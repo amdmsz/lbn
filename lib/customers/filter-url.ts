@@ -1,0 +1,63 @@
+import { CUSTOMERS_PAGE_SIZE } from "@/lib/customers/metadata";
+import type { CustomerCenterFilters } from "@/lib/customers/queries";
+
+function appendArrayParams(params: URLSearchParams, key: string, values: string[]) {
+  values.forEach((value) => params.append(key, value));
+}
+
+export function buildCustomersHref(
+  filters: CustomerCenterFilters,
+  overrides: Partial<CustomerCenterFilters> = {},
+  pathname = "/customers",
+) {
+  const next: CustomerCenterFilters = {
+    ...filters,
+    ...overrides,
+  };
+  const params = new URLSearchParams();
+
+  if (next.search) {
+    params.set("search", next.search);
+  }
+
+  if (next.productKeyword) {
+    params.set("productKeyword", next.productKeyword);
+  }
+
+  appendArrayParams(params, "productKeys", next.productKeys);
+  appendArrayParams(params, "tagIds", next.tagIds);
+  appendArrayParams(params, "statuses", next.statuses);
+
+  if (next.statuses.length === 1) {
+    params.set("queue", next.statuses[0]);
+  } else if (next.queue !== "all" && next.statuses.length === 0) {
+    params.set("queue", next.queue);
+  }
+
+  if (next.importedFrom) {
+    params.set("importedFrom", next.importedFrom);
+  }
+
+  if (next.importedTo) {
+    params.set("importedTo", next.importedTo);
+  }
+
+  if (next.teamId) {
+    params.set("teamId", next.teamId);
+  }
+
+  if (next.salesId) {
+    params.set("salesId", next.salesId);
+  }
+
+  if (next.pageSize !== CUSTOMERS_PAGE_SIZE) {
+    params.set("pageSize", String(next.pageSize));
+  }
+
+  if (next.page > 1) {
+    params.set("page", String(next.page));
+  }
+
+  const query = params.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}

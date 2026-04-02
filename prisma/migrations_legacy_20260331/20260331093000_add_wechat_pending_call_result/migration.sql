@@ -1,0 +1,15 @@
+-- AlterTable
+ALTER TABLE `CallRecord`
+  MODIFY `result` ENUM(
+    'NOT_CONNECTED',
+    'INVALID_NUMBER',
+    'HUNG_UP',
+    'CONNECTED_NO_TALK',
+    'INTERESTED',
+    'WECHAT_PENDING',
+    'WECHAT_ADDED',
+    'REFUSED_WECHAT',
+    'NEED_CALLBACK',
+    'REFUSED_TO_BUY',
+    'BLACKLIST'
+  ) NOT NULL;

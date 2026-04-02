@@ -1,0 +1,49 @@
+{
+  "name": "liquor-crm",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "postinstall": "prisma generate",
+    "db:seed": "node prisma/seed.mjs",
+    "db:backfill-payment-layer:preview": "node scripts/backfill-sales-order-payment-layer.mjs --dry-run",
+    "db:backfill-payment-layer": "node scripts/backfill-sales-order-payment-layer.mjs --apply",
+    "db:backfill-trade-order:report": "node scripts/backfill-phase2-trade-order.mjs --report-only",
+    "db:backfill-trade-order:preview": "node scripts/backfill-phase2-trade-order.mjs --dry-run",
+    "db:backfill-trade-order": "node scripts/backfill-phase2-trade-order.mjs --apply"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
+    "@prisma/adapter-mariadb": "^7.6.0",
+    "@prisma/client": "^7.6.0",
+    "@tanstack/react-table": "^8.21.3",
+    "clsx": "^2.1.1",
+    "dayjs": "^1.11.20",
+    "dotenv": "^17.2.3",
+    "lucide-react": "^1.7.0",
+    "next": "16.2.1",
+    "next-auth": "^4.24.13",
+    "prisma": "^7.6.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-hook-form": "^7.72.0",
+    "recharts": "^3.8.1",
+    "tailwind-merge": "^3.5.0",
+    "xlsx": "^0.18.5",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.1",
+    "prettier": "^3.8.1",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

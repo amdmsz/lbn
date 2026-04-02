@@ -1,0 +1,1741 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum RoleCode {
+  ADMIN
+  SUPERVISOR
+  SALES
+  OPS
+  SHIPPER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum LeadSource {
+  INFO_FLOW
+}
+
+enum LeadStatus {
+  NEW
+  ASSIGNED
+  FIRST_CALL_PENDING
+  FOLLOWING
+  WECHAT_ADDED
+  LIVE_INVITED
+  LIVE_WATCHED
+  ORDERED
+  CONVERTED
+  CLOSED_LOST
+  INVALID
+}
+
+enum LeadConversionStatus {
+  UNCONVERTED
+  CONVERTED
+  MERGED
+}
+
+enum CustomerStatus {
+  ACTIVE
+  DORMANT
+  LOST
+  BLACKLISTED
+}
+
+enum CustomerLevel {
+  NEW
+  REGULAR
+  VIP
+}
+
+enum AssignmentType {
+  MANUAL
+  BATCH
+  RECYCLE
+  REASSIGN
+}
+
+enum FollowUpTaskType {
+  CALL
+  WECHAT
+  LIVE_INVITE
+  ORDER_FOLLOW_UP
+  GENERAL
+}
+
+enum FollowUpTaskStatus {
+  PENDING
+  COMPLETED
+  CANCELED
+}
+
+enum FollowUpTaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum CallResult {
+  NOT_CONNECTED
+  INVALID_NUMBER
+  HUNG_UP
+  CONNECTED_NO_TALK
+  INTERESTED
+  WECHAT_PENDING
+  WECHAT_ADDED
+  REFUSED_WECHAT
+  NEED_CALLBACK
+  REFUSED_TO_BUY
+  BLACKLIST
+}
+
+enum WechatAddStatus {
+  PENDING
+  ADDED
+  REJECTED
+  BLOCKED
+}
+
+enum LiveSessionStatus {
+  DRAFT
+  SCHEDULED
+  LIVE
+  ENDED
+  CANCELED
+}
+
+enum InvitationMethod {
+  CALL
+  WECHAT
+  MANUAL
+  OTHER
+}
+
+enum InvitationStatus {
+  PENDING
+  INVITED
+  ACCEPTED
+  REJECTED
+}
+
+enum AttendanceStatus {
+  NOT_ATTENDED
+  ATTENDED
+  LEFT_EARLY
+}
+
+enum OrderType {
+  NORMAL_ORDER
+  GIFT_FREIGHT_ORDER
+}
+
+enum OrderStatus {
+  DRAFT
+  CONFIRMED
+  COMPLETED
+  CANCELED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum ShippingStatus {
+  PENDING
+  READY
+  SHIPPED
+  SIGNED
+  FINISHED
+  CANCELED
+}
+
+enum GiftQualificationSource {
+  LIVE_SESSION
+  SALES_CAMPAIGN
+  MANUAL_APPROVAL
+  OTHER
+}
+
+enum GiftReviewStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum ShippingTaskStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  COMPLETED
+  CANCELED
+}
+
+enum SalesOrderReviewStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum SalesOrderPaymentMode {
+  DEPOSIT
+  FULL_PAYMENT
+  COD
+}
+
+enum SalesOrderPaymentScheme {
+  FULL_PREPAID
+  DEPOSIT_PLUS_BALANCE
+  FULL_COD
+  DEPOSIT_PLUS_COD
+}
+
+enum TradeOrderStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  CANCELED
+}
+
+enum TradeOrderItemType {
+  SKU
+  BUNDLE
+  GIFT
+}
+
+enum TradeOrderItemSourceType {
+  DIRECT_SKU
+  BUNDLE_SALE
+  MANUAL_GIFT
+  LIVE_SESSION_PRODUCT
+}
+
+enum TradeOrderComponentType {
+  GOODS
+  GIFT
+}
+
+enum TradeOrderItemComponentSourceType {
+  DIRECT_SKU
+  BUNDLE_COMPONENT
+  GIFT_COMPONENT
+}
+
+enum SalesSubOrderStatus {
+  PENDING_PARENT_REVIEW
+  READY_FOR_FULFILLMENT
+  IN_FULFILLMENT
+  COMPLETED
+  CANCELED
+}
+
+enum BundleType {
+  STANDARD
+  LIVE_SESSION
+  CAMPAIGN
+}
+
+enum ProductBundleStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum ShippingReportStatus {
+  PENDING
+  REPORTED
+}
+
+enum ShippingFulfillmentStatus {
+  PENDING
+  READY_TO_SHIP
+  SHIPPED
+  DELIVERED
+  COMPLETED
+  CANCELED
+}
+
+enum LogisticsFollowUpTaskStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+  CANCELED
+}
+
+enum CodCollectionStatus {
+  PENDING_COLLECTION
+  COLLECTED
+  EXCEPTION
+  REJECTED
+  UNCOLLECTED
+}
+
+enum PaymentSourceType {
+  SALES_ORDER
+  GIFT_RECORD
+}
+
+enum PaymentPlanSubjectType {
+  GOODS
+  FREIGHT
+}
+
+enum PaymentPlanStageType {
+  FULL
+  DEPOSIT
+  BALANCE
+}
+
+enum PaymentCollectionChannel {
+  PREPAID
+  COD
+}
+
+enum PaymentPlanStatus {
+  PENDING
+  SUBMITTED
+  PARTIALLY_COLLECTED
+  COLLECTED
+  CANCELED
+}
+
+enum PaymentRecordChannel {
+  ORDER_FORM_DECLARED
+  BANK_TRANSFER
+  WECHAT_TRANSFER
+  ALIPAY_TRANSFER
+  COD
+  CASH
+  OTHER
+}
+
+enum PaymentRecordStatus {
+  SUBMITTED
+  CONFIRMED
+  REJECTED
+}
+
+enum CollectionTaskType {
+  BALANCE_COLLECTION
+  COD_COLLECTION
+  FREIGHT_COLLECTION
+  GENERAL_COLLECTION
+}
+
+enum CollectionTaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+}
+
+enum LeadImportFileType {
+  CSV
+  XLS
+  XLSX
+}
+
+enum LeadImportBatchStatus {
+  DRAFT
+  IMPORTING
+  COMPLETED
+  FAILED
+}
+
+enum LeadImportRowStatus {
+  PENDING
+  IMPORTED
+  FAILED
+  DUPLICATE
+}
+
+enum LeadDedupType {
+  EXISTING_LEAD
+  BATCH_DUPLICATE
+}
+
+enum LeadCustomerMergeAction {
+  CREATED_CUSTOMER
+  MATCHED_EXISTING_CUSTOMER
+}
+
+enum OperationModule {
+  USER
+  TEAM
+  ROLE
+  LEAD
+  LEAD_IMPORT
+  CUSTOMER
+  ASSIGNMENT
+  FOLLOW_UP
+  CALL
+  WECHAT
+  LIVE_SESSION
+  ORDER
+  GIFT
+  SHIPPING
+  SUPPLIER
+  PRODUCT
+  SALES_ORDER
+  SHIPPING_EXPORT
+  LOGISTICS
+  PAYMENT
+  COLLECTION
+  MASTER_DATA
+  SYSTEM
+}
+
+enum OperationTargetType {
+  USER
+  TEAM
+  ROLE
+  LEAD
+  LEAD_IMPORT_BATCH
+  LEAD_IMPORT_ROW
+  LEAD_IMPORT_TEMPLATE
+  LEAD_DEDUP_LOG
+  LEAD_CUSTOMER_MERGE_LOG
+  CUSTOMER
+  LEAD_ASSIGNMENT
+  FOLLOW_UP_TASK
+  CALL_RECORD
+  WECHAT_RECORD
+  LIVE_SESSION
+  LIVE_INVITATION
+  ORDER
+  GIFT_RECORD
+  SHIPPING_TASK
+  SUPPLIER
+  PRODUCT
+  PRODUCT_SKU
+  SALES_ORDER
+  SALES_ORDER_ITEM
+  SALES_ORDER_GIFT_ITEM
+  TRADE_ORDER
+  TRADE_ORDER_ITEM
+  TRADE_ORDER_ITEM_COMPONENT
+  PRODUCT_BUNDLE
+  PRODUCT_BUNDLE_ITEM
+  SHIPPING_EXPORT_BATCH
+  SHIPPING_EXPORT_LINE
+  LOGISTICS_FOLLOW_UP_TASK
+  COD_COLLECTION_RECORD
+  PAYMENT_PLAN
+  PAYMENT_RECORD
+  COLLECTION_TASK
+  TAG_GROUP
+  TAG_CATEGORY
+  TAG
+  CATEGORY
+  DICTIONARY_TYPE
+  DICTIONARY_ITEM
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  code        RoleCode @unique
+  name        String   @unique
+  description String?
+  isSystem    Boolean  @default(true)
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Team {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  name         String   @unique
+  description  String?  @db.Text
+  supervisorId String?  @unique
+  supervisor   User?    @relation("TeamSupervisor", fields: [supervisorId], references: [id])
+  users        User[]   @relation("UserTeam")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("teams")
+}
+
+model User {
+  id                      String           @id @default(cuid())
+  username                String           @unique
+  passwordHash            String
+  name                    String
+  phone                   String?          @unique
+  teamId                  String?
+  team                    Team?            @relation("UserTeam", fields: [teamId], references: [id])
+  supervisorId            String?
+  supervisor              User?            @relation("UserSupervisor", fields: [supervisorId], references: [id])
+  subordinates            User[]           @relation("UserSupervisor")
+  userStatus              UserStatus       @default(ACTIVE)
+  mustChangePassword      Boolean          @default(false)
+  lastLoginAt             DateTime?
+  invitedAt               DateTime?
+  invitedById             String?
+  invitedBy               User?            @relation("UserInviter", fields: [invitedById], references: [id])
+  invitedUsers            User[]           @relation("UserInviter")
+  disabledAt              DateTime?
+  disabledById            String?
+  disabledBy              User?            @relation("UserDisabler", fields: [disabledById], references: [id])
+  disabledUsers           User[]           @relation("UserDisabler")
+  roleId                  String
+  role                    Role             @relation(fields: [roleId], references: [id])
+  supervisedTeam          Team?            @relation("TeamSupervisor")
+  ownedLeads              Lead[]           @relation("LeadOwner")
+  ownedCustomers          Customer[]       @relation("CustomerOwner")
+  assignedLeadRecords     LeadAssignment[] @relation("LeadAssignmentTo")
+  createdLeadAssignments  LeadAssignment[] @relation("LeadAssignmentBy")
+  previousLeadAssignments LeadAssignment[] @relation("LeadAssignmentFrom")
+  ownedFollowUpTasks      FollowUpTask[]   @relation("FollowUpTaskOwner")
+  createdFollowUpTasks    FollowUpTask[]   @relation("FollowUpTaskCreator")
+  callRecords             CallRecord[]     @relation("CallRecordSales")
+  wechatRecords           WechatRecord[]   @relation("WechatRecordSales")
+  createdLiveSessions     LiveSession[]    @relation("LiveSessionCreator")
+  liveInvitations         LiveInvitation[] @relation("LiveInvitationSales")
+  ownedOrders             Order[]          @relation("OrderOwner")
+  ownedSalesOrders        SalesOrder[]     @relation("SalesOrderOwner")
+  createdSalesOrders      SalesOrder[]     @relation("SalesOrderCreatedBy")
+  updatedSalesOrders      SalesOrder[]     @relation("SalesOrderUpdatedBy")
+  reviewedSalesOrders     SalesOrder[]     @relation("SalesOrderReviewer")
+  ownedPaymentPlans       PaymentPlan[]    @relation("PaymentPlanOwner")
+  createdPaymentPlans     PaymentPlan[]    @relation("PaymentPlanCreatedBy")
+  updatedPaymentPlans     PaymentPlan[]    @relation("PaymentPlanUpdatedBy")
+  ownedPaymentRecords     PaymentRecord[]  @relation("PaymentRecordOwner")
+  submittedPaymentRecords PaymentRecord[]  @relation("PaymentRecordSubmittedBy")
+  confirmedPaymentRecords PaymentRecord[]  @relation("PaymentRecordConfirmedBy")
+  ownedCollectionTasks    CollectionTask[] @relation("CollectionTaskOwner")
+  createdCollectionTasks  CollectionTask[] @relation("CollectionTaskCreatedBy")
+  updatedCollectionTasks  CollectionTask[] @relation("CollectionTaskUpdatedBy")
+  giftRecords             GiftRecord[]     @relation("GiftRecordSales")
+  shippingTasks           ShippingTask[]   @relation("ShippingTaskAssignee")
+  createdSuppliers        Supplier[]       @relation("SupplierCreatedBy")
+  updatedSuppliers        Supplier[]       @relation("SupplierUpdatedBy")
+  createdProducts         Product[]        @relation("ProductCreatedBy")
+  updatedProducts         Product[]        @relation("ProductUpdatedBy")
+  exportedShippingBatches ShippingExportBatch[] @relation("ShippingExportBatchExporter")
+  logisticsFollowUpTasks  LogisticsFollowUpTask[] @relation("LogisticsFollowUpTaskOwner")
+  codCollectionRecords    CodCollectionRecord[]   @relation("CodCollectionRecordOwner")
+  createdLeadImportBatches   LeadImportBatch[]    @relation("LeadImportBatchCreator")
+  createdLeadImportTemplates LeadImportTemplate[] @relation("LeadImportTemplateCreator")
+  assignedCustomerTags    CustomerTag[]    @relation("CustomerTagAssignedBy")
+  assignedLeadTags        LeadTag[]        @relation("LeadTagAssignedBy")
+  operationLogs           OperationLog[]   @relation("OperationLogActor")
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+
+  @@index([roleId])
+  @@index([userStatus])
+  @@index([teamId])
+  @@index([supervisorId])
+  @@index([invitedById])
+  @@index([disabledById])
+}
+
+model Lead {
+  id                String               @id @default(cuid())
+  source            LeadSource
+  sourceDetail      String?
+  campaignName      String?
+  name              String?
+  phone             String
+  province          String?
+  city              String?
+  district          String?
+  address           String?
+  interestedProduct String?
+  isFirstPurchase   Boolean              @default(false)
+  remark            String?              @db.Text
+  status            LeadStatus           @default(NEW)
+  conversionStatus  LeadConversionStatus @default(UNCONVERTED)
+  ownerId           String?
+  owner             User?                @relation("LeadOwner", fields: [ownerId], references: [id])
+  customerId        String?
+  customer          Customer?            @relation(fields: [customerId], references: [id])
+  lastFollowUpAt    DateTime?
+  nextFollowUpAt    DateTime?
+  assignments       LeadAssignment[]
+  followUpTasks     FollowUpTask[]
+  callRecords       CallRecord[]
+  wechatRecords     WechatRecord[]
+  liveInvitations   LiveInvitation[]
+  orders            Order[]
+  giftRecords       GiftRecord[]
+  leadTags          LeadTag[]
+  mergeLogs         LeadCustomerMergeLog[]
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([phone])
+  @@index([status])
+  @@index([ownerId])
+  @@index([customerId])
+  @@index([nextFollowUpAt])
+  @@index([createdAt])
+}
+
+model Customer {
+  id              String           @id @default(cuid())
+  name            String
+  phone           String           @unique
+  wechatId        String?
+  province        String?
+  city            String?
+  district        String?
+  address         String?
+  status          CustomerStatus   @default(ACTIVE)
+  level           CustomerLevel    @default(NEW)
+  /// 业务承接人的主字段。主管分配线索后需要同步到这里，销售后续统一以客户中心承接。
+  ownerId         String?
+  owner           User?            @relation("CustomerOwner", fields: [ownerId], references: [id])
+  remark          String?          @db.Text
+  leads           Lead[]
+  followUpTasks   FollowUpTask[]
+  callRecords     CallRecord[]
+  wechatRecords   WechatRecord[]
+  liveInvitations LiveInvitation[]
+  orders          Order[]
+  salesOrders     SalesOrder[]
+  tradeOrders     TradeOrder[]
+  paymentPlans    PaymentPlan[]
+  paymentRecords  PaymentRecord[]
+  collectionTasks CollectionTask[]
+  giftRecords     GiftRecord[]
+  shippingTasks   ShippingTask[]
+  logisticsFollowUpTasks LogisticsFollowUpTask[]
+  codCollectionRecords   CodCollectionRecord[]
+  customerTags    CustomerTag[]
+  mergeLogs       LeadCustomerMergeLog[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([status])
+  @@index([ownerId])
+  @@index([createdAt])
+}
+
+model LeadAssignment {
+  id             String         @id @default(cuid())
+  leadId         String
+  lead           Lead           @relation(fields: [leadId], references: [id])
+  fromUserId     String?
+  fromUser       User?          @relation("LeadAssignmentFrom", fields: [fromUserId], references: [id])
+  toUserId       String
+  toUser         User           @relation("LeadAssignmentTo", fields: [toUserId], references: [id])
+  assignedById   String
+  assignedBy     User           @relation("LeadAssignmentBy", fields: [assignedById], references: [id])
+  assignmentType AssignmentType @default(MANUAL)
+  note           String?        @db.Text
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([leadId, createdAt])
+  @@index([toUserId, createdAt])
+}
+
+model FollowUpTask {
+  id          String               @id @default(cuid())
+  leadId      String?
+  lead        Lead?                @relation(fields: [leadId], references: [id])
+  customerId  String?
+  customer    Customer?            @relation(fields: [customerId], references: [id])
+  ownerId     String
+  owner       User                 @relation("FollowUpTaskOwner", fields: [ownerId], references: [id])
+  createdById String?
+  createdBy   User?                @relation("FollowUpTaskCreator", fields: [createdById], references: [id])
+  type        FollowUpTaskType     @default(GENERAL)
+  status      FollowUpTaskStatus   @default(PENDING)
+  priority    FollowUpTaskPriority @default(MEDIUM)
+  subject     String
+  content     String?              @db.Text
+  dueAt       DateTime
+  completedAt DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([leadId, status, dueAt])
+  @@index([customerId, status, dueAt])
+  @@index([ownerId, status, dueAt])
+}
+
+model CallRecord {
+  id              String     @id @default(cuid())
+  leadId          String?
+  lead            Lead?      @relation(fields: [leadId], references: [id])
+  customerId      String?
+  customer        Customer?  @relation(fields: [customerId], references: [id])
+  salesId         String
+  sales           User       @relation("CallRecordSales", fields: [salesId], references: [id])
+  callTime        DateTime
+  durationSeconds Int        @default(0)
+  result          CallResult
+  remark          String?    @db.Text
+  nextFollowUpAt  DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([leadId, callTime])
+  @@index([customerId, callTime])
+  @@index([salesId, callTime])
+}
+
+model WechatRecord {
+  id               String          @id @default(cuid())
+  leadId           String?
+  lead             Lead?           @relation(fields: [leadId], references: [id])
+  customerId       String?
+  customer         Customer?       @relation(fields: [customerId], references: [id])
+  salesId          String
+  sales            User            @relation("WechatRecordSales", fields: [salesId], references: [id])
+  addedStatus      WechatAddStatus @default(PENDING)
+  addedAt          DateTime?
+  wechatAccount    String?
+  wechatNickname   String?
+  wechatRemarkName String?
+  tags             Json?
+  summary          String?         @db.Text
+  nextFollowUpAt   DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([leadId, createdAt])
+  @@index([customerId, createdAt])
+  @@index([salesId, createdAt])
+}
+
+model LiveSession {
+  id            String            @id @default(cuid())
+  title         String
+  hostName      String
+  startAt       DateTime
+  roomId        String?
+  roomLink      String?
+  targetProduct String?
+  remark        String?           @db.Text
+  status        LiveSessionStatus @default(DRAFT)
+  createdById   String?
+  createdBy     User?             @relation("LiveSessionCreator", fields: [createdById], references: [id])
+  invitations   LiveInvitation[]
+  giftRecords   GiftRecord[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([status, startAt])
+  @@index([createdById])
+}
+
+model LiveInvitation {
+  id                   String           @id @default(cuid())
+  liveSessionId        String
+  liveSession          LiveSession      @relation(fields: [liveSessionId], references: [id])
+  leadId               String?
+  lead                 Lead?            @relation(fields: [leadId], references: [id])
+  customerId           String?
+  customer             Customer?        @relation(fields: [customerId], references: [id])
+  salesId              String
+  sales                User             @relation("LiveInvitationSales", fields: [salesId], references: [id])
+  invitationStatus     InvitationStatus @default(PENDING)
+  invitedAt            DateTime?
+  invitationMethod     InvitationMethod @default(MANUAL)
+  attendanceStatus     AttendanceStatus @default(NOT_ATTENDED)
+  watchDurationMinutes Int?             @default(0)
+  giftQualified        Boolean          @default(false)
+  remark               String?          @db.Text
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@index([liveSessionId, salesId])
+  @@index([leadId])
+  @@index([customerId])
+}
+
+model Supplier {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  contactName String?
+  contactPhone String?
+  remark      String?  @db.Text
+  enabled     Boolean  @default(true)
+  createdById String?
+  createdBy   User?    @relation("SupplierCreatedBy", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   User?    @relation("SupplierUpdatedBy", fields: [updatedById], references: [id])
+  products    Product[]
+  salesOrders SalesOrder[]
+  shippingTasks ShippingTask[] @relation("ShippingTaskSupplier")
+  exportBatches ShippingExportBatch[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([enabled, createdAt])
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  supplierId  String
+  supplier    Supplier @relation(fields: [supplierId], references: [id])
+  code        String   @unique
+  name        String
+  description String?  @db.Text
+  enabled     Boolean  @default(true)
+  createdById String?
+  createdBy   User?    @relation("ProductCreatedBy", fields: [createdById], references: [id])
+  updatedById String?
+  updatedBy   User?    @relation("ProductUpdatedBy", fields: [updatedById], references: [id])
+  skus        ProductSku[]
+  salesOrderItems SalesOrderItem[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([supplierId, enabled, createdAt])
+}
+
+model ProductSku {
+  id                     String   @id @default(cuid())
+  productId              String
+  product                Product  @relation(fields: [productId], references: [id])
+  skuCode                String   @unique
+  skuName                String
+  specText               String
+  unit                   String
+  defaultUnitPrice       Decimal  @db.Decimal(10, 2)
+  codSupported           Boolean  @default(false)
+  insuranceSupported     Boolean  @default(false)
+  defaultInsuranceAmount Decimal  @default(0) @db.Decimal(10, 2)
+  enabled                Boolean  @default(true)
+  salesOrderItems        SalesOrderItem[]
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([productId, enabled, createdAt])
+}
+
+model ProductBundle {
+  id                 String              @id @default(cuid())
+  code               String              @unique
+  name               String
+  bundleType         BundleType          @default(STANDARD)
+  status             ProductBundleStatus @default(DRAFT)
+  enabled            Boolean             @default(true)
+  description        String?             @db.Text
+  defaultBundlePrice Decimal?            @db.Decimal(10, 2)
+  version            Int                 @default(1)
+  createdById        String?
+  updatedById        String?
+  items              ProductBundleItem[]
+  tradeOrderItems    TradeOrderItem[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([status, enabled, createdAt])
+}
+
+model ProductBundleItem {
+  id         String        @id @default(cuid())
+  bundleId   String
+  bundle     ProductBundle @relation(fields: [bundleId], references: [id])
+  lineNo     Int
+  supplierId String
+  productId  String
+  skuId      String
+  qty        Int
+  sortOrder  Int           @default(0)
+  enabled    Boolean       @default(true)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@unique([bundleId, lineNo])
+  @@index([bundleId, sortOrder])
+}
+
+model TradeOrder {
+  id                     String                   @id @default(cuid())
+  tradeNo                String                   @unique
+  customerId             String
+  customer               Customer                 @relation(fields: [customerId], references: [id])
+  ownerId                String?
+  reviewStatus           SalesOrderReviewStatus   @default(PENDING_REVIEW)
+  tradeStatus            TradeOrderStatus         @default(DRAFT)
+  paymentScheme          SalesOrderPaymentScheme  @default(FULL_PREPAID)
+  listAmount             Decimal                  @default(0) @db.Decimal(10, 2)
+  dealAmount             Decimal                  @default(0) @db.Decimal(10, 2)
+  goodsAmount            Decimal                  @default(0) @db.Decimal(10, 2)
+  discountAmount         Decimal                  @default(0) @db.Decimal(10, 2)
+  finalAmount            Decimal                  @default(0) @db.Decimal(10, 2)
+  depositAmount          Decimal                  @default(0) @db.Decimal(10, 2)
+  collectedAmount        Decimal                  @default(0) @db.Decimal(10, 2)
+  paidAmount             Decimal                  @default(0) @db.Decimal(10, 2)
+  remainingAmount        Decimal                  @default(0) @db.Decimal(10, 2)
+  codAmount              Decimal                  @default(0) @db.Decimal(10, 2)
+  insuranceRequired      Boolean                  @default(false)
+  insuranceAmount        Decimal                  @default(0) @db.Decimal(10, 2)
+  discountReason         String?                  @db.Text
+  receiverNameSnapshot   String
+  receiverPhoneSnapshot  String
+  receiverAddressSnapshot String                  @db.Text
+  reviewerId             String?
+  reviewedAt             DateTime?
+  rejectReason           String?                  @db.Text
+  remark                 String?                  @db.Text
+  createdById            String?
+  updatedById            String?
+  items                  TradeOrderItem[]
+  components             TradeOrderItemComponent[]
+  salesOrders            SalesOrder[]
+  salesOrderItems        SalesOrderItem[]
+  shippingTasks          ShippingTask[]
+  paymentPlans           PaymentPlan[]
+  paymentRecords         PaymentRecord[]
+  collectionTasks        CollectionTask[]
+  logisticsFollowUpTasks LogisticsFollowUpTask[]
+  codCollectionRecords   CodCollectionRecord[]
+  exportLines            ShippingExportLine[]
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+
+  @@index([customerId, createdAt])
+  @@index([ownerId, reviewStatus, createdAt])
+  @@index([reviewStatus, tradeStatus, createdAt])
+}
+
+model TradeOrderItem {
+  id                     String                   @id @default(cuid())
+  tradeOrderId           String
+  tradeOrder             TradeOrder               @relation(fields: [tradeOrderId], references: [id])
+  lineNo                 Int
+  itemType               TradeOrderItemType
+  itemSourceType         TradeOrderItemSourceType
+  productId              String?
+  skuId                  String?
+  bundleId               String?
+  bundle                 ProductBundle?           @relation(fields: [bundleId], references: [id])
+  titleSnapshot          String
+  productNameSnapshot    String?
+  skuNameSnapshot        String?
+  specSnapshot           String?
+  unitSnapshot           String?
+  bundleCodeSnapshot     String?
+  bundleNameSnapshot     String?
+  bundleVersionSnapshot  Int?
+  listUnitPriceSnapshot  Decimal                  @default(0) @db.Decimal(10, 2)
+  dealUnitPriceSnapshot  Decimal                  @default(0) @db.Decimal(10, 2)
+  qty                    Int
+  subtotal               Decimal                  @default(0) @db.Decimal(10, 2)
+  discountAmount         Decimal                  @default(0) @db.Decimal(10, 2)
+  remark                 String?                  @db.Text
+  components             TradeOrderItemComponent[]
+  salesOrderItems        SalesOrderItem[]
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+
+  @@unique([tradeOrderId, lineNo])
+  @@index([tradeOrderId, itemType, createdAt])
+  @@index([bundleId])
+}
+
+model TradeOrderItemComponent {
+  id                             String                              @id @default(cuid())
+  tradeOrderId                   String
+  tradeOrder                     TradeOrder                          @relation(fields: [tradeOrderId], references: [id])
+  tradeOrderItemId               String
+  tradeOrderItem                 TradeOrderItem                      @relation(fields: [tradeOrderItemId], references: [id])
+  componentSeq                   Int
+  componentType                  TradeOrderComponentType
+  componentSourceType            TradeOrderItemComponentSourceType
+  supplierId                     String
+  productId                      String?
+  skuId                          String?
+  supplierNameSnapshot           String
+  productNameSnapshot            String
+  skuNameSnapshot                String?
+  specSnapshot                   String?
+  unitSnapshot                   String?
+  exportDisplayNameSnapshot      String
+  qty                            Int
+  allocatedListUnitPriceSnapshot Decimal                             @default(0) @db.Decimal(10, 2)
+  allocatedDealUnitPriceSnapshot Decimal                             @default(0) @db.Decimal(10, 2)
+  allocatedSubtotal              Decimal                             @default(0) @db.Decimal(10, 2)
+  allocatedDiscountAmount        Decimal                             @default(0) @db.Decimal(10, 2)
+  salesOrderItems                SalesOrderItem[]
+  createdAt                      DateTime                            @default(now())
+  updatedAt                      DateTime                            @updatedAt
+
+  @@unique([tradeOrderItemId, componentSeq])
+  @@index([tradeOrderId, supplierId, createdAt])
+}
+
+/// Phase 1 keeps one supplier sub-order per trade order as a migration-safe rule.
+/// This staged rule does not guarantee the permanent future shape of supplier sub-orders.
+model SalesOrder {
+  id                     String                 @id @default(cuid())
+  orderNo                String                 @unique
+  tradeOrderId           String?
+  tradeOrder             TradeOrder?            @relation(fields: [tradeOrderId], references: [id])
+  subOrderNo             String?
+  supplierSequence       Int?
+  subOrderStatus         SalesSubOrderStatus?
+  customerId             String
+  customer               Customer               @relation(fields: [customerId], references: [id])
+  ownerId                String?
+  owner                  User?                  @relation("SalesOrderOwner", fields: [ownerId], references: [id])
+  supplierId             String
+  supplier               Supplier               @relation(fields: [supplierId], references: [id])
+  reviewStatus           SalesOrderReviewStatus @default(PENDING_REVIEW)
+  paymentScheme          SalesOrderPaymentScheme @default(FULL_PREPAID)
+  paymentMode            SalesOrderPaymentMode
+  listAmount             Decimal                @default(0) @db.Decimal(10, 2)
+  dealAmount             Decimal                @default(0) @db.Decimal(10, 2)
+  goodsAmount            Decimal                @default(0) @db.Decimal(10, 2)
+  discountAmount         Decimal                @default(0) @db.Decimal(10, 2)
+  finalAmount            Decimal                @default(0) @db.Decimal(10, 2)
+  depositAmount          Decimal                @default(0) @db.Decimal(10, 2)
+  collectedAmount        Decimal                @default(0) @db.Decimal(10, 2)
+  paidAmount             Decimal                @default(0) @db.Decimal(10, 2)
+  remainingAmount        Decimal                @default(0) @db.Decimal(10, 2)
+  codAmount              Decimal                @default(0) @db.Decimal(10, 2)
+  insuranceRequired      Boolean                @default(false)
+  insuranceAmount        Decimal                @default(0) @db.Decimal(10, 2)
+  discountReason         String?                @db.Text
+  receiverNameSnapshot   String
+  receiverPhoneSnapshot  String
+  receiverAddressSnapshot String                @db.Text
+  reviewerId             String?
+  reviewer               User?                  @relation("SalesOrderReviewer", fields: [reviewerId], references: [id])
+  reviewedAt             DateTime?
+  rejectReason           String?                @db.Text
+  remark                 String?                @db.Text
+  createdById            String?
+  createdBy              User?                  @relation("SalesOrderCreatedBy", fields: [createdById], references: [id])
+  updatedById            String?
+  updatedBy              User?                  @relation("SalesOrderUpdatedBy", fields: [updatedById], references: [id])
+  items                  SalesOrderItem[]
+  giftItems              SalesOrderGiftItem[]
+  shippingTask           ShippingTask?          @relation("ShippingTaskSalesOrder")
+  exportLines            ShippingExportLine[]
+  paymentPlans           PaymentPlan[]
+  paymentRecords         PaymentRecord[]
+  collectionTasks        CollectionTask[]
+  logisticsFollowUpTasks LogisticsFollowUpTask[]
+  codCollectionRecords   CodCollectionRecord[]
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  @@index([customerId, createdAt])
+  @@index([ownerId, reviewStatus, createdAt])
+  @@index([supplierId, reviewStatus, createdAt])
+  @@index([reviewStatus, createdAt])
+  @@index([paymentScheme, createdAt])
+  @@index([paymentMode, createdAt])
+  @@index([tradeOrderId, createdAt])
+  @@unique([tradeOrderId, supplierId])
+}
+
+model SalesOrderItem {
+  id                        String                   @id @default(cuid())
+  salesOrderId              String
+  salesOrder                SalesOrder               @relation(fields: [salesOrderId], references: [id])
+  tradeOrderId              String?
+  tradeOrder                TradeOrder?              @relation(fields: [tradeOrderId], references: [id])
+  tradeOrderItemId          String?
+  tradeOrderItem            TradeOrderItem?          @relation(fields: [tradeOrderItemId], references: [id])
+  tradeOrderItemComponentId String?
+  tradeOrderItemComponent   TradeOrderItemComponent? @relation(fields: [tradeOrderItemComponentId], references: [id])
+  lineNo                    Int?
+  itemTypeSnapshot          TradeOrderItemType?
+  titleSnapshot             String?
+  exportDisplayNameSnapshot String?
+  productId                 String
+  product                   Product                  @relation(fields: [productId], references: [id])
+  skuId                     String
+  sku                       ProductSku               @relation(fields: [skuId], references: [id])
+  productNameSnapshot       String
+  skuNameSnapshot           String
+  specSnapshot              String
+  unitSnapshot              String
+  listPriceSnapshot         Decimal                  @db.Decimal(10, 2)
+  dealPriceSnapshot         Decimal                  @db.Decimal(10, 2)
+  qty                       Int
+  subtotal                  Decimal                  @db.Decimal(10, 2)
+  discountAmount            Decimal                  @default(0) @db.Decimal(10, 2)
+  createdAt                 DateTime                 @default(now())
+
+  @@index([salesOrderId, createdAt])
+  @@index([productId])
+  @@index([skuId])
+  @@index([tradeOrderId, salesOrderId])
+  @@index([tradeOrderItemId])
+  @@index([tradeOrderItemComponentId])
+}
+
+/// Read-only compatibility for historical bundled gifts.
+/// Future new-order gift writes should use TradeOrderItem(type=GIFT) + TradeOrderItemComponent.
+model SalesOrderGiftItem {
+  id           String     @id @default(cuid())
+  salesOrderId String
+  salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id])
+  giftName     String
+  qty          Int        @default(1)
+  remark       String?    @db.Text
+  createdAt    DateTime   @default(now())
+
+  @@index([salesOrderId, createdAt])
+}
+
+model Order {
+  id              String         @id @default(cuid())
+  customerId      String
+  customer        Customer       @relation(fields: [customerId], references: [id])
+  leadId          String?
+  lead            Lead?          @relation(fields: [leadId], references: [id])
+  ownerId         String?
+  owner           User?          @relation("OrderOwner", fields: [ownerId], references: [id])
+  type            OrderType
+  status          OrderStatus    @default(DRAFT)
+  paymentStatus   PaymentStatus  @default(PENDING)
+  shippingStatus  ShippingStatus @default(PENDING)
+  amount          Decimal        @db.Decimal(10, 2)
+  sourceScene     String?
+  receiverName    String
+  receiverPhone   String
+  receiverAddress String
+  trackingNumber  String?
+  remark          String?        @db.Text
+  shippingTask    ShippingTask?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([customerId, createdAt])
+  @@index([leadId])
+  @@index([ownerId])
+  @@index([status, paymentStatus, shippingStatus])
+}
+
+model GiftRecord {
+  id                  String                  @id @default(cuid())
+  customerId          String
+  customer            Customer                @relation(fields: [customerId], references: [id])
+  leadId              String?
+  lead                Lead?                   @relation(fields: [leadId], references: [id])
+  liveSessionId       String?
+  liveSession         LiveSession?            @relation(fields: [liveSessionId], references: [id])
+  salesId             String?
+  sales               User?                   @relation("GiftRecordSales", fields: [salesId], references: [id])
+  giftName            String
+  qualificationSource GiftQualificationSource @default(OTHER)
+  freightAmount       Decimal                 @default(0) @db.Decimal(10, 2)
+  reviewStatus        GiftReviewStatus        @default(PENDING_REVIEW)
+  shippingStatus      ShippingStatus          @default(PENDING)
+  receiverInfo        String?                 @db.Text
+  receiverName        String?
+  receiverPhone       String?
+  receiverAddress     String?
+  remark              String?                 @db.Text
+  shippingTask        ShippingTask?
+  paymentPlans        PaymentPlan[]
+  paymentRecords      PaymentRecord[]
+  collectionTasks     CollectionTask[]
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  @@index([customerId, createdAt])
+  @@index([leadId])
+  @@index([liveSessionId])
+  @@index([salesId])
+  @@index([reviewStatus, shippingStatus])
+}
+
+model ShippingTask {
+  id               String                     @id @default(cuid())
+  tradeOrderId     String?
+  tradeOrder       TradeOrder?                @relation(fields: [tradeOrderId], references: [id])
+  customerId       String
+  customer         Customer                   @relation(fields: [customerId], references: [id])
+  orderId          String?                    @unique
+  order            Order?                     @relation(fields: [orderId], references: [id])
+  salesOrderId     String?                    @unique
+  salesOrder       SalesOrder?                @relation("ShippingTaskSalesOrder", fields: [salesOrderId], references: [id])
+  giftRecordId     String?                    @unique
+  giftRecord       GiftRecord?                @relation(fields: [giftRecordId], references: [id])
+  supplierId       String?
+  supplier         Supplier?                  @relation("ShippingTaskSupplier", fields: [supplierId], references: [id])
+  exportBatchId    String?
+  exportBatch      ShippingExportBatch?       @relation(fields: [exportBatchId], references: [id])
+  assigneeId       String?
+  assignee         User?                      @relation("ShippingTaskAssignee", fields: [assigneeId], references: [id])
+  status           ShippingTaskStatus         @default(PENDING)
+  reportStatus     ShippingReportStatus       @default(PENDING)
+  shippingStatus   ShippingFulfillmentStatus  @default(PENDING)
+  carrier          String?
+  shippingProvider String?
+  trackingNumber   String?
+  codAmount        Decimal                    @default(0) @db.Decimal(10, 2)
+  insuranceRequired Boolean                   @default(false)
+  insuranceAmount  Decimal                    @default(0) @db.Decimal(10, 2)
+  receiverNameSnapshot String?
+  receiverPhoneSnapshot String?
+  receiverAddressSnapshot String?             @db.Text
+  content          String?                    @db.Text
+  screenshotUrl    String?
+  reportedAt       DateTime?
+  shippedAt        DateTime?
+  completedAt      DateTime?
+  remark           String?                    @db.Text
+  paymentPlans     PaymentPlan[]
+  paymentRecords   PaymentRecord[]
+  collectionTasks  CollectionTask[]
+  logisticsFollowUpTasks LogisticsFollowUpTask[]
+  codCollectionRecords   CodCollectionRecord[]
+  exportLines      ShippingExportLine[]
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  @@index([customerId, status, createdAt])
+  @@index([assigneeId, status, createdAt])
+  @@index([supplierId, reportStatus, shippingStatus, createdAt])
+  @@index([tradeOrderId, supplierId, reportStatus, shippingStatus, createdAt], map: "shiptask_trade_scope_idx")
+  @@index([exportBatchId])
+  @@index([trackingNumber])
+}
+
+model ShippingExportBatch {
+  id         String         @id @default(cuid())
+  exportNo   String         @unique
+  supplierId String
+  supplier   Supplier       @relation(fields: [supplierId], references: [id])
+  exportedById String?
+  exportedBy User?          @relation("ShippingExportBatchExporter", fields: [exportedById], references: [id])
+  exportedAt DateTime       @default(now())
+  orderCount Int            @default(0)
+  subOrderCount Int         @default(0)
+  tradeOrderCount Int       @default(0)
+  fileName   String
+  fileUrl    String?
+  remark     String?        @db.Text
+  shippingTasks ShippingTask[]
+  lines      ShippingExportLine[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([supplierId, exportedAt])
+  @@index([exportedById, exportedAt])
+}
+
+model ShippingExportLine {
+  id                        String              @id @default(cuid())
+  exportBatchId             String
+  exportBatch               ShippingExportBatch @relation(fields: [exportBatchId], references: [id])
+  rowNo                     Int
+  tradeOrderId              String
+  tradeOrder                TradeOrder          @relation(fields: [tradeOrderId], references: [id])
+  salesOrderId              String
+  salesOrder                SalesOrder          @relation(fields: [salesOrderId], references: [id])
+  shippingTaskId            String?
+  shippingTask              ShippingTask?       @relation(fields: [shippingTaskId], references: [id])
+  supplierId                String
+  tradeNoSnapshot           String
+  subOrderNoSnapshot        String
+  receiverNameSnapshot      String
+  receiverPhoneSnapshot     String
+  receiverAddressSnapshot   String              @db.Text
+  productSummarySnapshot    String              @db.Text
+  pieceCountSnapshot        Int
+  codAmountSnapshot         Decimal             @default(0) @db.Decimal(10, 2)
+  insuranceRequiredSnapshot Boolean             @default(false)
+  insuranceAmountSnapshot   Decimal             @default(0) @db.Decimal(10, 2)
+  remarkSnapshot            String?             @db.Text
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+
+  @@unique([exportBatchId, rowNo])
+  @@index([shippingTaskId])
+  @@index([tradeOrderId, salesOrderId])
+}
+
+model LogisticsFollowUpTask {
+  id               String                      @id @default(cuid())
+  tradeOrderId     String?
+  tradeOrder       TradeOrder?                 @relation(fields: [tradeOrderId], references: [id])
+  salesOrderId     String
+  salesOrder       SalesOrder                  @relation(fields: [salesOrderId], references: [id])
+  shippingTaskId   String
+  shippingTask     ShippingTask                @relation(fields: [shippingTaskId], references: [id])
+  customerId       String
+  customer         Customer                    @relation(fields: [customerId], references: [id])
+  ownerId          String
+  owner            User                        @relation("LogisticsFollowUpTaskOwner", fields: [ownerId], references: [id])
+  status           LogisticsFollowUpTaskStatus @default(PENDING)
+  intervalDays     Int                         @default(2)
+  nextTriggerAt    DateTime
+  lastTriggeredAt  DateTime?
+  lastFollowedUpAt DateTime?
+  closedAt         DateTime?
+  remark           String?                     @db.Text
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+
+  @@index([salesOrderId, status, nextTriggerAt])
+  @@index([shippingTaskId, status, nextTriggerAt])
+  @@index([tradeOrderId, salesOrderId, status, nextTriggerAt], map: "lgfollow_trade_sales_next_idx")
+  @@index([tradeOrderId, shippingTaskId, status, nextTriggerAt], map: "lgfollow_trade_ship_next_idx")
+  @@index([customerId, status, nextTriggerAt])
+  @@index([ownerId, status, nextTriggerAt])
+}
+
+model CodCollectionRecord {
+  id              String              @id @default(cuid())
+  paymentPlanId   String              @unique
+  paymentPlan     PaymentPlan         @relation(fields: [paymentPlanId], references: [id])
+  paymentRecordId String?             @unique
+  paymentRecord   PaymentRecord?      @relation(fields: [paymentRecordId], references: [id])
+  tradeOrderId    String?
+  tradeOrder      TradeOrder?         @relation(fields: [tradeOrderId], references: [id])
+  salesOrderId    String
+  salesOrder      SalesOrder          @relation(fields: [salesOrderId], references: [id])
+  shippingTaskId  String
+  shippingTask    ShippingTask        @relation(fields: [shippingTaskId], references: [id])
+  customerId      String
+  customer        Customer            @relation(fields: [customerId], references: [id])
+  ownerId         String?
+  owner           User?               @relation("CodCollectionRecordOwner", fields: [ownerId], references: [id])
+  status          CodCollectionStatus @default(PENDING_COLLECTION)
+  expectedAmount  Decimal             @db.Decimal(10, 2)
+  collectedAmount Decimal             @default(0) @db.Decimal(10, 2)
+  occurredAt      DateTime?
+  remark          String?             @db.Text
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([salesOrderId, status, createdAt])
+  @@index([shippingTaskId, status, createdAt])
+  @@index([tradeOrderId, salesOrderId, status, createdAt], map: "codrec_trade_sales_created_idx")
+  @@index([tradeOrderId, shippingTaskId, status, createdAt], map: "codrec_trade_ship_created_idx")
+  @@index([customerId, status, createdAt])
+  @@index([ownerId, status, createdAt])
+}
+
+model PaymentPlan {
+  id                String                   @id @default(cuid())
+  sourceType        PaymentSourceType
+  tradeOrderId      String?
+  tradeOrder        TradeOrder?              @relation(fields: [tradeOrderId], references: [id])
+  salesOrderId      String?
+  salesOrder        SalesOrder?              @relation(fields: [salesOrderId], references: [id])
+  giftRecordId      String?
+  giftRecord        GiftRecord?              @relation(fields: [giftRecordId], references: [id])
+  shippingTaskId    String?
+  shippingTask      ShippingTask?            @relation(fields: [shippingTaskId], references: [id])
+  customerId        String?
+  customer          Customer?                @relation(fields: [customerId], references: [id])
+  ownerId           String?
+  owner             User?                    @relation("PaymentPlanOwner", fields: [ownerId], references: [id])
+  subjectType       PaymentPlanSubjectType
+  stageType         PaymentPlanStageType
+  collectionChannel PaymentCollectionChannel
+  plannedAmount     Decimal                  @db.Decimal(10, 2)
+  submittedAmount   Decimal                  @default(0) @db.Decimal(10, 2)
+  confirmedAmount   Decimal                  @default(0) @db.Decimal(10, 2)
+  remainingAmount   Decimal                  @db.Decimal(10, 2)
+  dueAt             DateTime?
+  status            PaymentPlanStatus        @default(PENDING)
+  sequence          Int                      @default(1)
+  remark            String?                  @db.Text
+  createdById       String?
+  createdBy         User?                    @relation("PaymentPlanCreatedBy", fields: [createdById], references: [id])
+  updatedById       String?
+  updatedBy         User?                    @relation("PaymentPlanUpdatedBy", fields: [updatedById], references: [id])
+  codCollectionRecord CodCollectionRecord?
+  paymentRecords    PaymentRecord[]
+  collectionTasks   CollectionTask[]
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  @@index([sourceType, createdAt])
+  @@index([salesOrderId, status, dueAt])
+  @@index([tradeOrderId, sourceType, status, dueAt], map: "payplan_trade_source_due_idx")
+  @@index([tradeOrderId, salesOrderId, status, dueAt], map: "payplan_trade_sales_due_idx")
+  @@index([giftRecordId, status, dueAt])
+  @@index([shippingTaskId, status, dueAt])
+  @@index([customerId, status, dueAt])
+  @@index([ownerId, status, dueAt])
+}
+
+model PaymentRecord {
+  id            String              @id @default(cuid())
+  paymentPlanId String
+  paymentPlan   PaymentPlan         @relation(fields: [paymentPlanId], references: [id])
+  sourceType    PaymentSourceType
+  tradeOrderId  String?
+  tradeOrder    TradeOrder?         @relation(fields: [tradeOrderId], references: [id])
+  salesOrderId  String?
+  salesOrder    SalesOrder?         @relation(fields: [salesOrderId], references: [id])
+  giftRecordId  String?
+  giftRecord    GiftRecord?         @relation(fields: [giftRecordId], references: [id])
+  shippingTaskId String?
+  shippingTask  ShippingTask?       @relation(fields: [shippingTaskId], references: [id])
+  customerId    String?
+  customer      Customer?           @relation(fields: [customerId], references: [id])
+  ownerId       String?
+  owner         User?               @relation("PaymentRecordOwner", fields: [ownerId], references: [id])
+  amount        Decimal             @db.Decimal(10, 2)
+  channel       PaymentRecordChannel
+  status        PaymentRecordStatus @default(SUBMITTED)
+  occurredAt    DateTime
+  submittedById String
+  submittedBy   User                @relation("PaymentRecordSubmittedBy", fields: [submittedById], references: [id])
+  confirmedById String?
+  confirmedBy   User?               @relation("PaymentRecordConfirmedBy", fields: [confirmedById], references: [id])
+  codCollectionRecord CodCollectionRecord?
+  confirmedAt   DateTime?
+  referenceNo   String?
+  remark        String?             @db.Text
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@index([paymentPlanId, status, occurredAt])
+  @@index([sourceType, occurredAt])
+  @@index([salesOrderId, status, occurredAt])
+  @@index([tradeOrderId, sourceType, status, occurredAt], map: "payrec_trade_source_occ_idx")
+  @@index([tradeOrderId, salesOrderId, status, occurredAt], map: "payrec_trade_sales_occ_idx")
+  @@index([giftRecordId, status, occurredAt])
+  @@index([shippingTaskId, status, occurredAt])
+  @@index([customerId, status, occurredAt])
+  @@index([ownerId, status, occurredAt])
+  @@index([submittedById, status, occurredAt])
+  @@index([confirmedById, status, occurredAt])
+}
+
+model CollectionTask {
+  id             String               @id @default(cuid())
+  paymentPlanId  String
+  paymentPlan    PaymentPlan          @relation(fields: [paymentPlanId], references: [id])
+  sourceType     PaymentSourceType
+  tradeOrderId   String?
+  tradeOrder     TradeOrder?          @relation(fields: [tradeOrderId], references: [id])
+  salesOrderId   String?
+  salesOrder     SalesOrder?          @relation(fields: [salesOrderId], references: [id])
+  giftRecordId   String?
+  giftRecord     GiftRecord?          @relation(fields: [giftRecordId], references: [id])
+  shippingTaskId String?
+  shippingTask   ShippingTask?        @relation(fields: [shippingTaskId], references: [id])
+  customerId     String
+  customer       Customer             @relation(fields: [customerId], references: [id])
+  ownerId        String
+  owner          User                 @relation("CollectionTaskOwner", fields: [ownerId], references: [id])
+  taskType       CollectionTaskType
+  status         CollectionTaskStatus @default(PENDING)
+  dueAt          DateTime?
+  nextFollowUpAt DateTime?
+  lastContactAt  DateTime?
+  closedAt       DateTime?
+  remark         String?              @db.Text
+  createdById    String?
+  createdBy      User?                @relation("CollectionTaskCreatedBy", fields: [createdById], references: [id])
+  updatedById    String?
+  updatedBy      User?                @relation("CollectionTaskUpdatedBy", fields: [updatedById], references: [id])
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  @@index([paymentPlanId, status, dueAt])
+  @@index([sourceType, status, dueAt])
+  @@index([salesOrderId, status, dueAt])
+  @@index([tradeOrderId, sourceType, status, dueAt], map: "coltask_trade_source_due_idx")
+  @@index([tradeOrderId, salesOrderId, status, dueAt], map: "coltask_trade_sales_due_idx")
+  @@index([giftRecordId, status, dueAt])
+  @@index([shippingTaskId, status, dueAt])
+  @@index([customerId, status, dueAt])
+  @@index([ownerId, status, dueAt])
+}
+
+model TagGroup {
+  id          String        @id @default(cuid())
+  code        String        @unique
+  name        String
+  description String?       @db.Text
+  sortOrder   Int           @default(0)
+  isActive    Boolean       @default(true)
+  categories  TagCategory[]
+  tags        Tag[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([isActive, sortOrder])
+  @@map("tag_groups")
+}
+
+model TagCategory {
+  id          String   @id @default(cuid())
+  groupId     String
+  group       TagGroup @relation(fields: [groupId], references: [id])
+  code        String   @unique
+  name        String
+  description String?  @db.Text
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  tags        Tag[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([groupId, isActive, sortOrder])
+  @@map("tag_categories")
+}
+
+model Tag {
+  id           String        @id @default(cuid())
+  groupId      String
+  group        TagGroup      @relation(fields: [groupId], references: [id])
+  categoryId   String?
+  category     TagCategory?  @relation(fields: [categoryId], references: [id])
+  code         String        @unique
+  name         String
+  color        String?
+  description  String?       @db.Text
+  sortOrder    Int           @default(0)
+  isActive     Boolean       @default(true)
+  customerTags CustomerTag[]
+  leadTags     LeadTag[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([groupId, isActive, sortOrder])
+  @@index([categoryId, isActive, sortOrder])
+  @@map("tags")
+}
+
+model CustomerTag {
+  id           String   @id @default(cuid())
+  customerId   String
+  customer     Customer @relation(fields: [customerId], references: [id])
+  tagId        String
+  tag          Tag      @relation(fields: [tagId], references: [id])
+  assignedById String?
+  assignedBy   User?    @relation("CustomerTagAssignedBy", fields: [assignedById], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([customerId, tagId])
+  @@index([tagId, createdAt])
+  @@index([assignedById])
+  @@map("customer_tags")
+}
+
+model LeadTag {
+  id           String   @id @default(cuid())
+  leadId       String
+  lead         Lead     @relation(fields: [leadId], references: [id])
+  tagId        String
+  tag          Tag      @relation(fields: [tagId], references: [id])
+  assignedById String?
+  assignedBy   User?    @relation("LeadTagAssignedBy", fields: [assignedById], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([leadId, tagId])
+  @@index([tagId, createdAt])
+  @@index([assignedById])
+  @@map("lead_tags")
+}
+
+model LeadImportBatch {
+  id                String                @id @default(cuid())
+  createdById       String
+  createdBy         User                  @relation("LeadImportBatchCreator", fields: [createdById], references: [id])
+  templateId        String?
+  template          LeadImportTemplate?   @relation(fields: [templateId], references: [id])
+  fileName          String
+  fileType          LeadImportFileType
+  status            LeadImportBatchStatus @default(DRAFT)
+  defaultLeadSource LeadSource            @default(INFO_FLOW)
+  mappingConfig     Json?
+  headers           Json?
+  totalRows         Int                   @default(0)
+  successRows       Int                   @default(0)
+  failedRows        Int                   @default(0)
+  duplicateRows     Int                   @default(0)
+  createdCustomerRows Int                 @default(0)
+  matchedCustomerRows Int                 @default(0)
+  report            Json?
+  importedAt        DateTime?
+  errorMessage      String?               @db.Text
+  rows              LeadImportRow[]
+  dedupLogs         LeadDedupLog[]
+  mergeLogs         LeadCustomerMergeLog[]
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@index([createdById, createdAt])
+  @@index([status, createdAt])
+  @@index([templateId])
+  @@map("lead_import_batches")
+}
+
+model LeadImportRow {
+  id              String              @id @default(cuid())
+  batchId         String
+  batch           LeadImportBatch     @relation(fields: [batchId], references: [id])
+  rowNumber       Int
+  status          LeadImportRowStatus @default(PENDING)
+  phoneRaw        String?
+  normalizedPhone String?
+  mappedName      String?
+  errorReason     String?             @db.Text
+  rawData         Json
+  mappedData      Json?
+  dedupType       LeadDedupType?
+  matchedLeadId   String?
+  importedLeadId  String?
+  dedupLogs       LeadDedupLog[]
+  mergeLogs       LeadCustomerMergeLog[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@unique([batchId, rowNumber])
+  @@index([batchId, status])
+  @@index([normalizedPhone])
+  @@map("lead_import_rows")
+}
+
+model LeadImportTemplate {
+  id                String            @id @default(cuid())
+  name              String            @unique
+  description       String?           @db.Text
+  mappingConfig     Json
+  defaultLeadSource LeadSource        @default(INFO_FLOW)
+  isActive          Boolean           @default(true)
+  createdById       String?
+  createdBy         User?             @relation("LeadImportTemplateCreator", fields: [createdById], references: [id])
+  batches           LeadImportBatch[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([isActive, createdAt])
+  @@index([createdById])
+  @@map("lead_import_templates")
+}
+
+model LeadDedupLog {
+  id            String         @id @default(cuid())
+  batchId       String
+  batch         LeadImportBatch @relation(fields: [batchId], references: [id])
+  rowId         String?
+  row           LeadImportRow? @relation(fields: [rowId], references: [id])
+  phone         String
+  dedupType     LeadDedupType
+  matchedLeadId String?
+  reason        String?        @db.Text
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([batchId, createdAt])
+  @@index([rowId])
+  @@index([phone, dedupType])
+  @@map("lead_dedup_logs")
+}
+
+model LeadCustomerMergeLog {
+  id         String                  @id @default(cuid())
+  batchId    String
+  batch      LeadImportBatch         @relation(fields: [batchId], references: [id])
+  rowId      String?
+  row        LeadImportRow?          @relation(fields: [rowId], references: [id])
+  leadId     String
+  lead       Lead                    @relation(fields: [leadId], references: [id])
+  customerId String
+  customer   Customer                @relation(fields: [customerId], references: [id])
+  action     LeadCustomerMergeAction
+  source     LeadSource
+  phone      String
+  tagSynced  Boolean                 @default(false)
+  note       String?                 @db.Text
+  actorId    String?
+  createdAt  DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
+
+  @@index([batchId, action, createdAt])
+  @@index([rowId])
+  @@index([leadId, createdAt])
+  @@index([customerId, createdAt])
+  @@index([phone, createdAt])
+  @@map("lead_customer_merge_logs")
+}
+
+model Category {
+  id              String           @id @default(cuid())
+  code            String           @unique
+  name            String
+  description     String?          @db.Text
+  sortOrder       Int              @default(0)
+  isActive        Boolean          @default(true)
+  dictionaryTypes DictionaryType[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([isActive, sortOrder])
+  @@map("categories")
+}
+
+model DictionaryType {
+  id          String           @id @default(cuid())
+  categoryId  String?
+  category    Category?        @relation(fields: [categoryId], references: [id])
+  code        String           @unique
+  name        String
+  description String?          @db.Text
+  sortOrder   Int              @default(0)
+  isActive    Boolean          @default(true)
+  items       DictionaryItem[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([categoryId, isActive, sortOrder])
+  @@map("dictionary_types")
+}
+
+model DictionaryItem {
+  id          String         @id @default(cuid())
+  typeId      String
+  type        DictionaryType @relation(fields: [typeId], references: [id])
+  code        String
+  label       String
+  value       String
+  description String?        @db.Text
+  sortOrder   Int            @default(0)
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([typeId, code])
+  @@index([typeId, isActive, sortOrder])
+  @@map("dictionary_items")
+}
+
+model OperationLog {
+  id          String              @id @default(cuid())
+  actorId     String?
+  actor       User?               @relation("OperationLogActor", fields: [actorId], references: [id])
+  module      OperationModule
+  action      String
+  targetType  OperationTargetType
+  targetId    String
+  description String?             @db.Text
+  beforeData  Json?
+  afterData   Json?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([actorId, createdAt])
+  @@index([module, createdAt])
+  @@index([targetType, targetId])
+}
