@@ -220,7 +220,11 @@ export async function saveTradeOrderDraftAction(formData: FormData) {
     );
 
     revalidatePath(`/customers/${result.customerId}`);
+    revalidatePath("/orders");
     revalidatePath(`/orders/${result.id}`);
+    revalidatePath("/fulfillment");
+    revalidatePath("/dashboard");
+    revalidatePath("/reports");
 
     redirect(
       buildRedirectTarget(

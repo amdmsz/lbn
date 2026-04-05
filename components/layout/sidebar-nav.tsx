@@ -39,6 +39,7 @@ const iconMap: Record<NavigationIconName, typeof LayoutDashboard> = {
   products: Package,
   liveSessions: Video,
   orders: Package,
+  fulfillmentCenter: Package,
   paymentRecords: WalletCards,
   collectionTasks: ClipboardList,
   gifts: Gift,

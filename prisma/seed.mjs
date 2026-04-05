@@ -25,6 +25,9 @@ import {
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { randomBytes, scryptSync } from "node:crypto";
 
+// Local demo seed only.
+// Do not use this script for staging or production bootstrap.
+
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required to run prisma seed.");
 

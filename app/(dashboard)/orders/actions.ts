@@ -69,6 +69,7 @@ export async function saveSalesOrderAction(formData: FormData) {
     );
 
     revalidatePath("/orders");
+    revalidatePath("/fulfillment");
     revalidatePath(`/orders/${result.id}`);
     revalidatePath(`/customers/${result.customerId}`);
     revalidatePath("/shipping");
@@ -142,6 +143,7 @@ export async function reviewSalesOrderAction(formData: FormData) {
     );
 
     revalidatePath("/orders");
+    revalidatePath("/fulfillment");
     revalidatePath(`/customers/${result.customerId}`);
     revalidatePath("/shipping");
     revalidatePath("/payment-records");
@@ -200,6 +202,7 @@ export async function reviewTradeOrderAction(formData: FormData) {
     );
 
     revalidatePath("/orders");
+    revalidatePath("/fulfillment");
     revalidatePath(`/orders/${result.id}`);
     revalidatePath(`/customers/${result.customerId}`);
     revalidatePath("/shipping");

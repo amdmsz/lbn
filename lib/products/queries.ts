@@ -1,4 +1,4 @@
-import type { RoleCode } from "@prisma/client";
+import { Prisma, type RoleCode } from "@prisma/client";
 import { getParamValue, parseActionNotice } from "@/lib/action-notice";
 import { canAccessProductModule } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
@@ -15,16 +15,57 @@ export async function getProductsPageData(
   rawSearchParams?: Record<string, SearchParamsValue>,
 ) {
   if (!canAccessProductModule(viewer.role)) {
-    throw new Error("当前角色无权访问商品中心。");
+    throw new Error("You do not have access to the product center.");
   }
 
+  const keyword = getParamValue(rawSearchParams?.q).trim();
   const supplierId = getParamValue(rawSearchParams?.supplierId);
-  const where = supplierId ? { supplierId } : {};
+  const status = getParamValue(rawSearchParams?.status);
+  const category = getParamValue(rawSearchParams?.category);
+
+  const filters: Prisma.ProductWhereInput[] = [];
+
+  if (supplierId) {
+    filters.push({ supplierId });
+  }
+
+  if (status === "enabled") {
+    filters.push({ enabled: true });
+  }
+
+  if (status === "disabled") {
+    filters.push({ enabled: false });
+  }
+
+  if (keyword) {
+    filters.push({
+      OR: [
+        { code: { contains: keyword } },
+        { name: { contains: keyword } },
+        { description: { contains: keyword } },
+        { supplier: { name: { contains: keyword } } },
+        { supplier: { code: { contains: keyword } } },
+        {
+          skus: {
+            some: {
+              OR: [
+                { skuCode: { contains: keyword } },
+                { skuName: { contains: keyword } },
+                { specText: { contains: keyword } },
+              ],
+            },
+          },
+        },
+      ],
+    });
+  }
+
+  const where: Prisma.ProductWhereInput = filters.length > 0 ? { AND: filters } : {};
 
   const [items, suppliers] = await Promise.all([
     prisma.product.findMany({
       where,
-      orderBy: [{ enabled: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ enabled: "desc" }, { updatedAt: "desc" }, { createdAt: "desc" }],
       select: {
         id: true,
         code: true,
@@ -37,6 +78,7 @@ export async function getProductsPageData(
             id: true,
             name: true,
             code: true,
+            enabled: true,
           },
         },
         _count: {
@@ -48,19 +90,24 @@ export async function getProductsPageData(
       },
     }),
     prisma.supplier.findMany({
-      where: { enabled: true },
-      orderBy: { name: "asc" },
+      orderBy: [{ enabled: "desc" }, { name: "asc" }],
       select: {
         id: true,
         name: true,
         code: true,
+        enabled: true,
       },
     }),
   ]);
 
   return {
     notice: parseActionNotice(rawSearchParams),
-    filters: { supplierId },
+    filters: {
+      q: keyword,
+      status,
+      category,
+      supplierId,
+    },
     items,
     suppliers,
   };
@@ -72,7 +119,7 @@ export async function getProductDetail(
   rawSearchParams?: Record<string, SearchParamsValue>,
 ) {
   if (!canAccessProductModule(viewer.role)) {
-    throw new Error("当前角色无权访问商品中心。");
+    throw new Error("You do not have access to the product center.");
   }
 
   const [product, suppliers] = await Promise.all([
@@ -90,6 +137,7 @@ export async function getProductDetail(
             id: true,
             name: true,
             code: true,
+            enabled: true,
           },
         },
         skus: {
@@ -116,12 +164,12 @@ export async function getProductDetail(
       },
     }),
     prisma.supplier.findMany({
-      where: { enabled: true },
-      orderBy: { name: "asc" },
+      orderBy: [{ enabled: "desc" }, { name: "asc" }],
       select: {
         id: true,
         name: true,
         code: true,
+        enabled: true,
       },
     }),
   ]);

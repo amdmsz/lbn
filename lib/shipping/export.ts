@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { prisma } from "@/lib/db/prisma";
 
 type ShippingExportRow = {
   orderNo: string;
@@ -23,7 +24,11 @@ function escapeCsvCell(value: string | number | boolean) {
 }
 
 function normalizeFileName(fileName: string, exportNo: string) {
-  const baseName = fileName.trim().replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/-+/g, "-");
+  const prefixPattern = new RegExp(`^${exportNo}-`, "i");
+  const fileNameWithoutExportPrefix = fileName.trim().replace(prefixPattern, "");
+  const baseName = fileNameWithoutExportPrefix
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-");
   const normalizedBaseName = baseName || `shipping-export-${exportNo}.csv`;
   const withExtension = normalizedBaseName.toLowerCase().endsWith(".csv")
     ? normalizedBaseName
@@ -31,7 +36,7 @@ function normalizeFileName(fileName: string, exportNo: string) {
   return `${exportNo.toLowerCase()}-${withExtension}`;
 }
 
-export async function writeShippingExportCsv(input: {
+async function writeShippingExportCsvFile(input: {
   exportNo: string;
   fileName: string;
   rows: ShippingExportRow[];
@@ -40,7 +45,7 @@ export async function writeShippingExportCsv(input: {
   const outputDirectory = path.join(process.cwd(), "public", "exports", "shipping");
   const outputPath = path.join(outputDirectory, safeFileName);
   const headers = [
-    "订单编号",
+    "子单编号",
     "姓名",
     "电话",
     "地址",
@@ -76,5 +81,62 @@ export async function writeShippingExportCsv(input: {
   return {
     fileName: safeFileName,
     fileUrl: `/exports/shipping/${safeFileName}`,
+  };
+}
+
+export async function generateShippingExportCsvForBatch(exportBatchId: string) {
+  const batch = await prisma.shippingExportBatch.findUnique({
+    where: { id: exportBatchId },
+    select: {
+      id: true,
+      exportNo: true,
+      fileName: true,
+      lines: {
+        orderBy: { rowNo: "asc" },
+        select: {
+          subOrderNoSnapshot: true,
+          receiverNameSnapshot: true,
+          receiverPhoneSnapshot: true,
+          receiverAddressSnapshot: true,
+          productSummarySnapshot: true,
+          pieceCountSnapshot: true,
+          codAmountSnapshot: true,
+          insuranceRequiredSnapshot: true,
+          insuranceAmountSnapshot: true,
+        },
+      },
+    },
+  });
+
+  if (!batch) {
+    throw new Error("报单批次不存在。");
+  }
+
+  if (batch.lines.length === 0) {
+    throw new Error("当前历史批次尚未回填冻结快照，暂不支持重生成文件。");
+  }
+
+  const exportedFile = await writeShippingExportCsvFile({
+    exportNo: batch.exportNo,
+    fileName: batch.fileName,
+    rows: batch.lines.map((line) => ({
+      orderNo: line.subOrderNoSnapshot,
+      receiverName: line.receiverNameSnapshot,
+      receiverPhone: line.receiverPhoneSnapshot,
+      receiverAddress: line.receiverAddressSnapshot,
+      productName: line.productSummarySnapshot,
+      qty: line.pieceCountSnapshot,
+      codAmount: line.codAmountSnapshot.toString(),
+      insuranceRequired: line.insuranceRequiredSnapshot,
+      insuranceAmount: line.insuranceAmountSnapshot.toString(),
+    })),
+  });
+
+  return {
+    exportBatchId: batch.id,
+    exportNo: batch.exportNo,
+    fileName: exportedFile.fileName,
+    fileUrl: exportedFile.fileUrl,
+    lineCount: batch.lines.length,
   };
 }

@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { LeadImportBatchStatus } from "@prisma/client";
+import type { LeadImportBatchStatus } from "@prisma/client";
 import { LeadImportBatchesTable } from "@/components/lead-imports/lead-import-batches-table";
 import { LeadImportListFiltersForm } from "@/components/lead-imports/lead-import-list-filters";
 import { LeadImportUploadForm } from "@/components/lead-imports/lead-import-upload-form";
@@ -17,16 +17,9 @@ import {
   formatImportDateTime,
   getLeadImportBatchStatusLabel,
   getLeadImportBatchStatusVariant,
+  leadImportBatchStatusOptions,
 } from "@/lib/lead-imports/metadata";
 import { getLeadImportListData } from "@/lib/lead-imports/queries";
-
-const statusOptions = [
-  { value: "", label: "全部状态" },
-  { value: LeadImportBatchStatus.COMPLETED, label: "已完成" },
-  { value: LeadImportBatchStatus.IMPORTING, label: "导入中" },
-  { value: LeadImportBatchStatus.FAILED, label: "已失败" },
-  { value: LeadImportBatchStatus.DRAFT, label: "待导入" },
-] as const;
 
 function LeadImportPartition({
   title,
@@ -264,7 +257,7 @@ export default async function LeadImportsPage({
         <div className="space-y-6">
           <LeadImportListFiltersForm
             filters={data.filters}
-            statusOptions={statusOptions}
+            statusOptions={leadImportBatchStatusOptions}
             scrollTargetId="lead-import-batches"
           />
 

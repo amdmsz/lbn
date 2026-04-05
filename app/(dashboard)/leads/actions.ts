@@ -1,10 +1,20 @@
 "use server";
 
-import { AssignmentType, LeadStatus, UserStatus } from "@prisma/client";
+import {
+  AssignmentType,
+  CustomerOwnershipEventReason,
+  CustomerOwnershipMode,
+  LeadStatus,
+  UserStatus,
+} from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { canManageLeadAssignments, getLeadScope } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
+import {
+  assignCustomerToSalesTx,
+  getCustomerOwnershipActorContext,
+} from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
 import { MAX_BATCH_ASSIGNMENT_SIZE } from "@/lib/leads/metadata";
 import { buildLeadWhereInput, parseLeadListFilters } from "@/lib/leads/queries";
@@ -166,6 +176,7 @@ export async function batchAssignLeadsAction(
       id: true,
       name: true,
       username: true,
+      teamId: true,
     },
   });
 
@@ -212,6 +223,7 @@ export async function batchAssignLeadsAction(
   const updatedCustomerIds = new Set<string>();
   let assignedCount = 0;
   let skippedCount = 0;
+  const ownershipActor = await getCustomerOwnershipActorContext(session.user.id);
 
   await prisma.$transaction(async (tx) => {
     for (const lead of leads) {
@@ -253,7 +265,8 @@ export async function batchAssignLeadsAction(
             district: lead.district,
             address: lead.address,
             remark: lead.remark,
-            ownerId: targetSales.id,
+            ownershipMode: CustomerOwnershipMode.PUBLIC,
+            publicPoolTeamId: targetSales.teamId,
           },
           select: {
             id: true,
@@ -276,7 +289,7 @@ export async function batchAssignLeadsAction(
             targetId: customer.id,
             description: `分配线索时自动创建客户 ${customer.name} (${customer.phone}) 并承接给 ${targetSales.name} (@${targetSales.username})`,
             afterData: {
-              ownerId: targetSales.id,
+              ownerId: null,
               sourceLeadId: lead.id,
             },
           },
@@ -368,11 +381,12 @@ export async function batchAssignLeadsAction(
       }
 
       if (customer.ownerId !== targetSales.id) {
-        await tx.customer.update({
-          where: { id: customer.id },
-          data: {
-            ownerId: targetSales.id,
-          },
+        await assignCustomerToSalesTx(tx, {
+          actor: ownershipActor,
+          targetSales,
+          customerId: customer.id,
+          reason: CustomerOwnershipEventReason.SUPERVISOR_ASSIGN,
+          note: `Lead assignment sync from ${lead.name?.trim() || lead.phone}`,
         });
 
         await tx.operationLog.create({

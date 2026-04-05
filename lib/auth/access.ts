@@ -23,7 +23,7 @@ export function getDefaultRouteForRole(role: RoleCode) {
     case "SALES":
       return "/customers";
     case "SHIPPER":
-      return "/shipping";
+      return "/fulfillment?tab=shipping";
     case "ADMIN":
     case "SUPERVISOR":
     case "OPS":
@@ -96,6 +96,10 @@ export function canAccessPath(role: RoleCode, pathname: string) {
     return canAccessProductModule(role);
   }
 
+  if (pathname === "/fulfillment" || pathname.startsWith("/fulfillment/")) {
+    return canAccessOrderFulfillmentCenter(role);
+  }
+
   if (pathname === "/live-sessions" || pathname.startsWith("/live-sessions/")) {
     return canAccessLiveSessionModule(role);
   }
@@ -161,6 +165,26 @@ export function canAccessCustomerModule(role: RoleCode) {
   return role === "ADMIN" || role === "SUPERVISOR" || role === "SALES";
 }
 
+export function canAccessCustomerPublicPool(role: RoleCode) {
+  return canAccessCustomerModule(role);
+}
+
+export function canClaimPublicPoolCustomer(role: RoleCode) {
+  return role === "SALES";
+}
+
+export function canManageCustomerPublicPool(role: RoleCode) {
+  return role === "ADMIN" || role === "SUPERVISOR";
+}
+
+export function canAccessCustomerPublicPoolSettings(role: RoleCode) {
+  return canManageCustomerPublicPool(role);
+}
+
+export function canAccessCustomerPublicPoolReports(role: RoleCode) {
+  return canManageCustomerPublicPool(role);
+}
+
 export function canAccessLiveSessionModule(role: RoleCode) {
   return role === "ADMIN" || role === "SUPERVISOR" || role === "SALES" || role === "OPS";
 }
@@ -171,6 +195,10 @@ export function canAccessReportModule(role: RoleCode) {
 
 export function canAccessOrderModule(role: RoleCode) {
   return canAccessSalesOrderModule(role);
+}
+
+export function canAccessOrderFulfillmentCenter(role: RoleCode) {
+  return canAccessSalesOrderModule(role) || canAccessShippingModule(role);
 }
 
 export function canAccessSalesOrderModule(role: RoleCode) {

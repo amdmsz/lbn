@@ -9,6 +9,7 @@ export type NavigationIconName =
   | "products"
   | "liveSessions"
   | "orders"
+  | "fulfillmentCenter"
   | "paymentRecords"
   | "collectionTasks"
   | "gifts"
@@ -99,6 +100,13 @@ const navigationItems = {
     description: "管理 SalesOrder、审核与交易结果。",
     iconName: "orders",
     activePrefixes: ["/orders"],
+  }),
+  fulfillmentCenter: createItem({
+    title: "订单履约中心",
+    href: "/fulfillment",
+    description: "统一承接交易单、发货执行与批次记录，按业务域而不是技术对象组织。",
+    iconName: "orders",
+    activePrefixes: ["/fulfillment", "/orders", "/shipping"],
   }),
   paymentRecords: createItem({
     title: "收款记录",
@@ -211,11 +219,7 @@ const navigationTree: NavigationTree = {
       description: "商品主数据、交易审核与收款协同。",
       sections: [
         {
-          items: [
-            navigationItems.suppliers,
-            navigationItems.products,
-            navigationItems.orders,
-          ],
+          items: [navigationItems.products, navigationItems.fulfillmentCenter],
         },
         {
           title: "收款协同",
@@ -229,11 +233,7 @@ const navigationTree: NavigationTree = {
       description: "发货执行、报单批次与礼品协同。",
       sections: [
         {
-          items: [
-            navigationItems.shipping,
-            navigationItems.shippingExportBatches,
-            navigationItems.gifts,
-          ],
+          items: [navigationItems.gifts],
         },
       ],
     },
@@ -290,11 +290,7 @@ const navigationTree: NavigationTree = {
       description: "订单审核、商品主数据与团队收款。",
       sections: [
         {
-          items: [
-            navigationItems.suppliers,
-            navigationItems.products,
-            navigationItems.orders,
-          ],
+          items: [navigationItems.products, navigationItems.fulfillmentCenter],
         },
         {
           title: "收款协同",
@@ -308,11 +304,7 @@ const navigationTree: NavigationTree = {
       description: "查看团队履约、报单与礼品结果。",
       sections: [
         {
-          items: [
-            navigationItems.shipping,
-            navigationItems.shippingExportBatches,
-            navigationItems.gifts,
-          ],
+          items: [navigationItems.gifts],
         },
       ],
     },
@@ -364,7 +356,7 @@ const navigationTree: NavigationTree = {
       description: "我的订单、收款和催收任务。",
       sections: [
         {
-          items: [navigationItems.orders],
+          items: [navigationItems.fulfillmentCenter],
         },
         {
           title: "收款协同",
@@ -410,7 +402,7 @@ const navigationTree: NavigationTree = {
       description: "发货执行与报单批次。",
       sections: [
         {
-          items: [navigationItems.shipping, navigationItems.shippingExportBatches],
+          items: [navigationItems.fulfillmentCenter],
         },
       ],
     },

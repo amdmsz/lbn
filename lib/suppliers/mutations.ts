@@ -68,7 +68,7 @@ export async function upsertSupplier(
           remark: input.remark || null,
           updatedById: actor.id,
         },
-        select: { id: true, name: true },
+        select: { id: true, name: true, code: true },
       })
     : await prisma.supplier.create({
         data: {
@@ -80,7 +80,7 @@ export async function upsertSupplier(
           createdById: actor.id,
           updatedById: actor.id,
         },
-        select: { id: true, name: true },
+        select: { id: true, name: true, code: true },
       });
 
   await prisma.operationLog.create({
@@ -95,6 +95,8 @@ export async function upsertSupplier(
       afterData: input,
     },
   });
+
+  return supplier;
 }
 
 export async function toggleSupplier(actor: SupplierActor, supplierId: string) {

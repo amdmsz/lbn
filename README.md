@@ -1,16 +1,24 @@
-# Liquor CRM MVP
+# Liquor CRM
 
 酒水私域销售团队内部 CRM。
 
-当前 MVP 已覆盖：
+当前仓库的真实业务基线已经收口到：
 
-- 线索接入与分配
-- 客户管理
-- 通话 / 微信跟进记录
-- 直播场次与邀约记录
-- 订单 / 礼品 / 代发任务
-- Dashboard / 基础报表
-- OperationLog 审计日志
+- `Customer` 为销售执行主对象，Sales 主工作区是 `/customers`
+- `TradeOrder` 为成交主单，`SalesOrder` 为 supplier 子单
+- `/fulfillment` 为统一订单履约入口，包含 `trade-orders / shipping / batches` 三视图
+- `/products` 为商品域唯一一级入口，supplier 管理收进 `/products?tab=suppliers`
+- 公海池已经是 `Customer ownership lifecycle`，不是 Lead 2.0
+
+## 文档入口
+
+- 产品基线：[PRD.md](./PRD.md)
+- 里程碑与真实进度：[PLANS.md](./PLANS.md)
+- 交接摘要：[HANDOFF.md](./HANDOFF.md)
+- UI 主入口与兼容路径：[UI_ENTRYPOINTS.md](./UI_ENTRYPOINTS.md)
+- 前端 Prisma enum runtime 规则：[docs/frontend-runtime-rules.md](./docs/frontend-runtime-rules.md)
+- staging / production 部署基线：[docs/deployment-baseline.md](./docs/deployment-baseline.md)
+- staging 验收清单：[docs/staging-checklist.md](./docs/staging-checklist.md)
 
 ## Tech Stack
 
@@ -35,7 +43,7 @@ npm install
 cp .env.example .env
 ```
 
-Windows PowerShell 可用：
+Windows PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
@@ -43,9 +51,16 @@ Copy-Item .env.example .env
 
 3. 配置 `.env`
 
-- `DATABASE_URL` 指向本地 MySQL
-- `NEXTAUTH_URL` 本地开发通常为 `http://localhost:3000`
-- `NEXTAUTH_SECRET` 使用随机长字符串
+本地开发至少需要：
+
+- `DATABASE_URL`
+- `NEXTAUTH_URL`
+- `NEXTAUTH_SECRET`
+
+物流轨迹联调按需补充：
+
+- `XXAPI_API_KEY`
+- `XXAPI_EXPRESS_ENDPOINT`
 
 4. 生成 Prisma Client
 
@@ -53,17 +68,22 @@ Copy-Item .env.example .env
 npx prisma generate
 ```
 
-5. 同步数据库结构
+5. 同步本地数据库结构
 
 ```bash
 npx prisma db push
 ```
 
-6. 导入演示数据
+6. 按需导入本地 demo 数据
 
 ```bash
 npm run db:seed
 ```
+
+说明：
+
+- `db:seed` 只用于本地演示和权限联调
+- 不要在 staging / production 使用 `db:seed`
 
 7. 启动开发环境
 
@@ -76,132 +96,73 @@ npm run dev
 - `http://localhost:3000`
 - 未登录会跳转到 `/login`
 
-## Demo Accounts
+## 首个管理员初始化
 
-执行 `npm run db:seed` 后会生成以下演示账号：
+正式环境与 staging 不再依赖 demo seed 初始化账号。
 
-- `admin`
-- `supervisor`
-- `sales`
-- `ops`
-- `shipper`
+当前最小初始化方案：
 
-默认密码：
-
-```text
-demo123456
+```bash
+npm run admin:bootstrap -- --username admin --name "Platform Admin" --password "replace-with-strong-password"
 ```
 
-## Prisma Commands
+脚本会：
 
-常用命令：
+- 确保核心角色存在
+- 创建首个管理员
+- 避免重复造数据
+- 在显式 `--force` 时才刷新已有账号
+
+详细说明见：
+
+- [docs/deployment-baseline.md](./docs/deployment-baseline.md)
+
+## Prisma 与发布基线
+
+当前仓库的正式生产同步策略已经单独收口在部署文档中。
+
+当前原则：
+
+- 本地开发优先使用 `npx prisma db push`
+- staging / production 首发到空库时，当前也以 `db push` 作为真实 schema 同步方案
+- 历史 migration 链技术债尚未修复前，不把 `migrate deploy` 当成当前默认生产入口
+
+不要在没有单独 migration 修复里程碑的情况下，把当前仓库直接切回 `migrate deploy`。
+
+## 常用命令
 
 ```bash
 npx prisma validate
 npx prisma generate
 npx prisma db push
-npx prisma studio
-```
-
-当前仓库保留了早期 migration，但后续 MVP 演进主要通过 schema 直推本地数据库。
-
-- 本地开发优先使用 `npx prisma db push`
-- 如果后续补齐正式 migration，再在生产环境改用 `npx prisma migrate deploy`
-
-## Seed Command
-
-```bash
-npm run db:seed
-```
-
-用途：
-
-- 初始化角色
-- 初始化演示用户
-- 初始化线索 / 客户 / 跟进 / 直播 / 订单 / 礼品等基础演示数据
-
-## Build Commands
-
-代码检查：
-
-```bash
 npm run lint
-```
-
-生产构建：
-
-```bash
 npm run build
-```
-
-本地模拟生产启动：
-
-```bash
 npm run start
 ```
 
-## Deployment Outline
+## 发布前最低检查
 
-适用于宝塔 Node 项目部署前后的最小流程。
-
-1. 准备生产 MySQL 数据库
-2. 上传代码并安装依赖
-
-```bash
-npm install
-```
-
-3. 配置生产环境变量
-
-- `DATABASE_URL`
-- `NEXTAUTH_URL`
-- `NEXTAUTH_SECRET`
-
-4. 生成 Prisma Client
-
-```bash
-npx prisma generate
-```
-
-5. 同步数据库结构
-
-MVP 当前建议：
-
-```bash
-npx prisma db push
-```
-
-如果后续补齐正式 migration，再切换为：
-
-```bash
-npx prisma migrate deploy
-```
-
-6. 如需初始化演示环境，再执行：
-
-```bash
-npm run db:seed
-```
-
-7. 构建生产包
-
-```bash
-npm run build
-```
-
-8. 宝塔 Node 启动命令
-
-```bash
-npm run start
-```
-
-9. 配置反向代理与域名，将外部流量转发到 Node 服务端口
-
-## Suggested Pre-release Checks
-
+- `npx prisma validate`
+- `npx prisma generate`
 - `npm run lint`
 - `npm run build`
-- 登录页可正常鉴权
-- 各角色导航与路由权限一致
-- 核心列表页和详情页具备 loading / empty / error 状态
-- 关键动作可在 OperationLog 中追溯
+- 首个管理员初始化方案已验证
+- 登录页不暴露 demo 文案
+- `/fulfillment`、`/products`、公海池和兼容路由口径与文档一致
+
+## 当前 Staging 验收边界
+
+当前建议进入 staging 验收的边界只包含这些已经落地的主线：
+
+- 客户主线：`/customers` 与客户详情执行链
+- 成交与履约主线：`TradeOrder` + `/fulfillment`
+- 商品中心收口：`/products` + `/products?tab=suppliers`
+- 公海池 ownership lifecycle：`/customers/public-pool`
+- 登录、环境变量、Prisma 同步与管理员初始化基线
+
+不包含：
+
+- PBX / 外呼
+- 新 schema 里程碑
+- 历史 migration 链修复
+- 新业务功能扩展

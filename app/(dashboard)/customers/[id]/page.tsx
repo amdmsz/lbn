@@ -31,6 +31,25 @@ import {
   submitTradeOrderForReviewAction,
 } from "./actions";
 
+function getCustomerDetailNavigationContext(
+  searchParams: Record<string, string | string[] | undefined> | undefined,
+) {
+  const source = getParamValue(searchParams?.from);
+  const returnTo = getParamValue(searchParams?.returnTo);
+
+  if (source === "public-pool" && returnTo.startsWith("/customers/public-pool")) {
+    return {
+      source: "public-pool" as const,
+      returnTo,
+    };
+  }
+
+  return {
+    source: "customers" as const,
+    returnTo: "/customers",
+  };
+}
+
 async function getActiveTabData(
   viewer: { id: string; role: RoleCode },
   customerId: string,
@@ -75,9 +94,14 @@ export default async function CustomerDetailPage({
 
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const navigationContext = getCustomerDetailNavigationContext(resolvedSearchParams);
   const activeTab = parseCustomerDetailTab(
     resolvedSearchParams,
-    session.user.role === "SALES" ? "calls" : "profile",
+    navigationContext.source === "public-pool"
+      ? "profile"
+      : session.user.role === "SALES"
+        ? "calls"
+        : "profile",
   );
   const notice = parseMasterDataNotice(resolvedSearchParams);
   const createTradeOrder =
@@ -110,7 +134,9 @@ export default async function CustomerDetailPage({
   }
 
   const isOwnedByCurrentSales = shell.owner?.id === session.user.id;
+  const isExecutionReady = Boolean(shell.owner?.id) && shell.ownershipMode !== "PUBLIC";
   const canCreateSalesOrders =
+    isExecutionReady &&
     canCreateSalesOrder(session.user.role) &&
     (session.user.role !== "SALES" || isOwnedByCurrentSales);
   const tradeOrderComposer =
@@ -128,22 +154,27 @@ export default async function CustomerDetailPage({
   return (
     <CustomerDetailWorkbench
       shell={shell}
+      navigationContext={navigationContext}
       activeTab={activeTab}
       tabData={tabData}
       notice={notice}
       canCreateCalls={
+        isExecutionReady &&
         canCreateCallRecord(session.user.role) &&
         (session.user.role !== "SALES" || isOwnedByCurrentSales)
       }
       canCreateWechat={
+        isExecutionReady &&
         canCreateWechatRecord(session.user.role) &&
         (session.user.role !== "SALES" || isOwnedByCurrentSales)
       }
       canManageLiveInvitations={
+        isExecutionReady &&
         canCreateLiveInvitation(session.user.role) &&
         (session.user.role !== "SALES" || isOwnedByCurrentSales)
       }
       canManageTags={
+        isExecutionReady &&
         canUseCustomerTags(session.user.role) &&
         (session.user.role !== "SALES" || isOwnedByCurrentSales)
       }

@@ -4,31 +4,12 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-const demoUsers = [
-  "admin",
-  "supervisor",
-  "sales",
-  "ops",
-  "shipper",
-  "supervisor2",
-  "sales2",
-] as const;
-const demoUserLabels: Record<(typeof demoUsers)[number], string> = {
-  admin: "管理员",
-  supervisor: "主管",
-  sales: "销售",
-  ops: "运营",
-  shipper: "发货",
-  supervisor2: "主管（北区）",
-  sales2: "销售（北区）",
-};
-
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const passwordChanged = searchParams.get("passwordChanged") === "1";
-  const [username, setUsername] = useState("admin");
-  const [password, setPassword] = useState("demo123456");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
@@ -48,7 +29,7 @@ export function LoginForm() {
     setPending(false);
 
     if (!result || result.error) {
-      setError("账号或密码错误，或数据库尚未执行 seed。");
+      setError("账号或密码错误，或当前环境尚未完成管理员初始化。");
       return;
     }
 
@@ -62,9 +43,9 @@ export function LoginForm() {
         <p className="text-xs uppercase tracking-[0.22em] text-[var(--color-accent)]">
           酒水私域 CRM
         </p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight">本地登录</h1>
+        <h1 className="mt-3 text-3xl font-semibold tracking-tight">账号登录</h1>
         <p className="mt-3 text-sm leading-7 text-black/60">
-          当前环境使用本地演示账号登录，便于验证角色、菜单与权限流转。
+          使用已初始化的内部账号登录。首次登录如被要求改密，请按提示先完成密码更新。
         </p>
       </div>
 
@@ -112,28 +93,6 @@ export function LoginForm() {
           {pending ? "登录中..." : "登录"}
         </button>
       </form>
-
-      <div className="mt-8 rounded-2xl border border-black/8 bg-[var(--color-panel-strong)] p-4">
-        <p className="text-sm font-medium text-black/80">演示账号</p>
-        <p className="mt-2 text-sm text-black/60">
-          默认密码统一为 <code>demo123456</code>
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {demoUsers.map((user) => (
-            <button
-              key={user}
-              type="button"
-              onClick={() => {
-                setUsername(user);
-                setPassword("demo123456");
-              }}
-              className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-black/70 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
-            >
-              {demoUserLabels[user]}（{user}）
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

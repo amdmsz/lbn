@@ -5,6 +5,7 @@ import {
   canCreateWechatRecord,
   getCustomerScope,
 } from "@/lib/auth/access";
+import { touchCustomerEffectiveFollowUpFromWechatTx } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
 import { parseWechatTags } from "@/lib/wechat/metadata";
 
@@ -142,6 +143,12 @@ export async function createWechatRecord(
           tags,
         },
       },
+    });
+
+    await touchCustomerEffectiveFollowUpFromWechatTx(tx, {
+      customerId: customer.id,
+      occurredAt: addedAt ?? new Date(),
+      addedStatus,
     });
 
     return created;

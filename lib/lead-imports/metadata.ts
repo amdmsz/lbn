@@ -1,10 +1,10 @@
 import {
-  LeadCustomerMergeAction,
-  LeadDedupType,
-  LeadImportBatchStatus,
-  LeadImportFileType,
-  LeadImportRowStatus,
-  LeadSource,
+  type LeadCustomerMergeAction,
+  type LeadDedupType,
+  type LeadImportBatchStatus,
+  type LeadImportFileType,
+  type LeadImportRowStatus,
+  type LeadSource,
   type Prisma,
 } from "@prisma/client";
 import type { StatusBadgeVariant } from "@/components/shared/status-badge";
@@ -14,6 +14,18 @@ type SearchParamsValue = string | string[] | undefined;
 export const LEAD_IMPORT_PAGE_SIZE = 10;
 export const LEAD_IMPORT_PREVIEW_ROW_COUNT = 8;
 export const LEAD_IMPORT_TEMPLATE_NONE_VALUE = "__NONE__";
+export const LEAD_IMPORT_SOURCE_VALUES = ["INFO_FLOW"] as const satisfies readonly LeadSource[];
+export const DEFAULT_LEAD_IMPORT_SOURCE: LeadSource = "INFO_FLOW";
+export const LEAD_IMPORT_BATCH_STATUS_VALUES = [
+  "DRAFT",
+  "IMPORTING",
+  "COMPLETED",
+  "FAILED",
+] as const satisfies readonly LeadImportBatchStatus[];
+
+export function isLeadImportSourceValue(value: string): value is LeadSource {
+  return LEAD_IMPORT_SOURCE_VALUES.includes(value as LeadSource);
+}
 
 export const leadImportFieldDefinitions = [
   {
@@ -75,8 +87,19 @@ export type LeadImportNotice =
   | null;
 
 export const leadImportSourceOptions = [
-  { value: LeadSource.INFO_FLOW, label: "信息流" },
+  { value: DEFAULT_LEAD_IMPORT_SOURCE, label: "信息流" },
 ] as const;
+
+export const leadImportBatchStatusOptions = [
+  { value: "", label: "全部状态" },
+  { value: "COMPLETED", label: "已完成" },
+  { value: "IMPORTING", label: "导入中" },
+  { value: "FAILED", label: "已失败" },
+  { value: "DRAFT", label: "待导入" },
+] as const satisfies ReadonlyArray<{
+  value: "" | LeadImportBatchStatus;
+  label: string;
+}>;
 
 const batchStatusMeta: Record<
   LeadImportBatchStatus,

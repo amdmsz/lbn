@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SalesOrderPaymentSection } from "@/components/payments/sales-order-payment-section";
+import { LogisticsTracePanel } from "@/components/shipping/logistics-trace-panel";
 import { SalesOrderForm } from "@/components/sales-orders/sales-order-form";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { formatDateTime } from "@/lib/customers/metadata";
@@ -106,6 +107,9 @@ type OrderDetail = {
   } | null;
   items: Array<{
     id: string;
+    itemTypeSnapshot: "SKU" | "GIFT" | "BUNDLE" | null;
+    titleSnapshot: string | null;
+    exportDisplayNameSnapshot: string | null;
     productId: string;
     skuId: string;
     productNameSnapshot: string;
@@ -309,6 +313,48 @@ function getLogisticsTaskStatusVariant(
   }
 }
 
+function getExecutionLineTypeLabel(itemType: OrderDetail["items"][number]["itemTypeSnapshot"]) {
+  switch (itemType) {
+    case "GIFT":
+      return "赠品执行行";
+    case "BUNDLE":
+      return "套餐展开行";
+    case "SKU":
+    default:
+      return "普通商品行";
+  }
+}
+
+function getExecutionLineTypeVariant(
+  itemType: OrderDetail["items"][number]["itemTypeSnapshot"],
+) {
+  switch (itemType) {
+    case "GIFT":
+      return "neutral" as const;
+    case "BUNDLE":
+      return "warning" as const;
+    case "SKU":
+    default:
+      return "info" as const;
+  }
+}
+
+function getExecutionLineTitle(item: OrderDetail["items"][number]) {
+  return item.titleSnapshot?.trim() || `${item.productNameSnapshot} / ${item.skuNameSnapshot}`;
+}
+
+function getExecutionLineSemantics(item: OrderDetail["items"][number]) {
+  switch (item.itemTypeSnapshot) {
+    case "GIFT":
+      return "来自订单赠品执行组件，金额为 0，但会随当前供应商子单进入履约、导出和物流回看。";
+    case "BUNDLE":
+      return "来自套餐展开后的执行组件，当前子单只承接落到本供应商的套餐部分，不回退成父单视角。";
+    case "SKU":
+    default:
+      return "来自普通商品成交行，由当前供应商子单直接承接执行。";
+  }
+}
+
 export function SalesOrderDetailSection({
   order,
   skuOptions,
@@ -355,6 +401,8 @@ export function SalesOrderDetailSection({
     ) ?? order.items[0];
   const shippingTask = order.shippingTask;
   const latestCodRecord = shippingTask?.codCollectionRecords[0] ?? null;
+  const tradeNo = order.tradeOrder?.tradeNo ?? null;
+  const subOrderNo = order.subOrderNo || order.orderNo;
 
   return (
     <div className="space-y-6">
@@ -384,8 +432,29 @@ export function SalesOrderDetailSection({
 
         {order.tradeOrder?.tradeNo ? (
           <div className="mt-4 rounded-2xl border border-black/8 bg-white/72 px-4 py-3 text-sm text-black/68">
-            当前子单隶属于成交主单 {order.tradeOrder.tradeNo}，子单编号为{" "}
-            {order.subOrderNo || order.orderNo}。审核动作会先落到父单，再同步镜像到当前子单。
+            <div className="grid gap-3 md:grid-cols-3">
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                  成交主单
+                </div>
+                <div className="mt-1 font-medium text-black/80">{tradeNo}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                  子单编号
+                </div>
+                <div className="mt-1 font-medium text-black/80">{subOrderNo}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                  供货商
+                </div>
+                <div className="mt-1 font-medium text-black/80">{order.supplier.name}</div>
+              </div>
+            </div>
+            <p className="mt-3 text-xs leading-6 text-black/52">
+              当前页面仍然是供应商子单详情。审核、支付和履约结果会回流到父单，但这里继续承接子单执行事实。
+            </p>
           </div>
         ) : null}
 
@@ -393,12 +462,8 @@ export function SalesOrderDetailSection({
           <div className="crm-subtle-panel">
             <p className="crm-detail-label">订单基础</p>
             <div className="mt-3 space-y-2 text-sm text-black/70">
-              <div>
-                订单编号：
-                {order.tradeOrder?.tradeNo
-                  ? `${order.tradeOrder.tradeNo} / ${order.subOrderNo || order.orderNo}`
-                  : order.orderNo}
-              </div>
+              <div>成交主单：{tradeNo || "当前仍为单 SalesOrder 结构"}</div>
+              <div>子单编号：{subOrderNo}</div>
               <div>客户：{order.customer.name}</div>
               <div>供货商：{order.supplier.name}</div>
               <div>下单人：{order.owner?.name || order.customer.owner?.name || "未指派"}</div>
@@ -479,29 +544,39 @@ export function SalesOrderDetailSection({
 
       <section className="crm-section-card">
         <div className="space-y-2">
-          <h3 className="text-lg font-semibold text-black/85">订单快照</h3>
+          <h3 className="text-lg font-semibold text-black/85">子单执行快照</h3>
           <p className="text-sm leading-7 text-black/60">
-            商品名、规格、价格、收件信息和随单赠品都会在下单时写入快照，避免后续主数据变化污染历史交易。
+            当前详情继续展示供应商子单承接到的执行行。普通 SKU、订单赠品和套餐展开组件都会以执行快照形式保留，避免后续主数据变化污染历史交易。
           </p>
         </div>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
           <div className="crm-subtle-panel">
-            <p className="crm-detail-label">商品行</p>
+            <p className="crm-detail-label">执行行快照</p>
             <div className="mt-3 space-y-3">
               {order.items.map((item) => (
                 <div key={item.id} className="rounded-2xl border border-black/8 bg-white/70 p-4">
-                  <div className="font-medium text-black/80">
-                    {item.productNameSnapshot} / {item.skuNameSnapshot}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge
+                      label={getExecutionLineTypeLabel(item.itemTypeSnapshot)}
+                      variant={getExecutionLineTypeVariant(item.itemTypeSnapshot)}
+                    />
+                    <div className="font-medium text-black/80">{getExecutionLineTitle(item)}</div>
                   </div>
-                  <div className="mt-2 text-sm text-black/60">
-                    规格：{item.specSnapshot} / 数量：{item.qty}
-                    {item.unitSnapshot}
+                  <div className="mt-2 text-sm leading-7 text-black/60">
+                    {getExecutionLineSemantics(item)}
                   </div>
-                  <div className="mt-1 text-sm text-black/60">
-                    原价：{formatCurrency(item.listPriceSnapshot)} / 成交价：{" "}
-                    {formatCurrency(item.dealPriceSnapshot)} / 小计：{" "}
-                    {formatCurrency(item.subtotal)}
+                  <div className="mt-3 grid gap-2 text-sm text-black/60 md:grid-cols-2">
+                    <div>商品：{item.productNameSnapshot}</div>
+                    <div>SKU：{item.skuNameSnapshot}</div>
+                    <div>规格：{item.specSnapshot}</div>
+                    <div>
+                      数量：{item.qty}
+                      {item.unitSnapshot}
+                    </div>
+                    <div>原价：{formatCurrency(item.listPriceSnapshot)}</div>
+                    <div>成交价：{formatCurrency(item.dealPriceSnapshot)}</div>
+                    <div className="md:col-span-2">小计：{formatCurrency(item.subtotal)}</div>
                   </div>
                 </div>
               ))}
@@ -509,7 +584,10 @@ export function SalesOrderDetailSection({
           </div>
 
           <div className="crm-subtle-panel">
-            <p className="crm-detail-label">随单赠品</p>
+            <p className="crm-detail-label">历史兼容赠品记录</p>
+            <p className="mt-2 text-sm leading-7 text-black/60">
+              这里仅保留旧 `SalesOrderGiftItem` 的历史兼容展示。TradeOrder 新写路径下的赠品已经作为左侧 `GIFT` 执行行进入当前子单。
+            </p>
             <div className="mt-3 space-y-3">
               {order.giftItems.length > 0 ? (
                 order.giftItems.map((item) => (
@@ -522,7 +600,7 @@ export function SalesOrderDetailSection({
                 ))
               ) : (
                 <div className="rounded-2xl border border-dashed border-black/10 bg-white/55 p-4 text-sm leading-7 text-black/55">
-                  当前订单没有随单赠品。SalesOrderGiftItem 与 GiftRecord 继续分层维护。
+                  当前子单没有历史兼容赠品记录。若赠品来自新写路径，请在左侧 `GIFT` 执行行中查看。
                 </div>
               )}
             </div>
@@ -700,6 +778,13 @@ export function SalesOrderDetailSection({
                   </div>
                 </div>
               ) : null}
+              <LogisticsTracePanel
+                shippingTaskId={shippingTask.id}
+                shippingProvider={shippingTask.shippingProvider}
+                trackingNumber={shippingTask.trackingNumber}
+                className="mt-4"
+                title="查看完整物流轨迹"
+              />
             </div>
 
             <div className="crm-subtle-panel">

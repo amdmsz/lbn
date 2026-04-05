@@ -2,14 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { LeadSource } from "@prisma/client";
 import { auth } from "@/lib/auth/session";
 import {
   createLeadImportBatch,
   toggleLeadImportTemplate,
   upsertLeadImportTemplate,
 } from "@/lib/lead-imports/mutations";
-import { leadImportFieldDefinitions } from "@/lib/lead-imports/metadata";
+import {
+  DEFAULT_LEAD_IMPORT_SOURCE,
+  isLeadImportSourceValue,
+  leadImportFieldDefinitions,
+} from "@/lib/lead-imports/metadata";
 
 function getValue(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -51,6 +54,10 @@ function buildRedirectTarget(
   return `${pathname}?${params.toString()}`;
 }
 
+function getSafeLeadImportSource(value: string) {
+  return isLeadImportSourceValue(value) ? value : DEFAULT_LEAD_IMPORT_SOURCE;
+}
+
 export async function createLeadImportBatchAction(formData: FormData) {
   const actor = await getActor();
   const file = formData.get("file");
@@ -63,8 +70,7 @@ export async function createLeadImportBatchAction(formData: FormData) {
     const result = await createLeadImportBatch(actor, {
       file,
       templateId: getValue(formData, "templateId"),
-      defaultLeadSource: (getValue(formData, "defaultLeadSource") ||
-        LeadSource.INFO_FLOW) as LeadSource,
+      defaultLeadSource: getSafeLeadImportSource(getValue(formData, "defaultLeadSource")),
       mappingConfig: getValue(formData, "mappingConfig"),
     });
 
@@ -104,8 +110,7 @@ export async function upsertLeadImportTemplateAction(formData: FormData) {
       id: getValue(formData, "id"),
       name: getValue(formData, "name"),
       description: getValue(formData, "description"),
-      defaultLeadSource: (getValue(formData, "defaultLeadSource") ||
-        LeadSource.INFO_FLOW) as LeadSource,
+      defaultLeadSource: getSafeLeadImportSource(getValue(formData, "defaultLeadSource")),
       mappingConfig,
     });
 

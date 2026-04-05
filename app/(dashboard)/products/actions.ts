@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/session";
 import {
@@ -13,6 +14,7 @@ import {
   upsertProduct,
   upsertProductSku,
 } from "@/lib/products/mutations";
+import { upsertSupplier } from "@/lib/suppliers/mutations";
 
 async function getActor() {
   const session = await auth();
@@ -27,6 +29,10 @@ async function getActor() {
   };
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "操作失败，请稍后重试。";
+}
+
 async function runProductAction(
   formData: FormData,
   fallbackPath: string,
@@ -39,11 +45,10 @@ async function runProductAction(
     await action(actor);
   } catch (error) {
     rethrowRedirectError(error);
-    const message = error instanceof Error ? error.message : "操作失败，请稍后重试。";
-    redirect(buildRedirectTarget(redirectTo, "error", message));
+    redirect(buildRedirectTarget(redirectTo, "error", getErrorMessage(error)));
   }
 
-  redirect(buildRedirectTarget(redirectTo, "success", "保存成功"));
+  redirect(buildRedirectTarget(redirectTo, "success", "保存成功。"));
 }
 
 export async function upsertProductAction(formData: FormData) {
@@ -58,6 +63,36 @@ export async function upsertProductAction(formData: FormData) {
   });
 }
 
+export async function createInlineSupplierAction(formData: FormData) {
+  const actor = await getActor();
+
+  try {
+    const supplier = await upsertSupplier(actor, {
+      code: getFormValue(formData, "code"),
+      name: getFormValue(formData, "name"),
+      contactName: getFormValue(formData, "contactName"),
+      contactPhone: getFormValue(formData, "contactPhone"),
+      remark: getFormValue(formData, "remark"),
+    });
+
+    revalidatePath("/products");
+    revalidatePath("/suppliers");
+
+    return {
+      success: true as const,
+      supplier,
+      message: `已新增供货商：${supplier.name}。`,
+    };
+  } catch (error) {
+    rethrowRedirectError(error);
+
+    return {
+      success: false as const,
+      errorMessage: getErrorMessage(error),
+    };
+  }
+}
+
 export async function toggleProductAction(formData: FormData) {
   return runProductAction(formData, "/products", async (actor) => {
     await toggleProduct(actor, getFormValue(formData, "id"));
@@ -65,26 +100,34 @@ export async function toggleProductAction(formData: FormData) {
 }
 
 export async function upsertProductSkuAction(formData: FormData) {
-  return runProductAction(formData, getFormValue(formData, "redirectTo") || "/products", async (actor) => {
-    await upsertProductSku(actor, {
-      id: getFormValue(formData, "id"),
-      productId: getFormValue(formData, "productId"),
-      skuCode: getFormValue(formData, "skuCode"),
-      skuName: getFormValue(formData, "skuName"),
-      specText: getFormValue(formData, "specText"),
-      unit: getFormValue(formData, "unit"),
-      defaultUnitPrice: getFormValue(formData, "defaultUnitPrice"),
-      codSupported: (getFormValue(formData, "codSupported") || "false") as "true" | "false",
-      insuranceSupported: (getFormValue(formData, "insuranceSupported") || "false") as
-        | "true"
-        | "false",
-      defaultInsuranceAmount: getFormValue(formData, "defaultInsuranceAmount") || "0",
-    });
-  });
+  return runProductAction(
+    formData,
+    getFormValue(formData, "redirectTo") || "/products",
+    async (actor) => {
+      await upsertProductSku(actor, {
+        id: getFormValue(formData, "id"),
+        productId: getFormValue(formData, "productId"),
+        skuCode: getFormValue(formData, "skuCode"),
+        skuName: getFormValue(formData, "skuName"),
+        specText: getFormValue(formData, "specText"),
+        unit: getFormValue(formData, "unit"),
+        defaultUnitPrice: getFormValue(formData, "defaultUnitPrice"),
+        codSupported: (getFormValue(formData, "codSupported") || "false") as "true" | "false",
+        insuranceSupported: (getFormValue(formData, "insuranceSupported") || "false") as
+          | "true"
+          | "false",
+        defaultInsuranceAmount: getFormValue(formData, "defaultInsuranceAmount") || "0",
+      });
+    },
+  );
 }
 
 export async function toggleProductSkuAction(formData: FormData) {
-  return runProductAction(formData, getFormValue(formData, "redirectTo") || "/products", async (actor) => {
-    await toggleProductSku(actor, getFormValue(formData, "id"));
-  });
+  return runProductAction(
+    formData,
+    getFormValue(formData, "redirectTo") || "/products",
+    async (actor) => {
+      await toggleProductSku(actor, getFormValue(formData, "id"));
+    },
+  );
 }

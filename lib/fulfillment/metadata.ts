@@ -1,4 +1,4 @@
-import {
+import type {
   CodCollectionStatus,
   GiftQualificationSource,
   GiftReviewStatus,
@@ -385,33 +385,33 @@ export function mapShippingTaskStatusToShippingStatus(status: ShippingTaskStatus
   switch (status) {
     case "PENDING":
     case "PROCESSING":
-      return ShippingStatus.READY;
+      return "READY";
     case "SHIPPED":
-      return ShippingStatus.SHIPPED;
+      return "SHIPPED";
     case "COMPLETED":
-      return ShippingStatus.FINISHED;
+      return "FINISHED";
     case "CANCELED":
-      return ShippingStatus.CANCELED;
+      return "CANCELED";
     default:
-      return ShippingStatus.PENDING;
+      return "PENDING";
   }
 }
 
 export function mapShippingStatusToShippingTaskStatus(status: ShippingStatus) {
   switch (status) {
     case "PENDING":
-      return ShippingTaskStatus.PENDING;
+      return "PENDING";
     case "READY":
-      return ShippingTaskStatus.PROCESSING;
+      return "PROCESSING";
     case "SHIPPED":
-      return ShippingTaskStatus.SHIPPED;
+      return "SHIPPED";
     case "SIGNED":
     case "FINISHED":
-      return ShippingTaskStatus.COMPLETED;
+      return "COMPLETED";
     case "CANCELED":
-      return ShippingTaskStatus.CANCELED;
+      return "CANCELED";
     default:
-      return ShippingTaskStatus.PENDING;
+      return "PENDING";
   }
 }
 

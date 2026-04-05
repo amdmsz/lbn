@@ -11,8 +11,8 @@ export default function SuppliersError({
 }>) {
   return (
     <ErrorState
-      eyebrow="供货商中心异常"
-      title="供货商中心加载失败"
+      eyebrow="供货商视图异常"
+      title="供货商视图加载失败"
       description="页面在读取供货商主数据时发生错误。"
       detail={error.message}
       action={

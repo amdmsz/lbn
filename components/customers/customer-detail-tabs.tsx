@@ -18,17 +18,20 @@ export function CustomerDetailTabs({
   activeTab,
   counts,
   scrollTargetId,
+  buildHref,
 }: Readonly<{
   customerId: string;
   activeTab: CustomerDetailTab;
   counts: CustomerTabCounts;
   scrollTargetId?: string;
+  buildHref?: (tab: CustomerDetailTab) => string;
 }>) {
   const items = customerDetailTabs.map((tab) => ({
     value: tab.value,
     label: tab.label,
-    href:
-      tab.value === "profile"
+    href: buildHref
+      ? buildHref(tab.value)
+      : tab.value === "profile"
         ? `/customers/${customerId}`
         : `/customers/${customerId}?tab=${tab.value}`,
     count:

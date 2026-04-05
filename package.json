@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate",
+    "admin:bootstrap": "node scripts/bootstrap-admin.mjs",
     "db:seed": "node prisma/seed.mjs",
     "db:backfill-payment-layer:preview": "node scripts/backfill-sales-order-payment-layer.mjs --dry-run",
     "db:backfill-payment-layer": "node scripts/backfill-sales-order-payment-layer.mjs --apply",

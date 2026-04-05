@@ -40,6 +40,14 @@ import {
   getCustomerDetailShell,
   getCustomerDetailWechatData,
 } from "@/lib/customers/queries";
+import {
+  appendCustomerDetailNavigationContext,
+  type CustomerDetailNavigationContext,
+} from "@/lib/customers/public-pool-filter-url";
+import {
+  getCustomerOwnershipModeLabel,
+  publicPoolReasonLabels,
+} from "@/lib/customers/public-pool-metadata";
 import { getCustomerTradeOrderComposerData } from "@/lib/trade-orders/queries";
 import {
   formatCurrency,
@@ -121,11 +129,26 @@ function getActiveTabCount(tab: CustomerDetailTab, shell: CustomerDetailShellDat
   }
 }
 
-function buildCustomerTabHref(customerId: string, tab: CustomerDetailTab) {
-  return tab === "profile" ? `/customers/${customerId}` : `/customers/${customerId}?tab=${tab}`;
+function formatDateTimeSummary(value: Date | null | undefined, emptyLabel = "暂无") {
+  return value ? formatDateTime(value) : emptyLabel;
 }
 
-function buildCustomerTradeOrderHref(customerId: string, tradeOrderId?: string) {
+function buildCustomerTabHref(
+  customerId: string,
+  tab: CustomerDetailTab,
+  navigationContext?: CustomerDetailNavigationContext,
+) {
+  const baseHref =
+    tab === "profile" ? `/customers/${customerId}` : `/customers/${customerId}?tab=${tab}`;
+
+  return appendCustomerDetailNavigationContext(baseHref, navigationContext);
+}
+
+function buildCustomerTradeOrderHref(
+  customerId: string,
+  tradeOrderId?: string,
+  navigationContext?: CustomerDetailNavigationContext,
+) {
   const params = new URLSearchParams();
   params.set("tab", "orders");
   params.set("createTradeOrder", "1");
@@ -134,7 +157,14 @@ function buildCustomerTradeOrderHref(customerId: string, tradeOrderId?: string) 
     params.set("tradeOrderId", tradeOrderId);
   }
 
-  return `/customers/${customerId}?${params.toString()}`;
+  return appendCustomerDetailNavigationContext(
+    `/customers/${customerId}?${params.toString()}`,
+    navigationContext,
+  );
+}
+
+function getCustomerDetailBackLabel(navigationContext: CustomerDetailNavigationContext) {
+  return navigationContext.from === "public-pool" ? "返回公海池" : "返回客户中心";
 }
 
 function buildFocusActions(
@@ -146,7 +176,7 @@ function buildFocusActions(
       { tab: "calls" as const, label: "通话推进", count: shell._count.callRecords },
       { tab: "wechat" as const, label: "微信跟进", count: shell._count.wechatRecords },
       { tab: "live" as const, label: "直播邀约", count: shell._count.liveInvitations },
-      { tab: "orders" as const, label: "订单结果", count: shell._count.salesOrders },
+      { tab: "orders" as const, label: "成交结果", count: shell._count.salesOrders },
     ];
   }
 
@@ -187,6 +217,7 @@ function renderProfileTab(
   shell: CustomerDetailShellData,
   data: CustomerProfileData,
   canManageTags: boolean,
+  navigationContext?: CustomerDetailNavigationContext,
 ) {
   return (
     <div className="space-y-6">
@@ -267,7 +298,7 @@ function renderProfileTab(
 
         <CustomerTagsPanel
           customerId={shell.id}
-          redirectTo={`/customers/${shell.id}`}
+          redirectTo={buildCustomerTabHref(shell.id, "profile", navigationContext)}
           tags={data.customerTags}
           availableTags={data.availableTags}
           canManage={canManageTags}
@@ -342,6 +373,7 @@ function renderLegacyOrdersTab(
   data: CustomerOrdersData,
   customerId: string,
   canCreateSalesOrders: boolean,
+  navigationContext?: CustomerDetailNavigationContext,
 ) {
   return renderRecordCollectionTab({
     eyebrow: "成交记录",
@@ -360,10 +392,10 @@ function renderLegacyOrdersTab(
                 </div>
               </div>
               <Link
-                href={`/orders?createCustomerId=${customerId}`}
+                href={buildCustomerTradeOrderHref(customerId, undefined, navigationContext)}
                 className="crm-button crm-button-primary"
               >
-                创建销售订单
+                创建成交主单
               </Link>
             </div>
           ) : null}
@@ -400,8 +432,8 @@ function renderLegacyOrdersTab(
                     `创建时间：${formatDateTime(record.createdAt)}`,
                   ]}
                   description={`收件信息：${record.receiverNameSnapshot} / ${record.receiverPhoneSnapshot} / ${record.receiverAddressSnapshot}`}
-                  href={`/orders/${record.id}`}
-                  hrefLabel="查看订单"
+                  href={`/orders/${record.tradeOrder?.id ?? record.id}`}
+                  hrefLabel={record.tradeOrder ? "查看成交主单" : "查看订单"}
                 />
               );
             })}
@@ -410,7 +442,7 @@ function renderLegacyOrdersTab(
       ) : (
         <CustomerEmptyState
           title="暂无订单记录"
-          description="当前客户还没有销售订单。"
+          description="当前客户还没有成交主单记录。"
         />
       ),
   });
@@ -421,6 +453,7 @@ function renderOrdersTab({
   customerId,
   canCreateSalesOrders,
   tradeOrderComposer,
+  navigationContext,
   saveTradeOrderDraftAction,
   submitTradeOrderForReviewAction,
 }: Readonly<{
@@ -428,6 +461,7 @@ function renderOrdersTab({
   customerId: string;
   canCreateSalesOrders: boolean;
   tradeOrderComposer: TradeOrderComposerData | null;
+  navigationContext?: CustomerDetailNavigationContext;
   saveTradeOrderDraftAction?: (formData: FormData) => Promise<void>;
   submitTradeOrderForReviewAction?: (formData: FormData) => Promise<void>;
 }>) {
@@ -443,7 +477,11 @@ function renderOrdersTab({
               </div>
             </div>
             <Link
-              href={buildCustomerTradeOrderHref(customerId, tradeOrderComposer?.draft?.id)}
+              href={buildCustomerTradeOrderHref(
+                customerId,
+                tradeOrderComposer?.draft?.id,
+                navigationContext,
+              )}
               className="crm-button crm-button-primary"
             >
               {tradeOrderComposer ? "继续编辑成交表单" : "创建成交主单"}
@@ -464,7 +502,7 @@ function renderOrdersTab({
         </div>
       ) : null}
 
-      {renderLegacyOrdersTab(data, customerId, false)}
+      {renderLegacyOrdersTab(data, customerId, false, navigationContext)}
     </div>
   );
 }
@@ -552,6 +590,7 @@ function renderTabContent({
   canManageTags,
   canCreateSalesOrders,
   tradeOrderComposer,
+  navigationContext,
   saveTradeOrderDraftAction,
   submitTradeOrderForReviewAction,
 }: Readonly<{
@@ -564,12 +603,18 @@ function renderTabContent({
   canManageTags: boolean;
   canCreateSalesOrders: boolean;
   tradeOrderComposer: TradeOrderComposerData | null;
+  navigationContext?: CustomerDetailNavigationContext;
   saveTradeOrderDraftAction?: (formData: FormData) => Promise<void>;
   submitTradeOrderForReviewAction?: (formData: FormData) => Promise<void>;
 }>) {
   switch (activeTab) {
     case "profile":
-      return renderProfileTab(shell, tabData as CustomerProfileData, canManageTags);
+      return renderProfileTab(
+        shell,
+        tabData as CustomerProfileData,
+        canManageTags,
+        navigationContext,
+      );
     case "calls":
       return (
         <CustomerCallRecordsSection
@@ -604,6 +649,7 @@ function renderTabContent({
         customerId: shell.id,
         canCreateSalesOrders,
         tradeOrderComposer,
+        navigationContext,
         saveTradeOrderDraftAction,
         submitTradeOrderForReviewAction,
       });
@@ -627,10 +673,12 @@ export function CustomerDetailWorkbench({
   canManageTags,
   canCreateSalesOrders,
   tradeOrderComposer,
+  navigationContext,
   saveTradeOrderDraftAction,
   submitTradeOrderForReviewAction,
 }: Readonly<{
   shell: CustomerDetailShellData;
+  navigationContext: CustomerDetailNavigationContext;
   activeTab: CustomerDetailTab;
   tabData: CustomerDetailTabDataMap[CustomerDetailTab];
   notice: { tone: "success" | "danger"; message: string } | null;
@@ -646,11 +694,16 @@ export function CustomerDetailWorkbench({
   const activeTabMeta = getCustomerDetailTabMeta(activeTab);
   const activeTabCount = getActiveTabCount(activeTab, shell);
   const isManagementView = shell.viewerScope === "ADMIN" || shell.viewerScope === "SUPERVISOR";
+  const isPublicPoolContext = navigationContext.from === "public-pool";
   const effectiveRole: "ADMIN" | "SUPERVISOR" | "SALES" =
     shell.viewerScope === "ADMIN" || shell.viewerScope === "SUPERVISOR"
       ? shell.viewerScope
       : "SALES";
   const focusActions = buildFocusActions(effectiveRole, shell);
+  const ownershipLabel = getCustomerOwnershipModeLabel(shell.ownershipMode);
+  const publicPoolReasonLabel = shell.publicPoolReason
+    ? publicPoolReasonLabels[shell.publicPoolReason]
+    : "暂无入池原因";
 
   return (
     <WorkbenchLayout
@@ -663,9 +716,16 @@ export function CustomerDetailWorkbench({
             <>
               <CustomerStatusBadge status={shell.status} />
               <StatusBadge
+                label={`Ownership：${ownershipLabel}`}
+                variant={shell.ownershipMode === "PUBLIC" ? "warning" : "info"}
+              />
+              <StatusBadge
                 label={shell.owner ? `负责人：${shell.owner.name}` : "未分配负责人"}
                 variant={shell.owner ? "info" : "neutral"}
               />
+              {isPublicPoolContext ? (
+                <StatusBadge label="来自公海池" variant="warning" />
+              ) : null}
               <StatusBadge
                 label={`物流提醒 ${shell.logisticsFollowUpCount}`}
                 variant={shell.logisticsFollowUpCount > 0 ? "warning" : "neutral"}
@@ -674,12 +734,19 @@ export function CustomerDetailWorkbench({
           }
           actions={
             <div className="crm-toolbar-cluster">
-              <Link href="/customers" className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm">
-                返回客户中心
+              <Link
+                href={navigationContext.returnTo ?? "/customers"}
+                className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+              >
+                {getCustomerDetailBackLabel(navigationContext)}
               </Link>
               {canCreateSalesOrders ? (
                 <Link
-                  href={buildCustomerTradeOrderHref(shell.id, tradeOrderComposer?.draft?.id)}
+                  href={buildCustomerTradeOrderHref(
+                    shell.id,
+                    tradeOrderComposer?.draft?.id,
+                    navigationContext,
+                  )}
                   className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
                 >
                   创建成交主单
@@ -723,7 +790,7 @@ export function CustomerDetailWorkbench({
           {focusActions.map((item) => (
             <SmartLink
               key={item.tab}
-              href={buildCustomerTabHref(shell.id, item.tab)}
+              href={buildCustomerTabHref(shell.id, item.tab, navigationContext)}
               scrollTargetId="customer-records"
               className={cn(
                 "crm-button",
@@ -743,6 +810,38 @@ export function CustomerDetailWorkbench({
         sidebar={
           <DetailSidebar
             sections={[
+              {
+                eyebrow: isPublicPoolContext ? "Ownership 摘要" : "Ownership",
+                title: isPublicPoolContext ? "公海池上下文" : "当前归属状态",
+                description: isPublicPoolContext
+                  ? "当前详情来自公海池，保留入池原因、最近 owner 和返回上下文。"
+                  : "客户归属、入池历史和最近有效跟进在这里统一查看。",
+                items: [
+                  { label: "当前状态", value: ownershipLabel },
+                  { label: "负责人", value: formatOwnerLabel(shell.owner) },
+                  {
+                    label: "最近 Owner",
+                    value: shell.lastOwner ? shell.lastOwner.name : "暂无最近 owner",
+                  },
+                  { label: "入池原因", value: publicPoolReasonLabel },
+                  {
+                    label: "入池时间",
+                    value: formatDateTimeSummary(shell.publicPoolEnteredAt, "未在公海中"),
+                  },
+                  {
+                    label: "最近有效跟进",
+                    value: formatDateTimeSummary(shell.lastEffectiveFollowUpAt),
+                  },
+                  {
+                    label: "保护至",
+                    value: formatDateTimeSummary(shell.claimLockedUntil, "未锁定"),
+                  },
+                  {
+                    label: "公海团队",
+                    value: shell.publicPoolTeam?.name ?? shell.owner?.team?.name ?? "暂无团队",
+                  },
+                ],
+              },
               {
                 eyebrow: isManagementView ? "管理摘要" : "执行摘要",
                 title: isManagementView ? "客户经营摘要" : "下一步重点",
@@ -796,7 +895,7 @@ export function CustomerDetailWorkbench({
                   },
                   {
                     label: "订单动作",
-                    value: canCreateSalesOrders ? "可继续发起订单" : "仅查看成交结果",
+                    value: canCreateSalesOrders ? "可继续发起成交主单" : "仅查看成交结果",
                   },
                   {
                     label: "跟进动作",
@@ -824,6 +923,7 @@ export function CustomerDetailWorkbench({
               <CustomerDetailTabs
                 customerId={shell.id}
                 activeTab={activeTab}
+                buildHref={(tab) => buildCustomerTabHref(shell.id, tab, navigationContext)}
                 scrollTargetId="customer-records"
                 counts={{
                   calls: shell._count.callRecords,
@@ -869,6 +969,7 @@ export function CustomerDetailWorkbench({
                 canManageTags,
                 canCreateSalesOrders,
                 tradeOrderComposer,
+                navigationContext,
                 saveTradeOrderDraftAction,
                 submitTradeOrderForReviewAction,
               })}

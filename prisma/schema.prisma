@@ -56,6 +56,43 @@ enum CustomerLevel {
   VIP
 }
 
+enum CustomerOwnershipMode {
+  PRIVATE
+  PUBLIC
+  LOCKED
+}
+
+enum PublicPoolReason {
+  UNASSIGNED_IMPORT
+  MANUAL_RELEASE
+  INACTIVE_RECYCLE
+  OWNER_LEFT_TEAM
+  BATCH_REALLOCATION
+  MERGE_RELEASE
+  INVALID_FOLLOWUP_RECYCLE
+}
+
+enum PublicPoolAutoAssignStrategy {
+  NONE
+  ROUND_ROBIN
+  LOAD_BALANCING
+}
+
+enum CustomerOwnershipEventReason {
+  UNASSIGNED_IMPORT
+  MANUAL_RELEASE
+  INACTIVE_RECYCLE
+  OWNER_LEFT_TEAM
+  BATCH_REALLOCATION
+  MERGE_RELEASE
+  INVALID_FOLLOWUP_RECYCLE
+  SALES_CLAIM
+  SUPERVISOR_ASSIGN
+  AUTO_ASSIGN
+  TEAM_TRANSFER
+  OWNER_RESTORE
+}
+
 enum AssignmentType {
   MANUAL
   BATCH
@@ -463,10 +500,40 @@ model Team {
   supervisorId String?  @unique
   supervisor   User?    @relation("TeamSupervisor", fields: [supervisorId], references: [id])
   users        User[]   @relation("UserTeam")
+  publicPoolSetting TeamPublicPoolSetting?
+  publicPoolCustomers Customer[] @relation("CustomerPublicPoolTeam")
+  customerOwnershipEvents CustomerOwnershipEvent[] @relation("CustomerOwnershipEventTeam")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   @@map("teams")
+}
+
+model TeamPublicPoolSetting {
+  id                              String   @id @default(cuid())
+  teamId                          String   @unique
+  team                            Team     @relation(fields: [teamId], references: [id])
+  autoRecycleEnabled              Boolean  @default(true)
+  ownerExitRecycleEnabled         Boolean  @default(true)
+  autoAssignEnabled               Boolean  @default(false)
+  autoAssignStrategy              PublicPoolAutoAssignStrategy @default(NONE)
+  autoAssignBatchSize             Int      @default(20)
+  maxActiveCustomersPerSales      Int?
+  roundRobinCursorUserId          String?
+  defaultInactiveDays             Int      @default(14)
+  respectClaimLock                Boolean  @default(true)
+  strongEffectProtectionDays      Int      @default(7)
+  mediumEffectProtectionDays      Int      @default(3)
+  weakEffectResetsClock           Boolean  @default(false)
+  negativeRequiresSupervisorReview Boolean @default(true)
+  salesCanClaim                   Boolean  @default(true)
+  salesCanRelease                 Boolean  @default(false)
+  batchRecycleEnabled             Boolean  @default(true)
+  batchAssignEnabled              Boolean  @default(true)
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
+
+  @@map("team_public_pool_settings")
 }
 
 model User {
@@ -496,6 +563,7 @@ model User {
   supervisedTeam          Team?            @relation("TeamSupervisor")
   ownedLeads              Lead[]           @relation("LeadOwner")
   ownedCustomers          Customer[]       @relation("CustomerOwner")
+  publicPoolLastOwnedCustomers Customer[]  @relation("CustomerLastOwner")
   assignedLeadRecords     LeadAssignment[] @relation("LeadAssignmentTo")
   createdLeadAssignments  LeadAssignment[] @relation("LeadAssignmentBy")
   previousLeadAssignments LeadAssignment[] @relation("LeadAssignmentFrom")
@@ -533,6 +601,9 @@ model User {
   assignedCustomerTags    CustomerTag[]    @relation("CustomerTagAssignedBy")
   assignedLeadTags        LeadTag[]        @relation("LeadTagAssignedBy")
   operationLogs           OperationLog[]   @relation("OperationLogActor")
+  customerOwnershipEventsAsActor CustomerOwnershipEvent[] @relation("CustomerOwnershipEventActor")
+  customerOwnershipEventsFrom CustomerOwnershipEvent[] @relation("CustomerOwnershipEventFromOwner")
+  customerOwnershipEventsTo CustomerOwnershipEvent[] @relation("CustomerOwnershipEventToOwner")
   createdAt               DateTime         @default(now())
   updatedAt               DateTime         @updatedAt
 
@@ -597,9 +668,17 @@ model Customer {
   address         String?
   status          CustomerStatus   @default(ACTIVE)
   level           CustomerLevel    @default(NEW)
-  /// 业务承接人的主字段。主管分配线索后需要同步到这里，销售后续统一以客户中心承接。
   ownerId         String?
   owner           User?            @relation("CustomerOwner", fields: [ownerId], references: [id])
+  ownershipMode   CustomerOwnershipMode @default(PRIVATE)
+  lastOwnerId     String?
+  lastOwner       User?            @relation("CustomerLastOwner", fields: [lastOwnerId], references: [id])
+  publicPoolEnteredAt DateTime?
+  publicPoolReason PublicPoolReason?
+  claimLockedUntil DateTime?
+  lastEffectiveFollowUpAt DateTime?
+  publicPoolTeamId String?
+  publicPoolTeam  Team?            @relation("CustomerPublicPoolTeam", fields: [publicPoolTeamId], references: [id])
   remark          String?          @db.Text
   leads           Lead[]
   followUpTasks   FollowUpTask[]
@@ -618,12 +697,45 @@ model Customer {
   codCollectionRecords   CodCollectionRecord[]
   customerTags    CustomerTag[]
   mergeLogs       LeadCustomerMergeLog[]
+  ownershipEvents CustomerOwnershipEvent[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
   @@index([status])
   @@index([ownerId])
+  @@index([ownershipMode, ownerId])
+  @@index([lastOwnerId])
+  @@index([publicPoolTeamId, ownershipMode, publicPoolEnteredAt], map: "cust_pool_team_mode_entered_idx")
+  @@index([publicPoolReason, publicPoolEnteredAt], map: "cust_pool_reason_entered_idx")
+  @@index([claimLockedUntil])
+  @@index([lastEffectiveFollowUpAt])
   @@index([createdAt])
+}
+
+model CustomerOwnershipEvent {
+  id                  String                       @id @default(cuid())
+  customerId          String
+  customer            Customer                     @relation(fields: [customerId], references: [id])
+  fromOwnerId         String?
+  fromOwner           User?                        @relation("CustomerOwnershipEventFromOwner", fields: [fromOwnerId], references: [id])
+  toOwnerId           String?
+  toOwner             User?                        @relation("CustomerOwnershipEventToOwner", fields: [toOwnerId], references: [id])
+  fromOwnershipMode   CustomerOwnershipMode?
+  toOwnershipMode     CustomerOwnershipMode
+  reason              CustomerOwnershipEventReason
+  actorId             String?
+  actor               User?                        @relation("CustomerOwnershipEventActor", fields: [actorId], references: [id])
+  teamId              String?
+  team                Team?                        @relation("CustomerOwnershipEventTeam", fields: [teamId], references: [id])
+  note                String?                      @db.Text
+  effectiveFollowUpAt DateTime?
+  claimLockedUntil    DateTime?
+  createdAt           DateTime                     @default(now())
+
+  @@index([customerId, createdAt])
+  @@index([reason, createdAt])
+  @@index([teamId, createdAt])
+  @@index([actorId, createdAt])
 }
 
 model LeadAssignment {

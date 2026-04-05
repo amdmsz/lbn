@@ -11,16 +11,17 @@ import {
 import { auth } from "@/lib/auth/session";
 import {
   createShippingExportBatch,
+  regenerateShippingExportBatchFile,
   updateLogisticsFollowUpTask,
   updateSalesOrderShipping,
 } from "@/lib/shipping/mutations";
 
 function getErrorMessage(error: unknown) {
   if (error instanceof ZodError) {
-    return error.issues[0]?.message ?? "表单校验失败。";
+    return error.issues[0]?.message ?? "Form validation failed.";
   }
 
-  return error instanceof Error ? error.message : "操作失败，请稍后重试。";
+  return error instanceof Error ? error.message : "Action failed. Please retry later.";
 }
 
 export async function createShippingExportBatchAction(formData: FormData) {
@@ -47,12 +48,52 @@ export async function createShippingExportBatchAction(formData: FormData) {
 
     revalidatePath("/shipping");
     revalidatePath("/shipping/export-batches");
+    revalidatePath("/fulfillment");
+
+    const successMessage = result.fileGenerated
+      ? `Export batch ${result.exportNo} created and file generated from frozen snapshots.`
+      : `Export batch ${result.exportNo} created and snapshots frozen; file generation failed, regenerate it from export batches.`;
+
+    redirect(buildRedirectTarget(redirectTo, "success", successMessage));
+  } catch (error) {
+    rethrowRedirectError(error);
+    redirect(buildRedirectTarget(redirectTo, "error", getErrorMessage(error)));
+  }
+}
+
+function getFormValues(formData: FormData, key: string) {
+  return formData
+    .getAll(key)
+    .filter((value): value is string => typeof value === "string");
+}
+
+export async function regenerateShippingExportBatchFileAction(formData: FormData) {
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const redirectTo = getFormValue(formData, "redirectTo") || "/shipping/export-batches";
+
+  try {
+    const result = await regenerateShippingExportBatchFile(
+      {
+        id: session.user.id,
+        role: session.user.role,
+      },
+      getFormValue(formData, "exportBatchId"),
+    );
+
+    revalidatePath("/shipping");
+    revalidatePath("/shipping/export-batches");
+    revalidatePath("/fulfillment");
 
     redirect(
       buildRedirectTarget(
         redirectTo,
         "success",
-        `报单批次 ${result.exportNo} 已创建，相关任务已标记为已报单。`,
+        `Export batch ${result.exportNo} file regenerated from frozen snapshots.`,
       ),
     );
   } catch (error) {
@@ -101,6 +142,7 @@ export async function updateSalesOrderShippingAction(formData: FormData) {
 
     revalidatePath("/shipping");
     revalidatePath("/shipping/export-batches");
+    revalidatePath("/fulfillment");
     revalidatePath(`/orders/${result.salesOrderId}`);
     revalidatePath(`/customers/${result.customerId}`);
     revalidatePath("/collection-tasks");
@@ -108,7 +150,95 @@ export async function updateSalesOrderShippingAction(formData: FormData) {
     revalidatePath("/dashboard");
     revalidatePath("/reports");
 
-    redirect(buildRedirectTarget(redirectTo, "success", "发货信息已更新。"));
+    redirect(buildRedirectTarget(redirectTo, "success", "Shipping updated."));
+  } catch (error) {
+    rethrowRedirectError(error);
+    redirect(buildRedirectTarget(redirectTo, "error", getErrorMessage(error)));
+  }
+}
+
+export async function bulkUpdateSalesOrderShippingAction(formData: FormData) {
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const redirectTo = getFormValue(formData, "redirectTo") || "/shipping";
+
+  try {
+    const shippingTaskIds = getFormValues(formData, "shippingTaskId");
+    const shippingProviders = getFormValues(formData, "shippingProvider");
+    const trackingNumbers = getFormValues(formData, "trackingNumber");
+    const selectedShippingTaskIds = new Set(getFormValues(formData, "selectedShippingTaskId"));
+
+    if (selectedShippingTaskIds.size === 0) {
+      throw new Error("Please select at least one shipping task.");
+    }
+
+    let updatedCount = 0;
+    const affectedSalesOrderIds = new Set<string>();
+    const affectedCustomerIds = new Set<string>();
+
+    for (const [index, shippingTaskId] of shippingTaskIds.entries()) {
+      if (!selectedShippingTaskIds.has(shippingTaskId)) {
+        continue;
+      }
+
+      const trackingNumber = trackingNumbers[index]?.trim() ?? "";
+
+      if (!trackingNumber) {
+        throw new Error("Selected rows must include tracking numbers.");
+      }
+
+      const result = await updateSalesOrderShipping(
+        {
+          id: session.user.id,
+          role: session.user.role,
+        },
+        {
+          shippingTaskId,
+          shippingProvider: shippingProviders[index] ?? "",
+          trackingNumber,
+          shippingStatus: "SHIPPED",
+          codCollectionStatus: "",
+          codCollectedAmount: "",
+          codRemark: "",
+        },
+      );
+
+      updatedCount += 1;
+      affectedSalesOrderIds.add(result.salesOrderId);
+      affectedCustomerIds.add(result.customerId);
+    }
+
+    if (updatedCount === 0) {
+      throw new Error("No shipping task was updated.");
+    }
+
+    revalidatePath("/shipping");
+    revalidatePath("/shipping/export-batches");
+    revalidatePath("/fulfillment");
+    revalidatePath("/collection-tasks");
+    revalidatePath("/payment-records");
+    revalidatePath("/dashboard");
+    revalidatePath("/reports");
+
+    for (const salesOrderId of affectedSalesOrderIds) {
+      revalidatePath(`/orders/${salesOrderId}`);
+    }
+
+    for (const customerId of affectedCustomerIds) {
+      revalidatePath(`/customers/${customerId}`);
+    }
+
+    redirect(
+      buildRedirectTarget(
+        redirectTo,
+        "success",
+        `${updatedCount} shipping tasks moved to shipped from the current supplier pool.`,
+      ),
+    );
   } catch (error) {
     rethrowRedirectError(error);
     redirect(buildRedirectTarget(redirectTo, "error", getErrorMessage(error)));
@@ -144,12 +274,13 @@ export async function updateLogisticsFollowUpTaskAction(formData: FormData) {
     );
 
     revalidatePath("/shipping");
+    revalidatePath("/fulfillment");
     revalidatePath("/dashboard");
     revalidatePath("/reports");
     revalidatePath(`/orders/${result.salesOrderId}`);
     revalidatePath(`/customers/${result.customerId}`);
 
-    redirect(buildRedirectTarget(redirectTo, "success", "物流跟进任务已更新。"));
+    redirect(buildRedirectTarget(redirectTo, "success", "Logistics follow-up updated."));
   } catch (error) {
     rethrowRedirectError(error);
     redirect(buildRedirectTarget(redirectTo, "error", getErrorMessage(error)));

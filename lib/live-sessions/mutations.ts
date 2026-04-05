@@ -15,6 +15,7 @@ import {
   canManageLiveSessions,
   getCustomerScope,
 } from "@/lib/auth/access";
+import { touchCustomerEffectiveFollowUpFromLiveInvitationTx } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
 
 export type LiveActor = {
@@ -308,6 +309,15 @@ export async function upsertLiveInvitation(
           giftQualified,
         },
       },
+    });
+
+    await touchCustomerEffectiveFollowUpFromLiveInvitationTx(tx, {
+      customerId: customer.id,
+      occurredAt: invitedAt ?? liveSession.startAt,
+      attended,
+      attendanceStatus,
+      watchDurationMinutes: parsed.watchDurationMinutes,
+      giftQualified,
     });
 
     return saved;

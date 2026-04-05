@@ -1,397 +1,387 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PaginationControls } from "@/components/shared/pagination-controls";
+import { RecordTabs } from "@/components/shared/record-tabs";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/shared/status-badge";
+import { TradeOrderLogisticsCell } from "@/components/trade-orders/trade-order-logistics-cell";
 import { formatDateTime } from "@/lib/customers/metadata";
 import {
   formatCurrency,
   getSalesOrderPaymentSchemeLabel,
   getSalesOrderPaymentSchemeVariant,
-  getSalesOrderReviewStatusLabel,
-  getSalesOrderReviewStatusVariant,
-  getShippingFulfillmentStatusLabel,
-  getShippingFulfillmentStatusVariant,
-  getShippingReportStatusLabel,
 } from "@/lib/fulfillment/metadata";
+import {
+  buildFulfillmentBatchesHref,
+  buildFulfillmentShippingHref,
+} from "@/lib/fulfillment/navigation";
 import type { getTradeOrdersPageData, TradeOrderFilters } from "@/lib/trade-orders/queries";
+import { cn } from "@/lib/utils";
 
 type TradeOrdersData = Awaited<ReturnType<typeof getTradeOrdersPageData>>;
-type TradeOrderListItem = TradeOrdersData["items"][number];
+type TradeOrderItem = TradeOrdersData["items"][number];
+
+const GRID_CLASS =
+  "xl:grid-cols-[minmax(0,2.7fr)_minmax(0,0.95fr)_minmax(0,0.72fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1.14fr)_minmax(148px,0.82fr)]";
+
+const tradeStatusMeta: Record<
+  TradeOrderItem["tradeStatus"],
+  { label: string; variant: StatusBadgeVariant }
+> = {
+  DRAFT: { label: "草稿", variant: "neutral" },
+  PENDING_REVIEW: { label: "待审核", variant: "warning" },
+  APPROVED: { label: "已审核", variant: "success" },
+  REJECTED: { label: "已拒绝", variant: "danger" },
+  CANCELED: { label: "已取消", variant: "neutral" },
+};
 
 function buildPageHref(
   filters: TradeOrderFilters,
   overrides: Partial<TradeOrderFilters> = {},
+  basePath = "/orders",
+  baseSearchParams?: Record<string, string>,
 ) {
-  const next = {
-    ...filters,
-    ...overrides,
-  };
-  const params = new URLSearchParams();
+  const next = { ...filters, ...overrides };
+  const params = new URLSearchParams(baseSearchParams);
+  const entries: Array<[string, string]> = [
+    ["keyword", next.keyword],
+    ["customerKeyword", next.customerKeyword],
+    ["supplierId", next.supplierId],
+    ["statusView", next.statusView],
+    ["focusView", next.focusView],
+    ["supplierCount", next.supplierCount],
+  ];
 
-  if (next.keyword) {
-    params.set("keyword", next.keyword);
-  }
-
-  if (next.customerKeyword) {
-    params.set("customerKeyword", next.customerKeyword);
-  }
-
-  if (next.supplierId) {
-    params.set("supplierId", next.supplierId);
-  }
-
-  if (next.statusView) {
-    params.set("statusView", next.statusView);
-  }
-
-  if (next.supplierCount) {
-    params.set("supplierCount", next.supplierCount);
+  for (const [key, value] of entries) {
+    if (value) {
+      params.set(key, value);
+    } else {
+      params.delete(key);
+    }
   }
 
   if (next.sortBy !== "UPDATED_DESC") {
     params.set("sortBy", next.sortBy);
+  } else {
+    params.delete("sortBy");
   }
 
   if (next.page > 1) {
     params.set("page", String(next.page));
+  } else {
+    params.delete("page");
   }
 
   const query = params.toString();
-  return query ? `/orders?${query}` : "/orders";
+  return query ? `${basePath}?${query}` : basePath;
 }
 
-function getTradeStatusLabel(
-  value: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "CANCELED",
-) {
-  switch (value) {
-    case "DRAFT":
-      return "草稿";
-    case "PENDING_REVIEW":
-      return "待审核";
-    case "APPROVED":
-      return "已审核";
-    case "REJECTED":
-      return "已拒绝";
-    case "CANCELED":
-      return "已取消";
-    default:
-      return value;
-  }
-}
-
-function getTradeStatusVariant(
-  value: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "CANCELED",
-): StatusBadgeVariant {
-  switch (value) {
-    case "PENDING_REVIEW":
-      return "warning";
-    case "APPROVED":
-      return "success";
-    case "REJECTED":
-      return "danger";
-    case "DRAFT":
-    case "CANCELED":
-    default:
-      return "neutral";
-  }
-}
-
-function getStatusViewLabel(value: TradeOrderFilters["statusView"]) {
-  switch (value) {
-    case "DRAFT":
-      return "草稿";
-    case "PENDING_REVIEW":
-      return "待审核";
-    case "APPROVED":
-      return "已审核";
-    case "REJECTED":
-      return "已拒绝";
-    default:
-      return "全部状态";
-  }
-}
-
-function getSupplierCountLabel(value: TradeOrderFilters["supplierCount"]) {
-  switch (value) {
-    case "1":
-      return "1 个 supplier";
-    case "2":
-      return "2 个 supplier";
-    case "3_PLUS":
-      return "3 个及以上 supplier";
-    default:
-      return "全部 supplier 数";
-  }
-}
-
-function getSortLabel(value: TradeOrderFilters["sortBy"]) {
-  switch (value) {
-    case "UPDATED_ASC":
-      return "最早更新";
-    case "CREATED_DESC":
-      return "最新创建";
-    case "UPDATED_DESC":
-    default:
-      return "最近更新";
-  }
-}
-
-function buildCustomerTradeOrderHref(customerId: string, tradeOrderId?: string) {
-  const params = new URLSearchParams();
-  params.set("tab", "orders");
-  params.set("createTradeOrder", "1");
-
-  if (tradeOrderId) {
-    params.set("tradeOrderId", tradeOrderId);
+function getActiveFocusView(filters: TradeOrderFilters) {
+  if (filters.focusView) {
+    return filters.focusView;
   }
 
-  return `/customers/${customerId}?${params.toString()}`;
+  if (filters.statusView === "PENDING_REVIEW" || filters.statusView === "APPROVED") {
+    return filters.statusView;
+  }
+
+  return "";
 }
 
-function TradeOrderCard({
+function getShippingHref(item: TradeOrderItem) {
+  const summary = item.executionSummary;
+  if (!summary) {
+    return buildFulfillmentShippingHref({ keyword: item.tradeNo });
+  }
+
+  if (summary.exceptionSubOrderCount > 0) {
+    return buildFulfillmentShippingHref({ keyword: item.tradeNo, stageView: "EXCEPTION" });
+  }
+
+  if (summary.pendingReportSubOrderCount > 0) {
+    return buildFulfillmentShippingHref({ keyword: item.tradeNo, stageView: "PENDING_REPORT" });
+  }
+
+  if (summary.pendingTrackingSubOrderCount > 0) {
+    return buildFulfillmentShippingHref({ keyword: item.tradeNo, stageView: "PENDING_TRACKING" });
+  }
+
+  return buildFulfillmentShippingHref({ keyword: item.tradeNo, stageView: "SHIPPED" });
+}
+
+function getBatchHref(item: TradeOrderItem) {
+  return buildFulfillmentBatchesHref({
+    keyword: item.latestExportBatch?.exportNo || item.tradeNo,
+  });
+}
+
+function getTraceTarget(item: TradeOrderItem) {
+  const tracked = item.salesOrders.filter(
+    (salesOrder) => salesOrder.shippingTask?.trackingNumber?.trim(),
+  );
+
+  if (tracked.length === 1 && tracked[0].shippingTask) {
+    return tracked[0].shippingTask;
+  }
+
+  if (item.salesOrders.length === 1 && item.salesOrders[0].shippingTask) {
+    return item.salesOrders[0].shippingTask;
+  }
+
+  return null;
+}
+
+function getProductSummary(item: TradeOrderItem) {
+  const shown = item.items.slice(0, 2);
+  const rest = item.items.length - shown.length;
+
+  return {
+    lines: shown.map((tradeItem) => ({
+      id: tradeItem.id,
+      label:
+        tradeItem.titleSnapshot ||
+        tradeItem.productNameSnapshot ||
+        tradeItem.skuNameSnapshot ||
+        "未命名商品",
+      qty: tradeItem.qty,
+      type: tradeItem.itemType,
+    })),
+    rest,
+  };
+}
+
+function TradeOrderRow({
   item,
+  redirectTo,
   canCreate,
   canReview,
-  redirectTo,
   reviewAction,
 }: Readonly<{
-  item: TradeOrderListItem;
+  item: TradeOrderItem;
+  redirectTo: string;
   canCreate: boolean;
   canReview: boolean;
-  redirectTo: string;
   reviewAction: (formData: FormData) => Promise<void>;
 }>) {
-  const canContinueEdit =
-    canCreate && (item.tradeStatus === "DRAFT" || item.tradeStatus === "REJECTED");
-  const plannedSupplierCount = item.components.length;
-  const supplierSummary = item.components.map((component) => component.supplierNameSnapshot);
+  const product = getProductSummary(item);
+  const traceTarget = getTraceTarget(item);
+  const shippingHref = getShippingHref(item);
+  const batchHref = getBatchHref(item);
+  const totalQty = item.items.reduce((sum, tradeItem) => sum + tradeItem.qty, 0);
+  const continueEditHref =
+    canCreate && (item.tradeStatus === "DRAFT" || item.tradeStatus === "REJECTED")
+      ? `/customers/${item.customer.id}?tab=orders&createTradeOrder=1&tradeOrderId=${item.id}`
+      : null;
+
+  const fulfillmentSummary = [
+    ["待报单", item.executionSummary?.pendingReportSubOrderCount ?? 0],
+    ["待物流", item.executionSummary?.pendingTrackingSubOrderCount ?? 0],
+    ["已发货", item.executionSummary?.shippedSubOrderCount ?? 0],
+    ["异常", item.executionSummary?.exceptionSubOrderCount ?? 0],
+  ] as const;
 
   return (
-    <article className="overflow-hidden rounded-[1rem] border border-black/7 bg-[rgba(255,255,255,0.9)] shadow-[0_10px_22px_rgba(18,24,31,0.04)]">
-      <div className="border-b border-black/7 bg-[rgba(247,248,250,0.72)] px-4 py-3.5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black/42">
-                交易父单
-              </p>
+    <article className="overflow-hidden rounded-[0.96rem] border border-black/7 bg-white/94 shadow-[0_8px_20px_rgba(18,24,31,0.04)]">
+      <div className="border-b border-black/7 bg-[rgba(247,248,250,0.78)] px-4 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-[15px] font-semibold tracking-tight text-black/86">
+              {item.tradeNo}
+            </h3>
+            <StatusBadge
+              label={tradeStatusMeta[item.tradeStatus].label}
+              variant={tradeStatusMeta[item.tradeStatus].variant}
+            />
+            {item.executionSummary ? (
               <StatusBadge
-                label={getTradeStatusLabel(item.tradeStatus)}
-                variant={getTradeStatusVariant(item.tradeStatus)}
+                label={`子单 ${item.executionSummary.totalSubOrderCount}`}
+                variant="neutral"
               />
-              <StatusBadge
-                label={getSalesOrderPaymentSchemeLabel(item.paymentScheme)}
-                variant={getSalesOrderPaymentSchemeVariant(item.paymentScheme)}
-              />
-            </div>
-            <h3 className="text-base font-semibold tracking-tight text-black/86">{item.tradeNo}</h3>
-            <p className="text-sm text-black/58">
-              {item.customer.name} / {item.customer.phone}
-            </p>
+            ) : null}
           </div>
-          <div className="text-right text-xs leading-5 text-black/48">
-            <div>创建时间：{formatDateTime(item.createdAt)}</div>
-            <div>最近更新：{formatDateTime(item.updatedAt)}</div>
+          <div className="text-xs text-black/48">
+            下单 {formatDateTime(item.createdAt)} · 客户 {item.customer.name} · 销售{" "}
+            {item.customer.owner?.name || item.customer.owner?.username || "未分配"}
           </div>
         </div>
       </div>
 
-      <div className="space-y-4 px-4 py-4">
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-          <div className="rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] px-3.5 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/40">
-              客户与拆单范围
-            </p>
-            <div className="mt-2 space-y-1.5 text-sm leading-6 text-black/68">
-              <div>负责人：{item.customer.owner?.name || item.customer.owner?.username || "未分配"}</div>
-              <div>收件人：{item.receiverNameSnapshot}</div>
-              <div>联系电话：{item.receiverPhoneSnapshot}</div>
-              <div>SKU 行数：{item.items.length}</div>
-              <div>supplier 数：{plannedSupplierCount}</div>
-            </div>
-            {supplierSummary.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {supplierSummary.map((supplierName) => (
-                  <span
-                    key={`${item.id}-${supplierName}`}
-                    className="rounded-full border border-black/8 bg-white/76 px-3 py-1 text-[11px] text-black/60"
-                  >
-                    {supplierName}
-                  </span>
-                ))}
+      <div
+        className={cn(
+          "grid gap-px bg-black/7 md:grid-cols-2 xl:grid-cols-none xl:grid",
+          GRID_CLASS,
+        )}
+      >
+        <div className="bg-white/98 px-3 py-2.5">
+          <div className="space-y-2">
+            {product.lines.map((line) => (
+              <div key={line.id} className="flex items-start gap-2">
+                <span className="mt-0.5 rounded-full border border-black/8 bg-[rgba(247,248,250,0.88)] px-2 py-0.5 text-[10px] text-black/58">
+                  {line.type === "GIFT" ? "赠品" : line.type === "BUNDLE" ? "套餐" : "商品"}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-black/84">{line.label}</div>
+                  <div className="text-xs text-black/50">x {line.qty}</div>
+                </div>
               </div>
+            ))}
+            {product.rest > 0 ? (
+              <div className="text-xs text-black/50">等 {product.rest} 件商品</div>
             ) : null}
-          </div>
-
-          <div className="rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] px-3.5 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/40">
-              金额摘要
-            </p>
-            <div className="mt-2 space-y-1.5 text-sm leading-6 text-black/68">
-              <div>成交金额：{formatCurrency(item.finalAmount)}</div>
-              <div>已录金额：{formatCurrency(item.collectedAmount)}</div>
-              <div>待收金额：{formatCurrency(item.remainingAmount)}</div>
-              <div>定金：{formatCurrency(item.depositAmount)}</div>
-              <div>COD：{formatCurrency(item.codAmount)}</div>
-            </div>
           </div>
         </div>
 
-        <div className="rounded-[0.95rem] border border-black/7 bg-white/72 px-3.5 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/40">
-                商品明细
-              </p>
-              <p className="mt-1 text-xs text-black/52">
-                当前阶段只承接多 SKU 直售写路径，父单列表这里直接展示成交行快照与拆单结果。
-              </p>
-            </div>
+        <div className="bg-white/98 px-3 py-2.5 text-sm text-black/80">
+          <div className="font-semibold">{formatCurrency(item.finalAmount)}</div>
+          <div className="mt-1 text-xs text-black/56">
+            SKU {item.items.length} · 件数 {totalQty}
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {item.items.map((tradeItem) => (
+          <div className="text-xs text-black/48">已录 {formatCurrency(item.collectedAmount)}</div>
+        </div>
+
+        <div className="bg-white/98 px-3 py-2.5">
+          <StatusBadge
+            label={(item.executionSummary?.exceptionSubOrderCount ?? 0) > 0 ? "异常跟进" : "暂无售后"}
+            variant={(item.executionSummary?.exceptionSubOrderCount ?? 0) > 0 ? "warning" : "neutral"}
+          />
+          <div className="mt-1 text-xs text-black/52">
+            {(item.executionSummary?.exceptionSubOrderCount ?? 0) > 0
+              ? `${item.executionSummary?.exceptionSubOrderCount ?? 0} 个子单需关注`
+              : "默认不展开解释"}
+          </div>
+        </div>
+
+        <div className="bg-white/98 px-3 py-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge
+              label={tradeStatusMeta[item.tradeStatus].label}
+              variant={tradeStatusMeta[item.tradeStatus].variant}
+            />
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-1.5 text-[11px] leading-4">
+            {fulfillmentSummary.map(([label, count]) => (
               <div
-                key={tradeItem.id}
-                className="rounded-full border border-black/8 bg-[rgba(247,248,250,0.85)] px-3 py-1.5 text-xs text-black/62"
+                key={label}
+                className="flex items-center justify-between rounded-[0.72rem] border border-black/8 bg-[rgba(247,248,250,0.88)] px-2 py-1 text-black/60"
               >
-                {tradeItem.titleSnapshot || tradeItem.productNameSnapshot || "SKU"} × {tradeItem.qty}
+                <span>{label}</span>
+                <span className="font-semibold text-black/74">{count}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="rounded-[0.95rem] border border-black/7 bg-white/72 px-3.5 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/40">
-                供应商子单
-              </p>
-              <p className="mt-1 text-xs text-black/52">
-                新入口统一优先父单。旧子单详情保留兼容访问，但已经降为执行层次级入口。
-              </p>
-            </div>
+        <div className="bg-white/98 px-3 py-2.5">
+          <StatusBadge
+            label={getSalesOrderPaymentSchemeLabel(item.paymentScheme)}
+            variant={getSalesOrderPaymentSchemeVariant(item.paymentScheme)}
+          />
+          <div className="mt-1 text-xs text-black/56">
+            待收 {formatCurrency(item.remainingAmount)}
           </div>
-          {item.salesOrders.length > 0 ? (
-            <div className="mt-3 grid gap-3 xl:grid-cols-2">
-              {item.salesOrders.map((salesOrder) => (
-                <div
-                  key={salesOrder.id}
-                  className="rounded-[0.95rem] border border-black/8 bg-[rgba(249,250,252,0.74)] px-3.5 py-3"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="space-y-1">
-                      <div className="text-sm font-medium text-black/82">
-                        {item.tradeNo} / {salesOrder.subOrderNo || salesOrder.orderNo}
-                      </div>
-                      <div className="text-xs text-black/48">{salesOrder.supplier.name}</div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <StatusBadge
-                        label={getSalesOrderReviewStatusLabel(salesOrder.reviewStatus)}
-                        variant={getSalesOrderReviewStatusVariant(salesOrder.reviewStatus)}
-                      />
-                      {salesOrder.shippingTask ? (
-                        <StatusBadge
-                          label={getShippingFulfillmentStatusLabel(
-                            salesOrder.shippingTask.shippingStatus,
-                          )}
-                          variant={getShippingFulfillmentStatusVariant(
-                            salesOrder.shippingTask.shippingStatus,
-                          )}
-                        />
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="mt-2 space-y-1.5 text-xs leading-5 text-black/58">
-                    <div>子单金额：{formatCurrency(salesOrder.finalAmount)}</div>
-                    <div>待收金额：{formatCurrency(salesOrder.remainingAmount)}</div>
-                    <div>COD：{formatCurrency(salesOrder.codAmount)}</div>
-                    <div>
-                      发货摘要：
-                      {salesOrder.shippingTask
-                        ? `${getShippingReportStatusLabel(
-                            salesOrder.shippingTask.reportStatus,
-                          )} / ${getShippingFulfillmentStatusLabel(
-                            salesOrder.shippingTask.shippingStatus,
-                          )}`
-                        : "待父单审核通过"}
-                    </div>
-                  </div>
-                  <div className="mt-3">
-                    <Link href={`/orders/${salesOrder.id}`} className="crm-text-link text-xs">
-                      打开供应商子单详情
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="mt-3 rounded-[0.95rem] border border-dashed border-black/10 bg-[rgba(249,250,252,0.64)] px-4 py-3 text-sm leading-6 text-black/55">
-              当前仍是草稿或尚未提交审核，系统已根据 SKU 的 supplier 生成拆单预期，但还未物化
-              SalesOrder 子单。
-            </div>
-          )}
         </div>
 
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex flex-wrap gap-2">
-            <Link href={`/orders/${item.id}`} className="crm-button crm-button-primary">
-              打开父单详情
+        <div className="bg-white/98 px-3 py-2.5">
+          <TradeOrderLogisticsCell
+            receiverName={item.receiverNameSnapshot}
+            receiverPhone={item.receiverPhoneSnapshot}
+            receiverAddress={item.receiverAddressSnapshot}
+            shippingTaskId={traceTarget?.id}
+            shippingProvider={traceTarget?.shippingProvider}
+            trackingNumber={traceTarget?.trackingNumber}
+            shippingStatus={traceTarget?.shippingStatus}
+          />
+        </div>
+
+        <div className="flex h-full items-center justify-center bg-white/98 px-3 py-2.5">
+          <div className="flex w-full max-w-[8.5rem] flex-col items-center gap-2">
+            <Link
+              href={`/orders/${item.id}`}
+              className="inline-flex min-h-0 items-center rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-semibold text-black/76 transition hover:border-black/18 hover:bg-[rgba(247,248,250,0.96)]"
+            >
+              查看详情
             </Link>
-            {canContinueEdit ? (
-              <Link
-                href={buildCustomerTradeOrderHref(item.customer.id, item.id)}
-                className="crm-button crm-button-secondary"
-              >
-                回到客户详情继续编辑
-              </Link>
+
+            {canReview ? (
+              <>
+                <Link
+                  href={shippingHref}
+                  className="inline-flex min-h-0 items-center rounded-full border border-[rgba(54,95,135,0.14)] bg-[rgba(244,248,252,0.92)] px-3 py-1.5 text-xs font-medium text-[var(--color-info)] transition hover:border-[rgba(54,95,135,0.22)] hover:bg-white"
+                >
+                  去发货执行
+                </Link>
+
+                <details className="relative">
+                  <summary className="inline-flex cursor-pointer list-none items-center rounded-full border border-black/10 bg-[rgba(247,248,250,0.82)] px-3 py-1.5 text-xs font-medium text-black/62 transition hover:border-black/18 hover:bg-white">
+                    更多
+                  </summary>
+                  <div className="absolute right-0 z-20 mt-2 w-36 rounded-[0.9rem] border border-black/8 bg-white/96 p-1.5 shadow-[0_12px_28px_rgba(18,24,31,0.10)]">
+                    <Link
+                      href={batchHref}
+                      className="block rounded-[0.75rem] px-3 py-2 text-sm text-black/72 hover:bg-[rgba(247,248,250,0.9)]"
+                    >
+                      查看批次
+                    </Link>
+                    {continueEditHref ? (
+                      <Link
+                        href={continueEditHref}
+                        className="block rounded-[0.75rem] px-3 py-2 text-sm text-black/72 hover:bg-[rgba(247,248,250,0.9)]"
+                      >
+                        继续编辑
+                      </Link>
+                    ) : null}
+                  </div>
+                </details>
+              </>
             ) : null}
           </div>
-
-          {canReview && item.tradeStatus === "PENDING_REVIEW" ? (
-            <div className="grid gap-3 md:grid-cols-2">
-              <form
-                action={reviewAction}
-                className="rounded-[0.95rem] border border-black/8 bg-white/74 px-3.5 py-3"
-              >
-                <input type="hidden" name="tradeOrderId" value={item.id} />
-                <input type="hidden" name="reviewStatus" value="APPROVED" />
-                <input type="hidden" name="redirectTo" value={redirectTo} />
-                <p className="text-xs leading-5 text-black/55">
-                  审核通过后才统一初始化 supplier 子单的 shipping / payment artifacts。
-                </p>
-                <button type="submit" className="crm-button crm-button-primary mt-3 w-full">
-                  审核通过
-                </button>
-              </form>
-
-              <form
-                action={reviewAction}
-                className="rounded-[0.95rem] border border-black/8 bg-white/74 px-3.5 py-3"
-              >
-                <input type="hidden" name="tradeOrderId" value={item.id} />
-                <input type="hidden" name="reviewStatus" value="REJECTED" />
-                <input type="hidden" name="redirectTo" value={redirectTo} />
-                <textarea
-                  name="rejectReason"
-                  rows={3}
-                  required
-                  placeholder="填写驳回原因"
-                  className="crm-textarea"
-                />
-                <button type="submit" className="crm-button crm-button-secondary mt-3 w-full">
-                  驳回父单
-                </button>
-              </form>
-            </div>
-          ) : null}
         </div>
       </div>
+
+      {canReview && item.tradeStatus === "PENDING_REVIEW" ? (
+        <div className="border-t border-black/7 bg-[rgba(247,248,250,0.72)] px-4 py-4">
+          <div className="grid gap-3 lg:grid-cols-2">
+            <form
+              action={reviewAction}
+              className="rounded-[0.95rem] border border-black/8 bg-white/86 px-3.5 py-3"
+            >
+              <input type="hidden" name="tradeOrderId" value={item.id} />
+              <input type="hidden" name="reviewStatus" value="APPROVED" />
+              <input type="hidden" name="redirectTo" value={redirectTo} />
+              <p className="text-xs leading-5 text-black/55">
+                审核通过后，父单会进入正式履约与收款执行阶段。
+              </p>
+              <button type="submit" className="crm-button crm-button-primary mt-3 w-full">
+                审核通过
+              </button>
+            </form>
+
+            <form
+              action={reviewAction}
+              className="rounded-[0.95rem] border border-black/8 bg-white/86 px-3.5 py-3"
+            >
+              <input type="hidden" name="tradeOrderId" value={item.id} />
+              <input type="hidden" name="reviewStatus" value="REJECTED" />
+              <input type="hidden" name="redirectTo" value={redirectTo} />
+              <textarea
+                name="rejectReason"
+                rows={3}
+                required
+                placeholder="填写驳回原因"
+                className="crm-textarea"
+              />
+              <button type="submit" className="crm-button crm-button-secondary mt-3 w-full">
+                驳回父单
+              </button>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </article>
   );
 }
 
 export function TradeOrdersSection({
+  summary,
   items,
   filters,
   suppliers,
@@ -399,7 +389,10 @@ export function TradeOrdersSection({
   canCreate,
   canReview,
   reviewAction,
+  basePath = "/orders",
+  baseSearchParams,
 }: Readonly<{
+  summary: TradeOrdersData["summary"];
   items: TradeOrdersData["items"];
   filters: TradeOrdersData["filters"];
   suppliers: TradeOrdersData["suppliers"];
@@ -407,125 +400,177 @@ export function TradeOrdersSection({
   canCreate: boolean;
   canReview: boolean;
   reviewAction: (formData: FormData) => Promise<void>;
+  basePath?: string;
+  baseSearchParams?: Record<string, string>;
 }>) {
-  const currentPageHref = buildPageHref(filters, { page: pagination.page });
+  const activeFocusView = getActiveFocusView(filters);
+  const currentPageHref = buildPageHref(
+    filters,
+    { page: pagination.page },
+    basePath,
+    baseSearchParams,
+  );
+
+  const tabs: Array<{
+    value: string;
+    label: string;
+    count: number;
+    href: string;
+  }> = [
+    { value: "", label: "全部", count: summary.focusCounts.all },
+    { value: "PENDING_REVIEW", label: "待审核", count: summary.focusCounts.pendingReview },
+    { value: "APPROVED", label: "已审核", count: summary.focusCounts.approved },
+    { value: "PENDING_REPORT", label: "待报单", count: summary.focusCounts.pendingReport },
+    { value: "PENDING_TRACKING", label: "待物流", count: summary.focusCounts.pendingTracking },
+    { value: "SHIPPED", label: "已发货", count: summary.focusCounts.shipped },
+    { value: "EXCEPTION", label: "异常", count: summary.focusCounts.exception },
+  ].map(({ value, label, count }) => ({
+    value,
+    label,
+    count,
+    href: buildPageHref(
+      filters,
+      {
+        focusView: value as TradeOrderFilters["focusView"],
+        statusView:
+          value === "PENDING_REVIEW" || value === "APPROVED"
+            ? (value as TradeOrderFilters["statusView"])
+            : "",
+        page: 1,
+      },
+      basePath,
+      baseSearchParams,
+    ),
+  }));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      <RecordTabs activeValue={activeFocusView} items={tabs} />
+
       <div className="crm-filter-panel">
-        <form method="get" className="grid gap-3 xl:grid-cols-6">
-          <label className="space-y-2 xl:col-span-2">
-            <span className="crm-label">父单 / 子单 / supplier 检索</span>
-            <input
-              name="keyword"
-              defaultValue={filters.keyword}
-              className="crm-input"
-              placeholder="tradeNo / subOrderNo / supplier / 收件人 / 手机号"
-            />
-          </label>
-
-          <label className="space-y-2 xl:col-span-1">
-            <span className="crm-label">客户</span>
-            <input
-              name="customerKeyword"
-              defaultValue={filters.customerKeyword}
-              className="crm-input"
-              placeholder="客户名 / 客户手机号"
-            />
-          </label>
-
-          <label className="space-y-2">
-            <span className="crm-label">状态视图</span>
-            <select name="statusView" defaultValue={filters.statusView} className="crm-select">
-              <option value="">全部状态</option>
-              <option value="DRAFT">草稿</option>
-              <option value="PENDING_REVIEW">待审核</option>
-              <option value="APPROVED">已审核</option>
-              <option value="REJECTED">已拒绝</option>
-            </select>
-          </label>
-
-          <label className="space-y-2">
-            <span className="crm-label">supplier 数</span>
-            <select name="supplierCount" defaultValue={filters.supplierCount} className="crm-select">
-              <option value="">全部 supplier 数</option>
-              <option value="1">1 个 supplier</option>
-              <option value="2">2 个 supplier</option>
-              <option value="3_PLUS">3 个及以上 supplier</option>
-            </select>
-          </label>
-
-          <label className="space-y-2">
-            <span className="crm-label">更新时间</span>
-            <select name="sortBy" defaultValue={filters.sortBy} className="crm-select">
-              <option value="UPDATED_DESC">最近更新</option>
-              <option value="UPDATED_ASC">最早更新</option>
-              <option value="CREATED_DESC">最新创建</option>
-            </select>
-          </label>
-
-          <label className="space-y-2 xl:col-span-2">
-            <span className="crm-label">supplier</span>
-            <select name="supplierId" defaultValue={filters.supplierId} className="crm-select">
-              <option value="">全部 supplier</option>
-              {suppliers.map((supplier) => (
-                <option key={supplier.id} value={supplier.id}>
-                  {supplier.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="crm-filter-actions xl:col-span-4 xl:justify-end">
+        <form
+          method="get"
+          className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_10rem_10rem_10rem_10rem_auto]"
+        >
+          {Object.entries(baseSearchParams ?? {}).map(([key, value]) => (
+            <input key={key} type="hidden" name={key} value={value} />
+          ))}
+          <input type="hidden" name="focusView" value={activeFocusView} />
+          <input
+            name="keyword"
+            defaultValue={filters.keyword}
+            className="crm-input xl:col-span-2"
+            placeholder="tradeNo / subOrderNo / supplier / 收件人 / 手机"
+          />
+          <input
+            name="customerKeyword"
+            defaultValue={filters.customerKeyword}
+            className="crm-input"
+            placeholder="客户名 / 手机"
+          />
+          <select name="statusView" defaultValue={filters.statusView} className="crm-select">
+            <option value="">全部审核态</option>
+            <option value="DRAFT">草稿</option>
+            <option value="PENDING_REVIEW">待审核</option>
+            <option value="APPROVED">已审核</option>
+            <option value="REJECTED">已拒绝</option>
+          </select>
+          <select
+            name="supplierCount"
+            defaultValue={filters.supplierCount}
+            className="crm-select"
+          >
+            <option value="">全部 supplier 数</option>
+            <option value="1">1 个 supplier</option>
+            <option value="2">2 个 supplier</option>
+            <option value="3_PLUS">3 个以上 supplier</option>
+          </select>
+          <select name="sortBy" defaultValue={filters.sortBy} className="crm-select">
+            <option value="UPDATED_DESC">最近更新</option>
+            <option value="UPDATED_ASC">最早更新</option>
+            <option value="CREATED_DESC">最新创建</option>
+          </select>
+          <select name="supplierId" defaultValue={filters.supplierId} className="crm-select">
+            <option value="">全部 supplier</option>
+            {suppliers.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {supplier.name}
+              </option>
+            ))}
+          </select>
+          <div className="crm-filter-actions xl:col-span-full xl:justify-end">
             <button type="submit" className="crm-button crm-button-primary">
               应用筛选
             </button>
-            <Link href="/orders" className="crm-button crm-button-secondary">
+            <Link
+              href={buildPageHref(
+                {
+                  keyword: "",
+                  customerKeyword: "",
+                  supplierId: "",
+                  statusView: "",
+                  focusView: "",
+                  supplierCount: "",
+                  sortBy: "UPDATED_DESC",
+                  page: 1,
+                },
+                {},
+                basePath,
+                baseSearchParams,
+              )}
+              className="crm-button crm-button-secondary"
+            >
               重置
             </Link>
           </div>
         </form>
       </div>
 
-      {filters.statusView === "DRAFT" ? (
-        <div className="rounded-[0.95rem] border border-[#F59E0B]/20 bg-[rgba(255,248,235,0.92)] px-4 py-3.5 text-sm text-black/68">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="space-y-1">
-              <div className="font-medium text-black/82">草稿视图</div>
-              <div className="text-xs leading-5 text-black/56">
-                这里优先看尚未提审或被驳回后仍需继续编辑的父单。销售可直接回到客户详情继续修改。
-              </div>
-            </div>
-            {canCreate ? (
-              <Link href="/customers" className="crm-button crm-button-secondary">
-                返回客户中心继续建单
-              </Link>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
       {items.length > 0 ? (
-        <div className="space-y-4">
+        <div className="space-y-3.5">
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-black/60">
             <div>
               共 {pagination.totalCount} 张父单，当前第 {pagination.page} / {pagination.totalPages} 页
             </div>
             <div className="flex flex-wrap gap-2 text-xs text-black/52">
-              <span>状态：{getStatusViewLabel(filters.statusView)}</span>
-              <span>supplier 数：{getSupplierCountLabel(filters.supplierCount)}</span>
-              <span>排序：{getSortLabel(filters.sortBy)}</span>
+              <span>审核态：{filters.statusView || "全部"}</span>
+              <span>supplier 数：{filters.supplierCount || "全部"}</span>
+              <span>排序：{filters.sortBy}</span>
             </div>
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div
+            className={cn(
+              "hidden gap-px overflow-hidden rounded-[0.92rem] border border-black/8 bg-black/7 xl:grid",
+              GRID_CLASS,
+            )}
+          >
+            {[
+              "商品信息",
+              "金额 / 数量",
+              "售后 / 异常",
+              "订单状态",
+              "支付方式",
+              "收货信息",
+              "操作",
+            ].map((label) => (
+              <div
+                key={label}
+                className="bg-[rgba(247,248,250,0.9)] px-3 py-2 text-[11px] font-semibold tracking-[0.08em] text-black/44"
+              >
+                {label}
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-2.5">
             {items.map((item) => (
-              <TradeOrderCard
+              <TradeOrderRow
                 key={item.id}
                 item={item}
+                redirectTo={currentPageHref}
                 canCreate={canCreate}
                 canReview={canReview}
-                redirectTo={currentPageHref}
                 reviewAction={reviewAction}
               />
             ))}
@@ -538,13 +583,15 @@ export function TradeOrdersSection({
               pagination.page * pagination.pageSize,
               pagination.totalCount,
             )} 张父单，共 ${pagination.totalCount} 张`}
-            buildHref={(pageNumber) => buildPageHref(filters, { page: pageNumber })}
+            buildHref={(pageNumber) =>
+              buildPageHref(filters, { page: pageNumber }, basePath, baseSearchParams)
+            }
           />
         </div>
       ) : (
         <EmptyState
           title="暂无成交父单"
-          description="当前筛选条件下没有匹配的 TradeOrder。新建单入口仍在客户详情，这里负责父单列表、审核协同和 supplier 子单关系回看。"
+          description="当前筛选条件下没有匹配的 TradeOrder。新建单入口仍在客户详情，这里负责父单扫单、审核协同和 supplier 子单关系回看。"
           action={
             canCreate ? (
               <Link href="/customers" className="crm-button crm-button-primary">

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { salesOrderPaymentSchemeOptions } from "@/lib/fulfillment/metadata";
 import type { CustomerListItem } from "@/lib/customers/queries";
 import { CustomerListCard } from "@/components/customers/customer-list-card";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -13,31 +12,6 @@ type PaginationData = {
   totalPages: number;
 };
 
-type CreateOrderConfig = {
-  skuOptions: Array<{
-    id: string;
-    skuCode: string;
-    skuName: string;
-    specText: string;
-    unit: string;
-    defaultUnitPrice: string;
-    codSupported: boolean;
-    insuranceSupported: boolean;
-    defaultInsuranceAmount: string;
-    product: {
-      id: string;
-      name: string;
-      supplier: {
-        id: string;
-        name: string;
-      };
-    };
-  }>;
-  paymentSchemeOptions: typeof salesOrderPaymentSchemeOptions;
-  saveAction: (formData: FormData) => Promise<void>;
-  redirectTo: string;
-};
-
 export function CustomersTable({
   items,
   pagination,
@@ -47,7 +21,6 @@ export function CustomersTable({
   emptyDescription,
   buildPageHref,
   pageSizeControl,
-  createOrderConfig,
   scrollTargetId,
 }: Readonly<{
   items: CustomerListItem[];
@@ -58,7 +31,6 @@ export function CustomersTable({
   emptyDescription: string;
   buildPageHref: (page: number) => string;
   pageSizeControl?: ReactNode;
-  createOrderConfig?: CreateOrderConfig | null;
   scrollTargetId?: string;
 }>) {
   if (items.length === 0) {
@@ -91,7 +63,6 @@ export function CustomersTable({
             item={item}
             canCreateCallRecord={canCreateCallRecord}
             canCreateSalesOrder={canCreateSalesOrder}
-            createOrderConfig={createOrderConfig}
           />
         ))}
       </div>

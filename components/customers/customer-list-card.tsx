@@ -5,38 +5,11 @@ import type { LucideIcon } from "lucide-react";
 import { FilePlus2, FileText, MoreHorizontal, Phone } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { salesOrderPaymentSchemeOptions } from "@/lib/fulfillment/metadata";
 import type { CustomerListItem } from "@/lib/customers/queries";
 import { CustomerCallRecordForm } from "@/components/customers/customer-call-record-form";
 import { CustomerCallRecordHistory } from "@/components/customers/customer-call-record-history";
-import { SalesOrderForm } from "@/components/sales-orders/sales-order-form";
 import { formatDateTime } from "@/lib/customers/metadata";
 import { cn } from "@/lib/utils";
-
-type CreateOrderConfig = {
-  skuOptions: Array<{
-    id: string;
-    skuCode: string;
-    skuName: string;
-    specText: string;
-    unit: string;
-    defaultUnitPrice: string;
-    codSupported: boolean;
-    insuranceSupported: boolean;
-    defaultInsuranceAmount: string;
-    product: {
-      id: string;
-      name: string;
-      supplier: {
-        id: string;
-        name: string;
-      };
-    };
-  }>;
-  paymentSchemeOptions: typeof salesOrderPaymentSchemeOptions;
-  saveAction: (formData: FormData) => Promise<void>;
-  redirectTo: string;
-};
 
 function normalizeDate(value: Date | string | null | undefined) {
   if (!value) {
@@ -63,13 +36,13 @@ function getCardProduct(item: CustomerListItem) {
     return purchasedProduct;
   }
 
-  const importedProduct = item.latestInterestedProduct?.trim();
+  const interestedProduct = item.latestInterestedProduct?.trim();
 
-  if (importedProduct) {
-    return importedProduct;
+  if (interestedProduct) {
+    return interestedProduct;
   }
 
-  return "未记录已购产品";
+  return "未记录已购商品";
 }
 
 function getCardAddress(item: CustomerListItem) {
@@ -82,6 +55,10 @@ function getCardAddress(item: CustomerListItem) {
 
 function stopCardNavigation(event: MouseEvent<HTMLElement>) {
   event.stopPropagation();
+}
+
+function buildCustomerTradeOrderHref(customerId: string) {
+  return `/customers/${customerId}?tab=orders&createTradeOrder=1`;
 }
 
 function CustomerActionButton({
@@ -104,11 +81,9 @@ function CustomerActionButton({
       onClick={(event) => {
         event.stopPropagation();
 
-        if (disabled) {
-          return;
+        if (!disabled) {
+          onClick();
         }
-
-        onClick();
       }}
       className={cn(
         "inline-flex items-center justify-center gap-1.5 text-[13px] font-medium transition-[border-color,background-color,color,opacity,box-shadow,transform] ease-[cubic-bezier(0.22,1,0.36,1)]",
@@ -133,14 +108,12 @@ function CustomerModal({
   title,
   description,
   onClose,
-  panelClassName,
   children,
 }: Readonly<{
   open: boolean;
   title: string;
   description: string;
   onClose: () => void;
-  panelClassName?: string;
   children: ReactNode;
 }>) {
   if (!open) {
@@ -156,10 +129,7 @@ function CustomerModal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={cn(
-          "crm-card flex max-h-[calc(100vh-4rem)] w-full max-w-2xl flex-col overflow-hidden",
-          panelClassName,
-        )}
+        className="crm-card flex max-h-[calc(100vh-4rem)] w-full max-w-2xl flex-col overflow-hidden"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="border-b border-black/6 px-5 py-4">
@@ -202,18 +172,15 @@ export function CustomerListCard({
   item,
   canCreateCallRecord,
   canCreateSalesOrder = false,
-  createOrderConfig = null,
 }: Readonly<{
   item: CustomerListItem;
   canCreateCallRecord: boolean;
   canCreateSalesOrder?: boolean;
-  createOrderConfig?: CreateOrderConfig | null;
 }>) {
   const router = useRouter();
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const [callDialogOpen, setCallDialogOpen] = useState(false);
   const [callHistoryDialogOpen, setCallHistoryDialogOpen] = useState(false);
-  const [createOrderDialogOpen, setCreateOrderDialogOpen] = useState(false);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
 
   const detailHref = `/customers/${item.id}`;
@@ -266,13 +233,12 @@ export function CustomerListCard({
     setCallHistoryDialogOpen(true);
   }
 
-  function openCreateOrderDialog() {
-    if (!canCreateSalesOrder || !createOrderConfig) {
+  function openCreateTradeOrder() {
+    if (!canCreateSalesOrder) {
       return;
     }
 
-    setMobileActionsOpen(false);
-    setCreateOrderDialogOpen(true);
+    navigateTo(buildCustomerTradeOrderHref(item.id));
   }
 
   function handleCardKeyDown(event: ReactKeyboardEvent<HTMLElement>) {
@@ -291,7 +257,7 @@ export function CustomerListCard({
       <article
         role="link"
         tabIndex={0}
-        aria-label={"\u8fdb\u5165 " + item.name + " \u8be6\u60c5\u9875"}
+        aria-label={`进入 ${item.name} 详情页`}
         onClick={() => navigateTo(detailHref)}
         onKeyDown={handleCardKeyDown}
         className={cn(
@@ -348,9 +314,9 @@ export function CustomerListCard({
                   />
                   <CustomerActionButton
                     icon={FilePlus2}
-                    label="创建订单"
-                    onClick={openCreateOrderDialog}
-                    disabled={!canCreateSalesOrder || !createOrderConfig}
+                    label="创建成交主单"
+                    onClick={openCreateTradeOrder}
+                    disabled={!canCreateSalesOrder}
                     fullWidth
                   />
                 </div>
@@ -360,7 +326,9 @@ export function CustomerListCard({
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col">
-          <p className="mb-2 truncate text-[16px] font-medium leading-6 text-[#1E293B]">{item.phone}</p>
+          <p className="mb-2 truncate text-[16px] font-medium leading-6 text-[#1E293B]">
+            {item.phone}
+          </p>
           <p
             title={address}
             className="mb-[6px] overflow-hidden text-[14px] font-normal leading-[22px] text-[#64748B] line-clamp-2"
@@ -393,9 +361,9 @@ export function CustomerListCard({
               />
               <CustomerActionButton
                 icon={FilePlus2}
-                label="创建订单"
-                onClick={openCreateOrderDialog}
-                disabled={!canCreateSalesOrder || !createOrderConfig}
+                label="创建成交主单"
+                onClick={openCreateTradeOrder}
+                disabled={!canCreateSalesOrder}
               />
             </div>
           </div>
@@ -404,12 +372,8 @@ export function CustomerListCard({
 
       <CustomerModal
         open={callDialogOpen}
-        title="\u8bb0\u5f55\u901a\u8bdd"
-        description={
-          "\u4e3a " +
-          item.name +
-          " \u8bb0\u5f55\u672c\u6b21\u901a\u8bdd\u7ed3\u679c\u3001\u65f6\u957f\u3001\u5907\u6ce8\u548c\u4e0b\u6b21\u8ddf\u8fdb\u65f6\u95f4\u3002"
-        }
+        title="记录通话"
+        description={`为 ${item.name} 记录本次通话结果、时长、备注和下次跟进时间。`}
         onClose={() => setCallDialogOpen(false)}
       >
         <CustomerIdentity name={item.name} phone={item.phone} />
@@ -424,32 +388,6 @@ export function CustomerListCard({
       >
         <CustomerIdentity name={item.name} phone={item.phone} />
         <CustomerCallRecordHistory records={item.callRecords} />
-      </CustomerModal>
-
-      <CustomerModal
-        open={createOrderDialogOpen}
-        title="创建订单"
-        description={`直接在客户工作台为 ${item.name} 发起销售订单。`}
-        onClose={() => setCreateOrderDialogOpen(false)}
-        panelClassName="max-w-5xl"
-      >
-        {createOrderConfig ? (
-          <SalesOrderForm
-            saveAction={createOrderConfig.saveAction}
-            skuOptions={createOrderConfig.skuOptions}
-            paymentSchemeOptions={createOrderConfig.paymentSchemeOptions}
-            fixedCustomer={{
-              id: item.id,
-              name: item.name,
-              phone: item.phone,
-              address: address === "未填写地址" ? null : address,
-              owner: item.owner,
-            }}
-            submitLabel="创建销售订单"
-            helperText="当前客户已固定，直接填写成交信息、收件信息和支付方案。"
-            redirectTo={createOrderConfig.redirectTo}
-          />
-        ) : null}
       </CustomerModal>
     </>
   );

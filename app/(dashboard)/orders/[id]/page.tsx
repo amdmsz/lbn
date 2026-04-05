@@ -20,6 +20,7 @@ import {
   getDefaultRouteForRole,
 } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
+import { buildFulfillmentTradeOrdersHref } from "@/lib/fulfillment/navigation";
 import { getSalesOrderDetail } from "@/lib/sales-orders/queries";
 import { getTradeOrderDetail } from "@/lib/trade-orders/queries";
 import {
@@ -79,17 +80,19 @@ export default async function SalesOrderDetailPage({
     return (
       <div className="crm-page">
         <PageHeader
-          title={`成交父单详情 · ${tradeOrderData.order.tradeNo}`}
-          description="订单详情页现在优先回到 TradeOrder 父单视角。页面内先看父单摘要和 supplier 子单关系，旧子单详情仍保留为执行层次级入口。"
+          title={`父单详情 · ${tradeOrderData.order.tradeNo}`}
+          description="当前页面以 TradeOrder 为主叙事，统一承接整单成交、supplier 子单推进和执行摘要联动。"
           actions={
             <>
+              <Link
+                href={buildFulfillmentTradeOrdersHref()}
+                className="crm-button crm-button-secondary"
+              >
+                返回交易单列表
+              </Link>
               <StatusBadge
-                label={canReviewSalesOrder(session.user.role) ? "支持父单审核" : "只读"}
+                label={canReviewSalesOrder(session.user.role) ? "支持父单审核" : "父单总览模式"}
                 variant={canReviewSalesOrder(session.user.role) ? "success" : "info"}
-              />
-              <StatusBadge
-                label={canContinueEdit ? "可回到客户详情继续编辑" : "快照模式"}
-                variant={canContinueEdit ? "warning" : "neutral"}
               />
             </>
           }
@@ -98,8 +101,8 @@ export default async function SalesOrderDetailPage({
         {notice ? <ActionBanner tone={notice.tone}>{notice.message}</ActionBanner> : null}
 
         <DataTableWrapper
-          title="TradeOrder 父单"
-          description="父单负责成交审核、客户与金额摘要、supplier 拆单关系和父子编号统一。具体 shipping / payment / collection 执行仍由子单承接。"
+          title="TradeOrder 父单总览"
+          description="这里看整单卖了什么、拆成了哪些 supplier 子单、整体卡在哪，以及下一步应该去哪个执行上下文。"
         >
           <TradeOrderDetailSection
             order={tradeOrderData.order}

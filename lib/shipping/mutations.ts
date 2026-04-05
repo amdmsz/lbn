@@ -15,7 +15,7 @@ import {
 } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
 import { syncShippingCollectionTasks } from "@/lib/payments/mutations";
-import { writeShippingExportCsv } from "@/lib/shipping/export";
+import { generateShippingExportCsvForBatch } from "@/lib/shipping/export";
 
 export type ShippingActor = {
   id: string;
@@ -62,6 +62,25 @@ export type UpdateLogisticsFollowUpTaskInput = {
   nextTriggerAt: string;
   lastFollowedUpAt: string;
   remark: string;
+};
+
+type ShippingExportLineDraft = {
+  rowNo: number;
+  tradeOrderId: string;
+  salesOrderId: string;
+  shippingTaskId: string;
+  supplierId: string;
+  tradeNoSnapshot: string;
+  subOrderNoSnapshot: string;
+  receiverNameSnapshot: string;
+  receiverPhoneSnapshot: string;
+  receiverAddressSnapshot: string;
+  productSummarySnapshot: string;
+  pieceCountSnapshot: number;
+  codAmountSnapshot: string;
+  insuranceRequiredSnapshot: boolean;
+  insuranceAmountSnapshot: string;
+  remarkSnapshot: string | null;
 };
 
 const createShippingExportBatchSchema = z.object({
@@ -154,6 +173,7 @@ function buildShippingExportNo() {
   return `SEB${stamp}${suffix}`;
 }
 
+/*
 function buildExportProductSummary(
   items: Array<{
     exportDisplayNameSnapshot?: string | null;
@@ -164,6 +184,473 @@ function buildExportProductSummary(
   return items
     .map((item) => `${item.exportDisplayNameSnapshot || item.productNameSnapshot}【*${item.qty}】`)
     .join("+");
+}
+
+function getShippingExportFailureMessage(error: unknown) {
+  return error instanceof Error ? error.message : "导出文件生成失败，请稍后重试。";
+}
+
+*/
+
+function buildExportProductSummary(
+  items: Array<{
+    exportDisplayNameSnapshot?: string | null;
+    productNameSnapshot: string;
+    qty: number;
+  }>,
+) {
+  return items
+    .map((item) => `${item.exportDisplayNameSnapshot || item.productNameSnapshot} x${item.qty}`)
+    .join("+");
+}
+
+function getShippingExportFailureMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Export file generation failed. Please retry.";
+}
+
+function compareShippingExportLineDraft(a: ShippingExportLineDraft, b: ShippingExportLineDraft) {
+  return (
+    a.tradeNoSnapshot.localeCompare(b.tradeNoSnapshot) ||
+    a.subOrderNoSnapshot.localeCompare(b.subOrderNoSnapshot) ||
+    a.shippingTaskId.localeCompare(b.shippingTaskId)
+  );
+}
+
+function getDistinctCount(values: string[]) {
+  return new Set(values).size;
+}
+
+/*
+async function buildShippingExportLineDrafts(
+  actor: ShippingActor,
+  supplierId: string,
+): Promise<ShippingExportLineDraft[]> {
+  const teamId = await getShippingActorTeamId(actor);
+  const scope = buildShippingTaskManageWhere(actor, teamId);
+
+  const tasks = await prisma.shippingTask.findMany({
+    where: {
+      salesOrderId: { not: null },
+      supplierId,
+      reportStatus: ShippingReportStatus.PENDING,
+      salesOrder: {
+        reviewStatus: "APPROVED",
+      },
+      ...scope,
+    },
+    select: {
+      id: true,
+      supplierId: true,
+      codAmount: true,
+      insuranceRequired: true,
+      insuranceAmount: true,
+      receiverNameSnapshot: true,
+      receiverPhoneSnapshot: true,
+      receiverAddressSnapshot: true,
+      remark: true,
+      tradeOrder: {
+        select: {
+          id: true,
+          tradeNo: true,
+        },
+      },
+      salesOrder: {
+        select: {
+          id: true,
+          orderNo: true,
+          subOrderNo: true,
+          receiverNameSnapshot: true,
+          receiverPhoneSnapshot: true,
+          receiverAddressSnapshot: true,
+          items: {
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            select: {
+              id: true,
+              exportDisplayNameSnapshot: true,
+              productNameSnapshot: true,
+              qty: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (tasks.length === 0) {
+    throw new Error("当前供货商下没有可报单的待发货任务。");
+  }
+
+  const drafts = tasks.map((task) => {
+    if (!task.salesOrder) {
+      throw new Error("存在未关联销售订单的发货任务，无法冻结导出快照。");
+    }
+
+    if (!task.tradeOrder) {
+      throw new Error(`发货任务 ${task.id} 缺少成交主单，无法写入导出快照。`);
+    }
+
+    if (!task.supplierId) {
+      throw new Error(`发货任务 ${task.id} 缺少供货商信息，无法写入导出快照。`);
+    }
+
+    if (task.salesOrder.items.length === 0) {
+      throw new Error(`子单 ${task.salesOrder.orderNo} 没有执行行，无法写入导出快照。`);
+    }
+
+    const receiverNameSnapshot =
+      task.salesOrder.receiverNameSnapshot || task.receiverNameSnapshot || "";
+    const receiverPhoneSnapshot =
+      task.salesOrder.receiverPhoneSnapshot || task.receiverPhoneSnapshot || "";
+    const receiverAddressSnapshot =
+      task.salesOrder.receiverAddressSnapshot || task.receiverAddressSnapshot || "";
+
+    if (!receiverNameSnapshot || !receiverPhoneSnapshot || !receiverAddressSnapshot) {
+      throw new Error(`子单 ${task.salesOrder.orderNo} 收件快照不完整，无法写入导出快照。`);
+    }
+
+    return {
+      rowNo: 0,
+      tradeOrderId: task.tradeOrder.id,
+      salesOrderId: task.salesOrder.id,
+      shippingTaskId: task.id,
+      supplierId: task.supplierId,
+      tradeNoSnapshot: task.tradeOrder.tradeNo,
+      subOrderNoSnapshot: task.salesOrder.subOrderNo || task.salesOrder.orderNo,
+      receiverNameSnapshot,
+      receiverPhoneSnapshot,
+      receiverAddressSnapshot,
+      productSummarySnapshot: buildExportProductSummary(task.salesOrder.items),
+      pieceCountSnapshot: task.salesOrder.items.reduce((total, item) => total + item.qty, 0),
+      codAmountSnapshot: task.codAmount.toString(),
+      insuranceRequiredSnapshot: task.insuranceRequired,
+      insuranceAmountSnapshot: task.insuranceAmount.toString(),
+      remarkSnapshot: task.remark || null,
+    };
+  });
+
+  return drafts
+    .sort(compareShippingExportLineDraft)
+    .map((draft, index) => ({
+      ...draft,
+      rowNo: index + 1,
+    }));
+}
+
+async function persistShippingExportBatchFile(
+  actorId: string,
+  exportBatchId: string,
+  mode: "created" | "regenerated",
+  throwOnError: boolean,
+) {
+  const batch = await prisma.shippingExportBatch.findUnique({
+    where: { id: exportBatchId },
+    select: {
+      id: true,
+      exportNo: true,
+    },
+  });
+
+  if (!batch) {
+    throw new Error("报单批次不存在。");
+  }
+
+  try {
+    const exportedFile = await generateShippingExportCsvForBatch(batch.id);
+
+    await prisma.shippingExportBatch.update({
+      where: { id: batch.id },
+      data: {
+        fileName: exportedFile.fileName,
+        fileUrl: exportedFile.fileUrl,
+      },
+    });
+
+    await prisma.operationLog.create({
+      data: {
+        actorId,
+        module: OperationModule.SHIPPING_EXPORT,
+        action:
+          mode === "created"
+            ? "shipping_export_batch.file_generated"
+            : "shipping_export_batch.file_regenerated",
+        targetType: OperationTargetType.SHIPPING_EXPORT_BATCH,
+        targetId: batch.id,
+        description:
+          mode === "created"
+            ? `生成报单批次 ${batch.exportNo} 的导出文件`
+            : `按冻结快照重生成报单批次 ${batch.exportNo} 的导出文件`,
+        afterData: {
+          exportNo: batch.exportNo,
+          fileName: exportedFile.fileName,
+          fileUrl: exportedFile.fileUrl,
+          lineCount: exportedFile.lineCount,
+        },
+      },
+    });
+
+    return {
+      exportNo: batch.exportNo,
+      fileGenerated: true,
+      fileName: exportedFile.fileName,
+      fileUrl: exportedFile.fileUrl,
+    };
+  } catch (error) {
+    const errorMessage = getShippingExportFailureMessage(error);
+
+    try {
+      await prisma.operationLog.create({
+        data: {
+          actorId,
+          module: OperationModule.SHIPPING_EXPORT,
+          action:
+            mode === "created"
+              ? "shipping_export_batch.file_generation_failed"
+              : "shipping_export_batch.file_regeneration_failed",
+          targetType: OperationTargetType.SHIPPING_EXPORT_BATCH,
+          targetId: batch.id,
+          description:
+            mode === "created"
+              ? `报单批次 ${batch.exportNo} 冻结成功，但导出文件生成失败`
+              : `报单批次 ${batch.exportNo} 重生成文件失败`,
+          afterData: {
+            exportNo: batch.exportNo,
+            errorMessage,
+          },
+        },
+      });
+    } catch {
+      // Do not mask the original export error if failure logging also fails.
+    }
+
+    if (throwOnError) {
+      throw error;
+    }
+
+    return {
+      exportNo: batch.exportNo,
+      fileGenerated: false,
+      fileName: null,
+      fileUrl: null,
+      errorMessage,
+    };
+  }
+}
+
+*/
+
+async function buildShippingExportLineDrafts(
+  actor: ShippingActor,
+  supplierId: string,
+): Promise<ShippingExportLineDraft[]> {
+  const teamId = await getShippingActorTeamId(actor);
+  const scope = buildShippingTaskManageWhere(actor, teamId);
+
+  const tasks = await prisma.shippingTask.findMany({
+    where: {
+      salesOrderId: { not: null },
+      supplierId,
+      reportStatus: ShippingReportStatus.PENDING,
+      salesOrder: {
+        reviewStatus: "APPROVED",
+      },
+      ...scope,
+    },
+    select: {
+      id: true,
+      supplierId: true,
+      codAmount: true,
+      insuranceRequired: true,
+      insuranceAmount: true,
+      receiverNameSnapshot: true,
+      receiverPhoneSnapshot: true,
+      receiverAddressSnapshot: true,
+      remark: true,
+      tradeOrder: {
+        select: {
+          id: true,
+          tradeNo: true,
+        },
+      },
+      salesOrder: {
+        select: {
+          id: true,
+          orderNo: true,
+          subOrderNo: true,
+          receiverNameSnapshot: true,
+          receiverPhoneSnapshot: true,
+          receiverAddressSnapshot: true,
+          items: {
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            select: {
+              id: true,
+              exportDisplayNameSnapshot: true,
+              productNameSnapshot: true,
+              qty: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (tasks.length === 0) {
+    throw new Error("No pending shipping tasks are available for this supplier.");
+  }
+
+  const drafts = tasks.map((task) => {
+    if (!task.salesOrder) {
+      throw new Error("A shipping task is missing its sales order and cannot be frozen.");
+    }
+
+    if (!task.tradeOrder) {
+      throw new Error(`Shipping task ${task.id} is missing its trade order snapshot anchor.`);
+    }
+
+    if (!task.supplierId) {
+      throw new Error(`Shipping task ${task.id} is missing its supplier id.`);
+    }
+
+    if (task.salesOrder.items.length === 0) {
+      throw new Error(`Sales order ${task.salesOrder.orderNo} has no execution items to export.`);
+    }
+
+    const receiverNameSnapshot =
+      task.salesOrder.receiverNameSnapshot || task.receiverNameSnapshot || "";
+    const receiverPhoneSnapshot =
+      task.salesOrder.receiverPhoneSnapshot || task.receiverPhoneSnapshot || "";
+    const receiverAddressSnapshot =
+      task.salesOrder.receiverAddressSnapshot || task.receiverAddressSnapshot || "";
+
+    if (!receiverNameSnapshot || !receiverPhoneSnapshot || !receiverAddressSnapshot) {
+      throw new Error(`Sales order ${task.salesOrder.orderNo} is missing receiver snapshots.`);
+    }
+
+    return {
+      rowNo: 0,
+      tradeOrderId: task.tradeOrder.id,
+      salesOrderId: task.salesOrder.id,
+      shippingTaskId: task.id,
+      supplierId: task.supplierId,
+      tradeNoSnapshot: task.tradeOrder.tradeNo,
+      subOrderNoSnapshot: task.salesOrder.subOrderNo || task.salesOrder.orderNo,
+      receiverNameSnapshot,
+      receiverPhoneSnapshot,
+      receiverAddressSnapshot,
+      productSummarySnapshot: buildExportProductSummary(task.salesOrder.items),
+      pieceCountSnapshot: task.salesOrder.items.reduce((total, item) => total + item.qty, 0),
+      codAmountSnapshot: task.codAmount.toString(),
+      insuranceRequiredSnapshot: task.insuranceRequired,
+      insuranceAmountSnapshot: task.insuranceAmount.toString(),
+      remarkSnapshot: task.remark || null,
+    };
+  });
+
+  return drafts
+    .sort(compareShippingExportLineDraft)
+    .map((draft, index) => ({
+      ...draft,
+      rowNo: index + 1,
+    }));
+}
+
+async function persistShippingExportBatchFile(
+  actorId: string,
+  exportBatchId: string,
+  mode: "created" | "regenerated",
+  throwOnError: boolean,
+) {
+  const batch = await prisma.shippingExportBatch.findUnique({
+    where: { id: exportBatchId },
+    select: {
+      id: true,
+      exportNo: true,
+    },
+  });
+
+  if (!batch) {
+    throw new Error("Shipping export batch not found.");
+  }
+
+  try {
+    const exportedFile = await generateShippingExportCsvForBatch(batch.id);
+
+    await prisma.shippingExportBatch.update({
+      where: { id: batch.id },
+      data: {
+        fileName: exportedFile.fileName,
+        fileUrl: exportedFile.fileUrl,
+      },
+    });
+
+    await prisma.operationLog.create({
+      data: {
+        actorId,
+        module: OperationModule.SHIPPING_EXPORT,
+        action:
+          mode === "created"
+            ? "shipping_export_batch.file_generated"
+            : "shipping_export_batch.file_regenerated",
+        targetType: OperationTargetType.SHIPPING_EXPORT_BATCH,
+        targetId: batch.id,
+        description:
+          mode === "created"
+            ? `Generated export file for batch ${batch.exportNo}`
+            : `Regenerated export file from frozen snapshots for batch ${batch.exportNo}`,
+        afterData: {
+          exportNo: batch.exportNo,
+          fileName: exportedFile.fileName,
+          fileUrl: exportedFile.fileUrl,
+          lineCount: exportedFile.lineCount,
+        },
+      },
+    });
+
+    return {
+      exportNo: batch.exportNo,
+      fileGenerated: true,
+      fileName: exportedFile.fileName,
+      fileUrl: exportedFile.fileUrl,
+    };
+  } catch (error) {
+    const errorMessage = getShippingExportFailureMessage(error);
+
+    try {
+      await prisma.operationLog.create({
+        data: {
+          actorId,
+          module: OperationModule.SHIPPING_EXPORT,
+          action:
+            mode === "created"
+              ? "shipping_export_batch.file_generation_failed"
+              : "shipping_export_batch.file_regeneration_failed",
+          targetType: OperationTargetType.SHIPPING_EXPORT_BATCH,
+          targetId: batch.id,
+          description:
+            mode === "created"
+              ? `Frozen snapshots were written but file generation failed for batch ${batch.exportNo}`
+              : `File regeneration failed for batch ${batch.exportNo}`,
+          afterData: {
+            exportNo: batch.exportNo,
+            errorMessage,
+          },
+        },
+      });
+    } catch {
+      // Do not mask the original export error if failure logging also fails.
+    }
+
+    if (throwOnError) {
+      throw error;
+    }
+
+    return {
+      exportNo: batch.exportNo,
+      fileGenerated: false,
+      fileName: null,
+      fileUrl: null,
+      errorMessage,
+    };
+  }
 }
 
 function mapFulfillmentStatusToLegacyTaskStatus(status: ShippingFulfillmentStatus) {
@@ -246,45 +733,14 @@ export async function createShippingExportBatch(
   }
 
   const input = createShippingExportBatchSchema.parse(rawInput);
-  const teamId = await getShippingActorTeamId(actor);
-  const scope = buildShippingTaskManageWhere(actor, teamId);
   const exportNo = buildShippingExportNo();
 
-  const tasks = await prisma.shippingTask.findMany({
-    where: {
-      salesOrderId: { not: null },
-      supplierId: input.supplierId,
-      reportStatus: ShippingReportStatus.PENDING,
-      salesOrder: {
-        reviewStatus: "APPROVED",
-      },
-      ...scope,
-    },
-    select: {
-      id: true,
-      codAmount: true,
-      insuranceRequired: true,
-      insuranceAmount: true,
-      salesOrder: {
-        select: {
-          id: true,
-          orderNo: true,
-          receiverNameSnapshot: true,
-          receiverPhoneSnapshot: true,
-          receiverAddressSnapshot: true,
-          items: {
-            orderBy: { createdAt: "asc" },
-            select: {
-              id: true,
-              exportDisplayNameSnapshot: true,
-              productNameSnapshot: true,
-              qty: true,
-            },
-          },
-        },
-      },
-    },
-  });
+  const drafts = await buildShippingExportLineDrafts(actor, input.supplierId);
+  const orderCount = drafts.length;
+  const subOrderCount = getDistinctCount(drafts.map((draft) => draft.salesOrderId));
+  const tradeOrderCount = getDistinctCount(drafts.map((draft) => draft.tradeOrderId));
+
+  /*
 
   if (tasks.length === 0) {
     throw new Error("当前供货商下没有可报单的待发货任务。");
@@ -312,6 +768,8 @@ export async function createShippingExportBatch(
     }),
   });
 
+  */
+
   const batch = await prisma.$transaction(async (tx) => {
     const exportedAt = new Date();
 
@@ -320,9 +778,11 @@ export async function createShippingExportBatch(
         exportNo,
         supplierId: input.supplierId,
         exportedById: actor.id,
-        orderCount: tasks.length,
-        fileName: exportedFile.fileName,
-        fileUrl: exportedFile.fileUrl,
+        orderCount,
+        subOrderCount,
+        tradeOrderCount,
+        fileName: input.fileName,
+        fileUrl: null,
         remark: input.remark || null,
       },
       select: {
@@ -331,9 +791,31 @@ export async function createShippingExportBatch(
       },
     });
 
-    for (const task of tasks) {
+    await tx.shippingExportLine.createMany({
+      data: drafts.map((draft) => ({
+        exportBatchId: created.id,
+        rowNo: draft.rowNo,
+        tradeOrderId: draft.tradeOrderId,
+        salesOrderId: draft.salesOrderId,
+        shippingTaskId: draft.shippingTaskId,
+        supplierId: draft.supplierId,
+        tradeNoSnapshot: draft.tradeNoSnapshot,
+        subOrderNoSnapshot: draft.subOrderNoSnapshot,
+        receiverNameSnapshot: draft.receiverNameSnapshot,
+        receiverPhoneSnapshot: draft.receiverPhoneSnapshot,
+        receiverAddressSnapshot: draft.receiverAddressSnapshot,
+        productSummarySnapshot: draft.productSummarySnapshot,
+        pieceCountSnapshot: draft.pieceCountSnapshot,
+        codAmountSnapshot: draft.codAmountSnapshot,
+        insuranceRequiredSnapshot: draft.insuranceRequiredSnapshot,
+        insuranceAmountSnapshot: draft.insuranceAmountSnapshot,
+        remarkSnapshot: draft.remarkSnapshot,
+      })),
+    });
+
+    for (const draft of drafts) {
       await tx.shippingTask.update({
-        where: { id: task.id },
+        where: { id: draft.shippingTaskId },
         data: {
           exportBatchId: created.id,
           reportStatus: ShippingReportStatus.REPORTED,
@@ -349,7 +831,7 @@ export async function createShippingExportBatch(
           module: OperationModule.SHIPPING_EXPORT,
           action: "shipping_task.reported",
           targetType: OperationTargetType.SHIPPING_TASK,
-          targetId: task.id,
+          targetId: draft.shippingTaskId,
           description: `发货任务加入报单批次 ${created.exportNo}`,
           afterData: {
             exportBatchId: created.id,
@@ -371,9 +853,13 @@ export async function createShippingExportBatch(
         description: `创建报单批次 ${created.exportNo}`,
         afterData: {
           supplierId: input.supplierId,
-          orderCount: tasks.length,
-          fileName: exportedFile.fileName,
-          fileUrl: exportedFile.fileUrl,
+          orderCount,
+          subOrderCount,
+          tradeOrderCount,
+          snapshotLineCount: drafts.length,
+          fileName: input.fileName,
+          fileUrl: null,
+          snapshotDriven: true,
         },
       },
     });
@@ -381,7 +867,32 @@ export async function createShippingExportBatch(
     return created;
   });
 
-  return batch;
+  const fileResult = await persistShippingExportBatchFile(actor.id, batch.id, "created", false);
+
+  return {
+    ...batch,
+    fileGenerated: fileResult.fileGenerated,
+  };
+}
+
+export async function regenerateShippingExportBatchFile(
+  actor: ShippingActor,
+  exportBatchId: string,
+) {
+  if (!canManageShippingReporting(actor.role)) {
+    throw new Error("当前角色无权重生成报单文件。");
+  }
+
+  const fileResult = await persistShippingExportBatchFile(
+    actor.id,
+    exportBatchId,
+    "regenerated",
+    true,
+  );
+
+  return {
+    exportNo: fileResult.exportNo,
+  };
 }
 
 export async function updateSalesOrderShipping(

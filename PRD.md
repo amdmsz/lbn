@@ -3,7 +3,7 @@
 ## 文档状态
 
 - 版本：商业级当前基线
-- 更新时间：2026-04-02
+- 更新时间：2026-04-05
 - 用途：作为仓库内唯一产品基线文档，约束当前交易模型、页面主视角、执行边界与后续切流方向
 
 ---
@@ -53,6 +53,7 @@
 - `/orders` 已切到 `TradeOrder` 父单视角
 - `/orders/[id]` 已切到父单详情页，供应商子单作为次级执行对象
 - `/shipping`、`/payment-records`、`/collection-tasks` 仍保持子单执行主视角
+- `/customers/public-pool` 已切到 `Customer ownership lifecycle` 工作台，并继续分出规则页与报表页
 
 ---
 
@@ -205,4 +206,83 @@
 - 补订单中心与子单执行页的产品层体验
 - 继续完善 bundle / gift 在执行侧的可读性
 - 仅在确有必要时再评估新的 schema 里程碑
+## 0. 2026-04-02 Product Center Baseline Addendum
 
+- Product Center and supplier management are now one product-domain surface.
+- `/products` remains the default first-level entry for product work.
+- Supplier management now lives inside `/products?tab=suppliers`.
+- `/suppliers` is compatibility-only and redirects into Product Center.
+- Product create and product detail editing should use the same supplier interaction pattern: searchable supplier selection plus inline supplier creation with automatic backfill.
+- This baseline does not introduce procurement, inventory, settlement, or schema changes.
+
+## 0. 2026-04-03 Order Fulfillment Center Baseline Addendum
+
+- `/fulfillment` is now the unified first-level business entry for order fulfillment.
+- The fulfillment domain is organized into exactly 3 views:
+  - `trade-orders`: parent-order overview and management entry
+  - `shipping`: supplier-scoped execution workbench
+  - `batches`: frozen export result / audit / regenerate view
+- Legacy entry compatibility remains:
+  - `/orders -> /fulfillment?tab=trade-orders`
+  - `/shipping -> /fulfillment?tab=shipping`
+  - `/shipping/export-batches -> /fulfillment?tab=batches`
+- `TradeOrder` remains the transaction master record.
+- `SalesOrder` remains the supplier sub-order execution anchor.
+- `ShippingTask` remains the supplier-scoped fulfillment execution record.
+- `ShippingExportBatch / ShippingExportLine` are now the frozen export truth.
+- Shipping execution is no longer modeled as a flat task list in product IA. It is now a supplier work pool with:
+  - stage switching
+  - supplier summaries
+  - current supplier pool
+  - supplier-level batch actions
+- Batch records are positioned as result and audit views, not the first execution workbench.
+- Trade-order cards now carry parent-order fulfillment summaries and latest batch references, but they remain `TradeOrder`-first views.
+- No schema change is required for this baseline.
+- Do not reopen the old `SalesOrder`-as-master-order direction.
+- Do not collapse transaction / payment / fulfillment layers back into one mixed workflow.
+- For the current frozen baseline and handoff-safe summary, see `STAGE_FREEZE_2026-04-03.md`.
+
+## 0. 2026-04-03 Trade-Order Scanning And Logistics Interaction Addendum
+
+- The current `trade-orders` view is now frozen as a denser parent-order overview rather than a thick card list.
+- The default list state should answer only:
+  - who placed the deal
+  - what was sold
+  - what status it is in
+  - where to go next
+- Receiver information now keeps logistics collapsed by default.
+- In the receiver column, logistics is represented by a single status button only.
+- Hovering the logistics status button shows lightweight logistics basics:
+  - carrier name
+  - full tracking number
+- Clicking the logistics status button opens a secondary trace drawer for:
+  - current logistics status
+  - latest update time
+  - latest checkpoint
+  - full logistics timeline when available
+- Logistics detail must remain a secondary layer and must not expand the default list row height again.
+- The logistics trace query path is server-side only and remains routed through `/api/logistics/track`.
+- No schema change is required for this closeout.
+
+## 0. 2026-04-04 Customer Public Pool Baseline Addendum
+
+- Customer public pool is now a `Customer` ownership lifecycle surface, not a Lead 2.0 clone.
+- The mainline entry is `/customers/public-pool`.
+- Current stable sub-surfaces are:
+  - `/customers/public-pool`
+  - `/customers/public-pool/settings`
+  - `/customers/public-pool/reports`
+- `CustomerOwnershipEvent` is the ownership audit truth for pool entry, claim, assign, release, recycle, auto-assign, and owner restore flows.
+- Current completed baseline includes:
+  - v1 ownership lifecycle
+  - customer public-pool workbench
+  - inactive recycle preview/apply
+  - owner-exit recycle preview/apply
+  - team public-pool rules
+  - team public-pool reports
+  - auto-assign preview/apply
+- Team-level auto-assign is already wired to `TeamPublicPoolSetting` and currently supports:
+  - `ROUND_ROBIN`
+  - `LOAD_BALANCING`
+  - round-robin cursor persistence
+- This baseline does not reopen lead schema redesign and must not be interpreted as a return to Lead-centric sales execution.

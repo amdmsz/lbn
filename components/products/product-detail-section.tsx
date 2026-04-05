@@ -1,12 +1,10 @@
+import {
+  ProductSupplierField,
+  type SupplierOption,
+} from "@/components/products/product-supplier-field";
 import { MasterDataStatusBadge } from "@/components/settings/master-data-status-badge";
 import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency } from "@/lib/fulfillment/metadata";
-
-type SupplierOption = {
-  id: string;
-  name: string;
-  code: string;
-};
 
 type ProductDetail = {
   id: string;
@@ -15,7 +13,12 @@ type ProductDetail = {
   description: string | null;
   enabled: boolean;
   supplierId: string;
-  supplier: SupplierOption;
+  supplier: {
+    id: string;
+    name: string;
+    code: string;
+    enabled: boolean;
+  };
   skus: Array<{
     id: string;
     skuCode: string;
@@ -34,22 +37,41 @@ type ProductDetail = {
   }>;
 };
 
+type InlineSupplierResult =
+  | {
+      success: true;
+      supplier: {
+        id: string;
+        name: string;
+        code: string;
+      };
+      message: string;
+    }
+  | {
+      success: false;
+      errorMessage: string;
+    };
+
 export function ProductDetailSection({
   product,
   suppliers,
   canManage,
+  canQuickCreateSupplier,
   upsertProductAction,
   toggleProductAction,
   upsertProductSkuAction,
   toggleProductSkuAction,
+  createInlineSupplierAction,
 }: Readonly<{
   product: ProductDetail;
   suppliers: SupplierOption[];
   canManage: boolean;
+  canQuickCreateSupplier: boolean;
   upsertProductAction: (formData: FormData) => Promise<void>;
   toggleProductAction: (formData: FormData) => Promise<void>;
   upsertProductSkuAction: (formData: FormData) => Promise<void>;
   toggleProductSkuAction: (formData: FormData) => Promise<void>;
+  createInlineSupplierAction: (formData: FormData) => Promise<InlineSupplierResult>;
 }>) {
   return (
     <div className="space-y-6">
@@ -64,22 +86,16 @@ export function ProductDetailSection({
         <form action={upsertProductAction} className="mt-4 space-y-4">
           <input type="hidden" name="id" value={product.id} />
           <input type="hidden" name="redirectTo" value={`/products/${product.id}`} />
+
           <div className="grid gap-4 xl:grid-cols-2">
-            <label className="space-y-2">
-              <span className="crm-label">供货商</span>
-              <select
-                name="supplierId"
-                className="crm-select"
-                defaultValue={product.supplierId}
-                disabled={!canManage}
-              >
-                {suppliers.map((supplier) => (
-                  <option key={supplier.id} value={supplier.id}>
-                    {supplier.name} ({supplier.code})
-                  </option>
-                ))}
-              </select>
-            </label>
+            <ProductSupplierField
+              suppliers={suppliers}
+              initialSelectedSupplierId={product.supplierId}
+              disabled={!canManage}
+              canQuickCreateSupplier={canQuickCreateSupplier}
+              createInlineSupplierAction={createInlineSupplierAction}
+            />
+
             <label className="space-y-2">
               <span className="crm-label">商品编码</span>
               <input
@@ -90,7 +106,8 @@ export function ProductDetailSection({
                 disabled={!canManage}
               />
             </label>
-            <label className="space-y-2 xl:col-span-2">
+
+            <label className="space-y-2">
               <span className="crm-label">商品名称</span>
               <input
                 name="name"
@@ -101,8 +118,9 @@ export function ProductDetailSection({
               />
             </label>
           </div>
+
           <label className="block space-y-2">
-            <span className="crm-label">描述</span>
+            <span className="crm-label">说明</span>
             <textarea
               name="description"
               rows={3}
@@ -136,7 +154,7 @@ export function ProductDetailSection({
         <div className="space-y-2">
           <h3 className="text-lg font-semibold text-black/85">直播商品绑定预留</h3>
           <p className="text-sm leading-7 text-black/60">
-            当前阶段只在商品详情展示运营预留位。后续会把商品与直播场次做正式绑定，不在本阶段落完整关系表。
+            当前阶段只保留后续直播商品绑定的占位说明，本轮不引入新的运行时商品到直播链路绑定。
           </p>
         </div>
       </section>
@@ -144,47 +162,69 @@ export function ProductDetailSection({
       {canManage ? (
         <section className="crm-section-card">
           <div className="space-y-2">
-            <h3 className="text-lg font-semibold text-black/85">新增 SKU</h3>
+            <h3 className="text-lg font-semibold text-black/85">新建 SKU</h3>
             <p className="text-sm leading-7 text-black/60">
-              SKU 承载规格、默认单价、是否支持代收和保价能力。
+              SKU 承载规格、默认单价、货到付款支持和保价支持能力。
             </p>
           </div>
 
           <form action={upsertProductSkuAction} className="mt-6 space-y-4">
             <input type="hidden" name="productId" value={product.id} />
             <input type="hidden" name="redirectTo" value={`/products/${product.id}`} />
+
             <div className="grid gap-4 xl:grid-cols-2">
               <label className="space-y-2">
                 <span className="crm-label">SKU 编码</span>
                 <input name="skuCode" required className="crm-input" />
               </label>
+
               <label className="space-y-2">
                 <span className="crm-label">SKU 名称</span>
                 <input name="skuName" required className="crm-input" />
               </label>
+
               <label className="space-y-2">
                 <span className="crm-label">规格</span>
                 <input name="specText" required className="crm-input" />
               </label>
+
               <label className="space-y-2">
                 <span className="crm-label">单位</span>
                 <input name="unit" required className="crm-input" />
               </label>
+
               <label className="space-y-2">
                 <span className="crm-label">默认单价</span>
-                <input type="number" name="defaultUnitPrice" min="0" step="0.01" required className="crm-input" />
+                <input
+                  type="number"
+                  name="defaultUnitPrice"
+                  min="0"
+                  step="0.01"
+                  required
+                  className="crm-input"
+                />
               </label>
+
               <label className="space-y-2">
                 <span className="crm-label">默认保价金额</span>
-                <input type="number" name="defaultInsuranceAmount" min="0" step="0.01" defaultValue="0" className="crm-input" />
+                <input
+                  type="number"
+                  name="defaultInsuranceAmount"
+                  min="0"
+                  step="0.01"
+                  defaultValue="0"
+                  className="crm-input"
+                />
               </label>
+
               <label className="space-y-2">
-                <span className="crm-label">支持代收</span>
+                <span className="crm-label">支持货到付款</span>
                 <select name="codSupported" defaultValue="false" className="crm-select">
                   <option value="false">否</option>
                   <option value="true">是</option>
                 </select>
               </label>
+
               <label className="space-y-2">
                 <span className="crm-label">支持保价</span>
                 <select name="insuranceSupported" defaultValue="false" className="crm-select">
@@ -193,9 +233,10 @@ export function ProductDetailSection({
                 </select>
               </label>
             </div>
+
             <div className="flex justify-end">
               <button type="submit" className="crm-button crm-button-primary">
-                创建 SKU
+                新建 SKU
               </button>
             </div>
           </form>
@@ -209,7 +250,7 @@ export function ProductDetailSection({
               <div className="flex flex-wrap items-center gap-2">
                 <MasterDataStatusBadge isActive={sku.enabled} />
                 <span className="rounded-full border border-black/10 px-2.5 py-1 text-xs text-black/55">
-                  下单 {sku._count.salesOrderItems}
+                  成交引用 {sku._count.salesOrderItems}
                 </span>
               </div>
 
@@ -217,6 +258,7 @@ export function ProductDetailSection({
                 <input type="hidden" name="id" value={sku.id} />
                 <input type="hidden" name="productId" value={product.id} />
                 <input type="hidden" name="redirectTo" value={`/products/${product.id}`} />
+
                 <div className="grid gap-4 xl:grid-cols-2">
                   <label className="space-y-2">
                     <span className="crm-label">SKU 编码</span>
@@ -228,6 +270,7 @@ export function ProductDetailSection({
                       disabled={!canManage}
                     />
                   </label>
+
                   <label className="space-y-2">
                     <span className="crm-label">SKU 名称</span>
                     <input
@@ -238,6 +281,7 @@ export function ProductDetailSection({
                       disabled={!canManage}
                     />
                   </label>
+
                   <label className="space-y-2">
                     <span className="crm-label">规格</span>
                     <input
@@ -248,6 +292,7 @@ export function ProductDetailSection({
                       disabled={!canManage}
                     />
                   </label>
+
                   <label className="space-y-2">
                     <span className="crm-label">单位</span>
                     <input
@@ -258,6 +303,7 @@ export function ProductDetailSection({
                       disabled={!canManage}
                     />
                   </label>
+
                   <label className="space-y-2">
                     <span className="crm-label">默认单价</span>
                     <input
@@ -270,6 +316,7 @@ export function ProductDetailSection({
                       disabled={!canManage}
                     />
                   </label>
+
                   <label className="space-y-2">
                     <span className="crm-label">默认保价金额</span>
                     <input
@@ -282,8 +329,9 @@ export function ProductDetailSection({
                       disabled={!canManage}
                     />
                   </label>
+
                   <label className="space-y-2">
-                    <span className="crm-label">支持代收</span>
+                    <span className="crm-label">支持货到付款</span>
                     <select
                       name="codSupported"
                       defaultValue={String(sku.codSupported)}
@@ -294,6 +342,7 @@ export function ProductDetailSection({
                       <option value="true">是</option>
                     </select>
                   </label>
+
                   <label className="space-y-2">
                     <span className="crm-label">支持保价</span>
                     <select
@@ -337,7 +386,7 @@ export function ProductDetailSection({
       ) : (
         <EmptyState
           title="暂无 SKU"
-          description="当前商品还没有 SKU。先补充规格、价格和代收/保价能力。"
+          description="当前商品还没有 SKU，请先补充规格、价格与货到付款或保价能力。"
         />
       )}
     </div>

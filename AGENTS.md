@@ -36,6 +36,8 @@ The current business baseline of this repository is:
 - `ShippingTask` is the fulfillment execution record
 - `PaymentPlan`, `PaymentRecord`, and `CollectionTask` are the payment-layer baseline
 - `LogisticsFollowUpTask` is independent from order status and shipping status
+- `/products` is the single first-level entry for the product domain
+- supplier management lives inside `/products?tab=suppliers`, not as a separate first-level workbench
 - `OPS` and `SHIPPER` must not be silently expanded into sales customer views
 - Important business actions must remain traceable through `OperationLog`
 
@@ -90,6 +92,19 @@ Build a sales execution and customer operating platform covering:
 - Do not rely on UI hiding alone for RBAC.
 - Prefer additive evolution over destructive rewrites.
 - Avoid rewriting stable modules unless explicitly required.
+- Keep Prisma enum runtime usage out of frontend/shared/module-init risk chains; use local runtime constants there and reserve Prisma enums for database typing and backend truth/query/service layers.
+
+---
+
+## Prisma enum runtime rules
+
+- Prisma enums are for database types, Prisma schema alignment, backend constraints, and server-side truth/query/service layers.
+- Do not use Prisma enums as runtime constant objects in frontend, shared, metadata, settings, workbench, filter, page-level option builders, or other files that may execute during module initialization.
+- In those runtime-facing modules, do not write `PrismaEnum.X` or `Object.values(PrismaEnum)`.
+- Runtime options, labels, default values, and form choices must come from local string constants or metadata constants that stay aligned with Prisma enum values.
+- Prefer `import type` when a module only needs enum typing.
+- When a server action or service needs input validation, prefer validating against local runtime constants such as `z.enum(MY_VALUES)` instead of depending on Prisma enum runtime objects in shared/front-end risk chains.
+- If a module may be imported by the client, shared UI, or page initialization path, assume Prisma enum runtime objects are unsafe there unless there is a strong server-only reason and the file stays fully inside backend truth/query/service code.
 
 ---
 
@@ -393,6 +408,7 @@ The sidebar and product information architecture are business-domain driven, not
 ### Strong grouping rules
 - lead center and import center belong together
 - supplier center and product center belong together
+- keep Product Center as the first-level navigation entry and treat supplier management as a secondary capability inside it
 - sales should not be given shipping as a primary work area
 - shipper should not be given product-master maintenance as a work area
 

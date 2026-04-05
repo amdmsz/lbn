@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
-import { LeadSource } from "@prisma/client";
+import type { LeadSource } from "@prisma/client";
 import { createLeadImportBatchAction } from "@/app/(dashboard)/lead-imports/actions";
 import {
   buildLeadImportPreviewRows,
@@ -10,6 +10,7 @@ import {
   type ParsedLeadImportFile,
 } from "@/lib/lead-imports/file-parser";
 import {
+  DEFAULT_LEAD_IMPORT_SOURCE,
   buildFixedLeadImportMapping,
   normalizeImportedPhone,
   type LeadImportMappingConfig,
@@ -47,7 +48,7 @@ export function LeadImportUploadForm({
   sourceOptions: readonly SourceOption[];
 }>) {
   const [defaultLeadSource, setDefaultLeadSource] = useState<LeadSource>(
-    sourceOptions[0]?.value ?? LeadSource.INFO_FLOW,
+    sourceOptions[0]?.value ?? DEFAULT_LEAD_IMPORT_SOURCE,
   );
   const [mapping, setMapping] = useState<LeadImportMappingConfig>({});
   const [parsedFile, setParsedFile] = useState<ParsedLeadImportFile | null>(null);

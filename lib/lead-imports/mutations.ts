@@ -1,4 +1,5 @@
 import {
+  CustomerOwnershipMode,
   LeadCustomerMergeAction,
   LeadImportBatchStatus,
   LeadDedupType,
@@ -6,11 +7,13 @@ import {
   LeadSource,
   OperationModule,
   OperationTargetType,
+  PublicPoolReason,
   type Prisma,
   type RoleCode,
 } from "@prisma/client";
 import { z } from "zod";
 import { canAccessLeadImportModule } from "@/lib/auth/access";
+import { createInitialPublicOwnershipEventTx } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
 import { parseLeadImportFile } from "@/lib/lead-imports/file-parser";
 import {
@@ -206,9 +209,11 @@ async function createOrMatchCustomerForLead(
       id: string;
       code: string;
     } | null;
+    actorTeamId: string | null;
   },
 ) {
   const matchedCustomer = input.existingCustomerMap.get(input.lead.phone);
+  const publicPoolEnteredAt = new Date();
   const customer =
     matchedCustomer ??
     (await tx.customer.create({
@@ -218,6 +223,10 @@ async function createOrMatchCustomerForLead(
         address: input.mappedData.address,
         remark: input.mappedData.remark,
         ownerId: input.lead.ownerId,
+        ownershipMode: CustomerOwnershipMode.PUBLIC,
+        publicPoolEnteredAt,
+        publicPoolReason: PublicPoolReason.UNASSIGNED_IMPORT,
+        publicPoolTeamId: input.actorTeamId,
       },
       select: {
         id: true,
@@ -228,6 +237,13 @@ async function createOrMatchCustomerForLead(
 
   if (!matchedCustomer) {
     input.existingCustomerMap.set(customer.phone, customer);
+
+    await createInitialPublicOwnershipEventTx(tx, {
+      actorId: input.actorId,
+      actorTeamId: input.actorTeamId,
+      customerId: customer.id,
+      note: `Lead import batch ${input.fileName} row ${input.rowNumber}`,
+    });
   }
 
   const action = matchedCustomer
@@ -363,6 +379,11 @@ export async function createLeadImportBatch(
   });
 
   try {
+    const actorTeam = await prisma.user.findUnique({
+      where: { id: actor.id },
+      select: { teamId: true },
+    });
+
     const uniqueCandidatePhones = [
       ...new Set(
         parsedFile.rows
@@ -528,6 +549,7 @@ export async function createLeadImportBatch(
             mappedData,
             existingCustomerMap,
             sourceTag,
+            actorTeamId: actorTeam?.teamId ?? null,
           });
 
           linkedCustomerId = mergeResult.customer.id;

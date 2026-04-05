@@ -19,6 +19,7 @@ import {
 } from "@prisma/client";
 import { z } from "zod";
 import { canCreateSalesOrder, canReviewSalesOrder } from "@/lib/auth/access";
+import { touchCustomerEffectiveFollowUpFromTradeOrderTx } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
 import { syncSalesOrderPaymentArtifacts } from "@/lib/payments/mutations";
 import {
@@ -897,6 +898,11 @@ export async function saveTradeOrderDraft(
       },
     });
 
+    await touchCustomerEffectiveFollowUpFromTradeOrderTx(tx, {
+      customerId: context.customer.id,
+      occurredAt: new Date(),
+    });
+
     return tradeOrder;
   });
 
@@ -1069,6 +1075,11 @@ export async function submitTradeOrderForReview(
           salesOrderIds: createdSalesOrderIds,
         },
       },
+    });
+
+    await touchCustomerEffectiveFollowUpFromTradeOrderTx(tx, {
+      customerId: context.customer.id,
+      occurredAt: new Date(),
     });
 
     return {

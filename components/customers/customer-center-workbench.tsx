@@ -1,7 +1,10 @@
 import Link from "next/link";
 import type { RoleCode } from "@prisma/client";
-import { saveSalesOrderAction } from "@/app/(dashboard)/orders/actions";
-import { canCreateCallRecord, canCreateSalesOrder } from "@/lib/auth/access";
+import {
+  canAccessCustomerPublicPool,
+  canCreateCallRecord,
+  canCreateSalesOrder,
+} from "@/lib/auth/access";
 import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { CustomerFilterToolbar } from "@/components/customers/customer-filter-toolbar";
 import { CustomerPageSizeSelect } from "@/components/customers/customer-page-size-select";
@@ -10,7 +13,6 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { customerRoleHeaderMeta } from "@/lib/customers/metadata";
 import { buildCustomersHref } from "@/lib/customers/filter-url";
 import type { CustomerCenterData } from "@/lib/customers/queries";
-import { getSalesOrderCreateFormOptions } from "@/lib/sales-orders/queries";
 import { cn } from "@/lib/utils";
 
 type SummaryMetric = {
@@ -123,7 +125,7 @@ function SummaryMetricCard({
   );
 }
 
-export async function CustomerCenterWorkbench({
+export function CustomerCenterWorkbench({
   role,
   data,
 }: Readonly<{
@@ -133,9 +135,6 @@ export async function CustomerCenterWorkbench({
   const headerMeta = customerRoleHeaderMeta[role];
   const scopeLabel = getScopeLabel(data);
   const summaryItems = getSummaryItems(role, data);
-  const createOrderOptions = canCreateSalesOrder(role)
-    ? await getSalesOrderCreateFormOptions()
-    : null;
 
   const headerMetaContent =
     role === "SALES" && !data.filters.teamId && !data.filters.salesId ? null : (
@@ -173,6 +172,14 @@ export async function CustomerCenterWorkbench({
               </div>
 
               <div className="flex flex-wrap gap-2">
+                {canAccessCustomerPublicPool(role) ? (
+                  <Link
+                    href="/customers/public-pool"
+                    className="inline-flex h-9 items-center rounded-[0.78rem] border border-black/8 bg-[rgba(247,248,250,0.84)] px-3.5 text-sm text-black/72 transition hover:border-black/12 hover:bg-white hover:text-black/84"
+                  >
+                    公海池
+                  </Link>
+                ) : null}
                 <Link
                   href="/leads"
                   className="inline-flex h-9 items-center rounded-[0.78rem] border border-black/8 bg-[rgba(247,248,250,0.84)] px-3.5 text-sm text-black/72 transition hover:border-black/12 hover:bg-white hover:text-black/84"
@@ -180,10 +187,10 @@ export async function CustomerCenterWorkbench({
                   线索中心
                 </Link>
                 <Link
-                  href="/orders"
+                  href="/fulfillment?tab=trade-orders"
                   className="inline-flex h-9 items-center rounded-[0.78rem] border border-black/8 bg-[rgba(247,248,250,0.84)] px-3.5 text-sm text-black/72 transition hover:border-black/12 hover:bg-white hover:text-black/84"
                 >
-                  订单中心
+                  订单履约中心
                 </Link>
               </div>
             </div>
@@ -223,15 +230,6 @@ export async function CustomerCenterWorkbench({
           emptyDescription="调整时间、状态、产品或标签后，再继续查看客户工作列表。"
           buildPageHref={(page) => buildCustomersHref(data.filters, { page })}
           pageSizeControl={<CustomerPageSizeSelect filters={data.filters} />}
-          createOrderConfig={
-            createOrderOptions
-              ? {
-                  ...createOrderOptions,
-                  saveAction: saveSalesOrderAction,
-                  redirectTo: buildCustomersHref(data.filters),
-                }
-              : null
-          }
           scrollTargetId="customer-list"
         />
       </div>

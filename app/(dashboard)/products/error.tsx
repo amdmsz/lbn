@@ -13,7 +13,7 @@ export default function ProductsError({
     <ErrorState
       eyebrow="商品中心异常"
       title="商品中心加载失败"
-      description="页面在读取商品和 SKU 摘要时发生错误。"
+      description="页面在读取商品与 SKU 摘要时发生错误。"
       detail={error.message}
       action={
         <button type="button" onClick={reset} className="crm-button crm-button-primary">

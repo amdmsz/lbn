@@ -7,12 +7,14 @@ import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import {
   canAccessProductModule,
+  canAccessSupplierModule,
   canManageProducts,
   getDefaultRouteForRole,
 } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
 import { getProductDetail } from "@/lib/products/queries";
 import {
+  createInlineSupplierAction,
   toggleProductAction,
   toggleProductSkuAction,
   upsertProductAction,
@@ -55,7 +57,7 @@ export default async function ProductDetailPage({
     <div className="crm-page">
       <PageHeader
         title={data.product.name}
-        description="查看商品详情、SKU 骨架和直播商品绑定预留。"
+        description="查看商品详情、SKU 架构与直播商品绑定预留。"
         actions={
           <>
             <StatusBadge label={`SKU ${data.product.skus.length}`} variant="info" />
@@ -70,16 +72,18 @@ export default async function ProductDetailPage({
 
       <DataTableWrapper
         title="商品详情"
-        description="本阶段只提供商品 / SKU 骨架与运营预留位，不落正式直播商品绑定关系。"
+        description="本阶段只提供商品 / SKU 架构与运营预留位，不落正式直播商品绑定关系。"
       >
         <ProductDetailSection
           product={data.product}
           suppliers={data.suppliers}
           canManage={canManageProducts(session.user.role)}
+          canQuickCreateSupplier={canAccessSupplierModule(session.user.role)}
           upsertProductAction={upsertProductAction}
           toggleProductAction={toggleProductAction}
           upsertProductSkuAction={upsertProductSkuAction}
           toggleProductSkuAction={toggleProductSkuAction}
+          createInlineSupplierAction={createInlineSupplierAction}
         />
       </DataTableWrapper>
     </div>

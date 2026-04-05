@@ -2,6 +2,8 @@ import {
   Prisma,
   ProductBundleStatus,
   SalesOrderPaymentScheme,
+  ShippingFulfillmentStatus,
+  ShippingReportStatus,
   TradeOrderStatus,
   type RoleCode,
 } from "@prisma/client";
@@ -10,6 +12,7 @@ import { getParamValue, parseActionNotice } from "@/lib/action-notice";
 import { canAccessSalesOrderModule, canCreateSalesOrder } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
 import { getSalesOrderCreateFormOptions } from "@/lib/sales-orders/queries";
+import { getTradeOrderExecutionSummaryMap } from "@/lib/trade-orders/execution-summary";
 
 export type TradeOrderViewer = {
   id: string;
@@ -21,6 +24,14 @@ export type TradeOrderFilters = {
   customerKeyword: string;
   supplierId: string;
   statusView: "" | "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED";
+  focusView:
+    | ""
+    | "PENDING_REVIEW"
+    | "APPROVED"
+    | "PENDING_REPORT"
+    | "PENDING_TRACKING"
+    | "SHIPPED"
+    | "EXCEPTION";
   supplierCount: "" | "1" | "2" | "3_PLUS";
   sortBy: "UPDATED_DESC" | "UPDATED_ASC" | "CREATED_DESC";
   page: number;
@@ -32,6 +43,17 @@ const tradeOrderFiltersSchema = z.object({
   supplierId: z.string().trim().default(""),
   statusView: z
     .enum(["", "DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED"])
+    .default(""),
+  focusView: z
+    .enum([
+      "",
+      "PENDING_REVIEW",
+      "APPROVED",
+      "PENDING_REPORT",
+      "PENDING_TRACKING",
+      "SHIPPED",
+      "EXCEPTION",
+    ])
     .default(""),
   supplierCount: z.enum(["", "1", "2", "3_PLUS"]).default(""),
   sortBy: z.enum(["UPDATED_DESC", "UPDATED_ASC", "CREATED_DESC"]).default("UPDATED_DESC"),
@@ -367,13 +389,14 @@ export function parseTradeOrderFilters(
     statusView:
       getParamValue(rawSearchParams?.statusView) ||
       getParamValue(rawSearchParams?.reviewStatus),
+    focusView: getParamValue(rawSearchParams?.focusView),
     supplierCount: getParamValue(rawSearchParams?.supplierCount),
     sortBy: getParamValue(rawSearchParams?.sortBy) || "UPDATED_DESC",
     page: getParamValue(rawSearchParams?.page) || "1",
   });
 }
 
-function buildTradeOrderWhereInput(
+function buildTradeOrderCoreWhereInput(
   viewer: TradeOrderViewer,
   teamId: string | null,
   filters: TradeOrderFilters,
@@ -424,8 +447,144 @@ function buildTradeOrderWhereInput(
     });
   }
 
+  return andClauses.length > 0 ? { AND: andClauses } : {};
+}
+
+function getNoTrackingWhere(): Prisma.ShippingTaskWhereInput {
+  return {
+    OR: [{ trackingNumber: null }, { trackingNumber: "" }],
+  };
+}
+
+function getHasTrackingWhere(): Prisma.ShippingTaskWhereInput {
+  return {
+    AND: [{ trackingNumber: { not: null } }, { trackingNumber: { not: "" } }],
+  };
+}
+
+function buildTradeOrderFocusWhereInput(
+  focusView: TradeOrderFilters["focusView"],
+): Prisma.TradeOrderWhereInput | null {
+  if (!focusView) {
+    return null;
+  }
+
+  if (focusView === "PENDING_REVIEW" || focusView === "APPROVED") {
+    return { tradeStatus: focusView };
+  }
+
+  if (focusView === "PENDING_REPORT") {
+    return {
+      salesOrders: {
+        some: {
+          shippingTask: {
+            is: {
+              reportStatus: ShippingReportStatus.PENDING,
+              shippingStatus: {
+                not: ShippingFulfillmentStatus.CANCELED,
+              },
+              ...getNoTrackingWhere(),
+            },
+          },
+        },
+      },
+    };
+  }
+
+  if (focusView === "PENDING_TRACKING") {
+    return {
+      salesOrders: {
+        some: {
+          shippingTask: {
+            is: {
+              reportStatus: ShippingReportStatus.REPORTED,
+              shippingStatus: {
+                not: ShippingFulfillmentStatus.CANCELED,
+              },
+              ...getNoTrackingWhere(),
+            },
+          },
+        },
+      },
+    };
+  }
+
+  if (focusView === "SHIPPED") {
+    return {
+      salesOrders: {
+        some: {
+          shippingTask: {
+            is: {
+              shippingStatus: {
+                in: [
+                  ShippingFulfillmentStatus.SHIPPED,
+                  ShippingFulfillmentStatus.DELIVERED,
+                  ShippingFulfillmentStatus.COMPLETED,
+                ],
+              },
+            },
+          },
+        },
+      },
+    };
+  }
+
+  return {
+    salesOrders: {
+      some: {
+        shippingTask: {
+          is: {
+            OR: [
+              {
+                shippingStatus: ShippingFulfillmentStatus.CANCELED,
+              },
+              {
+                AND: [
+                  {
+                    reportStatus: ShippingReportStatus.PENDING,
+                  },
+                  getHasTrackingWhere(),
+                ],
+              },
+              {
+                AND: [
+                  {
+                    reportStatus: ShippingReportStatus.REPORTED,
+                  },
+                  {
+                    exportBatchId: {
+                      not: null,
+                    },
+                  },
+                  {
+                    exportBatch: {
+                      is: {
+                        fileUrl: null,
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    },
+  };
+}
+
+function buildTradeOrderStateWhereInput(
+  filters: TradeOrderFilters,
+): Prisma.TradeOrderWhereInput {
+  const andClauses: Prisma.TradeOrderWhereInput[] = [];
+
   if (filters.statusView) {
     andClauses.push({ tradeStatus: filters.statusView });
+  }
+
+  const focusWhere = buildTradeOrderFocusWhereInput(filters.focusView);
+  if (focusWhere) {
+    andClauses.push(focusWhere);
   }
 
   return andClauses.length > 0 ? { AND: andClauses } : {};
@@ -495,19 +654,22 @@ export async function getTradeOrdersPageData(
 
   const teamId = await getViewerTeamId(viewer);
   const filters = parseTradeOrderFilters(rawSearchParams);
-  const baseWhere = buildTradeOrderWhereInput(viewer, teamId, filters);
+  const coreWhere = buildTradeOrderCoreWhereInput(viewer, teamId, filters);
   const supplierCountTradeOrderIds = await resolveSupplierCountTradeOrderIds(
-    baseWhere,
+    coreWhere,
     filters.supplierCount,
   );
-  const where =
+  const scopedWhere =
     supplierCountTradeOrderIds === null
-      ? baseWhere
+      ? coreWhere
       : supplierCountTradeOrderIds.length > 0
         ? {
-            AND: [baseWhere, { id: { in: supplierCountTradeOrderIds } }],
+            AND: [coreWhere, { id: { in: supplierCountTradeOrderIds } }],
           }
         : { id: "__missing_trade_order_supplier_count__" };
+  const stateWhere = buildTradeOrderStateWhereInput(filters);
+  const where =
+    Object.keys(stateWhere).length > 0 ? { AND: [scopedWhere, stateWhere] } : scopedWhere;
   const orderBy = buildTradeOrderOrderBy(filters.sortBy);
 
   const [
@@ -518,6 +680,13 @@ export async function getTradeOrdersPageData(
     rejectedCount,
     codTradeCount,
     amountSummary,
+    focusAllCount,
+    focusPendingReviewCount,
+    focusApprovedCount,
+    pendingReportCount,
+    pendingTrackingCount,
+    shippedCount,
+    exceptionCount,
     suppliers,
   ] = await Promise.all([
     prisma.tradeOrder.count({ where }),
@@ -563,6 +732,43 @@ export async function getTradeOrdersPageData(
         remainingAmount: true,
       },
     }),
+    prisma.tradeOrder.count({ where: scopedWhere }),
+    prisma.tradeOrder.count({
+      where: {
+        AND: [scopedWhere, { tradeStatus: TradeOrderStatus.PENDING_REVIEW }],
+      },
+    }),
+    prisma.tradeOrder.count({
+      where: {
+        AND: [scopedWhere, { tradeStatus: TradeOrderStatus.APPROVED }],
+      },
+    }),
+    prisma.tradeOrder.count({
+      where: {
+        AND: [
+          scopedWhere,
+          buildTradeOrderFocusWhereInput("PENDING_REPORT") ?? {},
+        ],
+      },
+    }),
+    prisma.tradeOrder.count({
+      where: {
+        AND: [
+          scopedWhere,
+          buildTradeOrderFocusWhereInput("PENDING_TRACKING") ?? {},
+        ],
+      },
+    }),
+    prisma.tradeOrder.count({
+      where: {
+        AND: [scopedWhere, buildTradeOrderFocusWhereInput("SHIPPED") ?? {}],
+      },
+    }),
+    prisma.tradeOrder.count({
+      where: {
+        AND: [scopedWhere, buildTradeOrderFocusWhereInput("EXCEPTION") ?? {}],
+      },
+    }),
     prisma.supplier.findMany({
       where: { enabled: true },
       orderBy: { name: "asc" },
@@ -596,6 +802,7 @@ export async function getTradeOrdersPageData(
       insuranceAmount: true,
       receiverNameSnapshot: true,
       receiverPhoneSnapshot: true,
+      receiverAddressSnapshot: true,
       createdAt: true,
       updatedAt: true,
       customer: {
@@ -614,7 +821,6 @@ export async function getTradeOrdersPageData(
       },
       items: {
         orderBy: { lineNo: "asc" },
-        take: 4,
         select: {
           id: true,
           itemType: true,
@@ -655,6 +861,7 @@ export async function getTradeOrdersPageData(
               id: true,
               reportStatus: true,
               shippingStatus: true,
+              shippingProvider: true,
               trackingNumber: true,
             },
           },
@@ -662,6 +869,65 @@ export async function getTradeOrdersPageData(
       },
     },
   });
+
+  const pageTradeOrderIds = items.map((item) => item.id);
+  const executionSummaryMap = await getTradeOrderExecutionSummaryMap(pageTradeOrderIds);
+  const latestExportLines = pageTradeOrderIds.length
+    ? await prisma.shippingExportLine.findMany({
+        where: {
+          tradeOrderId: {
+            in: pageTradeOrderIds,
+          },
+        },
+        orderBy: [{ exportBatch: { exportedAt: "desc" } }, { rowNo: "asc" }],
+        select: {
+          tradeOrderId: true,
+          supplierId: true,
+          exportBatch: {
+            select: {
+              id: true,
+              exportNo: true,
+              exportedAt: true,
+              fileUrl: true,
+              supplier: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      })
+    : [];
+
+  const latestExportBatchByTradeOrderId = new Map<
+    string,
+    {
+      id: string;
+      exportNo: string;
+      exportedAt: Date;
+      fileUrl: string | null;
+      supplier: {
+        id: string;
+        name: string;
+      };
+    }
+  >();
+
+  for (const line of latestExportLines) {
+    if (latestExportBatchByTradeOrderId.has(line.tradeOrderId)) {
+      continue;
+    }
+
+    latestExportBatchByTradeOrderId.set(line.tradeOrderId, {
+      id: line.exportBatch.id,
+      exportNo: line.exportBatch.exportNo,
+      exportedAt: line.exportBatch.exportedAt,
+      fileUrl: line.exportBatch.fileUrl,
+      supplier: line.exportBatch.supplier,
+    });
+  }
 
   return {
     notice: parseActionNotice(rawSearchParams),
@@ -672,6 +938,15 @@ export async function getTradeOrdersPageData(
       approvedCount,
       rejectedCount,
       codTradeCount,
+      focusCounts: {
+        all: focusAllCount,
+        pendingReview: focusPendingReviewCount,
+        approved: focusApprovedCount,
+        pendingReport: pendingReportCount,
+        pendingTracking: pendingTrackingCount,
+        shipped: shippedCount,
+        exception: exceptionCount,
+      },
       totalFinalAmount: amountSummary._sum.finalAmount?.toString() ?? "0",
       totalRemainingAmount: amountSummary._sum.remainingAmount?.toString() ?? "0",
     },
@@ -699,6 +974,8 @@ export async function getTradeOrdersPageData(
         remainingAmount: salesOrder.remainingAmount.toString(),
         codAmount: salesOrder.codAmount.toString(),
       })),
+      executionSummary: executionSummaryMap.get(item.id) ?? null,
+      latestExportBatch: latestExportBatchByTradeOrderId.get(item.id) ?? null,
     })),
     pagination: {
       page,
@@ -885,9 +1162,77 @@ export async function getTradeOrderDetail(
               id: true,
               reportStatus: true,
               shippingStatus: true,
+              shippingProvider: true,
               trackingNumber: true,
               reportedAt: true,
               shippedAt: true,
+              exportBatch: {
+                select: {
+                  id: true,
+                  exportNo: true,
+                  exportedAt: true,
+                  fileUrl: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      paymentRecords: {
+        where: {
+          salesOrderId: {
+            not: null,
+          },
+        },
+        orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
+        take: 12,
+        select: {
+          id: true,
+          status: true,
+          amount: true,
+          occurredAt: true,
+          createdAt: true,
+          salesOrder: {
+            select: {
+              id: true,
+              orderNo: true,
+              subOrderNo: true,
+              supplier: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      collectionTasks: {
+        where: {
+          salesOrderId: {
+            not: null,
+          },
+        },
+        orderBy: [{ createdAt: "desc" }, { dueAt: "asc" }],
+        take: 12,
+        select: {
+          id: true,
+          status: true,
+          taskType: true,
+          createdAt: true,
+          dueAt: true,
+          nextFollowUpAt: true,
+          salesOrder: {
+            select: {
+              id: true,
+              orderNo: true,
+              subOrderNo: true,
+              supplier: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
             },
           },
         },
@@ -898,6 +1243,8 @@ export async function getTradeOrderDetail(
   if (!tradeOrder) {
     return null;
   }
+
+  const executionSummaryMap = await getTradeOrderExecutionSummaryMap([tradeOrder.id]);
 
   const operationLogs = await prisma.operationLog.findMany({
     where: {
@@ -981,6 +1328,12 @@ export async function getTradeOrderDetail(
           subtotal: item.subtotal.toString(),
         })),
       })),
+      paymentRecords: tradeOrder.paymentRecords.map((paymentRecord) => ({
+        ...paymentRecord,
+        amount: paymentRecord.amount.toString(),
+      })),
+      collectionTasks: tradeOrder.collectionTasks,
+      executionSummary: executionSummaryMap.get(tradeOrder.id) ?? null,
     },
     operationLogs,
   };

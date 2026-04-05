@@ -23,16 +23,16 @@ export default async function LoginPage() {
               酒水私域 CRM
             </p>
             <h2 className="mt-4 text-4xl font-semibold leading-tight">
-              先把登录、角色和路由权限跑通，再承接后续业务模块。
+              统一承接内部账号登录、首次改密和角色路由跳转。
             </h2>
             <p className="mt-6 max-w-md text-sm leading-7 text-[var(--color-sidebar-muted)]">
-              当前阶段提供本地演示账号登录、基础会话、角色菜单过滤和路由访问控制，方便验证 CRM 的权限骨架。
+              登录成功后，系统会按角色进入对应主入口，并在需要时强制完成首次改密。
             </p>
           </div>
           <div className="rounded-3xl border border-white/10 bg-white/5 p-5 text-sm leading-7 text-[var(--color-sidebar-muted)]">
-            支持角色：
+            当前登录链路承接：
             <br />
-            管理员（admin）/ 主管（supervisor）/ 销售（sales）/ 运营（ops）/ 发货（shipper）
+            管理员 / 主管 / 销售 / 运营 / 发货
           </div>
         </section>
 

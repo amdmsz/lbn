@@ -11,6 +11,7 @@ import {
   canCreateCallRecord,
   getCustomerScope,
 } from "@/lib/auth/access";
+import { touchCustomerEffectiveFollowUpFromCallTx } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
 
 export type CallRecordActor = {
@@ -203,6 +204,12 @@ export async function createCallRecord(
         },
       });
     }
+
+    await touchCustomerEffectiveFollowUpFromCallTx(tx, {
+      customerId: customer.id,
+      occurredAt: callTime,
+      result,
+    });
 
     return created;
   });

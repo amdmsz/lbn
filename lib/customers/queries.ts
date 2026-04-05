@@ -1,5 +1,6 @@
 import {
   CallResult,
+  CustomerOwnershipMode,
   CustomerStatus,
   FollowUpTaskStatus,
   LeadSource,
@@ -241,6 +242,16 @@ const pendingDealLeadStatuses: LeadStatus[] = [
   LeadStatus.ORDERED,
 ];
 
+const activeCustomerOwnershipModes = [
+  CustomerOwnershipMode.PRIVATE,
+  CustomerOwnershipMode.LOCKED,
+] as const;
+
+const publicPoolCustomerDetailModes = [
+  CustomerOwnershipMode.PUBLIC,
+  CustomerOwnershipMode.LOCKED,
+] as const;
+
 const legacyQueueAliasMap: Partial<Record<string, CustomerQueueKey>> = {
   all: "all",
   mine: "all",
@@ -453,7 +464,14 @@ function buildProductFilterKey(source: CustomerProductFilterSource, label: strin
 
 function getCustomerVisibilityWhereInput(actor: CustomerCenterActor): Prisma.CustomerWhereInput {
   if (actor.role === "ADMIN") {
-    return {};
+    return {
+      ownerId: {
+        not: null,
+      },
+      ownershipMode: {
+        in: [...activeCustomerOwnershipModes],
+      },
+    };
   }
 
   if (actor.role === "SUPERVISOR") {
@@ -464,6 +482,12 @@ function getCustomerVisibilityWhereInput(actor: CustomerCenterActor): Prisma.Cus
     }
 
     return {
+      ownerId: {
+        not: null,
+      },
+      ownershipMode: {
+        in: [...activeCustomerOwnershipModes],
+      },
       owner: {
         is: {
           teamId: actor.teamId,
@@ -474,12 +498,42 @@ function getCustomerVisibilityWhereInput(actor: CustomerCenterActor): Prisma.Cus
 
   if (actor.role === "SALES") {
     return {
+      ownershipMode: {
+        in: [...activeCustomerOwnershipModes],
+      },
       ownerId: actor.id,
     };
   }
 
   return {
     id: "__forbidden_customer_scope__",
+  };
+}
+
+function getCustomerPublicPoolDetailWhereInput(
+  actor: CustomerCenterActor,
+): Prisma.CustomerWhereInput {
+  if (actor.role === "ADMIN") {
+    return {
+      ownerId: null,
+      ownershipMode: {
+        in: [...publicPoolCustomerDetailModes],
+      },
+    };
+  }
+
+  if ((actor.role === "SUPERVISOR" || actor.role === "SALES") && actor.teamId) {
+    return {
+      ownerId: null,
+      ownershipMode: {
+        in: [...publicPoolCustomerDetailModes],
+      },
+      publicPoolTeamId: actor.teamId,
+    };
+  }
+
+  return {
+    id: "__forbidden_public_pool_customer_detail__",
   };
 }
 
@@ -2016,10 +2070,16 @@ async function getVisibleCustomerDetailBase(viewer: CustomerViewer, customerId: 
 
   const actor = await getCustomerCenterActor(viewer.id);
   const visibleWhere = getCustomerVisibilityWhereInput(actor);
+  const publicPoolDetailWhere = getCustomerPublicPoolDetailWhereInput(actor);
 
   const customer = await prisma.customer.findFirst({
     where: {
-      AND: [visibleWhere, { id: customerId }],
+      AND: [
+        { id: customerId },
+        {
+          OR: [visibleWhere, publicPoolDetailWhere],
+        },
+      ],
     },
     select: {
       id: true,
@@ -2032,6 +2092,11 @@ async function getVisibleCustomerDetailBase(viewer: CustomerViewer, customerId: 
       address: true,
       status: true,
       level: true,
+      ownershipMode: true,
+      publicPoolEnteredAt: true,
+      publicPoolReason: true,
+      claimLockedUntil: true,
+      lastEffectiveFollowUpAt: true,
       remark: true,
       createdAt: true,
       updatedAt: true,
@@ -2047,6 +2112,27 @@ async function getVisibleCustomerDetailBase(viewer: CustomerViewer, customerId: 
               code: true,
             },
           },
+        },
+      },
+      lastOwner: {
+        select: {
+          id: true,
+          name: true,
+          username: true,
+          team: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+            },
+          },
+        },
+      },
+      publicPoolTeam: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
         },
       },
       _count: {

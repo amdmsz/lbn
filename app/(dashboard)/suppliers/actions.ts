@@ -22,6 +22,10 @@ async function getActor() {
   };
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "操作失败，请稍后重试。";
+}
+
 async function runSupplierAction(
   formData: FormData,
   fallbackPath: string,
@@ -34,15 +38,14 @@ async function runSupplierAction(
     await action(actor);
   } catch (error) {
     rethrowRedirectError(error);
-    const message = error instanceof Error ? error.message : "操作失败，请稍后重试。";
-    redirect(buildRedirectTarget(redirectTo, "error", message));
+    redirect(buildRedirectTarget(redirectTo, "error", getErrorMessage(error)));
   }
 
-  redirect(buildRedirectTarget(redirectTo, "success", "保存成功"));
+  redirect(buildRedirectTarget(redirectTo, "success", "保存成功。"));
 }
 
 export async function upsertSupplierAction(formData: FormData) {
-  return runSupplierAction(formData, "/suppliers", async (actor) => {
+  return runSupplierAction(formData, "/products?tab=suppliers", async (actor) => {
     await upsertSupplier(actor, {
       id: getFormValue(formData, "id"),
       code: getFormValue(formData, "code"),
@@ -55,7 +58,7 @@ export async function upsertSupplierAction(formData: FormData) {
 }
 
 export async function toggleSupplierAction(formData: FormData) {
-  return runSupplierAction(formData, "/suppliers", async (actor) => {
+  return runSupplierAction(formData, "/products?tab=suppliers", async (actor) => {
     await toggleSupplier(actor, getFormValue(formData, "id"));
   });
 }
