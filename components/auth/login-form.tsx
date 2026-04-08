@@ -5,6 +5,23 @@ import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { BRAND_NAME_CN } from "@/lib/branding";
 
+function resolveLoginTarget(resultUrl: string | null | undefined, fallbackPath: string) {
+  if (!resultUrl) {
+    return fallbackPath;
+  }
+
+  if (typeof window === "undefined") {
+    return resultUrl;
+  }
+
+  try {
+    const resolvedUrl = new URL(resultUrl, window.location.origin);
+    return `${resolvedUrl.pathname}${resolvedUrl.search}${resolvedUrl.hash}` || fallbackPath;
+  } catch {
+    return resultUrl.startsWith("/") ? resultUrl : fallbackPath;
+  }
+}
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -34,7 +51,7 @@ export function LoginForm() {
       return;
     }
 
-    router.push(result.url ?? callbackUrl);
+    router.push(resolveLoginTarget(result.url, callbackUrl));
     router.refresh();
   }
 

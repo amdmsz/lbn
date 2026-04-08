@@ -509,6 +509,14 @@ async function resolveUserWriteContext(
     }
   }
 
+  if (!existingUser) {
+    return {
+      role,
+      team,
+      supervisor,
+    };
+  }
+
   if (supervisor?.id === existingUser?.id) {
     throw new Error("直属主管不能设置为账号本人。");
   }

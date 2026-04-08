@@ -107,11 +107,13 @@ export function UserDetailManager({
   const filteredSupervisors = useMemo(
     () =>
       actorRole === "ADMIN"
-        ? supervisorOptions.filter((item) =>
-            selectedTeamId ? item.teamId === selectedTeamId : true,
+        ? supervisorOptions.filter(
+            (item) =>
+              item.id !== user.id &&
+              (selectedTeamId ? item.teamId === selectedTeamId : true),
           )
-        : supervisorOptions,
-    [actorRole, selectedTeamId, supervisorOptions],
+        : supervisorOptions.filter((item) => item.id !== user.id),
+    [actorRole, selectedTeamId, supervisorOptions, user.id],
   );
 
   function handleUpdate(event: React.FormEvent<HTMLFormElement>) {
