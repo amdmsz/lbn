@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { SettingsControlCenter } from "@/components/settings/settings-control-center";
+import { getMergedCallResultDefinitions } from "@/lib/calls/settings";
 import {
   canAccessSettingsModule,
   getDefaultRouteForRole,
@@ -23,13 +24,25 @@ export default async function SettingsPage({
   }
 
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const data = await getMasterDataOverviewData(
-    {
-      id: session.user.id,
-      role: session.user.role,
-    },
-    resolvedSearchParams,
-  );
+  const viewer = {
+    id: session.user.id,
+    role: session.user.role,
+  };
+  const [masterData, callResultDefinitions] = await Promise.all([
+    getMasterDataOverviewData(viewer, resolvedSearchParams),
+    getMergedCallResultDefinitions(),
+  ]);
 
-  return <SettingsControlCenter data={data} />;
+  return (
+    <SettingsControlCenter
+      data={{
+        ...masterData,
+        callResultsSummary: {
+          totalCount: callResultDefinitions.length,
+          enabledCount: callResultDefinitions.filter((item) => item.isEnabled).length,
+          customCount: callResultDefinitions.filter((item) => !item.isSystem).length,
+        },
+      }}
+    />
+  );
 }

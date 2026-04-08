@@ -14,6 +14,10 @@ import {
 } from "@/lib/auth/access";
 import { SHIPPING_PAGE_SIZE } from "@/lib/fulfillment/metadata";
 import { prisma } from "@/lib/db/prisma";
+import {
+  resolveShippingExportFileStatus,
+  type ShippingExportFileState,
+} from "@/lib/shipping/file-state";
 
 type SearchParamsValue = string | string[] | undefined;
 
@@ -253,10 +257,27 @@ export type ShippingStageView =
   | "SHIPPED"
   | "EXCEPTION";
 
+type ShippingBatchPreview = {
+  id: string;
+  exportNo: string;
+  fileUrl: string | null;
+  exportedAt: Date;
+  lineCount: number;
+  fileState: ShippingExportFileState;
+  canDownload: boolean;
+  canRegenerate: boolean;
+};
+
+export type ShippingPendingBatchSummary = ShippingBatchPreview & {
+  taskCount: number;
+};
+
 export type ShippingOperationsFilters = {
   keyword: string;
+  supplierKeyword: string;
   supplierId: string;
   supplierViewId: string;
+  batchViewId: string;
   stageView: ShippingStageView;
   reportStatus: "" | ShippingReportStatus;
   shippingStatus: "" | ShippingFulfillmentStatus;
@@ -277,13 +298,8 @@ export type ShippingSupplierSummary = {
   hasFileIssue: boolean;
   hasPendingTracking: boolean;
   pendingTrackingCount: number;
-  latestBatch: {
-    id: string;
-    exportNo: string;
-    fileUrl: string | null;
-    exportedAt: Date;
-    lineCount: number;
-  } | null;
+  currentBatch: ShippingBatchPreview | null;
+  latestHistoryBatch: ShippingBatchPreview | null;
 };
 
 export type ShippingOperationsItem = {
@@ -326,6 +342,10 @@ export type ShippingOperationsItem = {
     id: string;
     orderNo: string;
     subOrderNo: string | null;
+    tradeOrder: {
+      id: string;
+      tradeNo: string;
+    } | null;
     reviewStatus: "PENDING_REVIEW" | "APPROVED" | "REJECTED";
     paymentScheme:
       | "FULL_PREPAID"
@@ -337,7 +357,8 @@ export type ShippingOperationsItem = {
     receiverAddressSnapshot: string;
     items: Array<{
       id: string;
-      productNameSnapshot: string;
+      skuNameSnapshot: string;
+      specSnapshot: string;
       qty: number;
     }>;
   } | null;
@@ -362,10 +383,42 @@ export type ShippingOperationsItem = {
   }>;
 };
 
+function createShippingBatchPreview(input: {
+  id: string;
+  exportNo: string;
+  fileUrl: string | null;
+  exportedAt: Date;
+  lineCount: number;
+  fileState: ShippingExportFileState;
+  canDownload: boolean;
+  canRegenerate: boolean;
+}): ShippingBatchPreview {
+  return {
+    id: input.id,
+    exportNo: input.exportNo,
+    fileUrl: input.fileUrl,
+    exportedAt: input.exportedAt,
+    lineCount: input.lineCount,
+    fileState: input.fileState,
+    canDownload: input.canDownload,
+    canRegenerate: input.canRegenerate,
+  };
+}
+
+function createShippingPendingBatchSummary(
+  preview: ShippingBatchPreview,
+  taskCount: number,
+): ShippingPendingBatchSummary {
+  return {
+    ...preview,
+    taskCount,
+  };
+}
+
 export type ShippingExportBatchFilters = {
   keyword: string;
   supplierId: string;
-  fileView: "" | "READY" | "MISSING_FILE" | "LEGACY";
+  fileView: "" | ShippingExportFileState;
   page: number;
 };
 
@@ -379,7 +432,9 @@ export type ShippingExportBatchItem = {
   fileUrl: string | null;
   remark: string | null;
   exportedAt: Date;
-  fileState: "READY" | "MISSING_FILE" | "LEGACY";
+  fileState: ShippingExportFileState;
+  canDownload: boolean;
+  canRegenerate: boolean;
   supplier: {
     id: string;
     name: string;
@@ -405,8 +460,10 @@ export type ShippingExportBatchItem = {
 
 const shippingOperationsFiltersSchema = z.object({
   keyword: z.string().trim().default(""),
+  supplierKeyword: z.string().trim().default(""),
   supplierId: z.string().trim().default(""),
   supplierViewId: z.string().trim().default(""),
+  batchViewId: z.string().trim().default(""),
   stageView: z.string().trim().default(""),
   reportStatus: z.enum(["", "PENDING", "REPORTED"]).default(""),
   shippingStatus: z
@@ -423,7 +480,7 @@ const SHIPPING_EXPORT_BATCH_PAGE_SIZE = 10;
 const shippingExportBatchFiltersSchema = z.object({
   keyword: z.string().trim().default(""),
   supplierId: z.string().trim().default(""),
-  fileView: z.enum(["", "READY", "MISSING_FILE", "LEGACY"]).default(""),
+  fileView: z.enum(["", "READY", "MISSING", "MISSING_FILE", "LEGACY", "PENDING"]).default(""),
   page: z.coerce.number().int().min(1).default(1),
 });
 
@@ -485,8 +542,10 @@ export function parseShippingOperationsFilters(
 ) {
   const parsed = shippingOperationsFiltersSchema.parse({
     keyword: getParamValue(searchParams?.keyword),
+    supplierKeyword: getParamValue(searchParams?.supplierKeyword),
     supplierId: getParamValue(searchParams?.supplierId),
     supplierViewId: getParamValue(searchParams?.supplierViewId),
+    batchViewId: getParamValue(searchParams?.batchViewId),
     stageView: getParamValue(searchParams?.stageView),
     reportStatus: getParamValue(searchParams?.reportStatus),
     shippingStatus: getParamValue(searchParams?.shippingStatus),
@@ -512,12 +571,17 @@ export function parseShippingOperationsFilters(
 export function parseShippingExportBatchFilters(
   searchParams: Record<string, SearchParamsValue> | undefined,
 ) {
-  return shippingExportBatchFiltersSchema.parse({
+  const parsed = shippingExportBatchFiltersSchema.parse({
     keyword: getParamValue(searchParams?.keyword),
     supplierId: getParamValue(searchParams?.supplierId),
     fileView: getParamValue(searchParams?.fileView),
     page: getParamValue(searchParams?.page) || "1",
   });
+
+  return {
+    ...parsed,
+    fileView: parsed.fileView === "MISSING_FILE" ? "MISSING" : parsed.fileView,
+  };
 }
 
 function buildTrackingMissingWhere(): Prisma.ShippingTaskWhereInput {
@@ -629,6 +693,9 @@ function buildShippingExceptionWhere(): Prisma.ShippingTaskWhereInput {
     OR: [
       { shippingStatus: ShippingFulfillmentStatus.CANCELED },
       {
+        AND: [{ tradeOrderId: null }, { salesOrder: { is: { tradeOrderId: null } } }],
+      },
+      {
         AND: [{ reportStatus: ShippingReportStatus.PENDING }, buildTrackingFilledWhere()],
       },
       {
@@ -653,13 +720,18 @@ function buildShippingStageWhere(stageView: ShippingStageView): Prisma.ShippingT
       };
     case "SHIPPED":
       return {
-        shippingStatus: {
-          in: [
-            ShippingFulfillmentStatus.SHIPPED,
-            ShippingFulfillmentStatus.DELIVERED,
-            ShippingFulfillmentStatus.COMPLETED,
-          ],
-        },
+        AND: [
+          {
+            shippingStatus: {
+              in: [
+                ShippingFulfillmentStatus.SHIPPED,
+                ShippingFulfillmentStatus.DELIVERED,
+                ShippingFulfillmentStatus.COMPLETED,
+              ],
+            },
+          },
+          { NOT: buildShippingExceptionWhere() },
+        ],
       };
     case "EXCEPTION":
       return buildShippingExceptionWhere();
@@ -752,31 +824,6 @@ function buildShippingExportBatchListWhere(
     });
   }
 
-  if (filters.fileView === "READY") {
-    andClauses.push({
-      fileUrl: {
-        not: null,
-      },
-    });
-  }
-
-  if (filters.fileView === "MISSING_FILE") {
-    andClauses.push({
-      fileUrl: null,
-      lines: {
-        some: {},
-      },
-    });
-  }
-
-  if (filters.fileView === "LEGACY") {
-    andClauses.push({
-      lines: {
-        none: {},
-      },
-    });
-  }
-
   return andClauses.length > 0 ? { AND: andClauses } : {};
 }
 
@@ -790,7 +837,8 @@ type ShippingSupplierRow = {
 
 function buildSupplierSummaries(
   rows: ShippingSupplierRow[],
-  latestBatchBySupplierId: Map<string, ShippingSupplierSummary["latestBatch"]>,
+  currentBatchBySupplierId: Map<string, ShippingSupplierSummary["currentBatch"]>,
+  latestHistoryBatchBySupplierId: Map<string, ShippingSupplierSummary["latestHistoryBatch"]>,
   exceptionSupplierIds: Set<string>,
   exceptionCounts: Map<string, number>,
   pendingTrackingCounts: Map<string, number>,
@@ -809,7 +857,8 @@ function buildSupplierSummaries(
       continue;
     }
 
-    const latestBatch = latestBatchBySupplierId.get(row.supplierId) ?? null;
+    const currentBatch = currentBatchBySupplierId.get(row.supplierId) ?? null;
+    const latestHistoryBatch = latestHistoryBatchBySupplierId.get(row.supplierId) ?? null;
     const pendingTrackingCount = pendingTrackingCounts.get(row.supplierId) ?? 0;
     const exceptionCount = exceptionCounts.get(row.supplierId) ?? 0;
 
@@ -821,10 +870,14 @@ function buildSupplierSummaries(
       stageTaskCount: 1,
       hasException: exceptionSupplierIds.has(row.supplierId),
       exceptionCount,
-      hasFileIssue: Boolean(latestBatch && !latestBatch.fileUrl),
+      hasFileIssue: Boolean(
+        currentBatch &&
+          (currentBatch.fileState === "MISSING" || currentBatch.fileState === "PENDING"),
+      ),
       hasPendingTracking: pendingTrackingCount > 0,
       pendingTrackingCount,
-      latestBatch,
+      currentBatch,
+      latestHistoryBatch,
     });
   }
 
@@ -849,19 +902,11 @@ function isShippedFulfillmentStatus(
   );
 }
 
-function resolveShippingExportBatchFileState(
-  fileUrl: string | null,
-  lineCount: number,
-): ShippingExportBatchItem["fileState"] {
-  if (fileUrl) {
-    return "READY";
-  }
-
-  if (lineCount > 0) {
-    return "MISSING_FILE";
-  }
-
-  return "LEGACY";
+function matchesShippingExportFileView(
+  fileView: ShippingExportBatchFilters["fileView"],
+  fileState: ShippingExportFileState,
+) {
+  return !fileView || fileView === fileState;
 }
 
 export async function getShippingOperationsPageData(
@@ -918,7 +963,7 @@ export async function getShippingOperationsPageData(
     ),
   );
 
-  const [exceptionRows, pendingTrackingRows, latestBatchRows] = supplierIds.length
+  const [exceptionRows, pendingTrackingRows, currentStageBatchRows, latestHistoryBatchRows] = supplierIds.length
     ? await Promise.all([
         prisma.shippingTask.findMany({
           where: {
@@ -940,6 +985,31 @@ export async function getShippingOperationsPageData(
             supplierId: true,
           },
         }),
+        prisma.shippingTask.findMany({
+          where: {
+            AND: [
+              currentStageWhere,
+              { supplierId: { in: supplierIds } },
+              { exportBatchId: { not: null } },
+            ],
+          },
+          select: {
+            supplierId: true,
+            exportBatch: {
+              select: {
+                id: true,
+                exportNo: true,
+                fileUrl: true,
+                exportedAt: true,
+                _count: {
+                  select: {
+                    lines: true,
+                  },
+                },
+              },
+            },
+          },
+        }),
         prisma.shippingExportBatch.findMany({
           where: buildShippingBatchWhere(viewer, teamId, supplierIds),
           orderBy: [{ supplierId: "asc" }, { exportedAt: "desc" }],
@@ -957,21 +1027,85 @@ export async function getShippingOperationsPageData(
           },
         }),
       ])
-    : [[], [], []];
+    : [[], [], [], []];
 
-  const latestBatchBySupplierId = new Map<string, ShippingSupplierSummary["latestBatch"]>();
-  for (const batch of latestBatchRows) {
-    if (latestBatchBySupplierId.has(batch.supplierId)) {
-      continue;
+  const batchPreviewCache = new Map<string, ShippingBatchPreview>();
+  const getBatchPreview = async (batch: {
+    id: string;
+    exportNo: string;
+    fileUrl: string | null;
+    exportedAt: Date;
+    _count: {
+      lines: number;
+    };
+  }) => {
+    const cached = batchPreviewCache.get(batch.id);
+
+    if (cached) {
+      return cached;
     }
 
-    latestBatchBySupplierId.set(batch.supplierId, {
+    const fileStatus = await resolveShippingExportFileStatus({
+      fileUrl: batch.fileUrl,
+      lineCount: batch._count.lines,
+    });
+
+    const preview = createShippingBatchPreview({
       id: batch.id,
       exportNo: batch.exportNo,
       fileUrl: batch.fileUrl,
       exportedAt: batch.exportedAt,
       lineCount: batch._count.lines,
+      fileState: fileStatus.state,
+      canDownload: fileStatus.canDownload,
+      canRegenerate: fileStatus.canRegenerate,
     });
+
+    batchPreviewCache.set(batch.id, preview);
+    return preview;
+  };
+
+  const currentBatchBySupplierId = new Map<string, ShippingSupplierSummary["currentBatch"]>();
+  const pendingBatchSummariesBySupplierId = new Map<
+    string,
+    Map<string, ShippingPendingBatchSummary>
+  >();
+
+  for (const row of currentStageBatchRows) {
+    if (!row.supplierId || !row.exportBatch) {
+      continue;
+    }
+
+    const preview = await getBatchPreview(row.exportBatch);
+    const existing = currentBatchBySupplierId.get(row.supplierId);
+
+    if (!existing || existing.exportedAt < preview.exportedAt) {
+      currentBatchBySupplierId.set(row.supplierId, preview);
+    }
+
+    const supplierBatchSummaries =
+      pendingBatchSummariesBySupplierId.get(row.supplierId) ?? new Map<string, ShippingPendingBatchSummary>();
+    const existingBatchSummary = supplierBatchSummaries.get(preview.id);
+
+    if (existingBatchSummary) {
+      existingBatchSummary.taskCount += 1;
+    } else {
+      supplierBatchSummaries.set(preview.id, createShippingPendingBatchSummary(preview, 1));
+    }
+
+    pendingBatchSummariesBySupplierId.set(row.supplierId, supplierBatchSummaries);
+  }
+
+  const latestHistoryBatchBySupplierId = new Map<string, ShippingSupplierSummary["latestHistoryBatch"]>();
+  for (const batch of latestHistoryBatchRows) {
+    if (latestHistoryBatchBySupplierId.has(batch.supplierId)) {
+      continue;
+    }
+
+    latestHistoryBatchBySupplierId.set(
+      batch.supplierId,
+      await getBatchPreview(batch),
+    );
   }
 
   const exceptionCounts = new Map<string, number>();
@@ -997,7 +1131,8 @@ export async function getShippingOperationsPageData(
 
   const supplierSummaries = buildSupplierSummaries(
     supplierRows,
-    latestBatchBySupplierId,
+    currentBatchBySupplierId,
+    latestHistoryBatchBySupplierId,
     new Set(
       exceptionRows
         .map((row) => row.supplierId)
@@ -1006,18 +1141,48 @@ export async function getShippingOperationsPageData(
     exceptionCounts,
     pendingTrackingCounts,
   );
+  const visibleSupplierSummaries = filters.supplierKeyword
+    ? supplierSummaries.filter((supplier) =>
+        supplier.supplier.name
+          .toLocaleLowerCase()
+          .includes(filters.supplierKeyword.toLocaleLowerCase()),
+      )
+    : supplierSummaries;
 
   const activeSupplierId =
-    supplierSummaries.find((supplier) => supplier.supplier.id === filters.supplierViewId)?.supplier.id ??
-    supplierSummaries[0]?.supplier.id ??
+    visibleSupplierSummaries.find((supplier) => supplier.supplier.id === filters.supplierViewId)?.supplier.id ??
+    visibleSupplierSummaries[0]?.supplier.id ??
     "";
 
   const activeSupplier =
-    supplierSummaries.find((supplier) => supplier.supplier.id === activeSupplierId) ?? null;
+    visibleSupplierSummaries.find((supplier) => supplier.supplier.id === activeSupplierId) ?? null;
+  const pendingBatchSummaries = activeSupplier
+    ? Array.from(
+        (pendingBatchSummariesBySupplierId.get(activeSupplier.supplier.id) ?? new Map()).values(),
+      ).sort(
+        (left, right) =>
+          right.exportedAt.getTime() - left.exportedAt.getTime() ||
+          right.taskCount - left.taskCount,
+      )
+    : [];
+  const activeBatchId =
+    filters.stageView === "PENDING_TRACKING"
+      ? pendingBatchSummaries.find((batch) => batch.id === filters.batchViewId)?.id ??
+        pendingBatchSummaries[0]?.id ??
+        ""
+      : "";
+  const activeBatch =
+    pendingBatchSummaries.find((batch) => batch.id === activeBatchId) ?? null;
 
   const activeSupplierWhere = activeSupplierId
     ? {
-        AND: [currentStageWhere, { supplierId: activeSupplierId }],
+        AND: [
+          currentStageWhere,
+          { supplierId: activeSupplierId },
+          ...(filters.stageView === "PENDING_TRACKING" && activeBatchId
+            ? [{ exportBatchId: activeBatchId }]
+            : []),
+        ],
       }
     : { id: "__empty_shipping_supplier_pool__" };
 
@@ -1076,6 +1241,12 @@ export async function getShippingOperationsPageData(
               id: true,
               orderNo: true,
               subOrderNo: true,
+              tradeOrder: {
+                select: {
+                  id: true,
+                  tradeNo: true,
+                },
+              },
               reviewStatus: true,
               paymentScheme: true,
               receiverNameSnapshot: true,
@@ -1085,7 +1256,8 @@ export async function getShippingOperationsPageData(
                 orderBy: { createdAt: "asc" },
                 select: {
                   id: true,
-                  productNameSnapshot: true,
+                  skuNameSnapshot: true,
+                  specSnapshot: true,
                   qty: true,
                 },
               },
@@ -1115,6 +1287,106 @@ export async function getShippingOperationsPageData(
       })
     : [];
 
+  const activeBatchItems =
+    activeSupplierId && activeBatch && filters.stageView === "PENDING_TRACKING"
+      ? await prisma.shippingTask.findMany({
+          where: {
+            AND: [
+              currentStageWhere,
+              { supplierId: activeSupplierId },
+              { exportBatchId: activeBatch.id },
+            ],
+          },
+          orderBy: [{ createdAt: "desc" }],
+          select: {
+            id: true,
+            reportStatus: true,
+            shippingStatus: true,
+            shippingProvider: true,
+            trackingNumber: true,
+            codAmount: true,
+            insuranceRequired: true,
+            insuranceAmount: true,
+            reportedAt: true,
+            shippedAt: true,
+            createdAt: true,
+            exportBatch: {
+              select: {
+                id: true,
+                exportNo: true,
+                fileUrl: true,
+              },
+            },
+            tradeOrder: {
+              select: {
+                id: true,
+                tradeNo: true,
+              },
+            },
+            supplier: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            customer: {
+              select: {
+                id: true,
+                name: true,
+                phone: true,
+              },
+            },
+            salesOrder: {
+              select: {
+                id: true,
+                orderNo: true,
+                subOrderNo: true,
+                tradeOrder: {
+                  select: {
+                    id: true,
+                    tradeNo: true,
+                  },
+                },
+                reviewStatus: true,
+                paymentScheme: true,
+                receiverNameSnapshot: true,
+                receiverPhoneSnapshot: true,
+                receiverAddressSnapshot: true,
+                items: {
+                  orderBy: { createdAt: "asc" },
+                  select: {
+                    id: true,
+                    skuNameSnapshot: true,
+                    specSnapshot: true,
+                    qty: true,
+                  },
+                },
+              },
+            },
+            codCollectionRecords: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: {
+                id: true,
+                status: true,
+                expectedAmount: true,
+                collectedAmount: true,
+                occurredAt: true,
+                remark: true,
+                paymentRecord: {
+                  select: {
+                    id: true,
+                    amount: true,
+                    status: true,
+                    occurredAt: true,
+                  },
+                },
+              },
+            },
+          },
+        })
+      : [];
+
   return {
     notice: parseActionNotice(rawSearchParams),
     summary: {
@@ -1127,12 +1399,31 @@ export async function getShippingOperationsPageData(
     },
     filters: {
       ...filters,
+      batchViewId: activeBatchId,
       supplierViewId: activeSupplierId,
       page,
     },
-    supplierSummaries,
+    supplierSummaries: visibleSupplierSummaries,
     activeSupplier,
+    pendingBatchSummaries,
+    activeBatch,
     items: itemRows.map((item) => ({
+      ...item,
+      codAmount: item.codAmount.toString(),
+      insuranceAmount: item.insuranceAmount.toString(),
+      codCollectionRecords: item.codCollectionRecords.map((record) => ({
+        ...record,
+        expectedAmount: record.expectedAmount.toString(),
+        collectedAmount: record.collectedAmount.toString(),
+        paymentRecord: record.paymentRecord
+          ? {
+              ...record.paymentRecord,
+              amount: record.paymentRecord.amount.toString(),
+            }
+          : null,
+      })),
+    })) satisfies ShippingOperationsItem[],
+    activeBatchItems: activeBatchItems.map((item) => ({
       ...item,
       codAmount: item.codAmount.toString(),
       insuranceAmount: item.insuranceAmount.toString(),
@@ -1169,15 +1460,9 @@ export async function getShippingExportBatchesPageData(
   const filters = parseShippingExportBatchFilters(rawSearchParams);
   const batchWhere = buildShippingExportBatchListWhere(viewer, teamId, filters);
 
-  const totalCount = await prisma.shippingExportBatch.count({ where: batchWhere });
-  const totalPages = Math.max(1, Math.ceil(totalCount / SHIPPING_EXPORT_BATCH_PAGE_SIZE));
-  const page = Math.min(filters.page, totalPages);
-
-  const items = await prisma.shippingExportBatch.findMany({
+  const rawItems = await prisma.shippingExportBatch.findMany({
     where: batchWhere,
     orderBy: { exportedAt: "desc" },
-    skip: (page - 1) * SHIPPING_EXPORT_BATCH_PAGE_SIZE,
-    take: SHIPPING_EXPORT_BATCH_PAGE_SIZE,
     select: {
       id: true,
       exportNo: true,
@@ -1209,21 +1494,89 @@ export async function getShippingExportBatchesPageData(
       },
       lines: {
         orderBy: [{ rowNo: "asc" }],
-        take: 12,
         select: {
           tradeOrderId: true,
           tradeNoSnapshot: true,
-        },
-      },
-      shippingTasks: {
-        select: {
-          reportStatus: true,
-          shippingStatus: true,
-          trackingNumber: true,
+          shippingTask: {
+            select: {
+              reportStatus: true,
+              shippingStatus: true,
+              trackingNumber: true,
+            },
+          },
         },
       },
     },
   });
+
+  const items = (
+    await Promise.all(
+      rawItems.map(async (item) => {
+        const sourceTradeOrders = Array.from(
+          new Map(
+            item.lines.map((line) => [
+              line.tradeOrderId,
+              {
+                id: line.tradeOrderId,
+                tradeNo: line.tradeNoSnapshot,
+              },
+            ]),
+          ).values(),
+        ).slice(0, 4);
+        const fileStatus = await resolveShippingExportFileStatus({
+          fileUrl: item.fileUrl,
+          lineCount: item._count.lines,
+        });
+        const pendingTrackingCount =
+          fileStatus.state === "READY"
+            ? item.lines.filter(
+                (line) =>
+                  line.shippingTask &&
+                  line.shippingTask.reportStatus === "REPORTED" &&
+                  !isShippedFulfillmentStatus(line.shippingTask.shippingStatus) &&
+                  line.shippingTask.shippingStatus !== "CANCELED" &&
+                  !line.shippingTask.trackingNumber?.trim(),
+              ).length
+            : 0;
+        const shippedCount = item.lines.filter(
+          (line) =>
+            line.shippingTask &&
+            isShippedFulfillmentStatus(line.shippingTask.shippingStatus),
+        ).length;
+
+        return {
+          id: item.id,
+          exportNo: item.exportNo,
+          orderCount: item.orderCount,
+          subOrderCount: item.subOrderCount,
+          tradeOrderCount: item.tradeOrderCount,
+          fileName: item.fileName,
+          fileUrl: item.fileUrl,
+          remark: item.remark,
+          exportedAt: item.exportedAt,
+          fileState: fileStatus.state,
+          canDownload: fileStatus.canDownload,
+          canRegenerate: fileStatus.canRegenerate,
+          supplier: item.supplier,
+          exportedBy: item.exportedBy,
+          sourceTradeOrders,
+          stageSummary: {
+            pendingTrackingCount,
+            shippedCount,
+          },
+          _count: item._count,
+        } satisfies ShippingExportBatchItem;
+      }),
+    )
+  ).filter((item) => matchesShippingExportFileView(filters.fileView, item.fileState));
+
+  const totalCount = items.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / SHIPPING_EXPORT_BATCH_PAGE_SIZE));
+  const page = Math.min(filters.page, totalPages);
+  const pagedItems = items.slice(
+    (page - 1) * SHIPPING_EXPORT_BATCH_PAGE_SIZE,
+    page * SHIPPING_EXPORT_BATCH_PAGE_SIZE,
+  );
 
   return {
     notice: parseActionNotice(rawSearchParams),
@@ -1231,54 +1584,7 @@ export async function getShippingExportBatchesPageData(
       ...filters,
       page,
     },
-    items: items.map((item) => {
-      const sourceTradeOrders = Array.from(
-        new Map(
-          item.lines.map((line) => [
-            line.tradeOrderId,
-            {
-              id: line.tradeOrderId,
-              tradeNo: line.tradeNoSnapshot,
-            },
-          ]),
-        ).values(),
-      ).slice(0, 4);
-      const fileState = resolveShippingExportBatchFileState(item.fileUrl, item._count.lines);
-      const pendingTrackingCount =
-        fileState === "READY"
-          ? item.shippingTasks.filter(
-              (shippingTask) =>
-                shippingTask.reportStatus === "REPORTED" &&
-                !isShippedFulfillmentStatus(shippingTask.shippingStatus) &&
-                shippingTask.shippingStatus !== "CANCELED" &&
-                !shippingTask.trackingNumber?.trim(),
-            ).length
-          : 0;
-      const shippedCount = item.shippingTasks.filter((shippingTask) =>
-        isShippedFulfillmentStatus(shippingTask.shippingStatus),
-      ).length;
-
-      return {
-        id: item.id,
-        exportNo: item.exportNo,
-        orderCount: item.orderCount,
-        subOrderCount: item.subOrderCount,
-        tradeOrderCount: item.tradeOrderCount,
-        fileName: item.fileName,
-        fileUrl: item.fileUrl,
-        remark: item.remark,
-        exportedAt: item.exportedAt,
-        fileState,
-        supplier: item.supplier,
-        exportedBy: item.exportedBy,
-        sourceTradeOrders,
-        stageSummary: {
-          pendingTrackingCount,
-          shippedCount,
-        },
-        _count: item._count,
-      } satisfies ShippingExportBatchItem;
-    }),
+    items: pagedItems,
     pagination: {
       page,
       pageSize: SHIPPING_EXPORT_BATCH_PAGE_SIZE,

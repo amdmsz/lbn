@@ -28,7 +28,7 @@ type FulfillmentShippingParams = {
 type FulfillmentBatchParams = {
   keyword?: string;
   supplierId?: string;
-  fileView?: "" | "READY" | "MISSING_FILE" | "LEGACY";
+  fileView?: "" | "READY" | "MISSING" | "LEGACY" | "PENDING";
 };
 
 export function getOrderFulfillmentViewsForRole(

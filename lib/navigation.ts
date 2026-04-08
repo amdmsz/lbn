@@ -1,4 +1,10 @@
 import type { RoleCode } from "@prisma/client";
+import {
+  canAccessLiveSessionModule,
+  canAccessProductModule,
+  canAccessSupplierModule,
+} from "@/lib/auth/access";
+import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 
 export type NavigationIconName =
   | "dashboard"
@@ -48,63 +54,63 @@ const navigationItems = {
   dashboard: createItem({
     title: "Dashboard",
     href: "/dashboard",
-    description: "按角色查看今日重点、工作队列与业务入口。",
+    description: "查看当前角色的今日重点、工作队列和常用入口。",
     iconName: "dashboard",
     activePrefixes: ["/dashboard"],
   }),
   customers: createItem({
     title: "客户中心",
     href: "/customers",
-    description: "销售主工作台与组织级客户经营视图。",
+    description: "客户执行主工作台和客户经营视图。",
     iconName: "customers",
     activePrefixes: ["/customers"],
   }),
   leads: createItem({
     title: "线索中心",
     href: "/leads",
-    description: "处理线索复核、分配、归并与审计。",
+    description: "处理线索复核、分配、归并和审计。",
     iconName: "leads",
     activePrefixes: ["/leads"],
   }),
   leadImports: createItem({
     title: "导入中心",
     href: "/lead-imports",
-    description: "管理导入批次、模板与异常回看。",
+    description: "管理导入批次、模板和异常回看。",
     iconName: "leadImports",
     activePrefixes: ["/lead-imports", "/lead-import-templates"],
   }),
   liveSessions: createItem({
     title: "直播场次",
     href: "/live-sessions",
-    description: "直播协同、邀约记录与运营配合入口。",
+    description: "直播协同、邀约记录和运营配合入口。",
     iconName: "liveSessions",
     activePrefixes: ["/live-sessions"],
   }),
   suppliers: createItem({
-    title: "供货商中心",
+    title: "供应商中心",
     href: "/suppliers",
-    description: "维护供货商主数据与履约上游信息。",
+    description: "兼容入口，已收口到商品中心。",
     iconName: "suppliers",
     activePrefixes: ["/suppliers"],
   }),
   products: createItem({
     title: "商品中心",
     href: "/products",
-    description: "维护商品与 SKU 主数据。",
+    description: "维护商品、SKU 和供应商相关主数据。",
     iconName: "products",
     activePrefixes: ["/products"],
   }),
   orders: createItem({
-    title: "订单中心",
+    title: "订单中心 / 交易单",
     href: "/orders",
-    description: "管理 SalesOrder、审核与交易结果。",
+    description: "兼容入口，当前主线已收口到履约中心。",
     iconName: "orders",
     activePrefixes: ["/orders"],
   }),
   fulfillmentCenter: createItem({
-    title: "订单履约中心",
+    title: "订单中心",
     href: "/fulfillment",
-    description: "统一承接交易单、发货执行与批次记录，按业务域而不是技术对象组织。",
+    description: "统一承接交易单、发货执行和批次记录。",
     iconName: "orders",
     activePrefixes: ["/fulfillment", "/orders", "/shipping"],
   }),
@@ -118,22 +124,22 @@ const navigationItems = {
   collectionTasks: createItem({
     title: "催收任务",
     href: "/collection-tasks",
-    description: "跟进尾款、COD 与运费催收任务。",
+    description: "跟进尾款、COD 和运费催收任务。",
     iconName: "collectionTasks",
     activePrefixes: ["/collection-tasks"],
   }),
   shipping: createItem({
-    title: "发货中心",
+    title: "订单中心 / 发货执行",
     href: "/shipping",
-    description: "履约执行台、状态推进与结果回看。",
+    description: "兼容入口，已收口到履约中心发货视图。",
     iconName: "shipping",
     activePrefixes: ["/shipping"],
     excludePrefixes: ["/shipping/export-batches"],
   }),
   shippingExportBatches: createItem({
-    title: "报单批次",
+    title: "订单中心 / 批次记录",
     href: "/shipping/export-batches",
-    description: "回看导出批次、供货商报单与历史记录。",
+    description: "兼容入口，已收口到履约中心批次视图。",
     iconName: "shippingExportBatches",
     activePrefixes: ["/shipping/export-batches"],
   }),
@@ -147,42 +153,42 @@ const navigationItems = {
   reports: createItem({
     title: "报表中心",
     href: "/reports",
-    description: "查看经营、履约与财务预览。",
+    description: "查看经营、履约和财务预览。",
     iconName: "reports",
     activePrefixes: ["/reports"],
   }),
   settingsCenter: createItem({
     title: "设置中心",
     href: "/settings",
-    description: "组织、账号与主数据中台总览。",
+    description: "账号、团队、标签、字典和通话结果统一入口。",
     iconName: "settings",
     activePrefixes: ["/settings"],
   }),
   settingsUsers: createItem({
     title: "账号管理",
     href: "/settings/users",
-    description: "维护内部账号、角色、状态与密码流程。",
+    description: "维护内部账号、角色、状态和密码流程。",
     iconName: "settings",
     activePrefixes: ["/settings/users"],
   }),
   settingsTeams: createItem({
     title: "团队管理",
     href: "/settings/teams",
-    description: "维护团队结构、主管与成员归属。",
+    description: "维护团队结构、负责人和成员归属。",
     iconName: "settings",
     activePrefixes: ["/settings/teams"],
   }),
   settingsTags: createItem({
-    title: "标签与分类",
+    title: "标签体系",
     href: "/settings/tag-groups",
-    description: "统一维护标签组、分类和标签定义。",
+    description: "统一维护标签组、标签分类和标签定义。",
     iconName: "settings",
     activePrefixes: ["/settings/tag-groups", "/settings/tag-categories", "/settings/tags"],
   }),
   settingsDictionaries: createItem({
-    title: "字典与类目",
+    title: "字典配置",
     href: "/settings/dictionaries",
-    description: "维护字典类型、字典项与基础类目。",
+    description: "维护字典类型、字典项和基础类目。",
     iconName: "settings",
     activePrefixes: ["/settings/dictionaries"],
   }),
@@ -195,13 +201,13 @@ const navigationTree: NavigationTree = {
     {
       key: "workspace",
       title: "工作台",
-      description: "组织级驾驶舱与关键任务入口。",
+      description: "组织级驾驶舱和关键任务入口。",
       sections: [{ items: [navigationItems.dashboard] }],
     },
     {
       key: "customer-operations",
       title: "客户运营",
-      description: "客户、线索、导入与直播协同。",
+      description: "客户、线索、导入和直播协同。",
       sections: [
         {
           items: [
@@ -216,7 +222,7 @@ const navigationTree: NavigationTree = {
     {
       key: "commerce",
       title: "商品交易",
-      description: "商品主数据、交易审核与收款协同。",
+      description: "商品主数据、交易审核和收款协同。",
       sections: [
         {
           items: [navigationItems.products, navigationItems.fulfillmentCenter],
@@ -230,49 +236,33 @@ const navigationTree: NavigationTree = {
     {
       key: "fulfillment",
       title: "履约中心",
-      description: "发货执行、报单批次与礼品协同。",
-      sections: [
-        {
-          items: [navigationItems.gifts],
-        },
-      ],
+      description: "礼品协同和履约相关结果回看。",
+      sections: [{ items: [navigationItems.gifts] }],
     },
     {
       key: "analytics",
       title: "数据分析",
-      description: "经营分析与财务预览入口。",
+      description: "经营分析和管理视图入口。",
       sections: [{ items: [navigationItems.reports] }],
     },
     {
       key: "settings",
       title: "设置中心",
-      description: "组织与主数据中台。",
-      sections: [
-        {
-          items: [navigationItems.settingsCenter],
-        },
-        {
-          title: "组织与账号",
-          items: [navigationItems.settingsUsers, navigationItems.settingsTeams],
-        },
-        {
-          title: "主数据",
-          items: [navigationItems.settingsTags, navigationItems.settingsDictionaries],
-        },
-      ],
+      description: "设置域统一入口，不再把 settings 子页拆成多个 sidebar 入口。",
+      sections: [{ items: [navigationItems.settingsCenter] }],
     },
   ],
   SUPERVISOR: [
     {
       key: "workspace",
       title: "工作台",
-      description: "团队经营与协同入口。",
+      description: "团队经营和协同入口。",
       sections: [{ items: [navigationItems.dashboard] }],
     },
     {
       key: "customer-operations",
       title: "客户运营",
-      description: "团队客户、线索、导入与直播协同。",
+      description: "团队客户、线索、导入和直播协同。",
       sections: [
         {
           items: [
@@ -287,7 +277,7 @@ const navigationTree: NavigationTree = {
     {
       key: "commerce",
       title: "商品交易",
-      description: "订单审核、商品主数据与团队收款。",
+      description: "订单审核、商品主数据和团队收款。",
       sections: [
         {
           items: [navigationItems.products, navigationItems.fulfillmentCenter],
@@ -301,12 +291,8 @@ const navigationTree: NavigationTree = {
     {
       key: "fulfillment",
       title: "履约中心",
-      description: "查看团队履约、报单与礼品结果。",
-      sections: [
-        {
-          items: [navigationItems.gifts],
-        },
-      ],
+      description: "查看团队履约、报单和礼品结果。",
+      sections: [{ items: [navigationItems.gifts] }],
     },
     {
       key: "analytics",
@@ -317,38 +303,22 @@ const navigationTree: NavigationTree = {
     {
       key: "settings",
       title: "设置中心",
-      description: "组织与主数据中台。",
-      sections: [
-        {
-          items: [navigationItems.settingsCenter],
-        },
-        {
-          title: "组织与账号",
-          items: [navigationItems.settingsUsers, navigationItems.settingsTeams],
-        },
-        {
-          title: "主数据",
-          items: [navigationItems.settingsTags, navigationItems.settingsDictionaries],
-        },
-      ],
+      description: "设置域统一入口，不再把 settings 子页拆成多个 sidebar 入口。",
+      sections: [{ items: [navigationItems.settingsCenter] }],
     },
   ],
   SALES: [
     {
       key: "workspace",
       title: "工作台",
-      description: "个人客户工作台与结果摘要。",
+      description: "个人客户工作台和结果摘要。",
       sections: [{ items: [navigationItems.dashboard] }],
     },
     {
       key: "customer-operations",
       title: "客户运营",
       description: "客户主线与直播邀约协同。",
-      sections: [
-        {
-          items: [navigationItems.customers, navigationItems.liveSessions],
-        },
-      ],
+      sections: [{ items: [navigationItems.customers, navigationItems.liveSessions] }],
     },
     {
       key: "commerce",
@@ -369,18 +339,14 @@ const navigationTree: NavigationTree = {
     {
       key: "workspace",
       title: "工作台",
-      description: "运营协同与常用入口。",
+      description: "运营协同和常用入口。",
       sections: [{ items: [navigationItems.dashboard] }],
     },
     {
       key: "operations",
       title: "运营协同",
       description: "直播场次和礼品协同。",
-      sections: [
-        {
-          items: [navigationItems.liveSessions, navigationItems.gifts],
-        },
-      ],
+      sections: [{ items: [navigationItems.liveSessions, navigationItems.gifts] }],
     },
     {
       key: "product-collaboration",
@@ -393,22 +359,95 @@ const navigationTree: NavigationTree = {
     {
       key: "workspace",
       title: "工作台",
-      description: "履约执行摘要与待办入口。",
+      description: "履约执行摘要和待办入口。",
       sections: [{ items: [navigationItems.dashboard] }],
+    },
+    {
+      key: "operations",
+      title: "协同支持",
+      description: "直播场次协同与跨岗位活动信息维护。",
+      sections: [{ items: [navigationItems.liveSessions] }],
     },
     {
       key: "fulfillment",
       title: "履约中心",
-      description: "发货执行与报单批次。",
-      sections: [
-        {
-          items: [navigationItems.fulfillmentCenter],
-        },
-      ],
+      description: "发货执行、报单批次与履约相关主数据协同。",
+      sections: [{ items: [navigationItems.fulfillmentCenter, navigationItems.products] }],
     },
   ],
 };
 
-export function getNavigationGroupsForRole(role: RoleCode) {
-  return navigationTree[role] ?? [];
+function canAccessNavigationItem(
+  role: RoleCode,
+  permissionCodes: readonly ExtraPermissionCode[],
+  item: NavigationItem,
+) {
+  if (item.href === "/live-sessions") {
+    return canAccessLiveSessionModule(role, permissionCodes);
+  }
+
+  if (item.href === "/products") {
+    return canAccessProductModule(role, permissionCodes);
+  }
+
+  if (item.href === "/suppliers") {
+    return canAccessSupplierModule(role, permissionCodes);
+  }
+
+  return true;
+}
+
+function hasNavigationItem(groups: NavigationGroup[], href: string) {
+  return groups.some((group) =>
+    group.sections.some((section) => section.items.some((item) => item.href === href)),
+  );
+}
+
+export function getNavigationGroupsForRole(
+  role: RoleCode,
+  permissionCodes: readonly ExtraPermissionCode[] = [],
+) {
+  const filteredGroups = (navigationTree[role] ?? [])
+    .map((group) => ({
+      ...group,
+      sections: group.sections
+        .map((section) => ({
+          ...section,
+          items: section.items.filter((item) =>
+            canAccessNavigationItem(role, permissionCodes, item),
+          ),
+        }))
+        .filter((section) => section.items.length > 0),
+    }))
+    .filter((group) => group.sections.length > 0);
+
+  const grantedItems: NavigationItem[] = [];
+
+  if (
+    canAccessLiveSessionModule(role, permissionCodes) &&
+    !hasNavigationItem(filteredGroups, navigationItems.liveSessions.href)
+  ) {
+    grantedItems.push(navigationItems.liveSessions);
+  }
+
+  if (
+    canAccessProductModule(role, permissionCodes) &&
+    !hasNavigationItem(filteredGroups, navigationItems.products.href)
+  ) {
+    grantedItems.push(navigationItems.products);
+  }
+
+  if (grantedItems.length === 0) {
+    return filteredGroups;
+  }
+
+  return [
+    ...filteredGroups,
+    {
+      key: "granted-access",
+      title: "额外授权",
+      description: "由管理员按账号追加的跨岗位模块入口。",
+      sections: [{ items: grantedItems }],
+    },
+  ];
 }

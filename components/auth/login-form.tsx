@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { BRAND_NAME_CN } from "@/lib/branding";
 
 export function LoginForm() {
   const router = useRouter();
@@ -41,7 +42,7 @@ export function LoginForm() {
     <div className="crm-card w-full max-w-md p-8">
       <div>
         <p className="text-xs uppercase tracking-[0.22em] text-[var(--color-accent)]">
-          酒水私域 CRM
+          {BRAND_NAME_CN}
         </p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight">账号登录</h1>
         <p className="mt-3 text-sm leading-7 text-black/60">

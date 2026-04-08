@@ -7,6 +7,7 @@ import {
   buildFulfillmentShippingHref,
   buildFulfillmentTradeOrdersHref,
 } from "@/lib/fulfillment/navigation";
+import { buildShippingExportBatchDownloadHref } from "@/lib/shipping/download";
 import type { getShippingExportBatchesPageData } from "@/lib/shipping/queries";
 
 type BatchData = Awaited<ReturnType<typeof getShippingExportBatchesPageData>>;
@@ -64,13 +65,19 @@ function getFileStateMeta(fileState: ExportBatchItem["fileState"]): {
       return {
         label: "文件可下载",
         variant: "success",
-        note: "冻结快照已生成文件，可直接下载或再次重生成。",
+        note: "冻结快照和导出文件都可直接使用。",
       };
-    case "MISSING_FILE":
+    case "MISSING":
       return {
-        label: "待重生成",
+        label: "文件缺失",
+        variant: "danger",
+        note: "批次记录保留了文件地址，但磁盘文件不存在，应尽快重生成。",
+      };
+    case "PENDING":
+      return {
+        label: "待生成",
         variant: "warning",
-        note: "快照已冻结，但文件缺失或生成失败，应从这里重生成。",
+        note: "冻结快照已写入，但导出文件还未可用，可从这里生成。",
       };
     case "LEGACY":
     default:
@@ -85,7 +92,7 @@ function getFileStateMeta(fileState: ExportBatchItem["fileState"]): {
 function getPrimaryShippingHref(item: ExportBatchItem) {
   const keyword = item.sourceTradeOrders.length === 1 ? item.sourceTradeOrders[0]?.tradeNo : "";
 
-  if (item.fileState === "MISSING_FILE") {
+  if (item.fileState === "MISSING" || item.fileState === "PENDING") {
     return buildFulfillmentShippingHref({
       supplierViewId: item.supplier.id,
       stageView: "EXCEPTION",
@@ -168,7 +175,7 @@ export function ShippingExportBatchesSection({
       </div>
 
       <div className="crm-filter-panel">
-        <form method="get" className="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_14rem_auto]">
+        <form method="get" className="grid gap-3 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.5fr)_14rem_auto]">
           {Object.entries(baseSearchParams ?? {}).map(([key, value]) => (
             <input key={key} type="hidden" name={key} value={value} />
           ))}
@@ -190,12 +197,13 @@ export function ShippingExportBatchesSection({
             <select name="fileView" defaultValue={filters.fileView} className="crm-select">
               <option value="">全部状态</option>
               <option value="READY">文件可下载</option>
-              <option value="MISSING_FILE">待重生成</option>
+              <option value="MISSING">文件缺失</option>
+              <option value="PENDING">待生成</option>
               <option value="LEGACY">历史批次</option>
             </select>
           </label>
 
-          <div className="crm-filter-actions">
+          <div className="crm-filter-actions md:col-span-2 2xl:col-span-1">
             <button type="submit" className="crm-button crm-button-primary">
               应用筛选
             </button>
@@ -335,10 +343,15 @@ export function ShippingExportBatchesSection({
                 <div className="space-y-1">
                   <div>
                     文件：
-                    {item.fileUrl ? (
-                      <a href={item.fileUrl} className="ml-1 crm-text-link">
+                    {item.canDownload && item.fileUrl ? (
+                      <a
+                        href={buildShippingExportBatchDownloadHref(item.id)}
+                        className="ml-1 crm-text-link"
+                      >
                         下载
                       </a>
+                    ) : item.fileState === "MISSING" ? (
+                      <span className="ml-1 text-[var(--color-danger)]">记录路径已失效</span>
                     ) : (
                       <span className="ml-1 text-black/45">尚未生成</span>
                     )}
@@ -346,14 +359,16 @@ export function ShippingExportBatchesSection({
                   <div className="text-xs text-black/45">
                     {item.fileState === "READY"
                       ? "当前批次已冻结并完成文件生成。"
-                      : item.fileState === "MISSING_FILE"
-                        ? "当前批次已冻结快照，但文件缺失，可在此重生成。"
-                        : "当前批次属于历史兼容记录，后续 backfill 前不支持重生成。"}
+                      : item.fileState === "MISSING"
+                        ? "当前批次已有冻结快照，但旧文件已丢失；请在这里重生成。"
+                        : item.fileState === "PENDING"
+                          ? "当前批次已有冻结快照，但文件尚未可用；请在这里生成。"
+                          : "当前批次属于历史兼容记录，后续 backfill 前不支持重生成。"}
                   </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {canManageReporting && item.fileState !== "LEGACY" ? (
+                  {canManageReporting && item.canRegenerate ? (
                     <form action={regenerateFileAction}>
                       <input type="hidden" name="exportBatchId" value={item.id} />
                       <input
@@ -362,7 +377,7 @@ export function ShippingExportBatchesSection({
                         value={buildPageHref(filters, { page: pagination.page }, basePath, baseSearchParams)}
                       />
                       <button type="submit" className="crm-button crm-button-secondary">
-                        {item.fileUrl ? "重生成文件" : "生成文件"}
+                        {item.fileState === "READY" ? "重生成文件" : "生成文件"}
                       </button>
                     </form>
                   ) : null}

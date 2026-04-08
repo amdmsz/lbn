@@ -175,9 +175,12 @@
 
 ### SHIPPER
 
-- 主要在 `/shipping` 工作
+- 主要在 `/fulfillment?tab=shipping` 工作
 - 处理 supplier 维度报单、导出、回填单号、推进履约状态
+- 可进入 `/live-sessions` 维护直播场次基础信息，用于活动协同与后续回看
+- 可进入 `/products` 维护履约协同所需的商品与 supplier 主数据
 - 不承担交易审核与支付确认
+- 不因直播场次权限而获得客户经营主链
 
 ### OPS
 

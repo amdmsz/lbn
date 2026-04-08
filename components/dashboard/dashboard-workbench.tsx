@@ -12,6 +12,12 @@ import {
 } from "@/components/shared/page-summary-strip";
 import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge } from "@/components/shared/status-badge";
+import {
+  canAccessLiveSessionModule,
+  canAccessProductModule,
+} from "@/lib/auth/access";
+import { buildOrderFulfillmentHref } from "@/lib/fulfillment/navigation";
+import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import type {
   ConversionMetric,
   EmployeeRankingItem,
@@ -80,40 +86,78 @@ function getRoleMeta(role: RoleCode) {
       return {
         eyebrow: "履约执行台",
         title: "履约工作台",
-        description: "先看发货执行、报单批次和履约结果，再进入发货中心处理具体任务。",
+        description: "先看发货执行和履约结果；需要协同时，再进入直播场次或商品主数据模块处理履约配合任务。",
         roleNote: "履约执行",
         boundary: "不进入客户经营和收款确认主链。",
       };
   }
 }
 
-function getQuickEntries(role: RoleCode) {
+function appendGrantedQuickEntries(
+  role: RoleCode,
+  permissionCodes: readonly ExtraPermissionCode[],
+  items: Array<{
+    title: string;
+    description: string;
+    href: string;
+  }>,
+) {
+  const nextItems = [...items];
+
+  const hasGrantedLiveModule =
+    canAccessLiveSessionModule(role, permissionCodes) && !canAccessLiveSessionModule(role);
+  const hasGrantedProductModule =
+    canAccessProductModule(role, permissionCodes) && !canAccessProductModule(role);
+
+  if (hasGrantedLiveModule && !nextItems.some((item) => item.href === "/live-sessions")) {
+    nextItems.push({
+      title: "直播场次",
+      description: "这是管理员额外授权的协同入口，可查看或维护直播场次基础信息。",
+      href: "/live-sessions",
+    });
+  }
+
+  if (hasGrantedProductModule && !nextItems.some((item) => item.href === "/products")) {
+    nextItems.push({
+      title: "商品中心",
+      description: "这是管理员额外授权的入口，可维护商品、SKU 与供货商主数据。",
+      href: "/products",
+    });
+  }
+
+  return nextItems;
+}
+
+function getQuickEntries(
+  role: RoleCode,
+  permissionCodes: readonly ExtraPermissionCode[] = [],
+) {
   switch (role) {
     case "ADMIN":
-      return [
+      return appendGrantedQuickEntries(role, permissionCodes, [
         {
           title: "客户中心",
           description: "看组织、团队与销售层级客户经营。",
           href: "/customers",
         },
         {
-          title: "订单中心",
+          title: "订单中心 / 交易单",
           description: "看审核、交易结构和异常订单。",
-          href: "/orders",
+          href: buildOrderFulfillmentHref("trade-orders"),
         },
         {
-          title: "发货中心",
+          title: "订单中心 / 发货执行",
           description: "看履约执行状态与报单节奏。",
-          href: "/shipping",
+          href: buildOrderFulfillmentHref("shipping"),
         },
         {
           title: "报表中心",
           description: "看经营、履约和财务预览。",
           href: "/reports",
         },
-      ];
+      ]);
     case "SUPERVISOR":
-      return [
+      return appendGrantedQuickEntries(role, permissionCodes, [
         {
           title: "团队客户",
           description: "进入团队客户视图继续下钻销售。",
@@ -122,7 +166,7 @@ function getQuickEntries(role: RoleCode) {
         {
           title: "待审核订单",
           description: "集中处理团队订单审核和结果回看。",
-          href: "/orders",
+          href: buildOrderFulfillmentHref("trade-orders", { statusView: "PENDING_REVIEW" }),
         },
         {
           title: "催收任务",
@@ -132,20 +176,20 @@ function getQuickEntries(role: RoleCode) {
         {
           title: "履约协同",
           description: "跟踪团队履约和发货执行。",
-          href: "/shipping",
+          href: buildOrderFulfillmentHref("shipping"),
         },
-      ];
+      ]);
     case "SALES":
-      return [
+      return appendGrantedQuickEntries(role, permissionCodes, [
         {
           title: "客户中心",
           description: "今天优先处理客户工作队列。",
           href: "/customers",
         },
         {
-          title: "订单中心",
+          title: "订单中心 / 交易单",
           description: "回看本人订单审核与成交结果。",
-          href: "/orders",
+          href: buildOrderFulfillmentHref("trade-orders"),
         },
         {
           title: "收款记录",
@@ -157,9 +201,9 @@ function getQuickEntries(role: RoleCode) {
           description: "推进尾款、COD 和运费任务。",
           href: "/collection-tasks",
         },
-      ];
+      ]);
     case "OPS":
-      return [
+      return appendGrantedQuickEntries(role, permissionCodes, [
         {
           title: "直播场次",
           description: "承接直播排期与邀约协同。",
@@ -175,20 +219,20 @@ function getQuickEntries(role: RoleCode) {
           description: "回看礼品资格与结果。",
           href: "/gifts",
         },
-      ];
+      ]);
     case "SHIPPER":
-      return [
+      return appendGrantedQuickEntries(role, permissionCodes, [
         {
-          title: "发货中心",
+          title: "订单中心 / 发货执行",
           description: "进入履约执行台处理任务。",
-          href: "/shipping",
+          href: buildOrderFulfillmentHref("shipping"),
         },
         {
-          title: "报单批次",
+          title: "订单中心 / 批次记录",
           description: "回看导出批次与供货商报单。",
-          href: "/shipping/export-batches",
+          href: buildOrderFulfillmentHref("batches"),
         },
-      ];
+      ]);
   }
 }
 
@@ -235,18 +279,20 @@ function MetricGroupSection({
 
 export function DashboardWorkbench({
   role,
+  permissionCodes = [],
   navigationGroups,
   data,
   extraCards = [],
 }: Readonly<{
   role: RoleCode;
+  permissionCodes?: ExtraPermissionCode[];
   navigationGroups: NavigationGroup[];
   data: DashboardDataShape;
   extraCards?: SummaryCard[];
 }>) {
   const meta = getRoleMeta(role);
   const cards = [...extraCards, ...data.cards];
-  const quickEntries = getQuickEntries(role);
+  const quickEntries = getQuickEntries(role, permissionCodes);
 
   return (
     <WorkbenchLayout

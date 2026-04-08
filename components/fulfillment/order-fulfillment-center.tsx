@@ -39,21 +39,18 @@ function getRoleMeta(role: RoleCode) {
   switch (role) {
     case "SHIPPER":
       return {
-        scope: "发货执行默认入口",
-        description:
-          "订单履约中心把交易单、发货执行和批次记录放进同一业务域。发货员默认落在发货执行，继续按 supplier 子单推进报单、回填物流和履约结果。",
+        scope: "发货视图默认入口",
+        description: "统一查看交易单、发货执行与批次。",
       };
     case "SALES":
       return {
         scope: "交易单默认入口",
-        description:
-          "销售继续从客户详情建单，但在订单履约中心统一回看成交父单、拆单结果和履约摘要，不回退到旧的 SalesOrder 主单认知。",
+        description: "统一回看成交与履约。",
       };
     default:
       return {
         scope: "域级总览入口",
-        description:
-          "订单履约中心统一承接交易单、发货执行和批次记录。交易事实仍由 TradeOrder 父单叙事，发货执行和批次记录继续保持各自正确的执行与审计定位。",
+        description: "统一承接交易、发货与批次。",
       };
   }
 }
@@ -123,9 +120,9 @@ function getSummaryItems(
         emphasis: "success",
       },
       {
-        label: "灞ョ害寮傚父",
+        label: "履约异常",
         value: String(shippingData.summary.exceptionCount),
-        note: "浼樺厛澶勭悊鍙栨秷銆佹枃浠剁己澶卞拰鎶ュ崟寮傚父",
+        note: "优先处理取消、文件异常和状态冲突",
         href: buildOrderFulfillmentHref("shipping", { stageView: "EXCEPTION" }),
         emphasis: "warning",
       },
@@ -137,9 +134,9 @@ function getSummaryItems(
       (sum, item) => sum + item._count.lines,
       0,
     );
-    const generatedCount = batchData.items.filter((item) => Boolean(item.fileUrl)).length;
+    const generatedCount = batchData.items.filter((item) => item.fileState === "READY").length;
     const pendingGenerationCount = batchData.items.filter(
-      (item) => !item.fileUrl && item._count.lines > 0,
+      (item) => item.fileState === "MISSING" || item.fileState === "PENDING",
     ).length;
 
     return [
@@ -176,22 +173,19 @@ function getViewMeta(activeView: OrderFulfillmentView) {
     case "trade-orders":
       return {
         title: "交易单",
-        description:
-          "主对象是 TradeOrder。这里先看成交审核、supplier 拆单结果和父单履约摘要，再决定是否进入执行层。",
+        description: "查看成交审核与父单履约。",
         eyebrow: "父单叙事",
       };
     case "shipping":
       return {
         title: "发货执行",
-        description:
-          "主对象是 SalesOrder + ShippingTask。发货员现在先看 supplier 工作池，再进入当前 supplier 的子单池报单、回填物流和推进发货。",
+        description: "按阶段和 supplier 处理发货执行。",
         eyebrow: "执行视图",
       };
     case "batches":
       return {
         title: "批次记录",
-        description:
-          "主对象是 ShippingExportBatch + ShippingExportLine。这里看冻结快照、文件下载、重生成和历史审计，不再把批次页塑造成主执行入口。",
+        description: "查看冻结批次与文件。",
         eyebrow: "结果与审计",
       };
     default:
@@ -248,8 +242,8 @@ export function OrderFulfillmentCenter({
     <WorkbenchLayout
       header={
         <PageHeader
-          eyebrow="订单履约业务域"
-          title="订单履约中心"
+          eyebrow="订单中心业务域"
+          title="订单中心"
           description={roleMeta.description}
           meta={
             <>
@@ -276,7 +270,7 @@ export function OrderFulfillmentCenter({
                   href={buildOrderFulfillmentHref("shipping")}
                   className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
                 >
-                  进入发货执行
+                  切换到发货执行
                 </Link>
               ) : null}
             </div>
@@ -319,7 +313,7 @@ export function OrderFulfillmentCenter({
         <SectionCard
           eyebrow="交易单"
           title="TradeOrder 父单总览"
-          description="这里继续以 TradeOrder 为主叙事，承接成交审核、supplier 拆单结果、父单履约摘要，以及跳到发货执行和批次记录的域内联动。"
+          description="回看父单、审核与拆单。"
         >
           <TradeOrdersSection
             summary={tradeOrdersData.summary}
@@ -340,13 +334,16 @@ export function OrderFulfillmentCenter({
         <SectionCard
           eyebrow="发货执行"
           title="SalesOrder + ShippingTask 执行视图"
-          description="当前发货执行已经改成 supplier 工作池：先切阶段，再选 supplier，最后处理当前 supplier 的子单池。"
+          description="按阶段和 supplier 推进。"
         >
           <ShippingOperationsSection
             summary={shippingData.summary}
             supplierSummaries={shippingData.supplierSummaries}
             activeSupplier={shippingData.activeSupplier}
+            pendingBatchSummaries={shippingData.pendingBatchSummaries}
+            activeBatch={shippingData.activeBatch}
             items={shippingData.items}
+            activeBatchItems={shippingData.activeBatchItems}
             filters={shippingData.filters}
             pagination={shippingData.pagination}
             canManageReporting={canManageShippingReporting}
@@ -365,7 +362,7 @@ export function OrderFulfillmentCenter({
         <SectionCard
           eyebrow="批次记录"
           title="ShippingExportBatch 冻结结果与审计"
-          description="这里专门承接冻结快照、文件下载、重生成与历史审计，不再承担第一执行入口的角色。"
+          description="查看批次、文件与审计。"
         >
           <ShippingExportBatchesSection
             items={batchData.items}

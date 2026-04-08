@@ -1,0 +1,28 @@
+[Unit]
+Description=Jiuzhuang CRM Next.js application
+After=network-online.target mysql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__APP_USER__
+Group=__APP_GROUP__
+WorkingDirectory=__APP_ROOT__
+Environment=NODE_ENV=production
+Environment=PORT=3000
+EnvironmentFile=__ENV_FILE__
+ExecStart=/usr/bin/env bash -lc 'npm run start -- --hostname 127.0.0.1 --port "${PORT:-3000}"'
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=__APP_ROOT__/public/exports __APP_ROOT__/public/uploads
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

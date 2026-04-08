@@ -32,7 +32,7 @@ export function PaginationControls({
         <p className="text-sm leading-6 text-black/60">{summary}</p>
       </div>
 
-      <div className="crm-toolbar-cluster">
+      <div className="crm-toolbar-cluster justify-start lg:justify-end">
         <SmartLink
           href={buildHref(Math.max(1, page - 1))}
           scrollTargetId={scrollTargetId}

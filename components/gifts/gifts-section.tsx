@@ -295,7 +295,7 @@ export function GiftsSection({
             <h3 className="text-lg font-semibold text-black/85">创建礼品记录</h3>
             <p className="text-sm leading-7 text-black/60">
               当前页面继续承接礼品资格、审核与履约兼容处理。`giftRecordId`
-              只作为礼品履约兼容链路，不进入 V2 发货中心。
+                只作为礼品履约兼容链路，不进入 V2 订单中心。
             </p>
           </div>
 
@@ -550,7 +550,7 @@ export function GiftsSection({
                                 礼品履约兼容
                               </div>
                               <p className="text-xs leading-6 text-black/50">
-                                仅承接 giftRecordId 的兼容发货任务，不进入 V2 发货中心。
+                仅承接 giftRecordId 的兼容发货任务，不进入 V2 订单中心。
                               </p>
                             </div>
                             <input type="hidden" name="giftRecordId" value={item.id} />

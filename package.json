@@ -10,6 +10,7 @@
     "postinstall": "prisma generate",
     "admin:bootstrap": "node scripts/bootstrap-admin.mjs",
     "db:seed": "node prisma/seed.mjs",
+    "db:migration-baseline:reconcile": "node scripts/reconcile-prisma-migration-baseline.mjs",
     "db:backfill-payment-layer:preview": "node scripts/backfill-sales-order-payment-layer.mjs --dry-run",
     "db:backfill-payment-layer": "node scripts/backfill-sales-order-payment-layer.mjs --apply",
     "db:backfill-trade-order:report": "node scripts/backfill-phase2-trade-order.mjs --report-only",

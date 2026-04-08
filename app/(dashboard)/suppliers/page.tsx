@@ -12,7 +12,7 @@ export default async function SuppliersPage() {
     redirect("/login");
   }
 
-  if (!canAccessSupplierModule(session.user.role)) {
+  if (!canAccessSupplierModule(session.user.role, session.user.permissionCodes)) {
     redirect(getDefaultRouteForRole(session.user.role));
   }
 

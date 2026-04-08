@@ -15,12 +15,14 @@ import {
   canManageLiveSessions,
   getCustomerScope,
 } from "@/lib/auth/access";
+import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import { touchCustomerEffectiveFollowUpFromLiveInvitationTx } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
 
 export type LiveActor = {
   id: string;
   role: RoleCode;
+  permissionCodes?: ExtraPermissionCode[];
 };
 
 export type CreateLiveSessionInput = {
@@ -93,11 +95,11 @@ export async function createLiveSession(
   actor: LiveActor,
   rawInput: CreateLiveSessionInput,
 ) {
-  if (!canAccessLiveSessionModule(actor.role)) {
+  if (!canAccessLiveSessionModule(actor.role, actor.permissionCodes)) {
     throw new Error("当前角色无权访问直播场次模块。");
   }
 
-  if (!canManageLiveSessions(actor.role)) {
+  if (!canManageLiveSessions(actor.role, actor.permissionCodes)) {
     throw new Error("当前角色不能创建直播场次。");
   }
 

@@ -299,7 +299,7 @@ export function SalesOrderForm({
           <div>
             <p className="crm-detail-label">下单客户</p>
             <p className="mt-1 text-sm text-black/60">
-              主入口建议从客户详情页发起。订单中心直建时，只支持远程搜索客户。
+            主入口建议从客户详情页发起。订单中心直建时，只支持远程搜索客户。
             </p>
           </div>
           {!fixedCustomer && selectedCustomer ? (

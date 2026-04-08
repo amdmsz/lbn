@@ -8,6 +8,7 @@ export function WorkbenchLayout({
   stickyBar,
   sidebar,
   sidebarPosition,
+  layoutClassName,
   sidebarClassName,
   contentClassName,
   className,
@@ -19,6 +20,7 @@ export function WorkbenchLayout({
   stickyBar?: ReactNode;
   sidebar?: ReactNode;
   sidebarPosition?: "left" | "right";
+  layoutClassName?: string;
   sidebarClassName?: string;
   contentClassName?: string;
   className?: string;
@@ -32,6 +34,7 @@ export function WorkbenchLayout({
       stickyBar={stickyBar}
       sidebar={sidebar}
       sidebarPosition={sidebarPosition}
+      layoutClassName={layoutClassName}
       sidebarClassName={sidebarClassName}
       contentClassName={contentClassName}
       className={className}

@@ -6,7 +6,7 @@ import type {
   PublicPoolReason,
   RoleCode,
 } from "@prisma/client";
-import type { FollowUpEffectLevel } from "@/lib/calls/metadata";
+import type { CallResultEffectLevelValue } from "@/lib/calls/metadata";
 
 export const CUSTOMER_OWNERSHIP_MODE_VALUES = [
   "PRIVATE",
@@ -137,7 +137,7 @@ export const defaultTeamPublicPoolSettingValues: TeamPublicPoolSettingValues = {
   batchAssignEnabled: true,
 };
 
-export const publicPoolEffectLevelLabels: Record<FollowUpEffectLevel, string> = {
+export const publicPoolEffectLevelLabels: Record<CallResultEffectLevelValue, string> = {
   STRONG: "强有效",
   MEDIUM: "中有效",
   WEAK: "弱动作",

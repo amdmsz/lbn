@@ -1,6 +1,7 @@
 import { Prisma, type RoleCode } from "@prisma/client";
 import { getParamValue, parseActionNotice } from "@/lib/action-notice";
 import { canAccessProductModule } from "@/lib/auth/access";
+import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 
 type SearchParamsValue = string | string[] | undefined;
@@ -8,13 +9,14 @@ type SearchParamsValue = string | string[] | undefined;
 export type ProductViewer = {
   id: string;
   role: RoleCode;
+  permissionCodes?: ExtraPermissionCode[];
 };
 
 export async function getProductsPageData(
   viewer: ProductViewer,
   rawSearchParams?: Record<string, SearchParamsValue>,
 ) {
-  if (!canAccessProductModule(viewer.role)) {
+  if (!canAccessProductModule(viewer.role, viewer.permissionCodes)) {
     throw new Error("You do not have access to the product center.");
   }
 
@@ -73,6 +75,7 @@ export async function getProductsPageData(
         description: true,
         enabled: true,
         createdAt: true,
+        updatedAt: true,
         supplier: {
           select: {
             id: true,
@@ -118,7 +121,7 @@ export async function getProductDetail(
   productId: string,
   rawSearchParams?: Record<string, SearchParamsValue>,
 ) {
-  if (!canAccessProductModule(viewer.role)) {
+  if (!canAccessProductModule(viewer.role, viewer.permissionCodes)) {
     throw new Error("You do not have access to the product center.");
   }
 
@@ -131,6 +134,8 @@ export async function getProductDetail(
         name: true,
         description: true,
         enabled: true,
+        createdAt: true,
+        updatedAt: true,
         supplierId: true,
         supplier: {
           select: {
@@ -141,7 +146,7 @@ export async function getProductDetail(
           },
         },
         skus: {
-          orderBy: [{ enabled: "desc" }, { createdAt: "desc" }],
+          orderBy: [{ enabled: "desc" }, { updatedAt: "desc" }, { createdAt: "desc" }],
           select: {
             id: true,
             skuCode: true,
@@ -154,11 +159,18 @@ export async function getProductDetail(
             defaultInsuranceAmount: true,
             enabled: true,
             createdAt: true,
+            updatedAt: true,
             _count: {
               select: {
                 salesOrderItems: true,
               },
             },
+          },
+        },
+        _count: {
+          select: {
+            skus: true,
+            salesOrderItems: true,
           },
         },
       },

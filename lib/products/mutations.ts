@@ -4,12 +4,14 @@ import {
   type RoleCode,
 } from "@prisma/client";
 import { z } from "zod";
-import { canManageProducts } from "@/lib/auth/access";
+import { canCreateProducts, canManageProducts } from "@/lib/auth/access";
+import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 
 export type ProductActor = {
   id: string;
   role: RoleCode;
+  permissionCodes?: ExtraPermissionCode[];
 };
 
 const upsertProductSchema = z.object({
@@ -38,8 +40,14 @@ const upsertProductSkuSchema = z.object({
 });
 
 function ensureManageProducts(actor: ProductActor) {
-  if (!canManageProducts(actor.role)) {
+  if (!canManageProducts(actor.role, actor.permissionCodes)) {
     throw new Error("当前角色无权维护商品主数据。");
+  }
+}
+
+function ensureCreateProducts(actor: ProductActor) {
+  if (!canCreateProducts(actor.role, actor.permissionCodes)) {
+    throw new Error("当前角色无权新建商品。");
   }
 }
 
@@ -47,8 +55,13 @@ export async function upsertProduct(
   actor: ProductActor,
   rawInput: z.input<typeof upsertProductSchema>,
 ) {
-  ensureManageProducts(actor);
   const input = upsertProductSchema.parse(rawInput);
+
+  if (input.id) {
+    ensureManageProducts(actor);
+  } else {
+    ensureCreateProducts(actor);
+  }
 
   const supplier = await prisma.supplier.findUnique({
     where: { id: input.supplierId },
@@ -124,6 +137,8 @@ export async function upsertProduct(
       },
     },
   });
+
+  return product;
 }
 
 export async function toggleProduct(actor: ProductActor, productId: string) {
@@ -165,6 +180,12 @@ export async function toggleProduct(actor: ProductActor, productId: string) {
       afterData: { enabled: updated.enabled },
     },
   });
+
+  return {
+    id: existing.id,
+    name: existing.name,
+    enabled: updated.enabled,
+  };
 }
 
 export async function upsertProductSku(
@@ -261,6 +282,8 @@ export async function upsertProductSku(
       afterData: input,
     },
   });
+
+  return sku;
 }
 
 export async function toggleProductSku(actor: ProductActor, skuId: string) {
@@ -301,4 +324,10 @@ export async function toggleProductSku(actor: ProductActor, skuId: string) {
       afterData: { enabled: updated.enabled },
     },
   });
+
+  return {
+    id: existing.id,
+    skuName: existing.skuName,
+    enabled: updated.enabled,
+  };
 }

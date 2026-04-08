@@ -8,6 +8,7 @@ export function PageShell({
   stickyBar,
   sidebar,
   sidebarPosition = "right",
+  layoutClassName,
   sidebarClassName,
   contentClassName,
   className,
@@ -19,6 +20,7 @@ export function PageShell({
   stickyBar?: ReactNode;
   sidebar?: ReactNode;
   sidebarPosition?: "left" | "right";
+  layoutClassName?: string;
   sidebarClassName?: string;
   contentClassName?: string;
   className?: string;
@@ -35,18 +37,29 @@ export function PageShell({
       <div
         className={cn(
           hasSidebar
-            ? "grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px] 2xl:grid-cols-[minmax(0,1fr)_360px]"
-            : "space-y-5",
+            ? "grid gap-4 xl:gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(260px,300px)] 2xl:grid-cols-[minmax(0,1fr)_340px]"
+            : "space-y-4",
+          hasSidebar ? layoutClassName : null,
         )}
       >
         {hasSidebar && sidebarPosition === "left" ? (
-          <aside className={cn("space-y-4 xl:sticky xl:top-5 xl:self-start", sidebarClassName)}>
+          <aside
+            className={cn(
+              "space-y-4 xl:self-start 2xl:sticky 2xl:top-[var(--crm-sticky-top)]",
+              sidebarClassName,
+            )}
+          >
             {sidebar}
           </aside>
         ) : null}
         <div className={cn("min-w-0 space-y-5", contentClassName)}>{children}</div>
         {hasSidebar && sidebarPosition === "right" ? (
-          <aside className={cn("space-y-4 xl:sticky xl:top-5 xl:self-start", sidebarClassName)}>
+          <aside
+            className={cn(
+              "space-y-4 xl:self-start 2xl:sticky 2xl:top-[var(--crm-sticky-top)]",
+              sidebarClassName,
+            )}
+          >
             {sidebar}
           </aside>
         ) : null}

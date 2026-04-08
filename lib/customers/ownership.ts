@@ -6,15 +6,11 @@ import {
   OperationTargetType,
   PublicPoolReason,
   UserStatus,
-  type CallResult,
   type Prisma,
   type RoleCode,
   type WechatAddStatus,
 } from "@prisma/client";
-import {
-  getCallResultEffectMeta,
-  type FollowUpEffectLevel,
-} from "@/lib/calls/metadata";
+import type { CallResultEffectLevelValue } from "@/lib/calls/metadata";
 import { prisma } from "@/lib/db/prisma";
 import { getResolvedTeamPublicPoolSetting } from "@/lib/customers/public-pool-settings";
 import { getWechatAddedStatusEffectMeta } from "@/lib/wechat/metadata";
@@ -96,7 +92,7 @@ export function createSystemOwnershipActorContext(
 }
 
 export type EffectiveFollowUpMeta = {
-  effectLevel: FollowUpEffectLevel;
+  effectLevel: CallResultEffectLevelValue;
   resetsPublicPoolClock: boolean;
   claimProtectionDays: number;
   requiresSupervisorReview: boolean;
@@ -982,21 +978,6 @@ export async function touchCustomerEffectiveFollowUpTx(
       lastEffectiveFollowUpAt: true,
       claimLockedUntil: true,
     },
-  });
-}
-
-export async function touchCustomerEffectiveFollowUpFromCallTx(
-  tx: TransactionClient,
-  input: {
-    customerId: string | null | undefined;
-    occurredAt: Date;
-    result: CallResult;
-  },
-) {
-  return touchCustomerEffectiveFollowUpTx(tx, {
-    customerId: input.customerId,
-    occurredAt: input.occurredAt,
-    meta: getCallResultEffectMeta(input.result),
   });
 }
 

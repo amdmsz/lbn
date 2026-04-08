@@ -14,6 +14,7 @@ import {
   getDefaultRouteForRole,
 } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
+import { buildOrderFulfillmentHref } from "@/lib/fulfillment/navigation";
 import { getGiftsPageData } from "@/lib/gifts/queries";
 
 export default async function GiftsPage({
@@ -68,9 +69,9 @@ export default async function GiftsPage({
           },
           {
             title: "履约兼容查看",
-            description: "礼品发货与运费仍在这里查看兼容链路，不放进 V2 发货中心主操作台。",
-            href: "/shipping",
-            hrefLabel: "查看发货中心",
+            description: "礼品发货与运费仍在这里查看兼容链路，不放进 V2 订单中心主操作台。",
+            href: buildOrderFulfillmentHref("shipping"),
+            hrefLabel: "查看订单中心",
             badgeLabel: "履约协同",
             badgeVariant: "success" as const,
           },

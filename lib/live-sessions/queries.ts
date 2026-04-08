@@ -1,14 +1,16 @@
 import { type RoleCode } from "@prisma/client";
 import { canAccessLiveSessionModule } from "@/lib/auth/access";
+import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 
 export type LiveSessionViewer = {
   id: string;
   role: RoleCode;
+  permissionCodes?: ExtraPermissionCode[];
 };
 
 export async function getLiveSessionsData(viewer: LiveSessionViewer) {
-  if (!canAccessLiveSessionModule(viewer.role)) {
+  if (!canAccessLiveSessionModule(viewer.role, viewer.permissionCodes)) {
     throw new Error("当前角色无权访问直播场次模块。");
   }
 

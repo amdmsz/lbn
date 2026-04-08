@@ -27,7 +27,9 @@ import {
   getLeadScope,
   getShippingTaskScope,
 } from "@/lib/auth/access";
+import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
+import { buildOrderFulfillmentHref } from "@/lib/fulfillment/navigation";
 import {
   buildCollectionTaskScope,
   buildPaymentPlanScope,
@@ -46,6 +48,11 @@ const CONNECTED_CALL_RESULTS: CallResult[] = [
   CallResult.REFUSED_TO_BUY,
   CallResult.BLACKLIST,
 ];
+const NON_CONNECTED_CALL_RESULT_CODES = [
+  "NOT_CONNECTED",
+  "INVALID_NUMBER",
+  "HUNG_UP",
+] as const;
 const INVITED_STATUSES: InvitationStatus[] = [
   InvitationStatus.INVITED,
   InvitationStatus.ACCEPTED,
@@ -62,6 +69,7 @@ const PENDING_V2_SHIPPING_STATUSES: ShippingFulfillmentStatus[] = [
 export type ReportViewer = {
   id: string;
   role: RoleCode;
+  permissionCodes?: ExtraPermissionCode[];
 };
 
 export type SummaryCard = {
@@ -311,7 +319,7 @@ async function getTodayCards(viewer: ReportViewer) {
           },
         })
       : Promise.resolve(null),
-    canAccessLiveSessionModule(viewer.role)
+    canAccessLiveSessionModule(viewer.role, viewer.permissionCodes)
       ? prisma.liveSession.count({
           where: {
             status: {
@@ -530,7 +538,7 @@ async function getPaymentSummary(viewer: ReportViewer) {
         label: "待代收金额",
         value: formatCurrency(toCurrencyNumber(codRemainingAggregate._sum.remainingAmount)),
         note: "口径：collectionChannel = COD 且未取消的 PaymentPlan.remainingAmount。",
-        href: "/shipping",
+        href: buildOrderFulfillmentHref("shipping", { isCod: "true" }),
       },
       {
         label: "活跃催收任务",
@@ -722,25 +730,28 @@ async function getFulfillmentSummary(viewer: ReportViewer) {
       label: "待报单任务",
       value: String(pendingReportCount ?? 0),
       note: "已审核通过但尚未导出给供货商的履约任务。",
-      href: "/shipping?reportStatus=PENDING",
+      href: buildOrderFulfillmentHref("shipping", { reportStatus: "PENDING" }),
     },
     {
       label: "已报单待回填",
       value: String(reportedWithoutTrackingCount ?? 0),
       note: "已报单但尚未回填物流单号，不能推进到已发货。",
-      href: "/shipping?reportStatus=REPORTED&hasTrackingNumber=false",
+      href: buildOrderFulfillmentHref("shipping", {
+        reportStatus: "REPORTED",
+        hasTrackingNumber: "false",
+      }),
     },
     {
       label: "待物流跟进",
       value: toCountValue(logisticsDueCount),
       note: "物流跟进任务状态为待跟进或跟进中，且已到触发时间。",
-      href: "/shipping",
+      href: buildOrderFulfillmentHref("shipping"),
     },
     {
       label: "待 COD 回款",
       value: String(codPendingCount ?? 0),
       note: "已发货 COD 订单中，尚未完成履约侧回款登记的任务。",
-      href: "/shipping?isCod=true",
+      href: buildOrderFulfillmentHref("shipping", { isCod: "true" }),
     },
   ];
 
@@ -839,9 +850,20 @@ async function getConversionMetrics(viewer: ReportViewer) {
           gte: range.start,
           lte: range.end,
         },
-        result: {
-          in: CONNECTED_CALL_RESULTS,
-        },
+        OR: [
+          {
+            resultCode: {
+              not: null,
+              notIn: [...NON_CONNECTED_CALL_RESULT_CODES],
+            },
+          },
+          {
+            resultCode: null,
+            result: {
+              in: CONNECTED_CALL_RESULTS,
+            },
+          },
+        ],
       },
     }),
     prisma.lead.count({

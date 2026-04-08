@@ -3,7 +3,6 @@ import path from "node:path";
 import { prisma } from "@/lib/db/prisma";
 
 type ShippingExportRow = {
-  orderNo: string;
   receiverName: string;
   receiverPhone: string;
   receiverAddress: string;
@@ -45,9 +44,8 @@ async function writeShippingExportCsvFile(input: {
   const outputDirectory = path.join(process.cwd(), "public", "exports", "shipping");
   const outputPath = path.join(outputDirectory, safeFileName);
   const headers = [
-    "子单编号",
     "姓名",
-    "电话",
+    "号码",
     "地址",
     "品名",
     "件数",
@@ -60,7 +58,6 @@ async function writeShippingExportCsvFile(input: {
     headers.map((header) => escapeCsvCell(header)).join(","),
     ...input.rows.map((row) =>
       [
-        row.orderNo,
         row.receiverName,
         row.receiverPhone,
         row.receiverAddress,
@@ -94,7 +91,6 @@ export async function generateShippingExportCsvForBatch(exportBatchId: string) {
       lines: {
         orderBy: { rowNo: "asc" },
         select: {
-          subOrderNoSnapshot: true,
           receiverNameSnapshot: true,
           receiverPhoneSnapshot: true,
           receiverAddressSnapshot: true,
@@ -120,7 +116,6 @@ export async function generateShippingExportCsvForBatch(exportBatchId: string) {
     exportNo: batch.exportNo,
     fileName: batch.fileName,
     rows: batch.lines.map((line) => ({
-      orderNo: line.subOrderNoSnapshot,
       receiverName: line.receiverNameSnapshot,
       receiverPhone: line.receiverPhoneSnapshot,
       receiverAddress: line.receiverAddressSnapshot,

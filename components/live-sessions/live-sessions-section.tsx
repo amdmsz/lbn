@@ -85,7 +85,7 @@ export function LiveSessionsSection({
           <div className="space-y-2">
             <h3 className="text-lg font-semibold text-black/85">创建直播场次</h3>
             <p className="text-sm leading-7 text-black/60">
-              由主管、管理员或运营维护直播场次基础信息。保存后会写入 OperationLog，
+              由具备权限的账号维护直播场次基础信息。保存后会写入 OperationLog，
               客户详情页可直接基于这些场次登记邀约与观看记录。
             </p>
           </div>

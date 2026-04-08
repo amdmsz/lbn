@@ -12,6 +12,7 @@ import {
 import { PageToolbar } from "@/components/shared/page-toolbar";
 import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { buildOrderFulfillmentHref } from "@/lib/fulfillment/navigation";
 import { formatCurrency } from "@/lib/fulfillment/metadata";
 import { getSalesOrdersPageData } from "@/lib/sales-orders/queries";
 
@@ -139,7 +140,7 @@ export function OrdersWorkbench({
       header={
         <PageHeader
           eyebrow={meta.eyebrow}
-          title="订单中心"
+        title="订单中心"
           description={meta.description}
           meta={
             <>
@@ -153,8 +154,11 @@ export function OrdersWorkbench({
               <Link href="/payment-records" className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm">
                 收款记录
               </Link>
-              <Link href="/shipping" className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm">
-                发货中心
+              <Link
+                href={buildOrderFulfillmentHref("shipping")}
+                className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+              >
+                订单中心 / 发货执行
               </Link>
             </div>
           }

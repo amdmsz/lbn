@@ -1,11 +1,11 @@
 import type { WechatAddStatus } from "@prisma/client";
-import type { FollowUpEffectLevel } from "@/lib/calls/metadata";
+import type { CallResultEffectLevelValue } from "@/lib/calls/metadata";
 
 export const wechatAddedStatusMeta: Record<
   WechatAddStatus,
   {
     label: string;
-    effectLevel: FollowUpEffectLevel;
+    effectLevel: CallResultEffectLevelValue;
     resetsPublicPoolClock: boolean;
     claimProtectionDays: number;
     requiresSupervisorReview: boolean;

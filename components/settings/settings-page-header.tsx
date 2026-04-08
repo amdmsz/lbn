@@ -1,0 +1,55 @@
+import type { ReactNode } from "react";
+import { SettingsWorkspaceNav } from "@/components/settings/settings-workspace-nav";
+import { PageContextLink } from "@/components/shared/page-context-link";
+import { SummaryHeader } from "@/components/shared/summary-header";
+import type { SettingsWorkspaceValue } from "@/lib/settings/metadata";
+
+export function SettingsPageHeader({
+  activeValue,
+  title,
+  description,
+  badges,
+  actions,
+  metrics,
+  backHref = "/settings",
+  backLabel = "返回设置中心",
+  trail,
+}: Readonly<{
+  activeValue: SettingsWorkspaceValue;
+  title: string;
+  description?: string;
+  badges?: ReactNode;
+  actions?: ReactNode;
+  metrics?: Array<{
+    label: string;
+    value: string;
+    hint?: string;
+  }>;
+  backHref?: string;
+  backLabel?: string;
+  trail?: string[];
+}>) {
+  return (
+    <div className="space-y-4">
+      <SummaryHeader
+        context={
+          <PageContextLink
+            href={backHref}
+            label={backLabel}
+            trail={trail ?? ["设置中心", title]}
+          />
+        }
+        eyebrow="设置中心"
+        title={title}
+        description={description}
+        badges={badges}
+        actions={actions}
+        metrics={metrics}
+      />
+
+      <div className="crm-subtle-panel">
+        <SettingsWorkspaceNav activeValue={activeValue} />
+      </div>
+    </div>
+  );
+}

@@ -189,7 +189,7 @@
 
 1. 在现有模型上做 workflow enhancement
 2. 单独规划 finance / reconciliation
-3. 单独清理 Prisma 历史 migration 链
+3. 在新的 replayable migration 基线上继续维护 schema 变更
 
 不建议：
 
@@ -233,7 +233,8 @@
 - 正式环境不再依赖 `prisma/seed.mjs` 初始化账号
 - 首个管理员初始化应使用 `npm run admin:bootstrap`
 - 当前 staging / production 部署基线以 `docs/deployment-baseline.md` 为准
-- 当前 Prisma 生产同步策略已明确收口，但历史 migration 链修复仍是独立技术债
+- 当前 Prisma migration rebaseline 已完成，空库正式环境可使用 `npx prisma migrate deploy`
+- rebaseline 之前创建的旧环境，如数据库结构已与 `schema.prisma` 一致，需要先做一次 migration metadata reconcile
 
 ---
 
@@ -252,4 +253,4 @@
 - PBX / 外呼
 - 新功能扩展
 - 新 schema 改造
-- 历史 migration 链修复
+- 与当前 release 无关的二次 schema 重构

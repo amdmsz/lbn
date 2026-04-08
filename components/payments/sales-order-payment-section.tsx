@@ -440,7 +440,7 @@ export function SalesOrderPaymentSection({
                   </form>
                 ) : plan.collectionChannel === "COD" ? (
                   <div className="mt-4 rounded-2xl border border-dashed border-black/10 bg-white/55 p-4 text-sm leading-7 text-black/55">
-                    COD 回款请在发货中心登记，系统会自动联动 PaymentPlan、PaymentRecord 与催收任务。
+                    COD 回款请在订单中心登记，系统会自动联动 PaymentPlan、PaymentRecord 与催收任务。
                   </div>
                 ) : null}
               </div>

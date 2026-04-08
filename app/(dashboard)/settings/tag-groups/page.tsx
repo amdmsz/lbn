@@ -1,11 +1,9 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { SettingsWorkspaceNav } from "@/components/settings/settings-workspace-nav";
+import { SettingsPageHeader } from "@/components/settings/settings-page-header";
 import { MasterDataStatusBadge } from "@/components/settings/master-data-status-badge";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
-import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { canAccessSettingsModule, getDefaultRouteForRole } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
@@ -40,33 +38,26 @@ export default async function TagGroupsPage({
 
   return (
     <div className="crm-page">
-      <PageHeader
+      <SettingsPageHeader
+        activeValue="tag-groups"
         title="标签组"
-        description="标签组用于承载一类业务标签，例如客户分层、跟进信号或直播表现。管理员和主管可新增、修改和启停。"
-        actions={
-          <>
-            <StatusBadge label={`共 ${data.items.length} 个标签组`} variant="info" />
-            <Link href="/settings" className="crm-button crm-button-secondary">
-              返回主数据中心
-            </Link>
-          </>
-        }
+        description="标签组继续作为标签体系的一级分组，用来承载客户分层、跟进信号和直播表现等标签资产。"
+        metrics={[
+          {
+            label: "标签组",
+            value: String(data.items.length),
+            hint: "当前可维护的一级分组数",
+          },
+        ]}
       />
 
       {data.notice ? (
-        <ActionBanner tone={data.notice.tone} className="mt-5">
-          {data.notice.message}
-        </ActionBanner>
+        <ActionBanner tone={data.notice.tone}>{data.notice.message}</ActionBanner>
       ) : null}
 
-      <div className="crm-subtle-panel">
-        <SettingsWorkspaceNav activeValue="tag-groups" />
-      </div>
-
       <DataTableWrapper
-        className="mt-5"
         title="新增标签组"
-        description="编码建议使用英文大写和下划线，便于后续复用。"
+        description="建议使用稳定编码，便于后续复用和筛选。"
       >
         <form action={upsertTagGroupAction} className="grid gap-3.5 xl:grid-cols-[1fr_1fr_160px]">
           <input type="hidden" name="redirectTo" value={redirectTo} />
@@ -88,13 +79,13 @@ export default async function TagGroupsPage({
             <input type="number" name="sortOrder" min="0" defaultValue="0" className="crm-input" />
           </label>
           <label className="space-y-1.5 xl:col-span-2">
-            <span className="crm-label">描述</span>
+            <span className="crm-label">说明</span>
             <textarea
               name="description"
               rows={3}
               maxLength={1000}
               className="crm-textarea"
-              placeholder="补充说明这个标签组的业务范围"
+              placeholder="补充这个标签组的业务范围"
             />
           </label>
           <div className="flex items-end">
@@ -146,7 +137,7 @@ export default async function TagGroupsPage({
                   </div>
 
                   <label className="block space-y-1.5">
-                    <span className="crm-label">描述</span>
+                    <span className="crm-label">说明</span>
                     <textarea
                       name="description"
                       rows={3}

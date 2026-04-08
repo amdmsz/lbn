@@ -1,12 +1,14 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { DetailLayout } from "@/components/layout-patterns/detail-layout";
 import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { CustomerCallRecordsSection } from "@/components/customers/customer-call-records-section";
 import { CustomerDetailTabs } from "@/components/customers/customer-detail-tabs";
 import { CustomerLiveRecordsSection } from "@/components/customers/customer-live-records-section";
 import {
-  CustomerDetailItem,
+  CustomerMobileDialButton,
+  MobileCallFollowUpSheet,
+} from "@/components/customers/mobile-call-followup-sheet";
+import {
   CustomerEmptyState,
   CustomerRecordCard,
   CustomerTabSection,
@@ -16,16 +18,14 @@ import { CustomerStatusBadge } from "@/components/customers/customer-status-badg
 import { CustomerTagsPanel } from "@/components/customers/customer-tags-panel";
 import { CustomerWechatRecordsSection } from "@/components/customers/customer-wechat-records-section";
 import { ActionBanner } from "@/components/shared/action-banner";
-import { DetailSidebar } from "@/components/shared/detail-sidebar";
-import { SectionCard } from "@/components/shared/section-card";
+import { PageContextLink } from "@/components/shared/page-context-link";
 import { SmartLink } from "@/components/shared/smart-link";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { StickyActionBar } from "@/components/shared/sticky-action-bar";
-import { SummaryHeader } from "@/components/shared/summary-header";
 import { TradeOrderForm } from "@/components/trade-orders/trade-order-form";
 import {
   formatDateTime,
   formatRegion,
+  getCustomerDetailTabGroupMeta,
   getCustomerDetailTabMeta,
   getCustomerLevelLabel,
   type CustomerDetailTab,
@@ -91,6 +91,9 @@ type CustomerGiftsData = NonNullable<
 type CustomerLogsData = NonNullable<
   Awaited<ReturnType<typeof getCustomerDetailLogsData>>
 >;
+type CustomerCallResultOptions = NonNullable<
+  Awaited<ReturnType<typeof getCustomerDetailCallsData>>
+>["callResultOptions"];
 
 type CustomerDetailTabDataMap = {
   profile: CustomerProfileData;
@@ -102,7 +105,41 @@ type CustomerDetailTabDataMap = {
   logs: CustomerLogsData;
 };
 
-function formatLeadSourceSummary(source: CustomerDetailShellData["importSummary"]["firstSource"]) {
+type SummaryTone = "default" | "info" | "warning" | "danger" | "success";
+
+type SummaryCard = {
+  eyebrow: string;
+  value: string;
+  description: string;
+  note: string;
+  href: string;
+  tone?: SummaryTone;
+};
+
+type DetailField = {
+  label: string;
+  value: ReactNode;
+  span?: "full";
+};
+
+type RiskState = {
+  title: string;
+  description: string;
+  tone: SummaryTone;
+  tab: CustomerDetailTab;
+};
+
+const summaryToneClassName: Record<SummaryTone, string> = {
+  default: "border-black/7",
+  info: "border-[rgba(54,95,135,0.14)]",
+  warning: "border-[rgba(155,106,29,0.16)]",
+  danger: "border-[rgba(141,59,51,0.16)]",
+  success: "border-[rgba(47,107,71,0.16)]",
+};
+
+function formatLeadSourceSummary(
+  source: CustomerDetailShellData["importSummary"]["firstSource"],
+) {
   return source ? getLeadSourceLabel(source) : "暂无";
 }
 
@@ -129,8 +166,55 @@ function getActiveTabCount(tab: CustomerDetailTab, shell: CustomerDetailShellDat
   }
 }
 
-function formatDateTimeSummary(value: Date | null | undefined, emptyLabel = "暂无") {
+function formatDateTimeSummary(
+  value: Date | null | undefined,
+  emptyLabel = "暂无",
+) {
   return value ? formatDateTime(value) : emptyLabel;
+}
+
+function getDaysSince(value: Date | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const diff = Date.now() - value.getTime();
+  return Math.floor(diff / (24 * 60 * 60 * 1000));
+}
+
+function DetailFieldGrid({
+  items,
+  columns = "two",
+}: Readonly<{
+  items: DetailField[];
+  columns?: "two" | "three";
+}>) {
+  const isThreeColumn = columns === "three";
+
+  return (
+    <div
+      className={cn(
+        "grid gap-x-6 gap-y-4",
+        isThreeColumn ? "md:grid-cols-2 xl:grid-cols-3" : "md:grid-cols-2",
+      )}
+    >
+      {items.map((item) => (
+        <div
+          key={item.label}
+          className={cn(
+            "space-y-1.5 border-b border-black/6 pb-3",
+            item.span === "full" &&
+              (isThreeColumn ? "md:col-span-2 xl:col-span-3" : "md:col-span-2"),
+          )}
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-black/38">
+            {item.label}
+          </p>
+          <div className="text-sm leading-6 text-black/78">{item.value}</div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function buildCustomerTabHref(
@@ -163,289 +247,434 @@ function buildCustomerTradeOrderHref(
   );
 }
 
-function getCustomerDetailBackLabel(navigationContext: CustomerDetailNavigationContext) {
-  return navigationContext.from === "public-pool" ? "返回公海池" : "返回客户中心";
+function getCustomerDetailBackLabel(
+  navigationContext: CustomerDetailNavigationContext,
+) {
+  return navigationContext.from === "public-pool"
+    ? "返回公海池"
+    : "返回客户中心";
 }
 
-function buildFocusActions(
-  role: "ADMIN" | "SUPERVISOR" | "SALES",
-  shell: CustomerDetailShellData,
-) {
-  if (role === "SALES") {
-    return [
-      { tab: "calls" as const, label: "通话推进", count: shell._count.callRecords },
-      { tab: "wechat" as const, label: "微信跟进", count: shell._count.wechatRecords },
-      { tab: "live" as const, label: "直播邀约", count: shell._count.liveInvitations },
-      { tab: "orders" as const, label: "成交结果", count: shell._count.salesOrders },
-    ];
-  }
+function getCustomerIdentitySummary(shell: CustomerDetailShellData) {
+  const region = formatRegion(shell.province, shell.city, shell.district);
+  const latestTime = shell.importSummary.latestImportAt
+    ? `最近导入 ${formatDateTime(shell.importSummary.latestImportAt)}`
+    : `创建于 ${formatDateTime(shell.createdAt)}`;
 
   return [
-    { tab: "profile" as const, label: "客户档案", count: shell.importSummary.linkedLeadCount },
-    { tab: "calls" as const, label: "通话检查", count: shell._count.callRecords },
-    { tab: "orders" as const, label: "成交结果", count: shell._count.salesOrders },
-    { tab: "logs" as const, label: "操作日志", count: shell.operationLogCount },
-  ];
+    region !== "未填写" ? region : null,
+    shell.wechatId?.trim() ? `微信 ${shell.wechatId.trim()}` : null,
+    latestTime,
+  ]
+    .filter(Boolean)
+    .join(" / ");
 }
 
-function renderRecordCollectionTab({
+function getOverviewRiskState(
+  shell: CustomerDetailShellData,
+  publicPoolReasonLabel: string,
+): RiskState {
+  const daysSinceEffective = getDaysSince(shell.lastEffectiveFollowUpAt);
+
+  if (shell.ownershipMode === "PUBLIC") {
+    return {
+      title: "公海待承接",
+      description: `客户当前处于公海上下文，入池原因：${publicPoolReasonLabel}。`,
+      tone: "warning",
+      tab: "profile",
+    };
+  }
+
+  if (!shell.lastEffectiveFollowUpAt) {
+    return {
+      title: "待首个有效跟进",
+      description: "还没有形成有效跟进记录，建议优先完成首个关键触达。",
+      tone: "warning",
+      tab: "calls",
+    };
+  }
+
+  if (daysSinceEffective !== null && daysSinceEffective >= 14) {
+    return {
+      title: "长期未推进",
+      description: `最近有效跟进停留在 ${formatDateTime(shell.lastEffectiveFollowUpAt)}。`,
+      tone: "danger",
+      tab: "calls",
+    };
+  }
+
+  if (shell.logisticsFollowUpCount > 0) {
+    return {
+      title: "存在履约提醒",
+      description: `当前有 ${shell.logisticsFollowUpCount} 条物流跟进提醒待关注。`,
+      tone: "info",
+      tab: "orders",
+    };
+  }
+
+  if (shell.importSummary.linkedLeadCount > 1) {
+    return {
+      title: "存在来源归并",
+      description: `当前已关联 ${shell.importSummary.linkedLeadCount} 条线索，建议核对来源链路。`,
+      tone: "info",
+      tab: "profile",
+    };
+  }
+
+  return {
+    title: "当前经营稳定",
+    description: "暂无明显异常，可继续围绕跟进与成交结果推进。",
+    tone: "success",
+    tab: "profile",
+  };
+}
+
+function getFollowUpEntryTab(
+  canCreateCalls: boolean,
+  canCreateWechat: boolean,
+  canManageLiveInvitations: boolean,
+) {
+  if (canCreateCalls) {
+    return "calls" as const;
+  }
+
+  if (canCreateWechat) {
+    return "wechat" as const;
+  }
+
+  if (canManageLiveInvitations) {
+    return "live" as const;
+  }
+
+  return "orders" as const;
+}
+
+function OverviewSummaryCard({
+  card,
+}: Readonly<{
+  card: SummaryCard;
+}>) {
+  return (
+    <SmartLink
+      href={card.href}
+      scrollTargetId="customer-main"
+      className={cn(
+        "group block rounded-[1.15rem] border bg-[rgba(255,255,255,0.86)] px-4 py-4 shadow-[0_8px_20px_rgba(18,24,31,0.04)] transition-[border-color,background-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:bg-white hover:shadow-[0_12px_24px_rgba(18,24,31,0.05)] md:px-5 md:py-4.5",
+        summaryToneClassName[card.tone ?? "default"],
+      )}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/38">
+        {card.eyebrow}
+      </p>
+      <p className="mt-2 text-[1.12rem] font-semibold tracking-[-0.03em] text-black/86 md:text-[1.28rem]">
+        {card.value}
+      </p>
+      <p className="mt-2 text-[13px] leading-6 text-black/58">{card.description}</p>
+      <p className="mt-3 text-[12px] leading-5 text-black/46">{card.note}</p>
+    </SmartLink>
+  );
+}
+
+function SidebarPanel({
   eyebrow,
   title,
-  description,
-  countLabel,
   children,
 }: Readonly<{
   eyebrow: string;
   title: string;
-  description: string;
-  countLabel: string;
   children: ReactNode;
 }>) {
   return (
-    <CustomerTabSection
-      eyebrow={eyebrow}
-      title={title}
-      description={description}
-      actions={<StatusBadge label={countLabel} variant="neutral" />}
-    >
-      {children}
-    </CustomerTabSection>
+    <section className="rounded-[1rem] border border-black/7 bg-[rgba(255,255,255,0.84)] px-4 py-4 shadow-[0_8px_18px_rgba(18,24,31,0.04)]">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-black/38">
+        {eyebrow}
+      </p>
+      <h2 className="mt-2 text-[0.96rem] font-semibold text-black/84">{title}</h2>
+      <div className="mt-4">{children}</div>
+    </section>
   );
 }
 
-function renderProfileTab(
-  shell: CustomerDetailShellData,
-  data: CustomerProfileData,
-  canManageTags: boolean,
-  navigationContext?: CustomerDetailNavigationContext,
-) {
+function SidebarRow({
+  label,
+  value,
+}: Readonly<{
+  label: string;
+  value: ReactNode;
+}>) {
   return (
-    <div className="space-y-6">
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_360px]">
-        <div className="space-y-6">
-          <CustomerTabSection
-            eyebrow="客户资料"
-            title="基础信息"
-            description="基础身份信息、地区和客户分层集中在这里。"
-          >
-            <div className="grid gap-4 md:grid-cols-2">
-              <CustomerDetailItem label="姓名" value={shell.name} />
-              <CustomerDetailItem label="手机号" value={shell.phone} />
-              <CustomerDetailItem
-                label="微信号"
-                value={shell.wechatId?.trim() || "未填写"}
-              />
-              <CustomerDetailItem
-                label="客户等级"
-                value={getCustomerLevelLabel(shell.level)}
-              />
-              <CustomerDetailItem
-                label="地区"
-                value={formatRegion(shell.province, shell.city, shell.district)}
-              />
-              <CustomerDetailItem
-                label="创建时间"
-                value={formatDateTime(shell.createdAt)}
-              />
-              <CustomerDetailItem
-                label="最近更新"
-                value={formatDateTime(shell.updatedAt)}
-              />
-              <CustomerDetailItem
-                label="地址"
-                value={shell.address?.trim() || "未填写"}
-              />
-            </div>
-            <div className="crm-subtle-panel mt-4 text-sm leading-7 text-black/64">
-              备注：{shell.remark?.trim() || "暂无备注"}
-            </div>
-          </CustomerTabSection>
+    <div className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
+      <p className="text-[12px] text-black/44">{label}</p>
+      <div className="w-full text-left text-[13px] font-medium leading-5 text-black/78 sm:max-w-[65%] sm:text-right">
+        {value}
+      </div>
+    </div>
+  );
+}
 
-          <CustomerTabSection
-            eyebrow="承接与来源"
-            title="来源与归并"
-            description="用于确认客户从哪里进入系统，以及当前由谁承接。"
-          >
-            <div className="grid gap-4 md:grid-cols-2">
-              <CustomerDetailItem label="负责人" value={formatOwnerLabel(shell.owner)} />
-              <CustomerDetailItem
-                label="首个来源"
-                value={formatLeadSourceSummary(shell.importSummary.firstSource)}
-              />
-              <CustomerDetailItem
-                label="最近来源"
-                value={formatLeadSourceSummary(shell.importSummary.latestSource)}
-              />
-              <CustomerDetailItem
-                label="最近导入"
-                value={
-                  shell.importSummary.latestImportAt
-                    ? formatDateTime(shell.importSummary.latestImportAt)
-                    : "暂无导入记录"
-                }
-              />
-              <CustomerDetailItem
-                label="关联线索"
-                value={String(shell.importSummary.linkedLeadCount)}
-              />
-              <CustomerDetailItem
-                label="导入 / 归并事件"
-                value={String(shell.importSummary.importEventCount)}
-              />
-            </div>
-          </CustomerTabSection>
+function CompactArchiveCard({
+  title,
+  meta,
+  description,
+  href,
+  hrefLabel,
+}: Readonly<{
+  title: string;
+  meta: string[];
+  description?: string;
+  href?: string;
+  hrefLabel?: string;
+}>) {
+  return (
+    <div className="rounded-[1rem] border border-black/7 bg-[rgba(249,250,251,0.74)] px-4 py-3.5 transition-colors hover:border-black/10 hover:bg-white/84">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1 space-y-2">
+          <p className="text-sm font-semibold text-black/82">{title}</p>
+          {description ? (
+            <p className="text-[13px] leading-6 text-black/56">{description}</p>
+          ) : null}
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] leading-5 text-black/48">
+            {meta.map((item, index) => (
+              <span key={`${index}-${item}`} className="inline-flex max-w-full items-center gap-2">
+                {index > 0 ? <span className="text-black/20">/</span> : null}
+                <span className="break-words">{item}</span>
+              </span>
+            ))}
+          </div>
         </div>
+        {href && hrefLabel ? (
+          <Link href={href} scroll={false} className="crm-text-link shrink-0 pt-0.5">
+            {hrefLabel}
+          </Link>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
+function renderProfileTab({
+  shell,
+  data,
+  canManageTags,
+  navigationContext,
+}: Readonly<{
+  shell: CustomerDetailShellData;
+  data: CustomerProfileData;
+  canManageTags: boolean;
+  navigationContext?: CustomerDetailNavigationContext;
+}>) {
+  const archiveHref = buildCustomerTabHref(shell.id, "profile", navigationContext);
+
+  return (
+    <div className="space-y-5">
+      <CustomerTabSection
+        eyebrow="客户档案"
+        title="基础信息"
+      >
         <CustomerTagsPanel
           customerId={shell.id}
-          redirectTo={buildCustomerTabHref(shell.id, "profile", navigationContext)}
+          redirectTo={archiveHref}
           tags={data.customerTags}
           availableTags={data.availableTags}
           canManage={canManageTags}
+          variant="compact"
+          className="border-none bg-transparent px-0 py-0"
         />
-      </div>
 
-      <CustomerTabSection
-        eyebrow="关联线索"
-        title="线索回流"
-        description="用于核对承接来源、原始线索状态和归并记录。"
-      >
-        {data.leads.length > 0 ? (
-          <div className="space-y-3">
-            {data.leads.map((lead) => (
-              <CustomerRecordCard
-                key={lead.id}
-                title={lead.name?.trim() || lead.phone}
-                meta={[
-                  `手机号：${lead.phone}`,
-                  `来源：${getLeadSourceLabel(lead.source)}`,
-                  `状态：${getLeadStatusLabel(lead.status)}`,
-                  `创建时间：${formatDateTime(lead.createdAt)}`,
-                ]}
-                href={`/leads/${lead.id}`}
-                hrefLabel="查看线索"
-              />
-            ))}
-          </div>
-        ) : (
-          <CustomerEmptyState
-            title="暂无关联线索"
-            description="当前客户暂时没有回流的线索记录。"
+        <div className="mt-5">
+          <DetailFieldGrid
+            columns="three"
+            items={[
+              { label: "姓名", value: shell.name },
+              { label: "手机号", value: shell.phone },
+              { label: "微信号", value: shell.wechatId?.trim() || "未填写" },
+              { label: "客户等级", value: getCustomerLevelLabel(shell.level) },
+              {
+                label: "地区",
+                value: formatRegion(shell.province, shell.city, shell.district),
+              },
+              { label: "创建时间", value: formatDateTime(shell.createdAt) },
+              { label: "最近更新时间", value: formatDateTime(shell.updatedAt) },
+              { label: "地址", value: shell.address?.trim() || "未填写", span: "full" },
+              { label: "备注", value: shell.remark?.trim() || "暂无备注", span: "full" },
+            ]}
           />
-        )}
+        </div>
       </CustomerTabSection>
 
       <CustomerTabSection
-        eyebrow="导入与归并"
-        title="导入历史"
-        description="保留导入批次、归并动作和标签同步记录，便于审计。"
+        eyebrow="经营脉络"
+        title="来源、归并与导入历史"
       >
-        {data.mergeLogs.length > 0 ? (
+        <DetailFieldGrid
+          columns="three"
+          items={[
+            { label: "负责人", value: formatOwnerLabel(shell.owner) },
+            {
+              label: "首个来源",
+              value: formatLeadSourceSummary(shell.importSummary.firstSource),
+            },
+            {
+              label: "最近来源",
+              value: formatLeadSourceSummary(shell.importSummary.latestSource),
+            },
+            {
+              label: "最近导入",
+              value: shell.importSummary.latestImportAt
+                ? formatDateTime(shell.importSummary.latestImportAt)
+                : "暂无导入记录",
+            },
+            {
+              label: "关联线索",
+              value: String(shell.importSummary.linkedLeadCount),
+            },
+            {
+              label: "导入 / 归并事件",
+              value: String(shell.importSummary.importEventCount),
+            },
+          ]}
+        />
+
+        <div className="mt-6 grid gap-5 xl:grid-cols-2">
           <div className="space-y-3">
-            {data.mergeLogs.map((record) => (
-              <CustomerRecordCard
-                key={record.id}
-                title={`${record.lead.name?.trim() || record.lead.phone} → ${record.batch.fileName}`}
-                meta={[
-                  `来源：${getLeadSourceLabel(record.source)}`,
-                  `动作：${record.action}`,
-                  `标签同步：${record.tagSynced ? "已同步" : "未同步"}`,
-                  `时间：${formatDateTime(record.createdAt)}`,
-                ]}
-                description={`线索手机号：${record.lead.phone}`}
-                href={`/leads/${record.lead.id}`}
-                hrefLabel="查看线索"
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="crm-detail-label text-black/38">线索回流</p>
+                <StatusBadge label={`${data.leads.length} 条`} variant="neutral" />
+              </div>
+              <p className="text-[13px] leading-6 text-black/56">
+                用于核对承接来源、原始线索状态和回流记录。
+              </p>
+            </div>
+
+            {data.leads.length > 0 ? (
+              <div className="space-y-3">
+                {data.leads.map((lead) => (
+                  <CompactArchiveCard
+                    key={lead.id}
+                    title={lead.name?.trim() || lead.phone}
+                    meta={[
+                      `手机号 ${lead.phone}`,
+                      `来源 ${getLeadSourceLabel(lead.source)}`,
+                      `状态 ${getLeadStatusLabel(lead.status)}`,
+                      `创建于 ${formatDateTime(lead.createdAt)}`,
+                    ]}
+                    href={`/leads/${lead.id}`}
+                    hrefLabel="查看线索"
+                  />
+                ))}
+              </div>
+            ) : (
+              <CustomerEmptyState
+                className="rounded-[1rem] border border-dashed border-black/7 bg-[rgba(247,248,250,0.66)] px-4 py-4 shadow-none"
+                title="暂无关联线索"
+                description="暂无线索记录。"
               />
-            ))}
+            )}
           </div>
-        ) : (
-          <CustomerEmptyState
-            title="暂无导入归并记录"
-            description="当前客户还没有导入归并历史。"
-          />
-        )}
+
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="crm-detail-label text-black/38">导入历史</p>
+                <StatusBadge label={`${data.mergeLogs.length} 条`} variant="neutral" />
+              </div>
+              <p className="text-[13px] leading-6 text-black/56">
+                保留导入批次、归并动作和标签同步记录，方便做来源审计。
+              </p>
+            </div>
+
+            {data.mergeLogs.length > 0 ? (
+              <div className="space-y-3">
+                {data.mergeLogs.map((record) => (
+                  <CompactArchiveCard
+                    key={record.id}
+                    title={`${record.lead.name?.trim() || record.lead.phone} / ${record.batch.fileName}`}
+                    meta={[
+                      `来源 ${getLeadSourceLabel(record.source)}`,
+                      `动作 ${record.action}`,
+                      `标签同步 ${record.tagSynced ? "已同步" : "未同步"}`,
+                      `时间 ${formatDateTime(record.createdAt)}`,
+                    ]}
+                    description={`线索手机号：${record.lead.phone}`}
+                    href={`/leads/${record.lead.id}`}
+                    hrefLabel="查看线索"
+                  />
+                ))}
+              </div>
+            ) : (
+              <CustomerEmptyState
+                className="rounded-[1rem] border border-dashed border-black/7 bg-[rgba(247,248,250,0.66)] px-4 py-4 shadow-none"
+                title="暂无导入归并记录"
+                description="暂无导入历史。"
+              />
+            )}
+          </div>
+        </div>
       </CustomerTabSection>
     </div>
   );
 }
 
-function renderLegacyOrdersTab(
-  data: CustomerOrdersData,
-  customerId: string,
-  canCreateSalesOrders: boolean,
-  navigationContext?: CustomerDetailNavigationContext,
-) {
-  return renderRecordCollectionTab({
-    eyebrow: "成交记录",
-    title: "订单记录",
-    description: "在客户维度回看成交、审核、履约与 COD 回流结果。",
-    countLabel: `${data.length} 条记录`,
-    children:
-      data.length > 0 ? (
-        <div className="space-y-6">
-          {canCreateSalesOrders ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/8 bg-white/72 px-4 py-3">
-              <div className="space-y-1">
-                <div className="text-sm font-medium text-black/82">从当前客户继续发起订单</div>
-                <div className="text-xs text-black/55">
-                  建单入口仍然挂在客户上下文，不回到全局订单页重新找客户。
-                </div>
-              </div>
-              <Link
-                href={buildCustomerTradeOrderHref(customerId, undefined, navigationContext)}
-                className="crm-button crm-button-primary"
-              >
-                创建成交主单
-              </Link>
-            </div>
-          ) : null}
+function renderOrdersList(data: CustomerOrdersData) {
+  return data.length > 0 ? (
+    <div className="space-y-3">
+      {data.map((record) => {
+        const latestCodRecord = record.shippingTask?.codCollectionRecords?.[0] ?? null;
+        const latestLogisticsTask =
+          record.shippingTask?.logisticsFollowUpTasks?.[0] ?? null;
 
-          <div className="space-y-3">
-            {data.map((record) => {
-              const latestCodRecord = record.shippingTask?.codCollectionRecords?.[0] ?? null;
-              const latestLogisticsTask = record.shippingTask?.logisticsFollowUpTasks?.[0] ?? null;
-
-              return (
-                <CustomerRecordCard
-                  key={record.id}
-                  title={`${record.tradeOrder?.tradeNo ? `${record.tradeOrder.tradeNo} / ${record.subOrderNo || record.orderNo}` : record.orderNo} / ${formatCurrency(record.finalAmount)}`}
-                  meta={[
-                    `负责人：${formatOwnerLabel(record.owner)}`,
-                    `供应商：${record.supplier.name}`,
-                    record.tradeOrder?.tradeNo
-                      ? `成交主单：${record.tradeOrder.tradeNo}`
-                      : `订单编号：${record.orderNo}`,
-                    record.subOrderNo
-                      ? `子单编号：${record.subOrderNo}`
-                      : "子单编号：当前仍为单订单结构",
-                    `审核状态：${getSalesOrderReviewStatusLabel(record.reviewStatus)}`,
-                    `收款方案：${getSalesOrderPaymentSchemeLabel(record.paymentScheme)}`,
-                    `报单状态：${record.shippingTask ? getShippingReportStatusLabel(record.shippingTask.reportStatus) : "未进入发货池"}`,
-                    `发货状态：${record.shippingTask ? getShippingFulfillmentStatusLabel(record.shippingTask.shippingStatus) : "待审核"}`,
-                    `物流单号：${record.shippingTask?.trackingNumber || "未回填"}`,
-                    latestLogisticsTask
-                      ? `物流跟进：${latestLogisticsTask.owner.name} / ${getLogisticsFollowUpTaskStatusLabel(latestLogisticsTask.status)}`
-                      : "物流跟进：暂无任务",
-                    latestCodRecord
-                      ? `COD：${getCodCollectionStatusLabel(latestCodRecord.status)} / ${formatCurrency(latestCodRecord.collectedAmount)}`
-                      : "COD：不适用或未开始",
-                    `创建时间：${formatDateTime(record.createdAt)}`,
-                  ]}
-                  description={`收件信息：${record.receiverNameSnapshot} / ${record.receiverPhoneSnapshot} / ${record.receiverAddressSnapshot}`}
-                  href={`/orders/${record.tradeOrder?.id ?? record.id}`}
-                  hrefLabel={record.tradeOrder ? "查看成交主单" : "查看订单"}
-                />
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        <CustomerEmptyState
-          title="暂无订单记录"
-          description="当前客户还没有成交主单记录。"
-        />
-      ),
-  });
+        return (
+          <CustomerRecordCard
+            key={record.id}
+            title={`${
+              record.tradeOrder?.tradeNo
+                ? `${record.tradeOrder.tradeNo} / ${record.subOrderNo || record.orderNo}`
+                : record.orderNo
+            } / ${formatCurrency(record.finalAmount)}`}
+            meta={[
+              `负责人：${formatOwnerLabel(record.owner)}`,
+              `供应商：${record.supplier.name}`,
+              record.tradeOrder?.tradeNo
+                ? `成交主单：${record.tradeOrder.tradeNo}`
+                : `订单编号：${record.orderNo}`,
+              record.subOrderNo
+                ? `子单编号：${record.subOrderNo}`
+                : "子单编号：当前仍为单订单结构",
+              `审核状态：${getSalesOrderReviewStatusLabel(record.reviewStatus)}`,
+              `收款方案：${getSalesOrderPaymentSchemeLabel(record.paymentScheme)}`,
+              `报单状态：${
+                record.shippingTask
+                  ? getShippingReportStatusLabel(record.shippingTask.reportStatus)
+                  : "未进入发货池"
+              }`,
+              `发货状态：${
+                record.shippingTask
+                  ? getShippingFulfillmentStatusLabel(record.shippingTask.shippingStatus)
+                  : "待审核"
+              }`,
+              `物流单号：${record.shippingTask?.trackingNumber || "未回填"}`,
+              latestLogisticsTask
+                ? `物流跟进：${latestLogisticsTask.owner.name} / ${getLogisticsFollowUpTaskStatusLabel(latestLogisticsTask.status)}`
+                : "物流跟进：暂无任务",
+              latestCodRecord
+                ? `COD：${getCodCollectionStatusLabel(latestCodRecord.status)} / ${formatCurrency(latestCodRecord.collectedAmount)}`
+                : "COD：不适用或未开始",
+              `创建时间：${formatDateTime(record.createdAt)}`,
+            ]}
+            description={`收件信息：${record.receiverNameSnapshot} / ${record.receiverPhoneSnapshot} / ${record.receiverAddressSnapshot}`}
+            href={`/orders/${record.tradeOrder?.id ?? record.id}`}
+            hrefLabel={record.tradeOrder ? "查看成交主单" : "查看订单"}
+          />
+        );
+      })}
+    </div>
+  ) : (
+    <CustomerEmptyState
+      title="暂无订单记录"
+      description="暂无成交记录。"
+    />
+  );
 }
 
 function renderOrdersTab({
@@ -466,29 +695,27 @@ function renderOrdersTab({
   submitTradeOrderForReviewAction?: (formData: FormData) => Promise<void>;
 }>) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {canCreateSalesOrders ? (
-        <div className="space-y-4 rounded-2xl border border-black/8 bg-white/72 px-4 py-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="space-y-1">
-              <div className="text-sm font-medium text-black/82">从当前客户继续发起订单</div>
-              <div className="text-xs text-black/55">
-                入口已切到成交主单表单，支持多 SKU 和多供货商直售，并在提交审核时自动拆子单。
-              </div>
-            </div>
+        <CustomerTabSection
+          eyebrow="成交主单"
+          title={tradeOrderComposer ? "继续编辑成交主单" : "从客户上下文发起成交"}
+          actions={
             <Link
               href={buildCustomerTradeOrderHref(
                 customerId,
                 tradeOrderComposer?.draft?.id,
                 navigationContext,
               )}
-              className="crm-button crm-button-primary"
+              className="crm-button crm-button-primary min-h-0 px-3.5 py-2 text-sm"
             >
-              {tradeOrderComposer ? "继续编辑成交表单" : "创建成交主单"}
+              {tradeOrderComposer ? "继续编辑" : "创建成交主单"}
             </Link>
-          </div>
-
-          {tradeOrderComposer && saveTradeOrderDraftAction && submitTradeOrderForReviewAction ? (
+          }
+        >
+          {tradeOrderComposer &&
+          saveTradeOrderDraftAction &&
+          submitTradeOrderForReviewAction ? (
             <TradeOrderForm
               customer={tradeOrderComposer.customer}
               paymentSchemeOptions={tradeOrderComposer.paymentSchemeOptions}
@@ -498,23 +725,33 @@ function renderOrdersTab({
               saveDraftAction={saveTradeOrderDraftAction}
               submitForReviewAction={submitTradeOrderForReviewAction}
             />
-          ) : null}
-        </div>
+          ) : (
+            <div className="rounded-[0.95rem] border border-black/6 bg-[rgba(247,248,250,0.72)] px-4 py-4 text-sm leading-6 text-black/56">
+              需要时再进入编辑。
+            </div>
+          )}
+        </CustomerTabSection>
       ) : null}
 
-      {renderLegacyOrdersTab(data, customerId, false, navigationContext)}
+      <CustomerTabSection
+        eyebrow="成交记录"
+        title="订单与履约记录"
+        actions={<StatusBadge label={`${data.length} 条记录`} variant="neutral" />}
+      >
+        {renderOrdersList(data)}
+      </CustomerTabSection>
     </div>
   );
 }
 
 function renderGiftsTab(data: CustomerGiftsData) {
-  return renderRecordCollectionTab({
-    eyebrow: "礼品记录",
-    title: "礼品资格与履约",
-    description: "礼品资格、审核和发货结果继续独立承接，不混入订单真相。",
-    countLabel: `${data.length} 条记录`,
-    children:
-      data.length > 0 ? (
+  return (
+    <CustomerTabSection
+      eyebrow="礼品履约"
+      title="礼品资格与履约"
+      actions={<StatusBadge label={`${data.length} 条记录`} variant="neutral" />}
+    >
+      {data.length > 0 ? (
         <div className="space-y-3">
           {data.map((record) => {
             const freightPlan = record.paymentPlans?.[0] ?? null;
@@ -544,20 +781,21 @@ function renderGiftsTab(data: CustomerGiftsData) {
       ) : (
         <CustomerEmptyState
           title="暂无礼品记录"
-          description="当前客户还没有礼品资格或礼品履约记录。"
+          description="暂无礼品记录。"
         />
-      ),
-  });
+      )}
+    </CustomerTabSection>
+  );
 }
 
 function renderLogsTab(data: CustomerLogsData) {
-  return renderRecordCollectionTab({
-    eyebrow: "审计记录",
-    title: "操作日志",
-    description: "保留客户相关重要动作的责任人和时间线，便于追溯。",
-    countLabel: `${data.length} 条记录`,
-    children:
-      data.length > 0 ? (
+  return (
+    <CustomerTabSection
+      eyebrow="审计记录"
+      title="操作日志"
+      actions={<StatusBadge label={`${data.length} 条记录`} variant="neutral" />}
+    >
+      {data.length > 0 ? (
         <div className="space-y-3">
           {data.map((record) => (
             <CustomerRecordCard
@@ -574,10 +812,11 @@ function renderLogsTab(data: CustomerLogsData) {
       ) : (
         <CustomerEmptyState
           title="暂无操作日志"
-          description="当前客户还没有可展示的操作日志。"
+          description="暂无日志记录。"
         />
-      ),
-  });
+      )}
+    </CustomerTabSection>
+  );
 }
 
 function renderTabContent({
@@ -609,17 +848,18 @@ function renderTabContent({
 }>) {
   switch (activeTab) {
     case "profile":
-      return renderProfileTab(
+      return renderProfileTab({
         shell,
-        tabData as CustomerProfileData,
+        data: tabData as CustomerProfileData,
         canManageTags,
         navigationContext,
-      );
+      });
     case "calls":
       return (
         <CustomerCallRecordsSection
           customerId={shell.id}
-          records={tabData as CustomerCallsData}
+          records={(tabData as CustomerCallsData).records}
+          resultOptions={(tabData as CustomerCallsData).callResultOptions}
           canCreate={canCreateCalls}
         />
       );
@@ -666,6 +906,7 @@ export function CustomerDetailWorkbench({
   shell,
   activeTab,
   tabData,
+  callResultOptions,
   notice,
   canCreateCalls,
   canCreateWechat,
@@ -681,6 +922,7 @@ export function CustomerDetailWorkbench({
   navigationContext: CustomerDetailNavigationContext;
   activeTab: CustomerDetailTab;
   tabData: CustomerDetailTabDataMap[CustomerDetailTab];
+  callResultOptions: CustomerCallResultOptions;
   notice: { tone: "success" | "danger"; message: string } | null;
   canCreateCalls: boolean;
   canCreateWechat: boolean;
@@ -692,291 +934,298 @@ export function CustomerDetailWorkbench({
   submitTradeOrderForReviewAction?: (formData: FormData) => Promise<void>;
 }>) {
   const activeTabMeta = getCustomerDetailTabMeta(activeTab);
+  const activeGroupMeta = getCustomerDetailTabGroupMeta(activeTab);
   const activeTabCount = getActiveTabCount(activeTab, shell);
-  const isManagementView = shell.viewerScope === "ADMIN" || shell.viewerScope === "SUPERVISOR";
   const isPublicPoolContext = navigationContext.from === "public-pool";
-  const effectiveRole: "ADMIN" | "SUPERVISOR" | "SALES" =
-    shell.viewerScope === "ADMIN" || shell.viewerScope === "SUPERVISOR"
-      ? shell.viewerScope
-      : "SALES";
-  const focusActions = buildFocusActions(effectiveRole, shell);
-  const ownershipLabel = getCustomerOwnershipModeLabel(shell.ownershipMode);
   const publicPoolReasonLabel = shell.publicPoolReason
     ? publicPoolReasonLabels[shell.publicPoolReason]
     : "暂无入池原因";
+  const ownershipLabel = getCustomerOwnershipModeLabel(shell.ownershipMode);
+  const riskState = getOverviewRiskState(shell, publicPoolReasonLabel);
+  const followUpEntryTab = getFollowUpEntryTab(
+    canCreateCalls,
+    canCreateWechat,
+    canManageLiveInvitations,
+  );
+  const primaryAction = canCreateSalesOrders
+    ? {
+        label: tradeOrderComposer ? "继续编辑成交主单" : "创建成交主单",
+        href: buildCustomerTradeOrderHref(
+          shell.id,
+          tradeOrderComposer?.draft?.id,
+          navigationContext,
+        ),
+        description: tradeOrderComposer
+          ? "回到当前草稿继续编辑。"
+          : "从客户详情发起成交主单。",
+        secondaryLabel: "查看跟进记录",
+        secondaryHref: buildCustomerTabHref(shell.id, followUpEntryTab, navigationContext),
+      }
+    : {
+        label: "进入跟进记录",
+        href: buildCustomerTabHref(shell.id, followUpEntryTab, navigationContext),
+        description: "先继续跟进。",
+        secondaryLabel: "查看成交结果",
+        secondaryHref: buildCustomerTabHref(shell.id, "orders", navigationContext),
+      };
+  const summaryCards: SummaryCard[] = [
+    {
+      eyebrow: "归属与保护期",
+      value: ownershipLabel,
+      description: `负责人 ${formatOwnerLabel(shell.owner)}`,
+      note: `最近有效跟进 ${formatDateTimeSummary(shell.lastEffectiveFollowUpAt)} / 保护期 ${formatDateTimeSummary(shell.claimLockedUntil, "未锁定")}`,
+      href: buildCustomerTabHref(shell.id, "profile", navigationContext),
+      tone: shell.ownershipMode === "PUBLIC" ? "warning" : "info",
+    },
+    {
+      eyebrow: "跟进推进",
+      value:
+        shell._count.callRecords > 0
+          ? `${shell._count.callRecords} 次通话`
+          : "待首个通话",
+      description: `微信 ${shell._count.wechatRecords} / 直播 ${shell._count.liveInvitations}`,
+      note: `最近关键触达 ${formatDateTimeSummary(shell.latestFollowUpAt)}`,
+      href: buildCustomerTabHref(shell.id, followUpEntryTab, navigationContext),
+    },
+    {
+      eyebrow: "成交结果",
+      value:
+        getCustomerTotalOrderCount(shell) > 0
+          ? `已有 ${getCustomerTotalOrderCount(shell)} 笔成交`
+          : "尚未形成成交",
+      description: `礼品 ${shell._count.giftRecords} 条 / 日志 ${shell.operationLogCount} 条`,
+      note: canCreateSalesOrders
+        ? "成交入口继续放在客户详情主链里。"
+        : "当前角色以查看成交结果为主。",
+      href: buildCustomerTabHref(shell.id, "orders", navigationContext),
+      tone: getCustomerTotalOrderCount(shell) > 0 ? "success" : "default",
+    },
+    {
+      eyebrow: "风险与异常",
+      value: riskState.title,
+      description: riskState.description,
+      note: `关联线索 ${shell.importSummary.linkedLeadCount} 条 / 物流提醒 ${shell.logisticsFollowUpCount} 条`,
+      href: buildCustomerTabHref(shell.id, riskState.tab, navigationContext),
+      tone: riskState.tone,
+    },
+  ];
 
   return (
     <WorkbenchLayout
+      className="!gap-0"
+      layoutClassName="xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)]"
       header={
-        <SummaryHeader
-          eyebrow="客户经营页"
-          title={shell.name}
-          description="详情页统一收口为摘要区、快捷动作、左侧摘要和右侧 Tabs 主内容，当前仅按激活标签页拉取数据。"
-          badges={
-            <>
-              <CustomerStatusBadge status={shell.status} />
-              <StatusBadge
-                label={`Ownership：${ownershipLabel}`}
-                variant={shell.ownershipMode === "PUBLIC" ? "warning" : "info"}
-              />
-              <StatusBadge
-                label={shell.owner ? `负责人：${shell.owner.name}` : "未分配负责人"}
-                variant={shell.owner ? "info" : "neutral"}
-              />
-              {isPublicPoolContext ? (
-                <StatusBadge label="来自公海池" variant="warning" />
-              ) : null}
-              <StatusBadge
-                label={`物流提醒 ${shell.logisticsFollowUpCount}`}
-                variant={shell.logisticsFollowUpCount > 0 ? "warning" : "neutral"}
-              />
-            </>
-          }
-          actions={
-            <div className="crm-toolbar-cluster">
-              <Link
+        <section className="overflow-hidden rounded-[1.3rem] border border-black/7 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(249,247,243,0.88))] px-4 py-4 shadow-[0_14px_30px_rgba(18,24,31,0.05)] md:px-5 md:py-5 xl:px-6 xl:py-6">
+          <div className="flex flex-col gap-5 2xl:flex-row 2xl:items-start 2xl:justify-between">
+            <div className="min-w-0 max-w-4xl space-y-4">
+              <PageContextLink
                 href={navigationContext.returnTo ?? "/customers"}
-                className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-              >
-                {getCustomerDetailBackLabel(navigationContext)}
-              </Link>
-              {canCreateSalesOrders ? (
-                <Link
-                  href={buildCustomerTradeOrderHref(
-                    shell.id,
-                    tradeOrderComposer?.draft?.id,
-                    navigationContext,
-                  )}
-                  className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
-                >
-                  创建成交主单
-                </Link>
-              ) : null}
-            </div>
-          }
-          metrics={[
-            {
-              label: "关联线索",
-              value: String(shell.importSummary.linkedLeadCount),
-              hint: "承接来源与归并历史",
-            },
-            {
-              label: "通话记录",
-              value: String(shell._count.callRecords),
-              hint: "首呼与后续跟进节奏",
-            },
-            {
-              label: "微信 / 直播",
-              value: `${shell._count.wechatRecords} / ${shell._count.liveInvitations}`,
-              hint: "私域触点与邀约推进",
-            },
-            {
-              label: "订单 / 礼品",
-              value: `${getCustomerTotalOrderCount(shell)} / ${shell._count.giftRecords}`,
-              hint: "成交与履约回流结果",
-            },
-          ]}
-        />
-      }
-      stickyBar={
-        <StickyActionBar
-          title={isManagementView ? "管理快捷动作" : "下一步动作"}
-          description={
-            isManagementView
-              ? "先看档案、记录和成交结果，再判断是否存在承接异常或过程风险。"
-              : "优先进入通话、微信、直播和订单标签页继续推进当前客户。"
-          }
-        >
-          {focusActions.map((item) => (
-            <SmartLink
-              key={item.tab}
-              href={buildCustomerTabHref(shell.id, item.tab, navigationContext)}
-              scrollTargetId="customer-records"
-              className={cn(
-                "crm-button",
-                activeTab === item.tab ? "crm-button-primary" : "crm-button-secondary",
-              )}
-            >
-              <span>{item.label}</span>
-              <span className="text-[11px] font-semibold tracking-[0.08em] text-current/72">
-                {item.count}
-              </span>
-            </SmartLink>
-          ))}
-        </StickyActionBar>
-      }
-    >
-      <DetailLayout
-        sidebar={
-          <DetailSidebar
-            sections={[
-              {
-                eyebrow: isPublicPoolContext ? "Ownership 摘要" : "Ownership",
-                title: isPublicPoolContext ? "公海池上下文" : "当前归属状态",
-                description: isPublicPoolContext
-                  ? "当前详情来自公海池，保留入池原因、最近 owner 和返回上下文。"
-                  : "客户归属、入池历史和最近有效跟进在这里统一查看。",
-                items: [
-                  { label: "当前状态", value: ownershipLabel },
-                  { label: "负责人", value: formatOwnerLabel(shell.owner) },
-                  {
-                    label: "最近 Owner",
-                    value: shell.lastOwner ? shell.lastOwner.name : "暂无最近 owner",
-                  },
-                  { label: "入池原因", value: publicPoolReasonLabel },
-                  {
-                    label: "入池时间",
-                    value: formatDateTimeSummary(shell.publicPoolEnteredAt, "未在公海中"),
-                  },
-                  {
-                    label: "最近有效跟进",
-                    value: formatDateTimeSummary(shell.lastEffectiveFollowUpAt),
-                  },
-                  {
-                    label: "保护至",
-                    value: formatDateTimeSummary(shell.claimLockedUntil, "未锁定"),
-                  },
-                  {
-                    label: "公海团队",
-                    value: shell.publicPoolTeam?.name ?? shell.owner?.team?.name ?? "暂无团队",
-                  },
-                ],
-              },
-              {
-                eyebrow: isManagementView ? "管理摘要" : "执行摘要",
-                title: isManagementView ? "客户经营摘要" : "下一步重点",
-                description: isManagementView
-                  ? "先看承接、来源和日志，再进入标签页检查具体记录。"
-                  : "优先处理首呼、微信、直播和成交推进动作。",
-                items: [
-                  { label: "负责人", value: formatOwnerLabel(shell.owner) },
-                  {
-                    label: "最近跟进",
-                    value: shell.latestFollowUpAt ? formatDateTime(shell.latestFollowUpAt) : "暂无",
-                  },
-                  { label: "关联线索", value: String(shell.importSummary.linkedLeadCount) },
-                  { label: "日志记录", value: String(shell.operationLogCount) },
-                  { label: "物流提醒", value: String(shell.logisticsFollowUpCount) },
-                ],
-              },
-              {
-                eyebrow: "客户档案",
-                title: "基础信息",
-                items: [
-                  {
-                    label: "地区",
-                    value: formatRegion(shell.province, shell.city, shell.district),
-                  },
-                  { label: "等级", value: getCustomerLevelLabel(shell.level) },
-                  {
-                    label: "首个来源",
-                    value: formatLeadSourceSummary(shell.importSummary.firstSource),
-                  },
-                  {
-                    label: "最近来源",
-                    value: formatLeadSourceSummary(shell.importSummary.latestSource),
-                  },
-                  {
-                    label: "最近导入",
-                    value: shell.importSummary.latestImportAt
-                      ? formatDateTime(shell.importSummary.latestImportAt)
-                      : "暂无导入记录",
-                  },
-                  { label: "最近更新", value: formatDateTime(shell.updatedAt) },
-                ],
-              },
-              {
-                eyebrow: "角色边界",
-                title: "当前工作边界",
-                items: [
-                  {
-                    label: "当前角色",
-                    value: isManagementView ? "管理视角" : "销售执行视角",
-                  },
-                  {
-                    label: "订单动作",
-                    value: canCreateSalesOrders ? "可继续发起成交主单" : "仅查看成交结果",
-                  },
-                  {
-                    label: "跟进动作",
-                    value:
-                      canCreateCalls || canCreateWechat || canManageLiveInvitations
-                        ? "可在标签页补录关键跟进动作"
-                        : "当前页面以查看记录为主",
-                  },
-                ],
-              },
-            ]}
-          />
-        }
-        main={
-          <>
-            {notice ? <ActionBanner tone={notice.tone}>{notice.message}</ActionBanner> : null}
-
-            <SectionCard
-              eyebrow="主内容"
-              title="客户经营主内容"
-              description="右侧只承接当前激活的业务标签页，左侧摘要不再和全部记录混排。"
-              contentClassName="space-y-3.5"
-              anchorId="customer-records"
-            >
-              <CustomerDetailTabs
-                customerId={shell.id}
-                activeTab={activeTab}
-                buildHref={(tab) => buildCustomerTabHref(shell.id, tab, navigationContext)}
-                scrollTargetId="customer-records"
-                counts={{
-                  calls: shell._count.callRecords,
-                  wechat: shell._count.wechatRecords,
-                  live: shell._count.liveInvitations,
-                  orders: shell._count.salesOrders,
-                  gifts: shell._count.giftRecords,
-                  logs: shell.operationLogCount,
-                }}
+                label={getCustomerDetailBackLabel(navigationContext)}
+                trail={[isPublicPoolContext ? "公海池" : "客户中心", "客户经营总览"]}
               />
 
-              <div className="crm-subtle-panel flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div className="space-y-1.5">
-                  <p className="crm-detail-label">当前标签页</p>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-end gap-3">
+                  <h1 className="text-[1.8rem] font-semibold tracking-[-0.04em] text-black/88 md:text-[2.15rem]">
+                    {shell.name}
+                  </h1>
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-black/82">{activeTabMeta.label}</p>
-                    {activeTabCount !== null ? (
-                      <StatusBadge label={`${activeTabCount} 条记录`} variant="neutral" />
+                    <p className="pb-1 text-[15px] font-medium text-black/54 md:text-[16px]">
+                      {shell.phone}
+                    </p>
+                    {canCreateCalls ? (
+                      <CustomerMobileDialButton
+                        customerId={shell.id}
+                        customerName={shell.name}
+                        phone={shell.phone}
+                        triggerSource="detail"
+                        className="inline-flex h-8 items-center rounded-full border border-[rgba(154,97,51,0.16)] bg-[rgba(154,97,51,0.08)] px-3 text-[12px] font-medium text-[rgba(84,55,31,0.96)] md:hidden"
+                      />
                     ) : null}
                   </div>
-                  <p className="max-w-3xl text-sm leading-6 text-black/58">
-                    {activeTabMeta.description}
-                  </p>
                 </div>
-                <div className="text-sm leading-6 text-black/56">
-                  <p>
-                    最近导入：
-                    {shell.importSummary.latestImportAt
-                      ? formatDateTime(shell.importSummary.latestImportAt)
-                      : "暂无导入记录"}
-                  </p>
-                  <p>最近更新：{formatDateTime(shell.updatedAt)}</p>
-                </div>
+                <p className="max-w-3xl text-[13px] leading-6 text-black/56">
+                  {getCustomerIdentitySummary(shell)}
+                </p>
               </div>
 
-              {renderTabContent({
-                activeTab,
-                shell,
-                tabData,
-                canCreateCalls,
-                canCreateWechat,
-                canManageLiveInvitations,
-                canManageTags,
-                canCreateSalesOrders,
-                tradeOrderComposer,
-                navigationContext,
-                saveTradeOrderDraftAction,
-                submitTradeOrderForReviewAction,
-              })}
-            </SectionCard>
-          </>
-        }
-      />
+              <div className="flex flex-wrap gap-1.5">
+                <CustomerStatusBadge status={shell.status} />
+                <StatusBadge
+                  label={`归属 ${ownershipLabel}`}
+                  variant={shell.ownershipMode === "PUBLIC" ? "warning" : "info"}
+                />
+                <StatusBadge
+                  label={shell.owner ? `负责人 ${shell.owner.name}` : "未分配负责人"}
+                  variant={shell.owner ? "info" : "neutral"}
+                />
+                <StatusBadge
+                  label={riskState.title}
+                  variant={riskState.tone === "default" ? "neutral" : riskState.tone}
+                />
+                {isPublicPoolContext ? (
+                  <StatusBadge label="来自公海池" variant="warning" />
+                ) : null}
+              </div>
+            </div>
+
+            <div className="w-full 2xl:max-w-[19rem] 2xl:min-w-[17rem]">
+              <div className="rounded-[1.05rem] border border-black/7 bg-[rgba(255,255,255,0.8)] px-4 py-4 shadow-[0_8px_18px_rgba(18,24,31,0.04)]">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-black/38">
+                  当前经营动作
+                </p>
+                <h2 className="mt-2 text-[1rem] font-semibold text-black/84">
+                  {canCreateSalesOrders ? "继续承接成交" : "继续推进客户"}
+                </h2>
+                <p className="mt-2 text-[13px] leading-6 text-black/56">
+                  {primaryAction.description}
+                </p>
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <Link
+                    href={primaryAction.href}
+                    className="crm-button crm-button-primary min-h-0 px-3.5 py-2 text-sm"
+                  >
+                    {primaryAction.label}
+                  </Link>
+                  <SmartLink
+                    href={primaryAction.secondaryHref}
+                    scrollTargetId="customer-main"
+                    className="text-sm text-black/52 transition hover:text-black/82"
+                  >
+                    {primaryAction.secondaryLabel}
+                  </SmartLink>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      }
+      summary={
+        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+          {summaryCards.map((card) => (
+            <OverviewSummaryCard key={card.eyebrow} card={card} />
+          ))}
+        </div>
+      }
+      sidebarPosition="left"
+      sidebar={
+        <div className="space-y-4">
+          <SidebarPanel eyebrow="经营侧摘要" title="当前经营状态">
+            <div className="divide-y divide-black/6">
+              <SidebarRow label="当前状态" value={ownershipLabel} />
+              <SidebarRow label="负责人" value={formatOwnerLabel(shell.owner)} />
+              <SidebarRow
+                label="最近有效跟进"
+                value={formatDateTimeSummary(shell.lastEffectiveFollowUpAt)}
+              />
+              <SidebarRow
+                label="保护期"
+                value={formatDateTimeSummary(shell.claimLockedUntil, "未锁定")}
+              />
+              <SidebarRow
+                label="公海 / 团队"
+                value={shell.publicPoolTeam?.name ?? shell.owner?.team?.name ?? "暂无团队"}
+              />
+            </div>
+          </SidebarPanel>
+
+          <SidebarPanel eyebrow="风险与来源" title="当前提示">
+            <p className="text-sm leading-6 text-black/62">{riskState.description}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <StatusBadge
+                label={`首个来源 ${formatLeadSourceSummary(shell.importSummary.firstSource)}`}
+                variant="neutral"
+              />
+              <StatusBadge
+                label={`最近来源 ${formatLeadSourceSummary(shell.importSummary.latestSource)}`}
+                variant="neutral"
+              />
+              {shell.publicPoolReason ? (
+                <StatusBadge label={publicPoolReasonLabel} variant="warning" />
+              ) : null}
+            </div>
+          </SidebarPanel>
+        </div>
+      }
+    >
+      {notice ? <ActionBanner tone={notice.tone}>{notice.message}</ActionBanner> : null}
+
+      <section
+        id="customer-main"
+        className="rounded-[1.1rem] border border-black/7 bg-[rgba(255,255,255,0.86)] px-4 py-4 shadow-[0_8px_20px_rgba(18,24,31,0.04)] md:px-5 md:py-5"
+      >
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-1.5">
+            <p className="crm-detail-label text-black/38">经营视角</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-[1rem] font-semibold text-black/84">
+                {activeGroupMeta.label}
+              </h2>
+              {activeGroupMeta.tabs.length > 1 ? (
+                <StatusBadge label={activeTabMeta.label} variant="neutral" />
+              ) : null}
+              {activeTabCount !== null ? (
+                <StatusBadge label={`${activeTabCount} 条记录`} variant="neutral" />
+              ) : null}
+            </div>
+            <p className="max-w-3xl text-[13px] leading-6 text-black/56">
+              {activeGroupMeta.description}
+            </p>
+          </div>
+
+          <div className="text-[12px] leading-5 text-black/46">
+            <p>
+              最近导入：
+              {shell.importSummary.latestImportAt
+                ? formatDateTime(shell.importSummary.latestImportAt)
+                : "暂无导入记录"}
+            </p>
+            <p>最近更新：{formatDateTime(shell.updatedAt)}</p>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <CustomerDetailTabs
+            customerId={shell.id}
+            activeTab={activeTab}
+            buildHref={(tab) => buildCustomerTabHref(shell.id, tab, navigationContext)}
+            scrollTargetId="customer-main"
+            counts={{
+              calls: shell._count.callRecords,
+              wechat: shell._count.wechatRecords,
+              live: shell._count.liveInvitations,
+              orders: shell._count.salesOrders,
+              gifts: shell._count.giftRecords,
+              logs: shell.operationLogCount,
+            }}
+          />
+        </div>
+      </section>
+
+      {renderTabContent({
+        activeTab,
+        shell,
+        tabData,
+        canCreateCalls,
+        canCreateWechat,
+        canManageLiveInvitations,
+        canManageTags,
+        canCreateSalesOrders,
+        tradeOrderComposer,
+        navigationContext,
+        saveTradeOrderDraftAction,
+        submitTradeOrderForReviewAction,
+      })}
+
+      {canCreateCalls ? (
+        <MobileCallFollowUpSheet
+          scope={{
+            kind: "detail",
+            customerId: shell.id,
+          }}
+          resultOptions={callResultOptions}
+        />
+      ) : null}
     </WorkbenchLayout>
   );
 }

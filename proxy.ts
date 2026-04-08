@@ -37,7 +37,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(changePasswordUrl);
   }
 
-  if (!canAccessPath(token.role, pathname)) {
+  if (!canAccessPath(token.role, pathname, token.permissionCodes ?? [])) {
     const fallbackUrl = request.nextUrl.clone();
     fallbackUrl.pathname = token.mustChangePassword
       ? "/change-password"

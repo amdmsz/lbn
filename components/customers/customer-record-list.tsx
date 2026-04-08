@@ -18,11 +18,13 @@ export function CustomerDetailItem({
 export function CustomerEmptyState({
   title,
   description,
+  className,
 }: Readonly<{
   title: string;
   description: string;
+  className?: string;
 }>) {
-  return <EmptyState title={title} description={description} />;
+  return <EmptyState className={className} title={title} description={description} />;
 }
 
 export function CustomerTabSection({
@@ -35,20 +37,27 @@ export function CustomerTabSection({
 }: Readonly<{
   eyebrow?: string;
   title: string;
-  description: string;
+  description?: string;
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
 }>) {
   return (
-    <section className={cn("crm-section-card", className)}>
-      <div className="flex flex-col gap-3 border-b border-black/6 pb-4 lg:flex-row lg:items-start lg:justify-between">
+    <section
+      className={cn(
+        "rounded-[1.1rem] border border-black/7 bg-[rgba(255,255,255,0.84)] px-4 py-4 shadow-[0_10px_24px_rgba(18,24,31,0.04)] md:px-5 md:py-5",
+        className,
+      )}
+    >
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-1.5">
-          {eyebrow ? <p className="crm-detail-label">{eyebrow}</p> : null}
-          <h2 className="text-lg font-semibold text-black/84">{title}</h2>
-          <p className="max-w-3xl text-sm leading-7 text-black/58">{description}</p>
+          {eyebrow ? <p className="crm-detail-label text-black/38">{eyebrow}</p> : null}
+          <h2 className="text-[1rem] font-semibold text-black/84">{title}</h2>
+          {description ? (
+            <p className="max-w-3xl text-[13px] leading-6 text-black/56">{description}</p>
+          ) : null}
         </div>
-        {actions ? <div className="crm-toolbar-cluster">{actions}</div> : null}
+        {actions ? <div className="crm-toolbar-cluster gap-1.5">{actions}</div> : null}
       </div>
 
       <div className="mt-4">{children}</div>
@@ -70,25 +79,26 @@ export function CustomerRecordCard({
   hrefLabel?: string;
 }>) {
   return (
-    <div className="crm-subtle-panel">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1 space-y-3">
+    <div className="rounded-[1rem] border border-black/7 bg-[rgba(250,250,251,0.72)] px-4 py-3.5 transition-colors hover:border-black/10 hover:bg-white/82">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 flex-1 space-y-2.5">
           <div className="space-y-1.5">
             <p className="text-sm font-semibold text-black/82">{title}</p>
             {description ? (
-              <p className="text-sm leading-6 text-black/58">{description}</p>
+              <p className="text-[13px] leading-6 text-black/56">{description}</p>
             ) : null}
           </div>
 
           {meta.length > 0 ? (
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] leading-5 text-black/48">
               {meta.map((item, index) => (
-                <div
+                <span
                   key={`${index}-${item}`}
-                  className="rounded-[0.8rem] border border-black/6 bg-white/70 px-3 py-2 text-sm leading-6 text-black/60"
+                  className="inline-flex max-w-full items-center gap-2"
                 >
-                  {item}
-                </div>
+                  {index > 0 ? <span className="text-black/20">·</span> : null}
+                  <span className="break-words">{item}</span>
+                </span>
               ))}
             </div>
           ) : null}

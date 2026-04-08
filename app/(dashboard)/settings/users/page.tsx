@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { SettingsPageHeader } from "@/components/settings/settings-page-header";
 import { UserCreateForm } from "@/components/settings/user-create-form";
-import { SettingsWorkspaceNav } from "@/components/settings/settings-workspace-nav";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FiltersPanel } from "@/components/shared/filters-panel";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { SummaryHeader } from "@/components/shared/summary-header";
 import {
   formatDateTimeLabel,
   getPasswordRequirementBadgeConfig,
@@ -58,24 +57,37 @@ export default async function SettingsUsersPage({
 
   return (
     <div className="crm-page">
-      <SummaryHeader
-        eyebrow="组织与账号管理"
+      <SettingsPageHeader
+        activeValue="users"
         title="账号管理"
-        description="管理员可以查看和维护全公司账号；主管只可管理自己团队内的销售、运营和发货账号。新建或重置密码都会生成临时密码，并要求首次登录改密。"
+        description="账号管理继续负责内部账号、角色、状态和密码流程。当前页面只统一设置域认知，不重做原有账号管理逻辑。"
         badges={
           <>
             <StatusBadge
               label={scopeLabel}
               variant={data.managementScope === "company" ? "info" : "warning"}
             />
-            <StatusBadge label={`共 ${data.summary.scopedTotalCount} 个可见账号`} variant="success" />
+            <StatusBadge
+              label={`可见账号 ${data.summary.scopedTotalCount}`}
+              variant="success"
+            />
           </>
+        }
+        actions={
+          <div className="crm-toolbar-cluster">
+            <Link href="/settings/teams" className="crm-button crm-button-secondary">
+              查看团队
+            </Link>
+          </div>
         }
         metrics={[
           {
             label: "可见账号",
             value: String(data.summary.scopedTotalCount),
-            hint: data.managementScope === "company" ? "当前可查看全公司账号范围" : "当前仅查看本团队账号范围",
+            hint:
+              data.managementScope === "company"
+                ? "当前可查看全公司账号范围"
+                : "当前仅查看本团队账号范围",
           },
           {
             label: "启用中",
@@ -85,12 +97,12 @@ export default async function SettingsUsersPage({
           {
             label: "已禁用",
             value: String(data.summary.inactiveCount),
-            hint: "历史业务数据保留，禁止继续登录",
+            hint: "历史业务数据保留，但不再允许登录",
           },
           {
             label: "团队数",
             value: String(data.summary.teamCount),
-            hint: "当前筛选范围下可选择的团队",
+            hint: "当前筛选范围下可关联的团队",
           },
         ]}
       />
@@ -105,16 +117,12 @@ export default async function SettingsUsersPage({
         </ActionBanner>
       ) : null}
 
-      <div className="crm-subtle-panel">
-        <SettingsWorkspaceNav activeValue="users" />
-      </div>
-
       <DataTableWrapper
         title="新增账号"
         description={
           session.user.role === "ADMIN"
             ? "管理员可创建管理员、主管、销售、运营和发货账号，并指定团队和直属主管。"
-            : "主管第一版只可为本团队创建销售、运营和发货账号。"
+            : "主管当前只可为本团队创建销售、运营和发货账号。"
         }
       >
         <UserCreateForm
@@ -130,12 +138,12 @@ export default async function SettingsUsersPage({
 
       <FiltersPanel
         title="账号筛选"
-        description="支持按账号关键词、角色、团队和状态快速筛选。主管视角会自动锁定到自己的团队。"
+        description="按关键字、角色、团队和状态筛选；主管视角会自动锁定到本团队。"
         className="mt-5"
       >
         <form method="get" className="grid gap-3.5 xl:grid-cols-4">
           <label className="space-y-1.5">
-            <span className="crm-label">关键词</span>
+            <span className="crm-label">关键字</span>
             <input
               name="search"
               defaultValue={data.filters.search}

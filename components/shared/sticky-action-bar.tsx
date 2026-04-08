@@ -20,8 +20,8 @@ export function StickyActionBar({
     <section
       className={cn(
         isCompact
-          ? "sticky top-3 z-20 rounded-[0.95rem] border border-black/8 bg-[rgba(255,255,255,0.84)] px-4 py-2.5 backdrop-blur shadow-[0_10px_22px_rgba(18,24,31,0.05)]"
-          : "sticky top-3 z-20 rounded-[1rem] border border-black/8 bg-[rgba(255,255,255,0.88)] px-4 py-3 backdrop-blur shadow-[0_16px_36px_rgba(18,24,31,0.08)]",
+          ? "lg:sticky lg:top-[var(--crm-sticky-top)] z-20 rounded-[0.95rem] border border-black/8 bg-[rgba(255,255,255,0.84)] px-4 py-2.5 backdrop-blur shadow-[0_10px_22px_rgba(18,24,31,0.05)]"
+          : "lg:sticky lg:top-[var(--crm-sticky-top)] z-20 rounded-[1rem] border border-black/8 bg-[rgba(255,255,255,0.88)] px-4 py-3 backdrop-blur shadow-[0_16px_36px_rgba(18,24,31,0.08)]",
         className,
       )}
     >
@@ -36,7 +36,14 @@ export function StickyActionBar({
             ) : null}
           </div>
         ) : null}
-        <div className={cn("crm-toolbar-cluster", isCompact ? "gap-1.5" : "")}>{children}</div>
+        <div
+          className={cn(
+            "crm-toolbar-cluster w-full min-w-0 lg:w-auto lg:justify-end",
+            isCompact ? "gap-1.5" : "",
+          )}
+        >
+          {children}
+        </div>
       </div>
     </section>
   );

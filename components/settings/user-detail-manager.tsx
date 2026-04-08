@@ -7,10 +7,14 @@ import {
   resetManagedUserPasswordAction,
   toggleManagedUserStatusAction,
   updateManagedUserAction,
+  updateManagedUserPermissionsAction,
   type AccountActionState,
 } from "@/lib/account-management/actions";
+import { getExtraPermissionBadgeConfig } from "@/lib/account-management/metadata";
 import { roleLabels } from "@/lib/auth/access";
+import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import { ActionBanner } from "@/components/shared/action-banner";
+import { StatusBadge } from "@/components/shared/status-badge";
 
 const initialActionState: AccountActionState = {
   status: "idle",
@@ -40,6 +44,12 @@ type SupervisorOption = {
   } | null;
 };
 
+type PermissionOption = {
+  code: ExtraPermissionCode;
+  label: string;
+  description: string;
+};
+
 function requiresTeam(roleCode: RoleCode) {
   return roleCode !== "ADMIN";
 }
@@ -51,13 +61,17 @@ function requiresSupervisor(roleCode: RoleCode) {
 export function UserDetailManager({
   actorRole,
   canManage,
+  canManagePermissions,
   user,
   roleOptions,
   teamOptions,
   supervisorOptions,
+  permissionOptions,
+  grantedPermissionCodes,
 }: Readonly<{
   actorRole: RoleCode;
   canManage: boolean;
+  canManagePermissions: boolean;
   user: {
     id: string;
     username: string;
@@ -78,11 +92,14 @@ export function UserDetailManager({
   roleOptions: RoleOption[];
   teamOptions: TeamOption[];
   supervisorOptions: SupervisorOption[];
+  permissionOptions: PermissionOption[];
+  grantedPermissionCodes: ExtraPermissionCode[];
 }>) {
   const router = useRouter();
   const [selectedRole, setSelectedRole] = useState<RoleCode>(user.role.code);
   const [selectedTeamId, setSelectedTeamId] = useState<string>(user.teamId ?? "");
   const [updateState, setUpdateState] = useState<AccountActionState>(initialActionState);
+  const [permissionState, setPermissionState] = useState<AccountActionState>(initialActionState);
   const [resetState, setResetState] = useState<AccountActionState>(initialActionState);
   const [toggleState, setToggleState] = useState<AccountActionState>(initialActionState);
   const [pending, startTransition] = useTransition();
@@ -132,6 +149,23 @@ export function UserDetailManager({
     startTransition(async () => {
       const nextState = await toggleManagedUserStatusAction(initialActionState, formData);
       setToggleState(nextState);
+
+      if (nextState.status === "success") {
+        router.refresh();
+      }
+      });
+  }
+
+  function handlePermissionUpdate(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+
+    startTransition(async () => {
+      const nextState = await updateManagedUserPermissionsAction(
+        initialActionState,
+        formData,
+      );
+      setPermissionState(nextState);
 
       if (nextState.status === "success") {
         router.refresh();
@@ -272,6 +306,81 @@ export function UserDetailManager({
           </div>
         ) : null}
       </form>
+
+      <div className="crm-card-muted p-4">
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-medium text-black/80">额外权限</p>
+            <p className="mt-2 text-sm leading-6 text-black/58">
+              这些权限用于给具体账号追加跨岗位模块能力，不改变该角色默认的数据边界。
+              权限变更后，目标账号需要重新登录一次才会在路由守卫和侧边栏里完全生效。
+            </p>
+          </div>
+
+          {grantedPermissionCodes.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {grantedPermissionCodes.map((permissionCode) => {
+                const badge = getExtraPermissionBadgeConfig(permissionCode);
+                return (
+                  <StatusBadge
+                    key={permissionCode}
+                    label={badge.label}
+                    variant={badge.variant}
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-sm text-black/55">当前未授予额外权限。</div>
+          )}
+
+          {canManagePermissions ? (
+            <form onSubmit={handlePermissionUpdate} className="space-y-4">
+              <input type="hidden" name="userId" value={user.id} />
+
+              <div className="space-y-3">
+                {permissionOptions.map((item) => (
+                  <label
+                    key={item.code}
+                    className="flex items-start gap-3 rounded-2xl border border-black/8 bg-white/80 px-4 py-3"
+                  >
+                    <input
+                      type="checkbox"
+                      name="permissionCodes"
+                      value={item.code}
+                      defaultChecked={grantedPermissionCodes.includes(item.code)}
+                      disabled={pending}
+                      className="mt-1 h-4 w-4 rounded border-black/15"
+                    />
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-black/80">{item.label}</p>
+                      <p className="text-sm leading-6 text-black/55">{item.description}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              {permissionState.message ? (
+                <ActionBanner
+                  tone={permissionState.status === "success" ? "success" : "danger"}
+                >
+                  {permissionState.message}
+                </ActionBanner>
+              ) : null}
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="crm-button crm-button-secondary"
+                >
+                  {pending ? "保存中..." : "保存额外权限"}
+                </button>
+              </div>
+            </form>
+          ) : null}
+        </div>
+      </div>
 
       {canManage ? (
         <div className="grid gap-4 xl:grid-cols-2">

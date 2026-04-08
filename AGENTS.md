@@ -137,11 +137,13 @@ Build a sales execution and customer operating platform covering:
 - does not inherit sales-customer visibility
 
 ### SHIPPER
-- primary working area is `/shipping`
+- primary working area is `/fulfillment?tab=shipping`
 - handles report/export, supplier submission, tracking number fill-in, and fulfillment status progression
+- may access `/live-sessions` to create or maintain live-session basics for activity collaboration and result lookback
+- may maintain fulfillment-related product and supplier master data in `/products` when execution collaboration requires it
 - can view fulfillment-relevant amount summaries in read-only fashion
 - does not confirm payments
-- does not maintain product master data
+- does not inherit sales-customer visibility through live-session access
 
 ### FINANCE
 - currently optional / reserved
@@ -410,7 +412,7 @@ The sidebar and product information architecture are business-domain driven, not
 - supplier center and product center belong together
 - keep Product Center as the first-level navigation entry and treat supplier management as a secondary capability inside it
 - sales should not be given shipping as a primary work area
-- shipper should not be given product-master maintenance as a work area
+- shipper may use Product Center for fulfillment-related product and supplier maintenance, but `/fulfillment` remains the primary work area
 
 ### Role-aware navigation
 - do not assume every role sees the same tree

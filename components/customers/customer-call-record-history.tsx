@@ -4,14 +4,16 @@ import {
   CustomerRecordCard,
   formatOptionalDate,
 } from "@/components/customers/customer-record-list";
-import { formatDurationSeconds, getCallResultLabel } from "@/lib/calls/metadata";
+import { formatDurationSeconds } from "@/lib/calls/metadata";
 import { formatDateTime } from "@/lib/customers/metadata";
 
 type CallRecordHistoryItem = {
   id: string;
   callTime: Date | string;
   durationSeconds: number;
-  result: CallResult;
+  result: CallResult | null;
+  resultCode: string | null;
+  resultLabel: string;
   remark: string | null;
   nextFollowUpAt: Date | string | null;
   sales: {
@@ -28,7 +30,6 @@ function normalizeOptionalDate(value: Date | string | null) {
   if (!value) {
     return null;
   }
-
   return value instanceof Date ? value : new Date(value);
 }
 
@@ -50,11 +51,12 @@ export function CustomerCallRecordHistory({
       {records.map((record) => (
         <CustomerRecordCard
           key={record.id}
-          title={`${getCallResultLabel(record.result)} · ${formatDateTime(normalizeDate(record.callTime))}`}
+          title={`${record.resultLabel} · ${formatDateTime(normalizeDate(record.callTime))}`}
           meta={[
             `销售：${record.sales.name} (@${record.sales.username})`,
             `通话时长：${formatDurationSeconds(record.durationSeconds)}`,
             `下次跟进：${formatOptionalDate(normalizeOptionalDate(record.nextFollowUpAt))}`,
+            `结果 code：${record.resultCode ?? record.result ?? "未记录"}`,
           ]}
           description={record.remark?.trim() || "无备注"}
         />

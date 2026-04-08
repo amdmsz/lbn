@@ -55,7 +55,14 @@ export function PageToolbar({
           ) : null}
         </div>
         {secondary ? (
-          <div className={cn("crm-toolbar-cluster shrink-0", isCompact ? "gap-1.5" : "")}>{secondary}</div>
+          <div
+            className={cn(
+              "crm-toolbar-cluster w-full min-w-0 lg:w-auto lg:justify-end",
+              isCompact ? "gap-1.5" : "",
+            )}
+          >
+            {secondary}
+          </div>
         ) : null}
       </div>
       {primary ? (
@@ -67,7 +74,11 @@ export function PageToolbar({
               : "bg-[linear-gradient(180deg,rgba(247,248,250,0.86),rgba(255,255,255,0.86))] px-4 py-3 md:px-5",
           )}
         >
-          <div className={cn("crm-toolbar-cluster", isCompact ? "gap-1.5" : "")}>{primary}</div>
+          <div className={cn("min-w-0 overflow-x-auto", isCompact ? "pb-0.5" : "")}>
+            <div className={cn("crm-toolbar-cluster min-w-max", isCompact ? "gap-1.5" : "")}>
+              {primary}
+            </div>
+          </div>
         </div>
       ) : null}
     </section>

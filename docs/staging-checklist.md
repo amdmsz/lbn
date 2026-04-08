@@ -1,9 +1,12 @@
 # Staging Checklist
 
-更新时间：2026-04-05
+更新时间：2026-04-08
 
 本清单用于当前仓库进入 staging 时的最小验收。
-只覆盖已经进入真实基线的功能，不覆盖 PBX、新 schema 里程碑或历史 migration 修复。
+只覆盖已经进入真实基线的功能，不覆盖 PBX、新 schema 里程碑或额外的 schema 重构。
+
+它不是生产部署说明。
+生产部署步骤、systemd / Nginx 模板、备份和回滚口径请看：[docs/deployment-baseline.md](./deployment-baseline.md)
 
 ## A. 环境与部署
 
@@ -20,7 +23,9 @@
 
 - [ ] 执行 `npx prisma validate`
 - [ ] 执行 `npx prisma generate`
-- [ ] 首发到空库或需要同步当前 schema 时，执行 `npx prisma db push`
+- [ ] 首发到空库时，执行 `npx prisma migrate deploy`
+- [ ] 确认当前本地 `prisma/migrations` 就是准备上线的正式 source of truth
+- [ ] 若当前 staging 是 rebaseline 之前创建的旧环境，先完成 migration metadata reconcile
 - [ ] 执行 `npm run build`
 - [ ] 执行 `npm run start`
 
@@ -37,6 +42,13 @@
 - [ ] 未登录访问 `/fulfillment` 会跳到 `/login`
 - [ ] 已登录访问 `/login` 会按角色跳到默认入口
 - [ ] 反向代理已将外部流量正确转发到 Node 服务
+- [ ] 当前 staging 使用的 `NEXTAUTH_URL` 与真实访问地址完全一致
+
+### 旧环境 migration metadata 对齐
+
+- [ ] 先执行 `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code`
+- [ ] 若返回 `0` 且环境属于 rebaseline 之前建立的旧库，执行 `npm run db:migration-baseline:reconcile -- --apply`
+- [ ] 执行 `npx prisma migrate status`
 
 ## B. 核心业务 Smoke
 
@@ -139,8 +151,11 @@
 - [ ] 默认入口是 `/fulfillment?tab=shipping`
 - [ ] 可进入 `/fulfillment?tab=shipping`
 - [ ] 可进入 `/fulfillment?tab=batches`
+- [ ] 可进入 `/live-sessions`
+- [ ] 可创建直播场次
+- [ ] 创建直播场次后写入 `OperationLog`
+- [ ] 可进入并维护 `/products`
 - [ ] 不可进入 `/customers`
-- [ ] 不可进入 `/products`
 
 ### OPS
 
@@ -161,9 +176,17 @@
 ## E. 备份与回滚前置检查
 
 - [ ] 发布前已做数据库快照
+- [ ] 发布前已备份 `public/exports` 与 `public/uploads`
 - [ ] 已标记当前候选版本的 Git tag 或明确 release commit
 - [ ] 已保留上一个可启动版本
-- [ ] 如果本次需要执行 `db push`，已安排维护窗口
+- [ ] 如果本次需要执行 migration metadata reconcile 或新 migration，已安排维护窗口
+
+## F. Production 前复制检查
+
+- [ ] 已整理出一份 production 环境变量清单，变量名与 staging 完全一致
+- [ ] 已确认 production 使用独立 MySQL 库、环境文件和 systemd service
+- [ ] 已记录 staging 验收通过时对应的 Git tag 或 release commit
+- [ ] 已确认 production 首发仍然按空库流程执行，而不是沿用本地 seed 数据
 
 ## 验收结论
 

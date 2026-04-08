@@ -28,6 +28,8 @@ import { randomBytes, scryptSync } from "node:crypto";
 // Local demo seed only.
 // Do not use this script for staging or production bootstrap.
 
+console.warn("[db:seed] Local demo seed only. Do not run this script in staging or production.");
+
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error("DATABASE_URL is required to run prisma seed.");
 

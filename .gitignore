@@ -24,6 +24,8 @@
 .DS_Store
 *.pem
 /public/exports/
+/public/uploads/
+/backups/
 /reports/*.json
 /prisma/_prisma_migrations_backup_*.json
 
@@ -33,10 +35,12 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 .codex-dev.log
+.tmp-*.log
 *.back
 
 # env files (can opt-in for committing if needed)
-.env*
+.env
+.env.*
 
 # vercel
 .vercel

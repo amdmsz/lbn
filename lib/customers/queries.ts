@@ -13,6 +13,11 @@ import {
 } from "@prisma/client";
 import { z } from "zod";
 import { canAccessCustomerModule } from "@/lib/auth/access";
+import type { CallResultOption } from "@/lib/calls/metadata";
+import {
+  getEnabledCallResultOptions,
+  hydrateCallResultLabels,
+} from "@/lib/calls/settings";
 import {
   CUSTOMERS_PAGE_SIZE,
   customerPageSizeOptions,
@@ -167,7 +172,9 @@ export type CustomerListItem = {
     id: string;
     callTime: Date;
     durationSeconds: number;
-    result: CallResult;
+    result: CallResult | null;
+    resultCode: string | null;
+    resultLabel: string;
     remark: string | null;
     nextFollowUpAt: Date | null;
     sales: {
@@ -202,6 +209,7 @@ export type CustomerCenterData = {
   salesBoard: SalesRepBoardItem[];
   productOptions: CustomerProductFilterOption[];
   tagOptions: CustomerTagFilterOption[];
+  callResultOptions: CallResultOption[];
   queueItems: CustomerListItem[];
   pagination: {
     page: number;
@@ -1094,6 +1102,7 @@ async function fetchCustomerListItems(
           callTime: true,
           durationSeconds: true,
           result: true,
+          resultCode: true,
           remark: true,
           nextFollowUpAt: true,
           sales: {
@@ -1128,6 +1137,12 @@ async function fetchCustomerListItems(
     },
   });
 
+  const labeledCallRecords = await hydrateCallResultLabels(
+    items.flatMap((item) => item.callRecords),
+  );
+  const labeledCallRecordMap = new Map(
+    labeledCallRecords.map((item) => [item.id, item]),
+  );
   const itemMap = new Map(items.map((item) => [item.id, item]));
   return customerIds.reduce<CustomerListItem[]>((result, id) => {
     const item = itemMap.get(id);
@@ -1136,6 +1151,22 @@ async function fetchCustomerListItems(
     if (item) {
       result.push({
         ...item,
+        callRecords: item.callRecords.map((record) => {
+          const labeled = labeledCallRecordMap.get(record.id);
+
+          return {
+            id: record.id,
+            callTime: record.callTime,
+            durationSeconds: record.durationSeconds,
+            result: record.result,
+            resultCode: labeled?.resultCode ?? record.resultCode ?? record.result ?? null,
+            resultLabel:
+              labeled?.resultLabel ?? record.resultCode ?? record.result ?? "未记录",
+            remark: record.remark,
+            nextFollowUpAt: record.nextFollowUpAt,
+            sales: record.sales,
+          };
+        }),
         latestImportAt: state?.latestLeadAt ?? null,
         latestFollowUpAt: state?.latestFollowUpAt ?? null,
         latestInterestedProduct: state?.latestInterestedProduct ?? null,
@@ -1503,7 +1534,10 @@ export async function getCustomerCenterData(
   const pageCustomerIds = filteredQueueSnapshots
     .slice((currentPage - 1) * filters.pageSize, currentPage * filters.pageSize)
     .map((item) => item.id);
-  const queueItems = await fetchCustomerListItems(pageCustomerIds, stateMap);
+  const [queueItems, callResultOptions] = await Promise.all([
+    fetchCustomerListItems(pageCustomerIds, stateMap),
+    getEnabledCallResultOptions(),
+  ]);
 
   return {
     actor,
@@ -1533,6 +1567,7 @@ export async function getCustomerCenterData(
     salesBoard,
     productOptions,
     tagOptions,
+    callResultOptions,
     queueItems,
     pagination: {
       page: currentPage,
@@ -2479,25 +2514,34 @@ export async function getCustomerDetailCallsData(
     return null;
   }
 
-  return prisma.callRecord.findMany({
-    where: { customerId: detail.customer.id },
-    orderBy: { callTime: "desc" },
-    take: 20,
-    select: {
-      id: true,
-      callTime: true,
-      durationSeconds: true,
-      result: true,
-      remark: true,
-      nextFollowUpAt: true,
-      sales: {
-        select: {
-          name: true,
-          username: true,
+  const [records, callResultOptions] = await Promise.all([
+    prisma.callRecord.findMany({
+      where: { customerId: detail.customer.id },
+      orderBy: { callTime: "desc" },
+      take: 20,
+      select: {
+        id: true,
+        callTime: true,
+        durationSeconds: true,
+        result: true,
+        resultCode: true,
+        remark: true,
+        nextFollowUpAt: true,
+        sales: {
+          select: {
+            name: true,
+            username: true,
+          },
         },
       },
-    },
-  });
+    }),
+    getEnabledCallResultOptions(),
+  ]);
+
+  return {
+    records: await hydrateCallResultLabels(records),
+    callResultOptions,
+  };
 }
 
 export async function getCustomerDetailWechatData(

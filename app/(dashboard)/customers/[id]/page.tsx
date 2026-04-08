@@ -12,6 +12,7 @@ import {
   getDefaultRouteForRole,
 } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
+import { getEnabledCallResultOptions } from "@/lib/calls/settings";
 import type { CustomerDetailTab } from "@/lib/customers/metadata";
 import {
   getCustomerDetailCallsData,
@@ -39,13 +40,12 @@ function getCustomerDetailNavigationContext(
 
   if (source === "public-pool" && returnTo.startsWith("/customers/public-pool")) {
     return {
-      source: "public-pool" as const,
+      from: "public-pool" as const,
       returnTo,
     };
   }
 
   return {
-    source: "customers" as const,
     returnTo: "/customers",
   };
 }
@@ -95,14 +95,7 @@ export default async function CustomerDetailPage({
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const navigationContext = getCustomerDetailNavigationContext(resolvedSearchParams);
-  const activeTab = parseCustomerDetailTab(
-    resolvedSearchParams,
-    navigationContext.source === "public-pool"
-      ? "profile"
-      : session.user.role === "SALES"
-        ? "calls"
-        : "profile",
-  );
+  const activeTab = parseCustomerDetailTab(resolvedSearchParams, "profile");
   const notice = parseMasterDataNotice(resolvedSearchParams);
   const createTradeOrder =
     getParamValue(resolvedSearchParams?.createTradeOrder) === "1";
@@ -135,10 +128,15 @@ export default async function CustomerDetailPage({
 
   const isOwnedByCurrentSales = shell.owner?.id === session.user.id;
   const isExecutionReady = Boolean(shell.owner?.id) && shell.ownershipMode !== "PUBLIC";
+  const canCreateCalls =
+    isExecutionReady &&
+    canCreateCallRecord(session.user.role) &&
+    (session.user.role !== "SALES" || isOwnedByCurrentSales);
   const canCreateSalesOrders =
     isExecutionReady &&
     canCreateSalesOrder(session.user.role) &&
     (session.user.role !== "SALES" || isOwnedByCurrentSales);
+  const callResultOptions = canCreateCalls ? await getEnabledCallResultOptions() : [];
   const tradeOrderComposer =
     activeTab === "orders" && createTradeOrder && canCreateSalesOrders
       ? await getCustomerTradeOrderComposerData(
@@ -157,12 +155,9 @@ export default async function CustomerDetailPage({
       navigationContext={navigationContext}
       activeTab={activeTab}
       tabData={tabData}
+      callResultOptions={callResultOptions}
       notice={notice}
-      canCreateCalls={
-        isExecutionReady &&
-        canCreateCallRecord(session.user.role) &&
-        (session.user.role !== "SALES" || isOwnedByCurrentSales)
-      }
+      canCreateCalls={canCreateCalls}
       canCreateWechat={
         isExecutionReady &&
         canCreateWechatRecord(session.user.role) &&

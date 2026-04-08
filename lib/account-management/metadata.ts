@@ -1,5 +1,10 @@
 import { UserStatus, type RoleCode } from "@prisma/client";
 import type { StatusBadgeVariant } from "@/components/shared/status-badge";
+import {
+  getExtraPermissionLabel,
+  getExtraPermissionVariant,
+  type ExtraPermissionCode,
+} from "@/lib/auth/permissions";
 import { roleLabels } from "@/lib/auth/access";
 
 type SearchParamsValue = string | string[] | undefined;
@@ -79,6 +84,16 @@ export function getPasswordRequirementBadgeConfig(mustChangePassword: boolean): 
         label: "密码状态正常",
         variant: "success",
       };
+}
+
+export function getExtraPermissionBadgeConfig(permissionCode: ExtraPermissionCode): {
+  label: string;
+  variant: StatusBadgeVariant;
+} {
+  return {
+    label: getExtraPermissionLabel(permissionCode),
+    variant: getExtraPermissionVariant(permissionCode),
+  };
 }
 
 function getParamValue(value: SearchParamsValue) {

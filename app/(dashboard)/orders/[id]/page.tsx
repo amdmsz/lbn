@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { SalesOrderDetailSection } from "@/components/sales-orders/sales-order-detail-section";
 import { TradeOrderDetailSection } from "@/components/trade-orders/trade-order-detail-section";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
+import { PageContextLink } from "@/components/shared/page-context-link";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { parseActionNotice } from "@/lib/action-notice";
@@ -80,21 +80,21 @@ export default async function SalesOrderDetailPage({
     return (
       <div className="crm-page">
         <PageHeader
+          context={
+            <PageContextLink
+              href={buildFulfillmentTradeOrdersHref()}
+              label="返回交易单列表"
+              trail={["履约中心", "交易单", tradeOrderData.order.tradeNo]}
+            />
+          }
+          eyebrow="履约中心"
           title={`父单详情 · ${tradeOrderData.order.tradeNo}`}
-          description="当前页面以 TradeOrder 为主叙事，统一承接整单成交、supplier 子单推进和执行摘要联动。"
+          description="查看父单、拆单与履约。"
           actions={
-            <>
-              <Link
-                href={buildFulfillmentTradeOrdersHref()}
-                className="crm-button crm-button-secondary"
-              >
-                返回交易单列表
-              </Link>
-              <StatusBadge
-                label={canReviewSalesOrder(session.user.role) ? "支持父单审核" : "父单总览模式"}
-                variant={canReviewSalesOrder(session.user.role) ? "success" : "info"}
-              />
-            </>
+            <StatusBadge
+              label={canReviewSalesOrder(session.user.role) ? "支持父单审核" : "父单总览模式"}
+              variant={canReviewSalesOrder(session.user.role) ? "success" : "info"}
+            />
           }
         />
 
@@ -102,7 +102,7 @@ export default async function SalesOrderDetailPage({
 
         <DataTableWrapper
           title="TradeOrder 父单总览"
-          description="这里看整单卖了什么、拆成了哪些 supplier 子单、整体卡在哪，以及下一步应该去哪个执行上下文。"
+          description="回看父单与拆单。"
         >
           <TradeOrderDetailSection
             order={tradeOrderData.order}
@@ -150,22 +150,34 @@ export default async function SalesOrderDetailPage({
   return (
     <div className="crm-page">
       <PageHeader
+        context={
+          <PageContextLink
+            href={
+              data.order.tradeOrderId && data.order.tradeOrder
+                ? `/orders/${data.order.tradeOrder.id}`
+                : buildFulfillmentTradeOrdersHref()
+            }
+            label={
+              data.order.tradeOrderId && data.order.tradeOrder
+                ? `返回父单 ${data.order.tradeOrder.tradeNo}`
+                : "返回交易单列表"
+            }
+            trail={[
+              "履约中心",
+              data.order.tradeOrderId ? "供应商子单" : "订单详情",
+              orderTitleNo,
+            ]}
+          />
+        }
+        eyebrow="履约中心"
         title={`${data.order.tradeOrderId ? "供应商子单详情" : "订单详情"} · ${orderTitleNo}`}
         description={
           data.order.tradeOrderId
-            ? "当前命中的是 supplier 子单详情。父单已经切到 TradeOrder 视角，这里保留为兼容入口，继续承接支付、发货和物流结果回看。"
-            : "在同一页面查看订单快照、应收计划、收款记录、催收任务、发货状态和操作日志。"
+            ? "查看子单执行结果。"
+            : "查看订单详情。"
         }
         actions={
           <>
-            {data.order.tradeOrderId && data.order.tradeOrder ? (
-              <Link
-                href={`/orders/${data.order.tradeOrder.id}`}
-                className="crm-button crm-button-secondary"
-              >
-                返回父单 {data.order.tradeOrder.tradeNo}
-              </Link>
-            ) : null}
             <StatusBadge
               label={canReviewSalesOrder(session.user.role) ? "支持审核" : "只读"}
               variant={canReviewSalesOrder(session.user.role) ? "success" : "info"}
@@ -194,8 +206,8 @@ export default async function SalesOrderDetailPage({
         title={data.order.tradeOrderId ? "SalesOrder 供应商子单" : "SalesOrder 主单"}
         description={
           data.order.tradeOrderId
-            ? "该子单从成交父单拆出，继续作为 shipping / payment / collection 的执行对象。"
-            : "本页仅处理 SalesOrder V2 及其关联的收款与履约数据。"
+            ? "执行层详情。"
+            : "订单详情。"
         }
       >
         <SalesOrderDetailSection

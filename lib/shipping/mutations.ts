@@ -6,6 +6,7 @@ import {
   ShippingFulfillmentStatus,
   ShippingReportStatus,
   ShippingTaskStatus,
+  type Prisma,
   type RoleCode,
 } from "@prisma/client";
 import { z } from "zod";
@@ -44,6 +45,8 @@ export type CreateShippingExportBatchInput = {
   supplierId: string;
   fileName: string;
   remark: string;
+  sourceStage?: "PENDING_REPORT" | "PENDING_TRACKING";
+  shippingTaskIds?: string[];
 };
 
 export type UpdateSalesOrderShippingInput = {
@@ -63,6 +66,9 @@ export type UpdateLogisticsFollowUpTaskInput = {
   lastFollowedUpAt: string;
   remark: string;
 };
+
+type ShippingStageOutcome = "PENDING_REPORT" | "PENDING_TRACKING" | "SHIPPED" | "EXCEPTION";
+type ShippingExportSourceStage = "PENDING_REPORT" | "PENDING_TRACKING";
 
 type ShippingExportLineDraft = {
   rowNo: number;
@@ -87,6 +93,8 @@ const createShippingExportBatchSchema = z.object({
   supplierId: z.string().trim().min(1, "请选择供货商。"),
   fileName: z.string().trim().min(1, "请填写导出文件名。").max(200),
   remark: z.string().trim().max(1000).default(""),
+  sourceStage: z.enum(["PENDING_REPORT", "PENDING_TRACKING"]).default("PENDING_REPORT"),
+  shippingTaskIds: z.array(z.string().trim().min(1)).default([]),
 });
 
 const updateSalesOrderShippingSchema = z.object({
@@ -194,13 +202,13 @@ function getShippingExportFailureMessage(error: unknown) {
 
 function buildExportProductSummary(
   items: Array<{
-    exportDisplayNameSnapshot?: string | null;
-    productNameSnapshot: string;
+    skuNameSnapshot: string;
+    specSnapshot: string;
     qty: number;
   }>,
 ) {
   return items
-    .map((item) => `${item.exportDisplayNameSnapshot || item.productNameSnapshot} x${item.qty}`)
+    .map((item) => `${item.skuNameSnapshot}${item.specSnapshot}`)
     .join("+");
 }
 
@@ -223,16 +231,51 @@ function getDistinctCount(values: string[]) {
 /*
 async function buildShippingExportLineDrafts(
   actor: ShippingActor,
-  supplierId: string,
+  input: {
+    supplierId: string;
+    sourceStage: ShippingExportSourceStage;
+    shippingTaskIds: string[];
+  },
 ): Promise<ShippingExportLineDraft[]> {
   const teamId = await getShippingActorTeamId(actor);
   const scope = buildShippingTaskManageWhere(actor, teamId);
+  const trackingMissingWhere: Prisma.ShippingTaskWhereInput = {
+    OR: [{ trackingNumber: null }, { trackingNumber: "" }],
+  };
+  const exportSourceWhere: Prisma.ShippingTaskWhereInput =
+    input.sourceStage === "PENDING_TRACKING"
+      ? {
+          reportStatus: ShippingReportStatus.REPORTED,
+          exportBatchId: { not: null },
+          shippingStatus: {
+            in: [ShippingFulfillmentStatus.PENDING, ShippingFulfillmentStatus.READY_TO_SHIP],
+          },
+          ...trackingMissingWhere,
+        }
+      : {
+          reportStatus: ShippingReportStatus.PENDING,
+          shippingStatus: {
+            not: ShippingFulfillmentStatus.CANCELED,
+          },
+          ...trackingMissingWhere,
+        };
 
   const tasks = await prisma.shippingTask.findMany({
     where: {
       salesOrderId: { not: null },
-      supplierId,
-      reportStatus: ShippingReportStatus.PENDING,
+      supplierId: input.supplierId,
+      ...(input.shippingTaskIds.length > 0
+        ? {
+            id: {
+              in: input.shippingTaskIds,
+            },
+          }
+        : {}),
+      ...exportSourceWhere,
+      OR: [
+        { tradeOrderId: { not: null } },
+        { salesOrder: { is: { tradeOrderId: { not: null } } } },
+      ],
       salesOrder: {
         reviewStatus: "APPROVED",
       },
@@ -259,6 +302,12 @@ async function buildShippingExportLineDrafts(
           id: true,
           orderNo: true,
           subOrderNo: true,
+          tradeOrder: {
+            select: {
+              id: true,
+              tradeNo: true,
+            },
+          },
           receiverNameSnapshot: true,
           receiverPhoneSnapshot: true,
           receiverAddressSnapshot: true,
@@ -266,8 +315,8 @@ async function buildShippingExportLineDrafts(
             orderBy: [{ createdAt: "asc" }, { id: "asc" }],
             select: {
               id: true,
-              exportDisplayNameSnapshot: true,
-              productNameSnapshot: true,
+              skuNameSnapshot: true,
+              specSnapshot: true,
               qty: true,
             },
           },
@@ -440,16 +489,51 @@ async function persistShippingExportBatchFile(
 
 async function buildShippingExportLineDrafts(
   actor: ShippingActor,
-  supplierId: string,
+  input: {
+    supplierId: string;
+    sourceStage: ShippingExportSourceStage;
+    shippingTaskIds: string[];
+  },
 ): Promise<ShippingExportLineDraft[]> {
   const teamId = await getShippingActorTeamId(actor);
   const scope = buildShippingTaskManageWhere(actor, teamId);
+  const trackingMissingWhere: Prisma.ShippingTaskWhereInput = {
+    OR: [{ trackingNumber: null }, { trackingNumber: "" }],
+  };
+  const exportSourceWhere: Prisma.ShippingTaskWhereInput =
+    input.sourceStage === "PENDING_TRACKING"
+      ? {
+          reportStatus: ShippingReportStatus.REPORTED,
+          exportBatchId: { not: null },
+          shippingStatus: {
+            in: [ShippingFulfillmentStatus.PENDING, ShippingFulfillmentStatus.READY_TO_SHIP],
+          },
+          ...trackingMissingWhere,
+        }
+      : {
+          reportStatus: ShippingReportStatus.PENDING,
+          shippingStatus: {
+            not: ShippingFulfillmentStatus.CANCELED,
+          },
+          ...trackingMissingWhere,
+        };
 
   const tasks = await prisma.shippingTask.findMany({
     where: {
       salesOrderId: { not: null },
-      supplierId,
-      reportStatus: ShippingReportStatus.PENDING,
+      supplierId: input.supplierId,
+      ...(input.shippingTaskIds.length > 0
+        ? {
+            id: {
+              in: input.shippingTaskIds,
+            },
+          }
+        : {}),
+      ...exportSourceWhere,
+      OR: [
+        { tradeOrderId: { not: null } },
+        { salesOrder: { is: { tradeOrderId: { not: null } } } },
+      ],
       salesOrder: {
         reviewStatus: "APPROVED",
       },
@@ -476,6 +560,12 @@ async function buildShippingExportLineDrafts(
           id: true,
           orderNo: true,
           subOrderNo: true,
+          tradeOrder: {
+            select: {
+              id: true,
+              tradeNo: true,
+            },
+          },
           receiverNameSnapshot: true,
           receiverPhoneSnapshot: true,
           receiverAddressSnapshot: true,
@@ -483,8 +573,8 @@ async function buildShippingExportLineDrafts(
             orderBy: [{ createdAt: "asc" }, { id: "asc" }],
             select: {
               id: true,
-              exportDisplayNameSnapshot: true,
-              productNameSnapshot: true,
+              skuNameSnapshot: true,
+              specSnapshot: true,
               qty: true,
             },
           },
@@ -493,8 +583,24 @@ async function buildShippingExportLineDrafts(
     },
   });
 
+  if (input.shippingTaskIds.length > 0 && tasks.length !== input.shippingTaskIds.length) {
+    throw new Error(
+      input.sourceStage === "PENDING_TRACKING"
+        ? "选中的子单中，存在不能再次导出或已经离开待填物流队列的记录。"
+        : "选中的子单中，存在不可导出或已经离开当前报单池的记录。",
+    );
+  }
+
+  if (false && input.shippingTaskIds.length > 0 && tasks.length !== input.shippingTaskIds.length) {
+    throw new Error("选中的子单中存在不可导出或已不在待报单池中的记录。");
+  }
+
   if (tasks.length === 0) {
-    throw new Error("No pending shipping tasks are available for this supplier.");
+    throw new Error(
+      input.sourceStage === "PENDING_TRACKING"
+        ? "当前供应商下没有可再次导出的待填物流子单。"
+        : "当前供应商下没有可报单的当前订单。",
+    );
   }
 
   const drafts = tasks.map((task) => {
@@ -502,7 +608,9 @@ async function buildShippingExportLineDrafts(
       throw new Error("A shipping task is missing its sales order and cannot be frozen.");
     }
 
-    if (!task.tradeOrder) {
+    const tradeOrderSnapshot = task.tradeOrder ?? task.salesOrder.tradeOrder;
+
+    if (!tradeOrderSnapshot) {
       throw new Error(`Shipping task ${task.id} is missing its trade order snapshot anchor.`);
     }
 
@@ -527,11 +635,11 @@ async function buildShippingExportLineDrafts(
 
     return {
       rowNo: 0,
-      tradeOrderId: task.tradeOrder.id,
+      tradeOrderId: tradeOrderSnapshot.id,
       salesOrderId: task.salesOrder.id,
       shippingTaskId: task.id,
       supplierId: task.supplierId,
-      tradeNoSnapshot: task.tradeOrder.tradeNo,
+      tradeNoSnapshot: tradeOrderSnapshot.tradeNo,
       subOrderNoSnapshot: task.salesOrder.subOrderNo || task.salesOrder.orderNo,
       receiverNameSnapshot,
       receiverPhoneSnapshot,
@@ -674,6 +782,36 @@ function isShippingReadyForCod(status: ShippingFulfillmentStatus) {
   return status === "SHIPPED" || status === "DELIVERED" || status === "COMPLETED";
 }
 
+function resolveShippingStageOutcome(input: {
+  reportStatus: ShippingReportStatus;
+  shippingStatus: ShippingFulfillmentStatus;
+  trackingNumber: string | null;
+}): ShippingStageOutcome {
+  const hasTrackingNumber = Boolean(input.trackingNumber?.trim());
+
+  if (input.shippingStatus === ShippingFulfillmentStatus.CANCELED) {
+    return "EXCEPTION";
+  }
+
+  if (
+    input.shippingStatus === ShippingFulfillmentStatus.SHIPPED ||
+    input.shippingStatus === ShippingFulfillmentStatus.DELIVERED ||
+    input.shippingStatus === ShippingFulfillmentStatus.COMPLETED
+  ) {
+    return "SHIPPED";
+  }
+
+  if (input.reportStatus === ShippingReportStatus.REPORTED && !hasTrackingNumber) {
+    return "PENDING_TRACKING";
+  }
+
+  if (input.reportStatus === ShippingReportStatus.PENDING && !hasTrackingNumber) {
+    return "PENDING_REPORT";
+  }
+
+  return "EXCEPTION";
+}
+
 function parseOptionalDate(value: string) {
   if (!value.trim()) {
     return null;
@@ -734,8 +872,13 @@ export async function createShippingExportBatch(
 
   const input = createShippingExportBatchSchema.parse(rawInput);
   const exportNo = buildShippingExportNo();
+  const isReExport = input.sourceStage === "PENDING_TRACKING";
 
-  const drafts = await buildShippingExportLineDrafts(actor, input.supplierId);
+  const drafts = await buildShippingExportLineDrafts(actor, {
+    supplierId: input.supplierId,
+    sourceStage: input.sourceStage,
+    shippingTaskIds: input.shippingTaskIds,
+  });
   const orderCount = drafts.length;
   const subOrderCount = getDistinctCount(drafts.map((draft) => draft.salesOrderId));
   const tradeOrderCount = getDistinctCount(drafts.map((draft) => draft.tradeOrderId));
@@ -829,7 +972,7 @@ export async function createShippingExportBatch(
         data: {
           actorId: actor.id,
           module: OperationModule.SHIPPING_EXPORT,
-          action: "shipping_task.reported",
+          action: isReExport ? "shipping_task.reexported" : "shipping_task.reported",
           targetType: OperationTargetType.SHIPPING_TASK,
           targetId: draft.shippingTaskId,
           description: `发货任务加入报单批次 ${created.exportNo}`,
@@ -838,6 +981,7 @@ export async function createShippingExportBatch(
             exportNo: created.exportNo,
             reportStatus: ShippingReportStatus.REPORTED,
             reportedAt: exportedAt,
+            sourceStage: input.sourceStage,
           },
         },
       });
@@ -847,7 +991,9 @@ export async function createShippingExportBatch(
       data: {
         actorId: actor.id,
         module: OperationModule.SHIPPING_EXPORT,
-        action: "shipping_export_batch.created",
+        action: isReExport
+          ? "shipping_export_batch.reexport_created"
+          : "shipping_export_batch.created",
         targetType: OperationTargetType.SHIPPING_EXPORT_BATCH,
         targetId: created.id,
         description: `创建报单批次 ${created.exportNo}`,
@@ -860,6 +1006,7 @@ export async function createShippingExportBatch(
           fileName: input.fileName,
           fileUrl: null,
           snapshotDriven: true,
+          sourceStage: input.sourceStage,
         },
       },
     });
@@ -872,6 +1019,8 @@ export async function createShippingExportBatch(
   return {
     ...batch,
     fileGenerated: fileResult.fileGenerated,
+    movedTaskCount: orderCount,
+    sourceStage: input.sourceStage,
   };
 }
 
@@ -928,6 +1077,8 @@ export async function updateSalesOrderShipping(
         select: {
           id: true,
           ownerId: true,
+          orderNo: true,
+          subOrderNo: true,
         },
       },
       customer: {
@@ -949,6 +1100,11 @@ export async function updateSalesOrderShipping(
   const normalizedCodStatus = input.codCollectionStatus || "";
   const normalizedCodRemark = input.codRemark.trim();
   const enteringShippedState = isShippingReadyForCod(input.shippingStatus);
+  const previousStage = resolveShippingStageOutcome({
+    reportStatus: existing.reportStatus,
+    shippingStatus: existing.shippingStatus,
+    trackingNumber: existing.trackingNumber,
+  });
 
   if (enteringShippedState && !normalizedTrackingNumber) {
     throw new Error("进入已发货、已签收或已完成前，必须先回填物流单号。");
@@ -1104,10 +1260,19 @@ export async function updateSalesOrderShipping(
     });
   });
 
+  const nextStage = resolveShippingStageOutcome({
+    reportStatus: existing.reportStatus,
+    shippingStatus: input.shippingStatus,
+    trackingNumber: normalizedTrackingNumber || null,
+  });
+
   return {
     id: existing.id,
     salesOrderId: existing.salesOrderId,
     customerId: existing.customerId,
+    subOrderNo: salesOrder.subOrderNo || salesOrder.orderNo,
+    previousStage,
+    nextStage,
   };
 }
 

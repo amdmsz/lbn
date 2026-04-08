@@ -13,11 +13,13 @@ export function DetailLayout({
   return (
     <div
       className={cn(
-        "grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)]",
+        "grid gap-5 xl:grid-cols-[minmax(260px,300px)_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)]",
         className,
       )}
     >
-      <div className="space-y-4 xl:sticky xl:top-5 xl:self-start">{sidebar}</div>
+      <div className="space-y-4 xl:self-start 2xl:sticky 2xl:top-[var(--crm-sticky-top)]">
+        {sidebar}
+      </div>
       <div className="min-w-0 space-y-5">{main}</div>
     </div>
   );

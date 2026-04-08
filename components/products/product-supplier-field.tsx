@@ -147,7 +147,7 @@ export function ProductSupplierField({
   return (
     <>
       <div className="space-y-3 xl:col-span-2">
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <label className="min-w-0 flex-1 space-y-2">
             <span className="crm-label">搜索供货商</span>
             <input
@@ -242,7 +242,7 @@ export function ProductSupplierField({
 
             <div className="overflow-y-auto px-5 py-4">
               <form onSubmit={handleQuickCreateSubmit} className="space-y-4">
-                <div className="grid gap-4 xl:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-2">
                   <label className="space-y-2">
                     <span className="crm-label">供货商编码</span>
                     <input
@@ -298,10 +298,10 @@ export function ProductSupplierField({
                   </div>
                 ) : null}
 
-                <div className="flex justify-end gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
                   <button
                     type="button"
-                    className="crm-button crm-button-secondary"
+                    className="crm-button crm-button-secondary w-full sm:w-auto"
                     onClick={() => {
                       resetQuickSupplierForm();
                       closeDialog();
@@ -309,7 +309,7 @@ export function ProductSupplierField({
                   >
                     取消
                   </button>
-                  <button type="submit" className="crm-button crm-button-primary" disabled={pending}>
+                  <button type="submit" className="crm-button crm-button-primary w-full sm:w-auto" disabled={pending}>
                     {pending ? "保存中..." : "新增供货商"}
                   </button>
                 </div>

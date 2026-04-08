@@ -2,6 +2,7 @@ import Link from "next/link";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
 import { MetricCard } from "@/components/shared/metric-card";
+import { PageContextLink } from "@/components/shared/page-context-link";
 import { RecordTabs } from "@/components/shared/record-tabs";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { SummaryHeader } from "@/components/shared/summary-header";
@@ -73,9 +74,16 @@ export function CustomerPublicPoolReportsWorkbench({
   return (
     <div className="crm-page">
       <SummaryHeader
+        context={
+          <PageContextLink
+            href="/customers/public-pool"
+            label="返回公海池"
+            trail={["客户中心", "公海池", "运营报表"]}
+          />
+        }
         eyebrow="Public Pool Analytics"
         title="公海池运营报表"
-        description="围绕当前 ownership lifecycle 回看公海规模、回收效率、认领效率和长期滞留，不依赖自动分配引擎也能先形成管理闭环。"
+        description="回看公海规模、认领效率与滞留。"
         badges={
           <>
             <StatusBadge
@@ -130,12 +138,12 @@ export function CustomerPublicPoolReportsWorkbench({
       <DataTableWrapper
         className="mt-5"
         title="报表范围"
-        description="先按团队看健康度，再切换窗口复盘近 7 / 30 天波动。ADMIN 可跨团队看，SUPERVISOR 固定本团队。"
+        description="按团队与窗口查看。"
       >
         <form
           action="/customers/public-pool/reports"
           method="get"
-          className="grid gap-3 md:grid-cols-[minmax(0,260px)_160px_160px_auto]"
+          className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
         >
           <label className="space-y-2">
             <span className="crm-label">团队</span>
@@ -174,8 +182,8 @@ export function CustomerPublicPoolReportsWorkbench({
         </form>
       </DataTableWrapper>
 
-      <DataTableWrapper className="mt-5" title="核心指标" description="先看池子规模、今日流入流出和锁定状态，再决定是盯规则还是盯承接。">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <DataTableWrapper className="mt-5" title="核心指标" description="核心概览。">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {data.summaryCards.map((card) => (
             <MetricCard key={card.label} label={card.label} value={card.value} note={card.note} />
           ))}
@@ -185,7 +193,7 @@ export function CustomerPublicPoolReportsWorkbench({
       <div className="mt-5 grid gap-5 xl:grid-cols-2">
         <DataTableWrapper
           title="入池 / 认领趋势"
-          description={`近 ${data.filters.windowDays} 天看公海流入与领用节奏，判断池子是在消化还是继续堆积。`}
+          description={`近 ${data.filters.windowDays} 天趋势。`}
         >
           {data.trends.length > 0 ? (
             <div className="space-y-3">
@@ -219,13 +227,13 @@ export function CustomerPublicPoolReportsWorkbench({
               ))}
             </div>
           ) : (
-            <EmptyState title="暂无趋势数据" description="当前窗口内还没有可展示的公海池流转事件。" />
+            <EmptyState title="暂无趋势数据" description="当前窗口内没有记录。" />
           )}
         </DataTableWrapper>
 
         <DataTableWrapper
           title="原因分布"
-          description="同时看当前池内原因、近窗回收原因和认领来源，判断规则过严还是承接能力不足。"
+          description="查看原因分布。"
         >
           <div className="space-y-4">
             {[
@@ -260,7 +268,7 @@ export function CustomerPublicPoolReportsWorkbench({
       <DataTableWrapper
         className="mt-5"
         title="团队表现"
-        description="看团队公海量、今日流转和平均认领时长，判断是规则需要调，还是承接节奏失衡。"
+        description="查看团队表现。"
       >
         {data.teamPerformance.length > 0 ? (
           <div className="crm-table-shell">
@@ -292,14 +300,14 @@ export function CustomerPublicPoolReportsWorkbench({
             </table>
           </div>
         ) : (
-          <EmptyState title="暂无团队表现数据" description="当前范围内还没有可展示的团队级公海指标。" />
+          <EmptyState title="暂无团队表现数据" description="当前范围内没有记录。" />
         )}
       </DataTableWrapper>
 
       <DataTableWrapper
         className="mt-5"
         title="Owner 表现"
-        description="看谁在承接、谁回收得多、谁触发了离职回收，辅助主管做 ownership 复盘。"
+        description="查看 owner 表现。"
       >
         {data.ownerPerformance.length > 0 ? (
           <div className="crm-table-shell">
@@ -330,14 +338,14 @@ export function CustomerPublicPoolReportsWorkbench({
             </table>
           </div>
         ) : (
-          <EmptyState title="暂无 owner 维度数据" description="当前窗口内还没有可用于 owner 复盘的公海池流转记录。" />
+          <EmptyState title="暂无 owner 数据" description="当前窗口内没有记录。" />
         )}
       </DataTableWrapper>
 
       <DataTableWrapper
         className="mt-5"
         title="长期滞留明细"
-        description={`筛出滞留超过 ${data.filters.lingerDays} 天、或多次进出公海、或高频回收的当前池内客户，支持直接 drill-down 到客户详情。`}
+        description={`滞留超过 ${data.filters.lingerDays} 天的客户。`}
       >
         {data.longStayItems.length > 0 ? (
           <div className="crm-table-shell">
@@ -386,11 +394,11 @@ export function CustomerPublicPoolReportsWorkbench({
             </table>
           </div>
         ) : (
-          <EmptyState title="没有长期滞留客户" description="当前过滤条件下，没有命中长期滞留或高频回收的池内客户。" />
+          <EmptyState title="没有长期滞留客户" description="当前筛选条件下没有记录。" />
         )}
       </DataTableWrapper>
 
-      <DataTableWrapper className="mt-5" title="统计口径" description="Phase 4 先用现有 ownership 真相层做轻量聚合，不引入额外 BI 模型。">
+      <DataTableWrapper className="mt-5" title="统计口径" description="指标说明。">
         <div className="space-y-3">
           {data.definitions.map((item) => (
             <div key={item.label} className="crm-subtle-panel">

@@ -22,15 +22,19 @@ export default async function LiveSessionsPage() {
     redirect("/login");
   }
 
-  if (!canAccessLiveSessionModule(session.user.role)) {
+  if (!canAccessLiveSessionModule(session.user.role, session.user.permissionCodes)) {
     redirect(getDefaultRouteForRole(session.user.role));
   }
 
   const data = await getLiveSessionsData({
     id: session.user.id,
     role: session.user.role,
+    permissionCodes: session.user.permissionCodes,
   });
-  const canManage = canManageLiveSessions(session.user.role);
+  const canManage = canManageLiveSessions(
+    session.user.role,
+    session.user.permissionCodes,
+  );
   const guideItems: WorkspaceGuideItem[] =
     session.user.role === "OPS"
       ? [
@@ -49,7 +53,24 @@ export default async function LiveSessionsPage() {
             badgeVariant: "warning" as const,
           },
         ]
-      : session.user.role === "SALES"
+      : session.user.role === "SHIPPER" && canManage
+        ? [
+          {
+            title: "场次协同",
+            description: "发货员可在这里补建或维护直播场次基础信息，支持活动履约协同和后续回看。",
+              badgeLabel: "协同维护",
+              badgeVariant: "info" as const,
+            },
+            {
+              title: "履约主线不变",
+              description: "放开直播场次创建后，发货员仍不进入客户经营和收款确认主链。",
+              href: "/fulfillment?tab=shipping",
+              hrefLabel: "回到发货执行",
+            badgeLabel: "边界保留",
+            badgeVariant: "warning" as const,
+          },
+        ]
+      : session.user.role === "SALES" && !canManage
         ? [
             {
               title: "邀约参考",
@@ -66,10 +87,11 @@ export default async function LiveSessionsPage() {
               badgeVariant: "warning" as const,
             },
           ]
-        : [
+        : canManage
+          ? [
             {
               title: "场次维护",
-              description: "管理员与主管可在这里统一维护直播场次、房间信息与基础运营数据。",
+              description: "当前账号具备直播场次维护权限，可在这里统一维护场次、房间信息与基础运营数据。",
               badgeLabel: "管理入口",
               badgeVariant: "info" as const,
             },
@@ -81,7 +103,8 @@ export default async function LiveSessionsPage() {
               badgeLabel: "客户回流",
               badgeVariant: "success" as const,
             },
-          ];
+          ]
+          : [];
 
   return (
     <div className="crm-page">

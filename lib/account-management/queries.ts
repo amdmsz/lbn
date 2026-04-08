@@ -10,6 +10,11 @@ import {
   getVisibleUserWhereInput,
 } from "@/lib/account-management/access";
 import { parseAccountManagementNotice } from "@/lib/account-management/metadata";
+import {
+  extraPermissionOptions,
+  normalizeExtraPermissionCodes,
+} from "@/lib/auth/permissions";
+import { isMissingUserPermissionGrantTableError } from "@/lib/auth/permission-grants-compat";
 import { prisma } from "@/lib/db/prisma";
 
 type SearchParamsValue = string | string[] | undefined;
@@ -121,6 +126,162 @@ function sortRoleOptions(roles: Pick<Role, "code" | "name">[]) {
   return [...roles].sort(
     (left, right) => order.indexOf(left.code) - order.indexOf(right.code),
   );
+}
+
+async function getUserDetailRecord(
+  visibleWhere: Prisma.UserWhereInput,
+  targetUserId: string,
+) {
+  try {
+    const user = await prisma.user.findFirst({
+      where: {
+        AND: [visibleWhere, { id: targetUserId }],
+      },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        phone: true,
+        teamId: true,
+        userStatus: true,
+        mustChangePassword: true,
+        lastLoginAt: true,
+        invitedAt: true,
+        disabledAt: true,
+        createdAt: true,
+        updatedAt: true,
+        role: {
+          select: {
+            code: true,
+            name: true,
+          },
+        },
+        team: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+        supervisor: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
+        invitedBy: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
+        disabledBy: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
+        supervisedTeam: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+        permissionGrants: {
+          orderBy: {
+            permissionCode: "asc",
+          },
+          select: {
+            permissionCode: true,
+          },
+        },
+      },
+    });
+
+    return {
+      user,
+      permissionGrantTableReady: true,
+    };
+  } catch (error) {
+    if (!isMissingUserPermissionGrantTableError(error)) {
+      throw error;
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        AND: [visibleWhere, { id: targetUserId }],
+      },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        phone: true,
+        teamId: true,
+        userStatus: true,
+        mustChangePassword: true,
+        lastLoginAt: true,
+        invitedAt: true,
+        disabledAt: true,
+        createdAt: true,
+        updatedAt: true,
+        role: {
+          select: {
+            code: true,
+            name: true,
+          },
+        },
+        team: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+        supervisor: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
+        invitedBy: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
+        disabledBy: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
+        supervisedTeam: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    return {
+      user: user
+        ? {
+            ...user,
+            permissionGrants: [],
+          }
+        : null,
+      permissionGrantTableReady: false,
+    };
+  }
 }
 
 export async function getUsersPageData(
@@ -290,66 +451,8 @@ export async function getUserDetailData(viewer: AccountViewer, targetUserId: str
   const actor = await getAccountActor(viewer.id);
   const visibleWhere = getVisibleUserWhereInput(actor);
 
-  const user = await prisma.user.findFirst({
-    where: {
-      AND: [visibleWhere, { id: targetUserId }],
-    },
-    select: {
-      id: true,
-      username: true,
-      name: true,
-      phone: true,
-      teamId: true,
-      userStatus: true,
-      mustChangePassword: true,
-      lastLoginAt: true,
-      invitedAt: true,
-      disabledAt: true,
-      createdAt: true,
-      updatedAt: true,
-      role: {
-        select: {
-          code: true,
-          name: true,
-        },
-      },
-      team: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
-        },
-      },
-      supervisor: {
-        select: {
-          id: true,
-          name: true,
-          username: true,
-        },
-      },
-      invitedBy: {
-        select: {
-          id: true,
-          name: true,
-          username: true,
-        },
-      },
-      disabledBy: {
-        select: {
-          id: true,
-          name: true,
-          username: true,
-        },
-      },
-      supervisedTeam: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
-        },
-      },
-    },
-  });
+  const detailRecord = await getUserDetailRecord(visibleWhere, targetUserId);
+  const user = detailRecord.user;
 
   if (!user) {
     return null;
@@ -438,6 +541,20 @@ export async function getUserDetailData(viewer: AccountViewer, targetUserId: str
       teamId: user.teamId,
       roleCode: user.role.code,
     }),
+    canManagePermissions:
+      actor.role === RoleCode.ADMIN &&
+      detailRecord.permissionGrantTableReady &&
+      canManageTargetUser(actor, {
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        teamId: user.teamId,
+        roleCode: user.role.code,
+      }),
+    permissionOptions: extraPermissionOptions,
+    grantedPermissionCodes: normalizeExtraPermissionCodes(
+      user.permissionGrants.map((item) => item.permissionCode),
+    ),
     roleOptions: sortRoleOptions(
       await prisma.role.findMany({
         where: {

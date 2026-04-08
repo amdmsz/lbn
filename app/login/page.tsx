@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
 import { getDefaultRouteForRole } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
+import { BRAND_NAME_CN, BRAND_TAGLINE } from "@/lib/branding";
 
 export default async function LoginPage() {
   const session = await auth();
@@ -20,13 +21,13 @@ export default async function LoginPage() {
         <section className="hidden rounded-[1.5rem] bg-[linear-gradient(180deg,#261c16_0%,#3a281d_100%)] p-8 text-[var(--color-sidebar-foreground)] md:flex md:flex-col md:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.24em] text-[var(--color-sidebar-muted)]">
-              酒水私域 CRM
+              {BRAND_NAME_CN}
             </p>
             <h2 className="mt-4 text-4xl font-semibold leading-tight">
-              统一承接内部账号登录、首次改密和角色路由跳转。
+              {BRAND_TAGLINE}
             </h2>
             <p className="mt-6 max-w-md text-sm leading-7 text-[var(--color-sidebar-muted)]">
-              登录成功后，系统会按角色进入对应主入口，并在需要时强制完成首次改密。
+              登录后按角色进入对应主入口。
             </p>
           </div>
           <div className="rounded-3xl border border-white/10 bg-white/5 p-5 text-sm leading-7 text-[var(--color-sidebar-muted)]">

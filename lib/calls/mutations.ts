@@ -2,7 +2,6 @@ import {
   OperationModule,
   OperationTargetType,
   WechatAddStatus,
-  type CallResult,
   type RoleCode,
 } from "@prisma/client";
 import { z } from "zod";
@@ -11,7 +10,10 @@ import {
   canCreateCallRecord,
   getCustomerScope,
 } from "@/lib/auth/access";
-import { touchCustomerEffectiveFollowUpFromCallTx } from "@/lib/customers/ownership";
+import { mapCallResultCodeToLegacyEnum } from "@/lib/calls/metadata";
+import {
+  getEnabledCallResultDefinitionByCode,
+} from "@/lib/calls/settings";
 import { prisma } from "@/lib/db/prisma";
 
 export type CallRecordActor = {
@@ -23,26 +25,10 @@ export type CreateCallRecordInput = {
   customerId: string;
   callTime: string;
   durationSeconds: number;
-  result: CallResult;
+  result: string;
   remark: string;
   nextFollowUpAt: string;
 };
-
-const CALL_RESULT_VALUES = [
-  "NOT_CONNECTED",
-  "INVALID_NUMBER",
-  "HUNG_UP",
-  "CONNECTED_NO_TALK",
-  "INTERESTED",
-  "WECHAT_PENDING",
-  "WECHAT_ADDED",
-  "REFUSED_WECHAT",
-  "NEED_CALLBACK",
-  "REFUSED_TO_BUY",
-  "BLACKLIST",
-] as const;
-
-const callResultSchema = z.enum(CALL_RESULT_VALUES);
 
 const createCallRecordSchema = z.object({
   customerId: z.string().trim().min(1, "缺少客户信息"),
@@ -52,7 +38,7 @@ const createCallRecordSchema = z.object({
     .int()
     .min(0, "通话时长不能小于 0")
     .max(24 * 60 * 60, "通话时长不能超过 24 小时"),
-  result: z.string().trim().pipe(callResultSchema),
+  result: z.string().trim().min(1, "请选择通话结果"),
   remark: z.string().trim().max(1000, "备注不能超过 1000 个字符").default(""),
   nextFollowUpAt: z.string().trim().default(""),
 });
@@ -67,13 +53,13 @@ function parseDateTimeInput(value: string, label: string) {
   return parsed;
 }
 
-function mapCallResultToWechatStatus(result: CallResult) {
-  switch (result) {
-    case "WECHAT_PENDING":
+function mapWechatSyncActionToStatus(action: "NONE" | "PENDING" | "ADDED" | "REFUSED") {
+  switch (action) {
+    case "PENDING":
       return WechatAddStatus.PENDING;
-    case "WECHAT_ADDED":
+    case "ADDED":
       return WechatAddStatus.ADDED;
-    case "REFUSED_WECHAT":
+    case "REFUSED":
       return WechatAddStatus.REJECTED;
     default:
       return null;
@@ -129,9 +115,17 @@ export async function createCallRecord(
     throw new Error("下次跟进时间不能早于通话时间。");
   }
 
+  const resultDefinition = await getEnabledCallResultDefinitionByCode(parsed.result);
+
+  if (!resultDefinition) {
+    throw new Error("当前通话结果不存在或已停用。");
+  }
+
   const salesId = actor.role === "SALES" ? actor.id : customer.ownerId ?? actor.id;
-  const result = parsed.result as CallResult;
-  const linkedWechatStatus = mapCallResultToWechatStatus(result);
+  const legacyResult = mapCallResultCodeToLegacyEnum(resultDefinition.code);
+  const linkedWechatStatus = mapWechatSyncActionToStatus(
+    resultDefinition.wechatSyncAction,
+  );
 
   const callRecord = await prisma.$transaction(async (tx) => {
     const created = await tx.callRecord.create({
@@ -140,7 +134,8 @@ export async function createCallRecord(
         salesId,
         callTime,
         durationSeconds: parsed.durationSeconds,
-        result,
+        result: legacyResult,
+        resultCode: resultDefinition.code,
         remark: parsed.remark || null,
         nextFollowUpAt,
       },
@@ -163,7 +158,9 @@ export async function createCallRecord(
           salesId,
           callTime,
           durationSeconds: parsed.durationSeconds,
-          result,
+          result: legacyResult,
+          resultCode: resultDefinition.code,
+          resultLabel: resultDefinition.label,
           nextFollowUpAt,
         },
       },
@@ -197,6 +194,8 @@ export async function createCallRecord(
             customerId: customer.id,
             salesId,
             fromCallRecordId: created.id,
+            fromResultCode: resultDefinition.code,
+            fromResultLabel: resultDefinition.label,
             addedStatus: linkedWechatStatus,
             addedAt: linkedWechatStatus === WechatAddStatus.ADDED ? callTime : null,
             nextFollowUpAt,
@@ -204,12 +203,6 @@ export async function createCallRecord(
         },
       });
     }
-
-    await touchCustomerEffectiveFollowUpFromCallTx(tx, {
-      customerId: customer.id,
-      occurredAt: callTime,
-      result,
-    });
 
     return created;
   });

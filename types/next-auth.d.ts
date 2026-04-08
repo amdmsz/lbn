@@ -1,5 +1,6 @@
 import type { DefaultSession } from "next-auth";
 import type { RoleCode } from "@prisma/client";
+import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 
 declare module "next-auth" {
   interface Session {
@@ -9,6 +10,8 @@ declare module "next-auth" {
       role: RoleCode;
       roleName: string;
       mustChangePassword: boolean;
+      avatarPath: string | null;
+      permissionCodes: ExtraPermissionCode[];
     };
   }
 
@@ -18,6 +21,8 @@ declare module "next-auth" {
     role: RoleCode;
     roleName: string;
     mustChangePassword: boolean;
+    avatarPath: string | null;
+    permissionCodes: ExtraPermissionCode[];
   }
 }
 
@@ -28,5 +33,7 @@ declare module "next-auth/jwt" {
     role: RoleCode;
     roleName: string;
     mustChangePassword: boolean;
+    avatarPath: string | null;
+    permissionCodes: ExtraPermissionCode[];
   }
 }

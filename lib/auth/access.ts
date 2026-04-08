@@ -1,4 +1,8 @@
 import type { RoleCode } from "@prisma/client";
+import {
+  hasExtraPermission,
+  type ExtraPermissionCode,
+} from "@/lib/auth/permissions";
 
 const masterDataSettingPaths = [
   "/settings",
@@ -8,6 +12,7 @@ const masterDataSettingPaths = [
   "/settings/tag-categories",
   "/settings/tags",
   "/settings/dictionaries",
+  "/settings/call-results",
 ] as const;
 
 export const roleLabels: Record<RoleCode, string> = {
@@ -56,7 +61,11 @@ export function canAccessLeadImportModule(role: RoleCode) {
   return role === "ADMIN" || role === "SUPERVISOR";
 }
 
-export function canAccessPath(role: RoleCode, pathname: string) {
+export function canAccessPath(
+  role: RoleCode,
+  pathname: string,
+  permissionCodes: readonly ExtraPermissionCode[] = [],
+) {
   if (pathname === "/" || pathname === "/login") {
     return true;
   }
@@ -89,11 +98,11 @@ export function canAccessPath(role: RoleCode, pathname: string) {
   }
 
   if (pathname === "/suppliers" || pathname.startsWith("/suppliers/")) {
-    return canAccessSupplierModule(role);
+    return canAccessSupplierModule(role, permissionCodes);
   }
 
   if (pathname === "/products" || pathname.startsWith("/products/")) {
-    return canAccessProductModule(role);
+    return canAccessProductModule(role, permissionCodes);
   }
 
   if (pathname === "/fulfillment" || pathname.startsWith("/fulfillment/")) {
@@ -101,7 +110,7 @@ export function canAccessPath(role: RoleCode, pathname: string) {
   }
 
   if (pathname === "/live-sessions" || pathname.startsWith("/live-sessions/")) {
-    return canAccessLiveSessionModule(role);
+    return canAccessLiveSessionModule(role, permissionCodes);
   }
 
   if (pathname === "/orders" || pathname.startsWith("/orders/")) {
@@ -185,8 +194,18 @@ export function canAccessCustomerPublicPoolReports(role: RoleCode) {
   return canManageCustomerPublicPool(role);
 }
 
-export function canAccessLiveSessionModule(role: RoleCode) {
-  return role === "ADMIN" || role === "SUPERVISOR" || role === "SALES" || role === "OPS";
+export function canAccessLiveSessionModule(
+  role: RoleCode,
+  permissionCodes: readonly ExtraPermissionCode[] = [],
+) {
+  return (
+    role === "ADMIN" ||
+    role === "SUPERVISOR" ||
+    role === "SALES" ||
+    role === "OPS" ||
+    role === "SHIPPER" ||
+    hasExtraPermission(permissionCodes, "LIVE_SESSION_MANAGE")
+  );
 }
 
 export function canAccessReportModule(role: RoleCode) {
@@ -221,20 +240,55 @@ export function canReviewSalesOrder(role: RoleCode) {
   return role === "ADMIN" || role === "SUPERVISOR";
 }
 
-export function canAccessSupplierModule(role: RoleCode) {
-  return role === "ADMIN" || role === "SUPERVISOR";
+export function canAccessSupplierModule(
+  role: RoleCode,
+  permissionCodes: readonly ExtraPermissionCode[] = [],
+) {
+  return (
+    role === "ADMIN" ||
+    role === "SUPERVISOR" ||
+    role === "SHIPPER" ||
+    hasExtraPermission(permissionCodes, "PRODUCT_MANAGE")
+  );
 }
 
-export function canManageSuppliers(role: RoleCode) {
-  return canAccessSupplierModule(role);
+export function canManageSuppliers(
+  role: RoleCode,
+  permissionCodes: readonly ExtraPermissionCode[] = [],
+) {
+  return canAccessSupplierModule(role, permissionCodes);
 }
 
-export function canAccessProductModule(role: RoleCode) {
-  return role === "ADMIN" || role === "SUPERVISOR" || role === "OPS";
+export function canAccessProductModule(
+  role: RoleCode,
+  permissionCodes: readonly ExtraPermissionCode[] = [],
+) {
+  return (
+    role === "ADMIN" ||
+    role === "SUPERVISOR" ||
+    role === "OPS" ||
+    role === "SHIPPER" ||
+    hasExtraPermission(permissionCodes, "PRODUCT_MANAGE")
+  );
 }
 
-export function canManageProducts(role: RoleCode) {
-  return role === "ADMIN" || role === "SUPERVISOR";
+export function canCreateProducts(
+  role: RoleCode,
+  permissionCodes: readonly ExtraPermissionCode[] = [],
+) {
+  return canManageProducts(role, permissionCodes);
+}
+
+export function canManageProducts(
+  role: RoleCode,
+  permissionCodes: readonly ExtraPermissionCode[] = [],
+) {
+  return (
+    role === "ADMIN" ||
+    role === "SUPERVISOR" ||
+    role === "SHIPPER" ||
+    hasExtraPermission(permissionCodes, "PRODUCT_MANAGE")
+  );
 }
 
 export function canAccessGiftModule(role: RoleCode) {
@@ -313,8 +367,17 @@ export function canCreateLiveInvitation(role: RoleCode) {
   return role === "SALES";
 }
 
-export function canManageLiveSessions(role: RoleCode) {
-  return role === "ADMIN" || role === "SUPERVISOR" || role === "OPS";
+export function canManageLiveSessions(
+  role: RoleCode,
+  permissionCodes: readonly ExtraPermissionCode[] = [],
+) {
+  return (
+    role === "ADMIN" ||
+    role === "SUPERVISOR" ||
+    role === "OPS" ||
+    role === "SHIPPER" ||
+    hasExtraPermission(permissionCodes, "LIVE_SESSION_MANAGE")
+  );
 }
 
 export function canUseLeadTags(role: RoleCode) {

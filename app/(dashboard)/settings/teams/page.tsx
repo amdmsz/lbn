@@ -1,18 +1,17 @@
 import { redirect } from "next/navigation";
-import { SettingsWorkspaceNav } from "@/components/settings/settings-workspace-nav";
+import { SettingsPageHeader } from "@/components/settings/settings-page-header";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { SummaryHeader } from "@/components/shared/summary-header";
 import {
   formatDateTimeLabel,
   getRoleBadgeVariant,
   getUserStatusLabel,
   getUserStatusVariant,
 } from "@/lib/account-management/metadata";
-import { getTeamsPageData } from "@/lib/account-management/queries";
 import { upsertTeamAction } from "@/lib/account-management/actions";
+import { getTeamsPageData } from "@/lib/account-management/queries";
 import {
   canAccessTeamsSetting,
   getDefaultRouteForRole,
@@ -48,34 +47,34 @@ export default async function SettingsTeamsPage({
 
   return (
     <div className="crm-page">
-      <SummaryHeader
-        eyebrow="组织结构"
+      <SettingsPageHeader
+        activeValue="teams"
         title="团队管理"
-        description="团队页用于维护团队基础信息和团队主管。第一版只有管理员可新增 / 编辑团队，主管在这里仅查看自己的团队结构。"
+        description="团队页继续维护团队基础信息和团队负责人。管理员可编辑；主管在这里主要做只读回看。"
         badges={
           <>
             <StatusBadge
-              label={data.canManageTeams ? "管理员可维护团队" : "主管只读查看"}
+              label={data.canManageTeams ? "管理员可维护团队" : "主管只读"}
               variant={data.canManageTeams ? "info" : "warning"}
             />
-            <StatusBadge label={`共 ${data.teams.length} 个可见团队`} variant="success" />
+            <StatusBadge label={`可见团队 ${data.teams.length}`} variant="success" />
           </>
         }
         metrics={[
           {
             label: "可见团队",
             value: String(data.teams.length),
-            hint: data.canManageTeams ? "当前为全公司团队范围" : "当前仅展示你的团队",
+            hint: data.canManageTeams ? "当前为全公司团队范围" : "当前仅显示你的团队",
           },
           {
-            label: "已配置主管",
+            label: "已配负责人",
             value: String(data.teams.filter((item) => item.supervisorId).length),
-            hint: "已明确团队主管的团队数量",
+            hint: "已明确团队负责人的团队数",
           },
           {
             label: "总成员数",
             value: String(data.teams.reduce((sum, item) => sum + item._count.users, 0)),
-            hint: "当前可见团队下的成员数量汇总",
+            hint: "当前可见团队下的成员总数",
           },
         ]}
       />
@@ -86,30 +85,36 @@ export default async function SettingsTeamsPage({
 
       {!data.canManageTeams ? (
         <ActionBanner tone="danger">
-          团队的新建、编辑和指定团队主管目前仅开放给管理员。主管可在本页查看自己团队的结构和成员归属。
+          团队的新建、编辑和指定团队负责人目前仅开放给管理员。主管可在本页查看自己团队的结构和成员归属。
         </ActionBanner>
       ) : null}
-
-      <div className="crm-subtle-panel">
-        <SettingsWorkspaceNav activeValue="teams" />
-      </div>
 
       {data.canManageTeams ? (
         <DataTableWrapper
           title="新增团队"
-          description="先创建团队，再去账号管理页把主管账号归属到该团队，最后回到这里指定团队主管。"
+          description="先创建团队，再到账号管理页补齐负责人和成员归属。"
         >
           <form action={upsertTeamAction} className="grid gap-3.5 xl:grid-cols-[1fr_1fr]">
             <input type="hidden" name="redirectTo" value={redirectTo} />
 
             <label className="space-y-1.5">
               <span className="crm-label">团队名称</span>
-              <input name="name" className="crm-input" placeholder="例如：华东销售一组" required />
+              <input
+                name="name"
+                className="crm-input"
+                placeholder="例如：华东销售一组"
+                required
+              />
             </label>
 
             <label className="space-y-1.5">
               <span className="crm-label">团队编码</span>
-              <input name="code" className="crm-input" placeholder="例如：EAST_SALES" required />
+              <input
+                name="code"
+                className="crm-input"
+                placeholder="例如：EAST_SALES"
+                required
+              />
             </label>
 
             <label className="space-y-1.5 xl:col-span-2">
@@ -135,7 +140,7 @@ export default async function SettingsTeamsPage({
       <DataTableWrapper
         className="mt-5"
         title="团队列表"
-        description="团队主管需要先在账号页归属到对应团队，再回到这里完成指定。"
+        description="团队负责人需要先在账号页归属到对应团队，再回到这里完成指定。"
       >
         {data.teams.length > 0 ? (
           <div className="grid gap-4">
@@ -152,7 +157,7 @@ export default async function SettingsTeamsPage({
                       {team.description?.trim() || "暂无团队说明。"}
                     </p>
                     <p className="mt-2 text-sm text-black/55">
-                      团队主管：
+                      团队负责人：
                       {team.supervisor
                         ? ` ${team.supervisor.name} (@${team.supervisor.username})`
                         : " 未指定"}
@@ -171,12 +176,22 @@ export default async function SettingsTeamsPage({
                     <div className="grid gap-3.5 xl:grid-cols-[1fr_1fr]">
                       <label className="space-y-1.5">
                         <span className="crm-label">团队名称</span>
-                        <input name="name" defaultValue={team.name} className="crm-input" required />
+                        <input
+                          name="name"
+                          defaultValue={team.name}
+                          className="crm-input"
+                          required
+                        />
                       </label>
 
                       <label className="space-y-1.5">
                         <span className="crm-label">团队编码</span>
-                        <input name="code" defaultValue={team.code} className="crm-input" required />
+                        <input
+                          name="code"
+                          defaultValue={team.code}
+                          className="crm-input"
+                          required
+                        />
                       </label>
 
                       <label className="space-y-1.5 xl:col-span-2">
@@ -191,25 +206,25 @@ export default async function SettingsTeamsPage({
                       </label>
 
                       <label className="space-y-1.5 xl:col-span-2">
-                        <span className="crm-label">团队主管</span>
+                        <span className="crm-label">团队负责人</span>
                         <select
                           name="supervisorId"
                           defaultValue={team.supervisorId ?? ""}
                           className="crm-select"
                         >
-                          <option value="">暂不指定团队主管</option>
+                          <option value="">暂不指定团队负责人</option>
                           {data.supervisorOptions
                             .filter(
                               (item) =>
                                 item.teamId === team.id || item.id === team.supervisorId,
                             )
                             .map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.name} (@{item.username})
-                              {item.supervisedTeam && item.supervisedTeam.id !== team.id
-                                ? ` · 当前负责 ${item.supervisedTeam.name}`
-                                : ""}
-                            </option>
+                              <option key={item.id} value={item.id}>
+                                {item.name} (@{item.username})
+                                {item.supervisedTeam && item.supervisedTeam.id !== team.id
+                                  ? ` · 当前负责 ${item.supervisedTeam.name}`
+                                  : ""}
+                              </option>
                             ))}
                         </select>
                       </label>
@@ -227,7 +242,10 @@ export default async function SettingsTeamsPage({
                   {team.users.length > 0 ? (
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {team.users.map((member) => (
-                        <div key={member.id} className="rounded-2xl border border-black/8 bg-white/65 p-3">
+                        <div
+                          key={member.id}
+                          className="rounded-2xl border border-black/8 bg-white/65 p-3"
+                        >
                           <div className="flex flex-wrap gap-1.5">
                             <StatusBadge
                               label={roleLabels[member.role.code]}
@@ -238,7 +256,9 @@ export default async function SettingsTeamsPage({
                               variant={getUserStatusVariant(member.userStatus)}
                             />
                           </div>
-                          <p className="mt-3 text-sm font-medium text-black/82">{member.name}</p>
+                          <p className="mt-3 text-sm font-medium text-black/82">
+                            {member.name}
+                          </p>
                           <p className="mt-1 text-xs text-black/48">@{member.username}</p>
                         </div>
                       ))}

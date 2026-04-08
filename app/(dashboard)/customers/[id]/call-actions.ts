@@ -33,7 +33,7 @@ export async function createCustomerCallRecordAction(
         customerId: String(formData.get("customerId") ?? ""),
         callTime: String(formData.get("callTime") ?? ""),
         durationSeconds: Number(formData.get("durationSeconds") ?? 0),
-        result: String(formData.get("result") ?? "") as never,
+        result: String(formData.get("result") ?? ""),
         remark: String(formData.get("remark") ?? ""),
         nextFollowUpAt: String(formData.get("nextFollowUpAt") ?? ""),
       },

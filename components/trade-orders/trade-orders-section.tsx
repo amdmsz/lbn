@@ -591,7 +591,7 @@ export function TradeOrdersSection({
       ) : (
         <EmptyState
           title="暂无成交父单"
-          description="当前筛选条件下没有匹配的 TradeOrder。新建单入口仍在客户详情，这里负责父单扫单、审核协同和 supplier 子单关系回看。"
+          description="当前筛选条件下没有记录。"
           action={
             canCreate ? (
               <Link href="/customers" className="crm-button crm-button-primary">

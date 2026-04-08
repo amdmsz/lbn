@@ -265,8 +265,8 @@ export function SalesOrdersSection({
             submitLabel="提交审核"
             helperText={
               createCustomer
-                ? `当前从客户详情页为 ${createCustomer.name} 发起下单。订单中心只查询订单本身，不再混入未成交客户。`
-                : "订单中心可直接建单，但客户必须远程搜索，避免在大量客户中全量下拉。"
+          ? `当前从客户详情页为 ${createCustomer.name} 发起下单。订单中心只查询订单本身，不再混入未成交客户。`
+          : "订单中心可直接建单，但客户必须远程搜索，避免在大量客户中全量下拉。"
             }
             redirectTo={buildPageHref(filters, pagination.page)}
           />
@@ -452,7 +452,7 @@ export function SalesOrdersSection({
       ) : (
         <EmptyState
           title="暂无销售订单"
-          description="当前筛选条件下没有匹配的 SalesOrder。订单中心现在只查询订单记录本身，不再展示无订购客户。"
+        description="当前筛选条件下没有匹配的 SalesOrder。订单中心现在只查询订单记录本身，不再展示无订购客户。"
         />
       )}
     </div>

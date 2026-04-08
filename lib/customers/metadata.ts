@@ -102,42 +102,77 @@ export const customerRoleHeaderMeta: Record<
 export const customerDetailTabs = [
   {
     value: "profile",
-    label: "基本资料",
-    description: "查看客户摘要、负责人、来源、标签、导入与关联线索。",
+    label: "客户档案",
+    description: "集中查看客户身份、标签、来源归并、线索回流和导入脉络。",
   },
   {
     value: "calls",
-    label: "通话记录",
-    description: "集中查看通话结果、回访节奏和最近拨打情况。",
+    label: "通话推进",
+    description: "围绕首呼、回访节奏和最近一次通话结果继续推进客户。",
   },
   {
     value: "wechat",
-    label: "微信记录",
-    description: "查看加微状态、微信沉淀信息和后续跟进计划。",
+    label: "微信推进",
+    description: "查看加微状态、微信沉淀信息和后续私域跟进安排。",
   },
   {
     value: "live",
-    label: "直播记录",
-    description: "查看邀约、观看、到场和直播相关推进情况。",
+    label: "直播推进",
+    description: "查看直播邀约、到场、观看和礼品达标等经营动作。",
   },
   {
     value: "orders",
-    label: "订单记录",
-    description: "查看订单、支付和发货状态，判断成交推进结果。",
+    label: "成交结果",
+    description: "围绕成交主单、提审、履约与 COD 结果回看成交推进情况。",
   },
   {
     value: "gifts",
-    label: "礼品记录",
-    description: "查看礼品资格、审核、履约和收件信息。",
+    label: "礼品履约",
+    description: "查看礼品资格、审核、运费与发货履约，不混入订单真相。",
   },
   {
     value: "logs",
     label: "操作日志",
-    description: "查看客户相关的重要操作记录，便于审计和追溯。",
+    description: "查看客户及关联交易、履约动作的重要审计记录。",
   },
 ] as const;
 
 export type CustomerDetailTab = (typeof customerDetailTabs)[number]["value"];
+
+export const customerDetailTabGroups = [
+  {
+    value: "profile",
+    label: "客户档案",
+    description: "先看客户身份、来源和标签，再进入更细的经营记录。",
+    tabs: ["profile"],
+  },
+  {
+    value: "follow_up",
+    label: "跟进记录",
+    description: "围绕通话、微信和直播记录，继续承接客户推进节奏。",
+    tabs: ["calls", "wechat", "live"],
+  },
+  {
+    value: "results",
+    label: "成交结果",
+    description: "集中回看成交主单、礼品履约和后续经营结果。",
+    tabs: ["orders", "gifts"],
+  },
+  {
+    value: "logs",
+    label: "操作日志",
+    description: "保留客户与关联业务动作的审计时间线。",
+    tabs: ["logs"],
+  },
+] as const satisfies ReadonlyArray<{
+  value: string;
+  label: string;
+  description: string;
+  tabs: readonly CustomerDetailTab[];
+}>;
+
+export type CustomerDetailTabGroup =
+  (typeof customerDetailTabGroups)[number]["value"];
 export type CustomerQueueKey = (typeof customerQueueOptions)[number]["value"];
 export type CustomerPageSize = (typeof customerPageSizeOptions)[number];
 export type CustomerWorkStatusKey = Exclude<CustomerQueueKey, "all">;
@@ -147,6 +182,18 @@ export const customerWorkStatusOptions = customerQueueOptions.filter(
     value: CustomerWorkStatusKey;
   } => item.value !== "all",
 );
+
+const customerWorkStatusMeta: Record<
+  CustomerWorkStatusKey,
+  { label: string; variant: StatusBadgeVariant }
+> = {
+  new_imported: { label: "今日新增", variant: "info" },
+  pending_first_call: { label: "待首呼", variant: "warning" },
+  pending_follow_up: { label: "待回访", variant: "warning" },
+  pending_wechat: { label: "待加微", variant: "info" },
+  pending_invitation: { label: "待邀约", variant: "success" },
+  pending_deal: { label: "待成交", variant: "info" },
+};
 
 export function getCustomerStatusLabel(status: CustomerStatus) {
   return customerStatusMeta[status].label;
@@ -165,11 +212,22 @@ export function getCustomerQueueLabel(queue: CustomerQueueKey) {
 }
 
 export function getCustomerWorkStatusLabel(status: CustomerWorkStatusKey) {
-  return customerWorkStatusOptions.find((item) => item.value === status)?.label ?? "工作状态";
+  return customerWorkStatusMeta[status]?.label ?? "工作状态";
+}
+
+export function getCustomerWorkStatusVariant(status: CustomerWorkStatusKey) {
+  return customerWorkStatusMeta[status]?.variant ?? "neutral";
 }
 
 export function getCustomerDetailTabMeta(tab: CustomerDetailTab) {
   return customerDetailTabs.find((item) => item.value === tab) ?? customerDetailTabs[0];
+}
+
+export function getCustomerDetailTabGroupMeta(tab: CustomerDetailTab) {
+  return (
+    customerDetailTabGroups.find((group) => group.tabs.some((item) => item === tab)) ??
+    customerDetailTabGroups[0]
+  );
 }
 
 export function formatRegion(...parts: Array<string | null | undefined>) {
@@ -199,5 +257,35 @@ export function formatDateTime(value: Date) {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+  }).format(value);
+}
+
+export function formatRelativeDateTime(value: Date) {
+  const diffMs = Date.now() - value.getTime();
+  const diffMinutes = Math.max(1, Math.floor(diffMs / 60000));
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes} 分钟前`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+
+  if (diffHours < 24) {
+    return `${diffHours} 小时前`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffDays === 1) {
+    return "昨天";
+  }
+
+  if (diffDays < 30) {
+    return `${diffDays} 天前`;
+  }
+
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
   }).format(value);
 }

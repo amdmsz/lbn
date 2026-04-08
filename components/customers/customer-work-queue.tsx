@@ -1,11 +1,17 @@
 import Link from "next/link";
-import type { CustomerQueueKey } from "@/lib/customers/metadata";
-import type { CustomerCenterFilters, CustomerListItem } from "@/lib/customers/queries";
 import { CustomerStageTabs } from "@/components/customers/customer-stage-tabs";
 import { CustomersTable } from "@/components/customers/customers-table";
 import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { getCustomerQueueLabel } from "@/lib/customers/metadata";
+import type { CallResultOption } from "@/lib/calls/metadata";
+import {
+  getCustomerQueueLabel,
+  type CustomerQueueKey,
+} from "@/lib/customers/metadata";
+import type {
+  CustomerCenterFilters,
+  CustomerListItem,
+} from "@/lib/customers/queries";
 
 type PaginationData = {
   page: number;
@@ -55,6 +61,7 @@ export function CustomerWorkQueue({
   filters,
   items,
   pagination,
+  callResultOptions,
   canCreateCallRecord,
   selectedOwnerLabel,
 }: Readonly<{
@@ -64,6 +71,7 @@ export function CustomerWorkQueue({
   filters: CustomerCenterFilters;
   items: CustomerListItem[];
   pagination: PaginationData;
+  callResultOptions: CallResultOption[];
   canCreateCallRecord: boolean;
   selectedOwnerLabel: string;
 }>) {
@@ -93,9 +101,14 @@ export function CustomerWorkQueue({
         scrollTargetId="customer-queue"
       />
 
-      <form method="get" className="crm-subtle-panel grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto]">
+      <form
+        method="get"
+        className="crm-subtle-panel grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto]"
+      >
         {filters.teamId ? <input type="hidden" name="teamId" value={filters.teamId} /> : null}
-        {filters.salesId ? <input type="hidden" name="salesId" value={filters.salesId} /> : null}
+        {filters.salesId ? (
+          <input type="hidden" name="salesId" value={filters.salesId} />
+        ) : null}
         <input type="hidden" name="queue" value={filters.queue} />
 
         <label className="space-y-1.5">
@@ -127,14 +140,11 @@ export function CustomerWorkQueue({
       <CustomersTable
         items={items}
         pagination={pagination}
+        callResultOptions={callResultOptions}
         canCreateCallRecord={canCreateCallRecord}
         emptyTitle={`${getCustomerQueueLabel(filters.queue)}暂无客户`}
         emptyDescription="当前筛选条件下没有匹配客户，可以切换队列或放宽搜索条件。"
-        buildPageHref={(page) =>
-          buildCustomerQueueHref(filters, {
-            page,
-          })
-        }
+        filters={filters}
         scrollTargetId="customer-queue"
       />
     </SectionCard>

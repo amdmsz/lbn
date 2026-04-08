@@ -1,11 +1,9 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { SettingsWorkspaceNav } from "@/components/settings/settings-workspace-nav";
+import { SettingsPageHeader } from "@/components/settings/settings-page-header";
 import { MasterDataStatusBadge } from "@/components/settings/master-data-status-badge";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
-import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { canAccessSettingsModule, getDefaultRouteForRole } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
@@ -23,69 +21,39 @@ export default async function TagCategoriesPage({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }>) {
   const session = await auth();
-
-  if (!session?.user) {
-    redirect("/login");
-  }
-
+  if (!session?.user) redirect("/login");
   if (!canAccessSettingsModule(session.user.role)) {
     redirect(getDefaultRouteForRole(session.user.role));
   }
 
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const data = await getTagCategoryPageData(
-    {
-      id: session.user.id,
-      role: session.user.role,
-    },
+    { id: session.user.id, role: session.user.role },
     resolvedSearchParams,
   );
 
   return (
     <div className="crm-page">
-      <PageHeader
+      <SettingsPageHeader
+        activeValue="tag-categories"
         title="标签分类"
-        description="标签分类是标签组下的二级归类，用于管理同类标签并提升维护清晰度。"
-        actions={
-          <>
-            <StatusBadge label={`共 ${data.items.length} 个分类`} variant="info" />
-            <Link href="/settings" className="crm-button crm-button-secondary">
-              返回主数据中心
-            </Link>
-          </>
-        }
+        description="标签分类是标签组下的二级归类，用于让同类标签的维护和展示更清楚。"
+        metrics={[
+          { label: "标签分类", value: String(data.items.length), hint: "当前二级分类数" },
+        ]}
       />
 
-      {data.notice ? (
-        <ActionBanner tone={data.notice.tone} className="mt-5">
-          {data.notice.message}
-        </ActionBanner>
-      ) : null}
+      {data.notice ? <ActionBanner tone={data.notice.tone}>{data.notice.message}</ActionBanner> : null}
 
-      <div className="crm-subtle-panel">
-        <SettingsWorkspaceNav activeValue="tag-categories" />
-      </div>
-
-      <DataTableWrapper
-        className="mt-5"
-        title="新增标签分类"
-        description="每个分类必须归属于一个已启用标签组。"
-      >
-        <form
-          action={upsertTagCategoryAction}
-          className="grid gap-3.5 xl:grid-cols-[1fr_1fr_1fr_160px]"
-        >
+      <DataTableWrapper title="新增标签分类" description="每个分类都必须归属于一个已启用标签组。">
+        <form action={upsertTagCategoryAction} className="grid gap-3.5 xl:grid-cols-[1fr_1fr_1fr_160px]">
           <input type="hidden" name="redirectTo" value={redirectTo} />
           <label className="space-y-1.5">
             <span className="crm-label">所属标签组</span>
             <select name="groupId" className="crm-select" defaultValue="" required>
-              <option value="" disabled>
-                选择标签组
-              </option>
+              <option value="" disabled>选择标签组</option>
               {data.groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name} ({group.code})
-                </option>
+                <option key={group.id} value={group.id}>{group.name} ({group.code})</option>
               ))}
             </select>
           </label>
@@ -102,22 +70,16 @@ export default async function TagCategoriesPage({
             <input type="number" name="sortOrder" min="0" defaultValue="0" className="crm-input" />
           </label>
           <label className="space-y-1.5 xl:col-span-3">
-            <span className="crm-label">描述</span>
+            <span className="crm-label">说明</span>
             <textarea name="description" rows={3} maxLength={1000} className="crm-textarea" />
           </label>
           <div className="flex items-end">
-            <button type="submit" className="crm-button crm-button-primary w-full">
-              创建分类
-            </button>
+            <button type="submit" className="crm-button crm-button-primary w-full">创建分类</button>
           </div>
         </form>
       </DataTableWrapper>
 
-      <DataTableWrapper
-        className="mt-5"
-        title="标签分类列表"
-        description="分类支持变更所属标签组、名称、编码与启停状态。"
-      >
+      <DataTableWrapper className="mt-5" title="标签分类列表" description="分类支持调整所属标签组、名称、编码与启停状态。">
         {data.items.length > 0 ? (
           <div className="grid gap-3.5">
             {data.items.map((item) => (
@@ -125,21 +87,17 @@ export default async function TagCategoriesPage({
                 <form action={upsertTagCategoryAction} className="space-y-3.5">
                   <input type="hidden" name="id" value={item.id} />
                   <input type="hidden" name="redirectTo" value={redirectTo} />
-
                   <div className="flex flex-wrap items-center gap-2">
                     <MasterDataStatusBadge isActive={item.isActive} />
                     <StatusBadge label={`所属组：${item.group.name}`} variant="neutral" />
                     <StatusBadge label={`${item._count.tags} 个标签`} variant="neutral" />
                   </div>
-
                   <div className="grid gap-3.5 xl:grid-cols-[1fr_1fr_1fr_160px]">
                     <label className="space-y-1.5">
                       <span className="crm-label">所属标签组</span>
                       <select name="groupId" className="crm-select" defaultValue={item.groupId} required>
                         {data.groups.map((group) => (
-                          <option key={group.id} value={group.id}>
-                            {group.name} ({group.code})
-                          </option>
+                          <option key={group.id} value={group.id}>{group.name} ({group.code})</option>
                         ))}
                       </select>
                     </label>
@@ -153,31 +111,15 @@ export default async function TagCategoriesPage({
                     </label>
                     <label className="space-y-1.5">
                       <span className="crm-label">排序</span>
-                      <input
-                        type="number"
-                        name="sortOrder"
-                        min="0"
-                        defaultValue={item.sortOrder}
-                        className="crm-input"
-                      />
+                      <input type="number" name="sortOrder" min="0" defaultValue={item.sortOrder} className="crm-input" />
                     </label>
                   </div>
-
                   <label className="block space-y-1.5">
-                    <span className="crm-label">描述</span>
-                    <textarea
-                      name="description"
-                      rows={3}
-                      maxLength={1000}
-                      defaultValue={item.description ?? ""}
-                      className="crm-textarea"
-                    />
+                    <span className="crm-label">说明</span>
+                    <textarea name="description" rows={3} maxLength={1000} defaultValue={item.description ?? ""} className="crm-textarea" />
                   </label>
-
                   <div className="flex justify-end">
-                    <button type="submit" className="crm-button crm-button-primary">
-                      保存
-                    </button>
+                    <button type="submit" className="crm-button crm-button-primary">保存</button>
                   </div>
                 </form>
 
@@ -192,10 +134,7 @@ export default async function TagCategoriesPage({
             ))}
           </div>
         ) : (
-          <EmptyState
-            title="暂无标签分类"
-            description="请先在标签组下新增分类，用于后续创建标签时细化归类。"
-          />
+          <EmptyState title="暂无标签分类" description="请先在标签组下新增分类，用于后续创建标签时细化归类。" />
         )}
       </DataTableWrapper>
     </div>

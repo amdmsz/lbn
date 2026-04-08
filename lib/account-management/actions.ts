@@ -10,8 +10,10 @@ import {
   resetManagedUserPassword,
   toggleManagedUserStatus,
   updateManagedUser,
+  updateManagedUserPermissions,
   upsertTeam,
 } from "@/lib/account-management/mutations";
+import { normalizeExtraPermissionCodes } from "@/lib/auth/permissions";
 import { auth } from "@/lib/auth/session";
 
 export type AccountActionState = {
@@ -198,6 +200,37 @@ export async function toggleManagedUserStatusAction(
         result.userStatus === "INACTIVE"
           ? "账号已禁用，历史业务数据会继续保留。"
           : "账号已重新启用。",
+      temporaryPassword: null,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: formatActionError(error),
+      temporaryPassword: null,
+    };
+  }
+}
+
+export async function updateManagedUserPermissionsAction(
+  _previousState: AccountActionState,
+  formData: FormData,
+): Promise<AccountActionState> {
+  try {
+    const actor = await getActor();
+    const result = await updateManagedUserPermissions(actor, {
+      userId: getValue(formData, "userId"),
+      permissionCodes: normalizeExtraPermissionCodes(
+        formData
+          .getAll("permissionCodes")
+          .filter((value): value is string => typeof value === "string"),
+      ),
+    });
+
+    revalidateAccountPaths(result.userId);
+
+    return {
+      status: "success",
+      message: "额外权限已更新。目标账号需要重新登录后生效。",
       temporaryPassword: null,
     };
   } catch (error) {

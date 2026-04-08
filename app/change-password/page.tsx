@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { ChangePasswordForm } from "@/components/auth/change-password-form";
 import { auth } from "@/lib/auth/session";
+import { BRAND_NAME_CN } from "@/lib/branding";
 
 export default async function ChangePasswordPage() {
   const session = await auth();
@@ -15,7 +16,7 @@ export default async function ChangePasswordPage() {
         <section className="hidden rounded-[1.5rem] bg-[linear-gradient(180deg,#261c16_0%,#3a281d_100%)] p-8 text-[var(--color-sidebar-foreground)] md:flex md:flex-col md:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.24em] text-[var(--color-sidebar-muted)]">
-              酒水私域 CRM
+              {BRAND_NAME_CN}
             </p>
             <h1 className="mt-4 text-4xl font-semibold leading-tight">
               {session.user.mustChangePassword ? "首次登录先修改密码。" : "修改你的登录密码。"}

@@ -18,10 +18,49 @@ import {
 
 function getErrorMessage(error: unknown) {
   if (error instanceof ZodError) {
-    return error.issues[0]?.message ?? "Form validation failed.";
+    return error.issues[0]?.message ?? "表单校验失败。";
   }
 
-  return error instanceof Error ? error.message : "Action failed. Please retry later.";
+  return error instanceof Error ? error.message : "操作失败，请稍后重试。";
+}
+
+function getShippingStageLabel(
+  stage: "PENDING_REPORT" | "PENDING_TRACKING" | "SHIPPED" | "EXCEPTION",
+) {
+  switch (stage) {
+    case "PENDING_TRACKING":
+      return "待填物流";
+    case "SHIPPED":
+      return "已发货 / 回款关注";
+    case "EXCEPTION":
+      return "履约异常";
+    case "PENDING_REPORT":
+    default:
+      return "当前报单";
+  }
+}
+
+function getFormValues(formData: FormData, key: string) {
+  return formData
+    .getAll(key)
+    .filter((value): value is string => typeof value === "string");
+}
+
+function buildRedirectWithExtraParams(
+  redirectTo: string,
+  extraParams: Record<string, string>,
+) {
+  const [pathname, queryString = ""] = redirectTo.split("?");
+  const params = new URLSearchParams(queryString);
+
+  for (const [key, value] of Object.entries(extraParams)) {
+    if (value) {
+      params.set(key, value);
+    }
+  }
+
+  const nextQueryString = params.toString();
+  return nextQueryString ? `${pathname}?${nextQueryString}` : pathname;
 }
 
 export async function createShippingExportBatchAction(formData: FormData) {
@@ -32,6 +71,11 @@ export async function createShippingExportBatchAction(formData: FormData) {
   }
 
   const redirectTo = getFormValue(formData, "redirectTo") || "/shipping";
+  const sourceStage =
+    getFormValue(formData, "sourceStage") === "PENDING_TRACKING"
+      ? "PENDING_TRACKING"
+      : "PENDING_REPORT";
+  const selectedShippingTaskIds = getFormValues(formData, "selectedShippingTaskId");
 
   try {
     const result = await createShippingExportBatch(
@@ -43,6 +87,11 @@ export async function createShippingExportBatchAction(formData: FormData) {
         supplierId: getFormValue(formData, "supplierId"),
         fileName: getFormValue(formData, "fileName"),
         remark: getFormValue(formData, "remark"),
+        sourceStage,
+        shippingTaskIds:
+          selectedShippingTaskIds.length > 0
+            ? selectedShippingTaskIds
+            : getFormValues(formData, "shippingTaskId"),
       },
     );
 
@@ -50,21 +99,25 @@ export async function createShippingExportBatchAction(formData: FormData) {
     revalidatePath("/shipping/export-batches");
     revalidatePath("/fulfillment");
 
-    const successMessage = result.fileGenerated
-      ? `Export batch ${result.exportNo} created and file generated from frozen snapshots.`
-      : `Export batch ${result.exportNo} created and snapshots frozen; file generation failed, regenerate it from export batches.`;
+    const exportScopeLabel = result.movedTaskCount === 1 ? "子单" : "子单";
+    const successMessage =
+      sourceStage === "PENDING_TRACKING"
+        ? result.fileGenerated
+          ? `已再次导出批次 ${result.exportNo}，${result.movedTaskCount} 个${exportScopeLabel}仍留在待填物流，已生成本次导出文件。`
+          : `已再次导出批次 ${result.exportNo}，${result.movedTaskCount} 个${exportScopeLabel}仍留在待填物流；文件暂未生成，请到批次记录重生成。`
+        : result.fileGenerated
+          ? `已生成批次 ${result.exportNo}，${result.movedTaskCount} 个${exportScopeLabel}已进入待填物流，文件已按冻结快照生成。`
+          : `已生成批次 ${result.exportNo}，${result.movedTaskCount} 个${exportScopeLabel}已进入待填物流；文件暂未生成，请到批次记录重生成。`;
+    const successRedirectTo = buildRedirectWithExtraParams(redirectTo, {
+      stageView: "PENDING_TRACKING",
+      batchViewId: result.id,
+    });
 
-    redirect(buildRedirectTarget(redirectTo, "success", successMessage));
+    redirect(buildRedirectTarget(successRedirectTo, "success", successMessage));
   } catch (error) {
     rethrowRedirectError(error);
     redirect(buildRedirectTarget(redirectTo, "error", getErrorMessage(error)));
   }
-}
-
-function getFormValues(formData: FormData, key: string) {
-  return formData
-    .getAll(key)
-    .filter((value): value is string => typeof value === "string");
 }
 
 export async function regenerateShippingExportBatchFileAction(formData: FormData) {
@@ -93,7 +146,7 @@ export async function regenerateShippingExportBatchFileAction(formData: FormData
       buildRedirectTarget(
         redirectTo,
         "success",
-        `Export batch ${result.exportNo} file regenerated from frozen snapshots.`,
+        `批次 ${result.exportNo} 已按冻结快照重生成导出文件。`,
       ),
     );
   } catch (error) {
@@ -150,7 +203,12 @@ export async function updateSalesOrderShippingAction(formData: FormData) {
     revalidatePath("/dashboard");
     revalidatePath("/reports");
 
-    redirect(buildRedirectTarget(redirectTo, "success", "Shipping updated."));
+    const successMessage =
+      result.previousStage !== result.nextStage
+        ? `子单 ${result.subOrderNo} 已更新，任务已移入${getShippingStageLabel(result.nextStage)}。`
+        : `子单 ${result.subOrderNo} 已更新，当前仍在${getShippingStageLabel(result.nextStage)}。`;
+
+    redirect(buildRedirectTarget(redirectTo, "success", successMessage));
   } catch (error) {
     rethrowRedirectError(error);
     redirect(buildRedirectTarget(redirectTo, "error", getErrorMessage(error)));
@@ -173,7 +231,7 @@ export async function bulkUpdateSalesOrderShippingAction(formData: FormData) {
     const selectedShippingTaskIds = new Set(getFormValues(formData, "selectedShippingTaskId"));
 
     if (selectedShippingTaskIds.size === 0) {
-      throw new Error("Please select at least one shipping task.");
+      throw new Error("请至少选择一个发货任务。");
     }
 
     let updatedCount = 0;
@@ -188,7 +246,7 @@ export async function bulkUpdateSalesOrderShippingAction(formData: FormData) {
       const trackingNumber = trackingNumbers[index]?.trim() ?? "";
 
       if (!trackingNumber) {
-        throw new Error("Selected rows must include tracking numbers.");
+        throw new Error("批量回填物流时，所选子单必须填写物流单号。");
       }
 
       const result = await updateSalesOrderShipping(
@@ -213,7 +271,7 @@ export async function bulkUpdateSalesOrderShippingAction(formData: FormData) {
     }
 
     if (updatedCount === 0) {
-      throw new Error("No shipping task was updated.");
+      throw new Error("没有发货任务被更新。");
     }
 
     revalidatePath("/shipping");
@@ -236,7 +294,7 @@ export async function bulkUpdateSalesOrderShippingAction(formData: FormData) {
       buildRedirectTarget(
         redirectTo,
         "success",
-        `${updatedCount} shipping tasks moved to shipped from the current supplier pool.`,
+        `已更新 ${updatedCount} 个子单，任务已移入已发货 / 回款关注。`,
       ),
     );
   } catch (error) {
@@ -280,7 +338,7 @@ export async function updateLogisticsFollowUpTaskAction(formData: FormData) {
     revalidatePath(`/orders/${result.salesOrderId}`);
     revalidatePath(`/customers/${result.customerId}`);
 
-    redirect(buildRedirectTarget(redirectTo, "success", "Logistics follow-up updated."));
+    redirect(buildRedirectTarget(redirectTo, "success", "物流跟进任务已更新。"));
   } catch (error) {
     rethrowRedirectError(error);
     redirect(buildRedirectTarget(redirectTo, "error", getErrorMessage(error)));

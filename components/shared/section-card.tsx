@@ -63,7 +63,16 @@ export function SectionCard({
             </p>
           ) : null}
         </div>
-        {actions ? <div className={cn("crm-toolbar-cluster", isCompact ? "gap-1.5" : "")}>{actions}</div> : null}
+        {actions ? (
+          <div
+            className={cn(
+              "crm-toolbar-cluster w-full min-w-0 lg:w-auto lg:justify-end",
+              isCompact ? "gap-1.5" : "",
+            )}
+          >
+            {actions}
+          </div>
+        ) : null}
       </div>
       <div className={cn(isCompact ? "p-3.5 md:p-4" : "p-4 md:p-5", contentClassName)}>{children}</div>
     </section>

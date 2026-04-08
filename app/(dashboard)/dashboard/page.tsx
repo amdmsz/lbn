@@ -18,7 +18,10 @@ export default async function DashboardPage() {
   }
 
   const role = session.user.role;
-  const navigationGroups = getNavigationGroupsForRole(role);
+  const navigationGroups = getNavigationGroupsForRole(
+    role,
+    session.user.permissionCodes,
+  );
 
   if (navigationGroups.length === 0) {
     redirect(getDefaultRouteForRole(role));
@@ -27,6 +30,7 @@ export default async function DashboardPage() {
   const data = await getDashboardData({
     id: session.user.id,
     role,
+    permissionCodes: session.user.permissionCodes,
   });
 
   const extraCards =
@@ -71,6 +75,7 @@ export default async function DashboardPage() {
   return (
     <DashboardWorkbench
       role={role}
+      permissionCodes={session.user.permissionCodes}
       navigationGroups={navigationGroups}
       data={data}
       extraCards={extraCards}

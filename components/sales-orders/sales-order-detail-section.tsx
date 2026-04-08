@@ -4,6 +4,7 @@ import { LogisticsTracePanel } from "@/components/shipping/logistics-trace-panel
 import { SalesOrderForm } from "@/components/sales-orders/sales-order-form";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { formatDateTime } from "@/lib/customers/metadata";
+import { buildOrderFulfillmentHref } from "@/lib/fulfillment/navigation";
 import {
   formatCurrency,
   getCodCollectionStatusLabel,
@@ -650,8 +651,11 @@ export function SalesOrderDetailSection({
               <div className="mt-3 space-y-2 text-sm text-black/70">
                 <div>物流跟进任务数：{order.logisticsFollowUpTasks.length}</div>
                 {canAccessShippingCenter ? (
-                  <Link href="/shipping" className="crm-text-link">
-                    进入发货中心
+                  <Link
+                    href={buildOrderFulfillmentHref("shipping")}
+                    className="crm-text-link"
+                  >
+                    进入订单中心 / 发货执行
                   </Link>
                 ) : (
                   <Link href={`/customers/${order.customer.id}?tab=orders`} className="crm-text-link">
@@ -792,8 +796,11 @@ export function SalesOrderDetailSection({
               <div className="mt-3 space-y-2 text-sm text-black/70">
                 <div>物流跟进任务数：{order.logisticsFollowUpTasks.length}</div>
                 {canAccessShippingCenter ? (
-                  <Link href="/shipping" className="crm-text-link">
-                    进入发货中心
+                  <Link
+                    href={buildOrderFulfillmentHref("shipping")}
+                    className="crm-text-link"
+                  >
+                    进入订单中心 / 发货执行
                   </Link>
                 ) : (
                   <Link href={`/customers/${order.customer.id}?tab=orders`} className="crm-text-link">

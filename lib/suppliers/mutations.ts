@@ -5,11 +5,13 @@ import {
 } from "@prisma/client";
 import { z } from "zod";
 import { canManageSuppliers } from "@/lib/auth/access";
+import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 
 export type SupplierActor = {
   id: string;
   role: RoleCode;
+  permissionCodes?: ExtraPermissionCode[];
 };
 
 const upsertSupplierSchema = z.object({
@@ -25,7 +27,7 @@ export async function upsertSupplier(
   actor: SupplierActor,
   rawInput: z.input<typeof upsertSupplierSchema>,
 ) {
-  if (!canManageSuppliers(actor.role)) {
+  if (!canManageSuppliers(actor.role, actor.permissionCodes)) {
     throw new Error("当前角色无权维护供货商。");
   }
 
@@ -100,7 +102,7 @@ export async function upsertSupplier(
 }
 
 export async function toggleSupplier(actor: SupplierActor, supplierId: string) {
-  if (!canManageSuppliers(actor.role)) {
+  if (!canManageSuppliers(actor.role, actor.permissionCodes)) {
     throw new Error("当前角色无权维护供货商。");
   }
 
@@ -141,4 +143,10 @@ export async function toggleSupplier(actor: SupplierActor, supplierId: string) {
       afterData: { enabled: updated.enabled },
     },
   });
+
+  return {
+    id: existing.id,
+    name: existing.name,
+    enabled: updated.enabled,
+  };
 }

@@ -28,6 +28,7 @@ export async function createLiveSessionAction(
       {
         id: session.user.id,
         role: session.user.role,
+        permissionCodes: session.user.permissionCodes,
       },
       {
         title: String(formData.get("title") ?? ""),

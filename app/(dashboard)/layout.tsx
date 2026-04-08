@@ -18,10 +18,14 @@ export default async function DashboardLayout({
 
   return (
     <DashboardShell
-      navigationGroups={getNavigationGroupsForRole(session.user.role)}
+      navigationGroups={getNavigationGroupsForRole(
+        session.user.role,
+        session.user.permissionCodes,
+      )}
       currentUser={{
         name: session.user.name ?? session.user.username,
         username: session.user.username,
+        avatarPath: session.user.avatarPath,
         role: session.user.role,
         roleName: session.user.roleName,
         homePath: getDefaultRouteForRole(session.user.role),

@@ -7,6 +7,15 @@ import {
 } from "@prisma/client";
 import { z } from "zod";
 import {
+  extraPermissionCodes,
+  normalizeExtraPermissionCodes,
+  type ExtraPermissionCode,
+} from "@/lib/auth/permissions";
+import {
+  getUserPermissionGrantMigrationMessage,
+  isMissingUserPermissionGrantTableError,
+} from "@/lib/auth/permission-grants-compat";
+import {
   canCreateRole,
   canManageTargetUser,
   canManageTeams,
@@ -42,6 +51,11 @@ const userFormSchema = z.object({
 
 const userIdSchema = z.object({
   userId: z.string().trim().min(1, "缺少账号 ID"),
+});
+
+const userPermissionFormSchema = z.object({
+  userId: z.string().trim().min(1, "缺少账号 ID"),
+  permissionCodes: z.array(z.enum(extraPermissionCodes)).default([]),
 });
 
 const teamFormSchema = z.object({
@@ -120,6 +134,9 @@ type ManagedUserRecord = {
     code: string;
     name: string;
   } | null;
+  permissionGrants: Array<{
+    permissionCode: ExtraPermissionCode;
+  }>;
 };
 
 function normalizeUsername(value: string) {
@@ -156,6 +173,9 @@ function buildUserAuditSnapshot(user: ManagedUserRecord) {
     invitedById: user.invitedById,
     disabledAt: user.disabledAt,
     disabledById: user.disabledById,
+    permissionCodes: normalizeExtraPermissionCodes(
+      user.permissionGrants.map((item) => item.permissionCode),
+    ),
   };
 }
 
@@ -186,58 +206,132 @@ async function getManagedUserRecord(
   tx: TransactionClient,
   userId: string,
 ): Promise<ManagedUserRecord | null> {
-  return tx.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      username: true,
-      name: true,
-      phone: true,
-      teamId: true,
-      supervisorId: true,
-      userStatus: true,
-      mustChangePassword: true,
-      lastLoginAt: true,
-      invitedAt: true,
-      invitedById: true,
-      disabledAt: true,
-      disabledById: true,
-      role: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
+  try {
+    return await tx.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        phone: true,
+        teamId: true,
+        supervisorId: true,
+        userStatus: true,
+        mustChangePassword: true,
+        lastLoginAt: true,
+        invitedAt: true,
+        invitedById: true,
+        disabledAt: true,
+        disabledById: true,
+        role: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
         },
-      },
-      team: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
+        team: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
         },
-      },
-      supervisor: {
-        select: {
-          id: true,
-          name: true,
-          username: true,
-          teamId: true,
-          role: {
-            select: {
-              code: true,
+        supervisor: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            teamId: true,
+            role: {
+              select: {
+                code: true,
+              },
             },
           },
         },
-      },
-      supervisedTeam: {
-        select: {
-          id: true,
-          code: true,
-          name: true,
+        supervisedTeam: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+        permissionGrants: {
+          orderBy: {
+            permissionCode: "asc",
+          },
+          select: {
+            permissionCode: true,
+          },
         },
       },
-    },
-  });
+    });
+  } catch (error) {
+    if (!isMissingUserPermissionGrantTableError(error)) {
+      throw error;
+    }
+
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        phone: true,
+        teamId: true,
+        supervisorId: true,
+        userStatus: true,
+        mustChangePassword: true,
+        lastLoginAt: true,
+        invitedAt: true,
+        invitedById: true,
+        disabledAt: true,
+        disabledById: true,
+        role: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+        team: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+        supervisor: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            teamId: true,
+            role: {
+              select: {
+                code: true,
+              },
+            },
+          },
+        },
+        supervisedTeam: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    return user
+      ? {
+          ...user,
+          permissionGrants: [],
+        }
+      : null;
+  }
 }
 
 function assertCanManageUser(actor: AccountActor, user: ManagedUserRecord) {
@@ -697,6 +791,95 @@ export async function updateManagedUser(
 
     return updated;
   });
+}
+
+export async function updateManagedUserPermissions(
+  actor: AccountActor,
+  rawInput: z.input<typeof userPermissionFormSchema>,
+) {
+  if (actor.role !== RoleCode.ADMIN) {
+    throw new Error("只有管理员可以调整账号的额外权限。");
+  }
+
+  const parsed = userPermissionFormSchema.parse(rawInput);
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+    const existing = await getManagedUserRecord(tx, parsed.userId);
+
+    if (!existing) {
+      throw new Error("账号不存在。");
+    }
+
+    assertCanManageUser(actor, existing);
+
+    const beforePermissionCodes = normalizeExtraPermissionCodes(
+      existing.permissionGrants.map((item) => item.permissionCode),
+    );
+    const nextPermissionCodes = normalizeExtraPermissionCodes(parsed.permissionCodes);
+    const beforeSet = new Set(beforePermissionCodes);
+    const nextSet = new Set(nextPermissionCodes);
+
+    const addedPermissions = nextPermissionCodes.filter((code) => !beforeSet.has(code));
+    const removedPermissions = beforePermissionCodes.filter((code) => !nextSet.has(code));
+
+    if (addedPermissions.length === 0 && removedPermissions.length === 0) {
+      return {
+        userId: existing.id,
+        permissionCodes: beforePermissionCodes,
+      };
+    }
+
+    if (removedPermissions.length > 0) {
+      await tx.userPermissionGrant.deleteMany({
+        where: {
+          userId: existing.id,
+          permissionCode: {
+            in: removedPermissions,
+          },
+        },
+      });
+    }
+
+    if (addedPermissions.length > 0) {
+      await tx.userPermissionGrant.createMany({
+        data: addedPermissions.map((permissionCode) => ({
+          userId: existing.id,
+          permissionCode,
+          grantedById: actor.id,
+        })),
+      });
+    }
+
+    await createOperationLog(tx, {
+      actor: { connect: { id: actor.id } },
+      module: OperationModule.USER,
+      action: "user.permissions_updated",
+      targetType: OperationTargetType.USER,
+      targetId: existing.id,
+      description: `调整账号额外权限：${buildUserDisplayName(existing)}`,
+      beforeData: {
+        permissionCodes: beforePermissionCodes,
+      },
+      afterData: {
+        permissionCodes: nextPermissionCodes,
+        addedPermissions,
+        removedPermissions,
+      },
+    });
+
+    return {
+      userId: existing.id,
+      permissionCodes: nextPermissionCodes,
+    };
+    });
+  } catch (error) {
+    if (isMissingUserPermissionGrantTableError(error)) {
+      throw new Error(getUserPermissionGrantMigrationMessage());
+    }
+
+    throw error;
+  }
 }
 
 export async function resetManagedUserPassword(

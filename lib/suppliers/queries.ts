@@ -1,6 +1,7 @@
 import { Prisma, type RoleCode } from "@prisma/client";
 import { getParamValue, parseActionNotice } from "@/lib/action-notice";
 import { canAccessSupplierModule } from "@/lib/auth/access";
+import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 
 type SearchParamsValue = string | string[] | undefined;
@@ -8,6 +9,7 @@ type SearchParamsValue = string | string[] | undefined;
 export type SupplierViewer = {
   id: string;
   role: RoleCode;
+  permissionCodes?: ExtraPermissionCode[];
 };
 
 function getLatestDate(values: Array<Date | null | undefined>) {
@@ -26,7 +28,7 @@ export async function getSuppliersPageData(
   viewer: SupplierViewer,
   rawSearchParams?: Record<string, SearchParamsValue>,
 ) {
-  if (!canAccessSupplierModule(viewer.role)) {
+  if (!canAccessSupplierModule(viewer.role, viewer.permissionCodes)) {
     throw new Error("You do not have access to supplier management.");
   }
 
@@ -93,6 +95,7 @@ export async function getSuppliersPageData(
       _count: {
         select: {
           products: true,
+          salesOrders: true,
         },
       },
     },

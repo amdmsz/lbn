@@ -14,6 +14,11 @@ enum RoleCode {
   SHIPPER
 }
 
+enum UserPermissionCode {
+  LIVE_SESSION_MANAGE
+  PRODUCT_MANAGE
+}
+
 enum UserStatus {
   ACTIVE
   INACTIVE
@@ -133,6 +138,20 @@ enum CallResult {
   NEED_CALLBACK
   REFUSED_TO_BUY
   BLACKLIST
+}
+
+enum CallResultEffectLevel {
+  STRONG
+  MEDIUM
+  WEAK
+  NEGATIVE
+}
+
+enum CallResultWechatSyncAction {
+  NONE
+  PENDING
+  ADDED
+  REFUSED
 }
 
 enum WechatAddStatus {
@@ -479,6 +498,7 @@ enum OperationTargetType {
   CATEGORY
   DICTIONARY_TYPE
   DICTIONARY_ITEM
+  CALL_RESULT_SETTING
 }
 
 model Role {
@@ -541,6 +561,7 @@ model User {
   username                String           @unique
   passwordHash            String
   name                    String
+  avatarPath              String?
   phone                   String?          @unique
   teamId                  String?
   team                    Team?            @relation("UserTeam", fields: [teamId], references: [id])
@@ -560,6 +581,8 @@ model User {
   disabledUsers           User[]           @relation("UserDisabler")
   roleId                  String
   role                    Role             @relation(fields: [roleId], references: [id])
+  permissionGrants        UserPermissionGrant[] @relation("UserPermissionGrantUser")
+  grantedPermissionGrants UserPermissionGrant[] @relation("UserPermissionGrantBy")
   supervisedTeam          Team?            @relation("TeamSupervisor")
   ownedLeads              Lead[]           @relation("LeadOwner")
   ownedCustomers          Customer[]       @relation("CustomerOwner")
@@ -613,6 +636,22 @@ model User {
   @@index([supervisorId])
   @@index([invitedById])
   @@index([disabledById])
+}
+
+model UserPermissionGrant {
+  id             String             @id @default(cuid())
+  userId         String
+  user           User               @relation("UserPermissionGrantUser", fields: [userId], references: [id])
+  permissionCode UserPermissionCode
+  grantedById    String?
+  grantedBy      User?              @relation("UserPermissionGrantBy", fields: [grantedById], references: [id])
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@unique([userId, permissionCode])
+  @@index([permissionCode])
+  @@index([grantedById, createdAt])
+  @@map("user_permission_grants")
 }
 
 model Lead {
@@ -792,7 +831,8 @@ model CallRecord {
   sales           User       @relation("CallRecordSales", fields: [salesId], references: [id])
   callTime        DateTime
   durationSeconds Int        @default(0)
-  result          CallResult
+  result          CallResult?
+  resultCode      String?
   remark          String?    @db.Text
   nextFollowUpAt  DateTime?
   createdAt       DateTime   @default(now())
@@ -801,6 +841,28 @@ model CallRecord {
   @@index([leadId, callTime])
   @@index([customerId, callTime])
   @@index([salesId, callTime])
+  @@index([resultCode, callTime])
+}
+
+model CallResultSetting {
+  id                       String                     @id @default(cuid())
+  code                     String                     @unique
+  label                    String
+  description              String?                    @db.Text
+  isSystem                 Boolean                    @default(false)
+  isEnabled                Boolean                    @default(true)
+  sortOrder                Int                        @default(0)
+  effectLevel              CallResultEffectLevel
+  resetsPublicPoolClock    Boolean                    @default(false)
+  claimProtectionDays      Int                        @default(0)
+  requiresSupervisorReview Boolean                    @default(false)
+  wechatSyncAction         CallResultWechatSyncAction @default(NONE)
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+
+  @@index([isEnabled, sortOrder])
+  @@index([isSystem, sortOrder])
+  @@map("call_result_settings")
 }
 
 model WechatRecord {

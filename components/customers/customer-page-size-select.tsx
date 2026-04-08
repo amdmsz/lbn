@@ -38,7 +38,7 @@ export function CustomerPageSizeSelect({
         });
       }}
       className={cn(
-        "min-h-0 h-8 w-[92px] rounded-[10px] border border-[rgba(15,23,42,0.08)] bg-white/96 px-3 text-[13px] text-black/76 outline-none transition focus:border-[rgba(15,23,42,0.14)] focus:ring-2 focus:ring-black/5",
+        "min-h-0 h-9 w-[96px] rounded-[12px] border border-[rgba(15,23,42,0.08)] bg-white/96 px-3 text-[13px] text-black/76 outline-none transition focus:border-[rgba(15,23,42,0.14)] focus:ring-2 focus:ring-black/5",
         pending && "opacity-70",
       )}
     >

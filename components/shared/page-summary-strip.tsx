@@ -63,7 +63,7 @@ function SummaryTile({
           title={typeof item.note === "string" ? item.note : undefined}
           className={cn(
             isCompact
-              ? "mt-1 truncate text-[12px] leading-5 text-black/50"
+              ? "mt-1 line-clamp-2 text-[12px] leading-5 text-black/50"
               : "mt-2 text-sm leading-6 text-black/55",
           )}
         >
@@ -101,7 +101,7 @@ export function PageSummaryStrip({
     <div
       className={cn(
         density === "compact"
-          ? "grid grid-cols-2 gap-2.5 xl:grid-cols-4"
+          ? "grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-4"
           : "grid gap-3 md:grid-cols-2 2xl:grid-cols-4",
         className,
       )}

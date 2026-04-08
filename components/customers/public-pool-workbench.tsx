@@ -53,8 +53,7 @@ import type {
 } from "@/lib/customers/public-pool-recycle";
 import { cn } from "@/lib/utils";
 
-const sectionShellClassName =
-  "mx-auto w-full max-w-[1360px] px-[14px] md:px-[18px] xl:px-6";
+const sectionShellClassName = "crm-workspace-shell";
 
 const summaryToneClassName = {
   default: "border-black/6",
@@ -284,23 +283,20 @@ function getWorkbenchViewMeta(data: CustomerPublicPoolData) {
       return {
         eyebrow: "Recycle Queue",
         title: "团队回收工作台",
-        description:
-          "这里处理私有客户释放和批量回收。保护期内默认不可直接回收，避免正在推进的客户被无脑拿走。",
+        description: "处理释放与回收。",
       };
     case "records":
       return {
         eyebrow: "Ownership Audit",
         title: "Ownership 审计记录",
-        description:
-          "这里按 ownership event 追踪谁、在什么时候、因为什么，把客户从什么状态改到了什么状态。",
+        description: "查看 ownership 流转记录。",
       };
     case "pool":
     default:
       return {
         eyebrow: "Public Pool",
         title: "公海认领与分配工作台",
-        description:
-          "这里按可认领、锁定、最近有效跟进和订单摘要处理公海客户，优先解决认领、分配和筛选，不在列表里堆历史。",
+        description: "处理认领、指派与筛选。",
       };
   }
 }
@@ -311,17 +307,17 @@ function getSelectionHint(
   selectedCount: number,
 ) {
   if (data.filters.view === "records") {
-    return "记录视图只读，用于追踪 ownership 审计链。";
+    return "记录视图只读。";
   }
 
   if (selectedCount > 0) {
     if (data.filters.view === "recycle") {
-      return `已选择 ${selectedCount} 位客户，可直接执行批量回收。`;
+      return `已选择 ${selectedCount} 位客户。`;
     }
 
     return data.canClaim
-      ? `已选择 ${selectedCount} 位客户，可直接认领。`
-      : `已选择 ${selectedCount} 位客户，可在上方批量栏执行指派。`;
+      ? `已选择 ${selectedCount} 位客户。`
+      : `已选择 ${selectedCount} 位客户。`;
   }
 
   if (data.filters.view === "recycle") {
@@ -330,10 +326,10 @@ function getSelectionHint(
     }
 
     if (actionableCount === 0) {
-      return "当前列表客户均处于保护期内，默认不可直接回收。";
+      return "当前列表客户均在保护期内。";
     }
 
-    return `当前列表中有 ${actionableCount} 位客户可执行回收。`;
+    return `可回收 ${actionableCount} 位客户。`;
   }
 
   if (data.poolItems.length === 0) {
@@ -341,18 +337,18 @@ function getSelectionHint(
   }
 
   if (actionableCount === 0) {
-    return "当前列表客户均处于锁定状态，先查看详情或等待保护期结束。";
+    return "当前列表客户均已锁定。";
   }
 
   if (data.canClaim) {
-    return `当前列表中有 ${actionableCount} 位客户可直接认领。`;
+    return `可认领 ${actionableCount} 位客户。`;
   }
 
   if (data.canManage && data.salesOptions.length === 0) {
-    return "当前团队没有可用于指派的销售账号，先补齐团队成员。";
+    return "当前团队没有可指派销售。";
   }
 
-  return `当前列表中有 ${actionableCount} 位客户可执行指派。`;
+  return `可指派 ${actionableCount} 位客户。`;
 }
 
 function getBatchBarTitle(data: CustomerPublicPoolData) {
@@ -493,7 +489,7 @@ function RecycleAutomationCard({
       </div>
 
       {preview ? (
-        <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+        <div className="mt-4 grid gap-3 2xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
           <div className="space-y-3 rounded-[16px] border border-black/6 bg-[rgba(247,248,250,0.62)] px-3.5 py-3">
             <div>
               <p className="text-[12px] font-medium text-black/68">命中规则</p>
@@ -700,7 +696,7 @@ function AutoAssignAutomationCard({
       </div>
 
       {preview ? (
-        <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+        <div className="mt-4 grid gap-3 2xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
           <div className="space-y-3 rounded-[16px] border border-black/6 bg-[rgba(247,248,250,0.62)] px-3.5 py-3">
             <div>
               <p className="text-[12px] font-medium text-black/68">规则摘要</p>
@@ -1057,7 +1053,12 @@ export function CustomerPublicPoolWorkbench({
       }
       summary={
         <div className={cn(sectionShellClassName, "mb-4")}>
-          <div className={cn("grid gap-[14px]", summaryCards.length >= 5 ? "xl:grid-cols-5" : "xl:grid-cols-4", "grid-cols-2")}>
+          <div
+            className={cn(
+              "grid gap-[14px] grid-cols-1 sm:grid-cols-2 xl:grid-cols-3",
+              summaryCards.length >= 5 ? "2xl:grid-cols-5" : "2xl:grid-cols-4",
+            )}
+          >
             {summaryCards.map((item) => (
               <SummaryMetricCard key={item.label} item={item} />
             ))}
@@ -1071,7 +1072,7 @@ export function CustomerPublicPoolWorkbench({
             <RecordTabs items={getSegmentTabs(data)} activeValue={data.filters.segment} />
           ) : null}
 
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_340px]">
             <div className="rounded-[18px] border border-black/6 bg-[rgba(255,255,255,0.82)] px-4 py-4">
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/38">
                 {viewMeta.eyebrow}
@@ -1107,7 +1108,7 @@ export function CustomerPublicPoolWorkbench({
           <form
             action="/customers/public-pool"
             method="get"
-            className="crm-subtle-panel grid gap-3 md:grid-cols-2 xl:grid-cols-6"
+            className="crm-subtle-panel grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6"
           >
             <input type="hidden" name="view" value={data.filters.view} />
             {data.filters.view === "pool" ? (
@@ -1166,7 +1167,7 @@ export function CustomerPublicPoolWorkbench({
                 ))}
               </select>
             </label>
-            <div className="flex items-end gap-2 xl:col-span-6">
+            <div className="flex items-end gap-2 xl:col-span-3 2xl:col-span-6">
               <button type="submit" className="crm-button crm-button-primary">
                 应用筛选
               </button>
@@ -1189,13 +1190,13 @@ export function CustomerPublicPoolWorkbench({
                 onChange={(event) => setNote(event.target.value)}
                 maxLength={500}
                 placeholder="可选备注"
-                className="crm-input min-w-[11rem]"
+                className="crm-input w-full sm:min-w-[11rem]"
               />
               {data.filters.view === "pool" && data.canManage ? (
                 <select
                   value={targetSalesId}
                   onChange={(event) => setTargetSalesId(event.target.value)}
-                  className="crm-select min-w-[12rem]"
+                  className="crm-select w-full sm:min-w-[12rem]"
                 >
                   <option value="">选择指派销售</option>
                   {data.salesOptions.map((sales) => (
@@ -1288,7 +1289,7 @@ export function CustomerPublicPoolWorkbench({
             ) : null}
           <DataTableWrapper
             title="公海客户列表"
-            description="客户、有效跟进、最近 owner、入池原因和保护期保持在同一行完成扫描，详情按需进入，不在列表里摊开全部历史。"
+            description="查看公海客户。"
             eyebrow="Public Pool"
           >
             <EntityTable
@@ -1296,7 +1297,7 @@ export function CustomerPublicPoolWorkbench({
               rows={data.poolItems}
               getRowKey={(row) => row.id}
               emptyTitle="当前没有匹配的公海客户"
-              emptyDescription="调整筛选、切换分段，或稍后查看新的入池客户。"
+              emptyDescription="试试调整筛选。"
               columns={[
                 {
                   key: "select",
@@ -1484,11 +1485,11 @@ export function CustomerPublicPoolWorkbench({
 
         {data.filters.view === "recycle" ? (
           <div className="space-y-4">
-            <div className="grid gap-3 xl:grid-cols-2">
+            <div className="grid gap-3 2xl:grid-cols-2">
               <RecycleAutomationCard
                 kind="inactive"
                 title="自动回收"
-                description="按有效跟进超时规则预览并执行失活回收。普通自动回收始终尊重 claim lock。"
+                description="按规则预览并执行回收。"
                 preview={inactivePreview}
                 applyResult={inactiveApplyResult}
                 pending={pending}
@@ -1506,7 +1507,7 @@ export function CustomerPublicPoolWorkbench({
               <RecycleAutomationCard
                 kind="owner_exit"
                 title="离职回收"
-                description="按 owner 禁用、失去销售资格或脱离承接团队规则预览并执行回收。离职回收不受 claim lock 阻挡。"
+                description="按离职规则回收。"
                 preview={ownerExitPreview}
                 applyResult={ownerExitApplyResult}
                 pending={pending}
@@ -1525,7 +1526,7 @@ export function CustomerPublicPoolWorkbench({
 
             <DataTableWrapper
               title="可回收客户"
-              description="回收视图只保留当前 owner、有效跟进、保护期和订单摘要，聚焦主管日常释放与回收判断。"
+              description="查看可回收客户。"
               eyebrow="Recycle"
             >
               <EntityTable
@@ -1533,7 +1534,7 @@ export function CustomerPublicPoolWorkbench({
                 rows={data.recycleItems}
                 getRowKey={(row) => row.id}
                 emptyTitle="当前没有可回收客户"
-                emptyDescription="团队范围内没有匹配的私有客户，或筛选条件过窄。"
+                emptyDescription="当前筛选条件下没有记录。"
                 columns={[
                   {
                     key: "select",
@@ -1667,7 +1668,7 @@ export function CustomerPublicPoolWorkbench({
         {data.filters.view === "records" ? (
           <DataTableWrapper
             title="Ownership 审计链"
-            description="记录谁把哪个客户从私有、锁定或公海状态流转到了下一状态，并附带动作原因、跟进时点和保护期快照。"
+            description="查看流转记录。"
             eyebrow="Records"
           >
             <EntityTable
@@ -1675,7 +1676,7 @@ export function CustomerPublicPoolWorkbench({
               rows={data.recordItems}
               getRowKey={(row) => row.id}
               emptyTitle="当前没有匹配的流转记录"
-              emptyDescription="调整原因、团队或搜索条件后再查看。"
+              emptyDescription="试试调整筛选。"
               columns={[
                 {
                   key: "time",
