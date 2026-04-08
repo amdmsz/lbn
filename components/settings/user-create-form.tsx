@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import type { RoleCode } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import {
@@ -78,9 +78,7 @@ export function UserCreateForm({
   const [selectedRole, setSelectedRole] = useState<RoleCode>(
     getDefaultRole(actorRole, roleOptions),
   );
-  const [selectedTeamId, setSelectedTeamId] = useState<string>(
-    actorRole === "SUPERVISOR" ? defaultTeamId ?? "" : defaultTeamId ?? "",
-  );
+  const [selectedTeamId, setSelectedTeamId] = useState<string>(defaultTeamId ?? "");
 
   const filteredSupervisors =
     actorRole === "ADMIN"
@@ -90,22 +88,6 @@ export function UserCreateForm({
       : supervisorOptions;
   const defaultSupervisor =
     filteredSupervisors.find((item) => item.id === defaultSupervisorId) ?? null;
-
-  useEffect(() => {
-    if (!requiresSupervisor(selectedRole)) {
-      return;
-    }
-
-    if (
-      filteredSupervisors.length === 1 &&
-      actorRole === "SUPERVISOR"
-    ) {
-      const supervisorInput = formRef.current?.elements.namedItem("supervisorId");
-      if (supervisorInput instanceof HTMLSelectElement) {
-        supervisorInput.value = filteredSupervisors[0]?.id ?? "";
-      }
-    }
-  }, [actorRole, filteredSupervisors, selectedRole]);
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
