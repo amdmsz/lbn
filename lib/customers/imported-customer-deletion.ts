@@ -42,6 +42,14 @@ type ReviewerSummary = {
 const activeCustomerOwnershipModes = ["PRIVATE", "LOCKED"] as const;
 const publicPoolCustomerDetailModes = ["PUBLIC", "LOCKED"] as const;
 
+const importedCustomerDeletionTransactionOptions: {
+  maxWait: number;
+  timeout: number;
+} = {
+  maxWait: 10_000,
+  timeout: 20_000,
+};
+
 const importedCustomerDeletionCustomerSelect = {
   id: true,
   name: true,
@@ -586,20 +594,35 @@ async function findImportedCustomerDeletionRequestsTx(
   tx: Prisma.TransactionClient | typeof prisma,
   customerId: string,
 ) {
-  const records = await tx.importedCustomerDeletionRequest.findMany({
-    where: {
-      customerIdSnapshot: customerId,
-    },
-    orderBy: [{ createdAt: "desc" }],
-    select: importedCustomerDeletionRequestSummarySelect,
-  });
-
-  const summaries = records.map(summarizeImportedCustomerDeletionRequest);
+  const [latestRecord, pendingRecord] = await Promise.all([
+    tx.importedCustomerDeletionRequest.findFirst({
+      where: {
+        customerIdSnapshot: customerId,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      select: importedCustomerDeletionRequestSummarySelect,
+    }),
+    tx.importedCustomerDeletionRequest.findFirst({
+      where: {
+        customerIdSnapshot: customerId,
+        status: "PENDING_SUPERVISOR",
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      select: importedCustomerDeletionRequestSummarySelect,
+    }),
+  ]);
 
   return {
-    latestRequest: summaries[0] ?? null,
-    pendingRequest:
-      summaries.find((item) => item.status === "PENDING_SUPERVISOR") ?? null,
+    latestRequest: latestRecord
+      ? summarizeImportedCustomerDeletionRequest(latestRecord)
+      : null,
+    pendingRequest: pendingRecord
+      ? summarizeImportedCustomerDeletionRequest(pendingRecord)
+      : null,
   };
 }
 
@@ -998,82 +1021,85 @@ export async function requestImportedCustomerDeletion(
     throw new Error("当前角色不能发起导入客户删除申请。");
   }
 
-  return prisma.$transaction(async (tx) => {
-    const customer = await findVisibleImportedCustomerForDeletionTx(
-      tx,
-      actor,
-      input.customerId,
-    );
-
-    if (!customer) {
-      throw new Error("当前客户不存在、已删除，或不在你的可见范围内。");
-    }
-
-    const [{ latestRequest, pendingRequest }, source] = await Promise.all([
-      findImportedCustomerDeletionRequestsTx(tx, customer.id),
-      findImportedCustomerDeletionOriginTx(tx, customer.id),
-    ]);
-    const reviewer = await resolveSupervisorReviewerTx(tx, customer, actor.teamId);
-    const guard = buildGuard({
-      actor,
-      customer,
-      source,
-      latestRequest,
-      pendingRequest,
-      suggestedReviewer: reviewer,
-    });
-
-    if (!guard.canRequestDeletion) {
-      throw new Error(
-        guard.blockedReason ??
-          "当前客户不满足导入删除申请条件，请确认是否仍为导入新建、公海客户且没有交易数据。",
+  return prisma.$transaction(
+    async (tx) => {
+      const customer = await findVisibleImportedCustomerForDeletionTx(
+        tx,
+        actor,
+        input.customerId,
       );
-    }
 
-    if (!reviewer) {
-      throw new Error("找不到可审批的团队主管，请先配置团队主管或由管理员处理。");
-    }
+      if (!customer) {
+        throw new Error("当前客户不存在、已删除，或不在你的可见范围内。");
+      }
 
-    const request = await tx.importedCustomerDeletionRequest.create({
-      data: {
-        customerIdSnapshot: customer.id,
-        customerNameSnapshot: customer.name,
-        customerPhoneSnapshot: customer.phone,
-        sourceMode: guard.source!.mode,
-        sourceBatchId: guard.source!.batchId,
-        sourceBatchFileName: guard.source!.batchFileName,
-        sourceRowNumber: guard.source!.rowNumber,
-        requestReason: input.reason,
-        reviewerId: reviewer.id,
-        requestedById: actor.id,
-      },
-      select: {
-        id: true,
-      },
-    });
+      const [{ latestRequest, pendingRequest }, source] = await Promise.all([
+        findImportedCustomerDeletionRequestsTx(tx, customer.id),
+        findImportedCustomerDeletionOriginTx(tx, customer.id),
+      ]);
+      const reviewer = await resolveSupervisorReviewerTx(tx, customer, actor.teamId);
+      const guard = buildGuard({
+        actor,
+        customer,
+        source,
+        latestRequest,
+        pendingRequest,
+        suggestedReviewer: reviewer,
+      });
 
-    await createImportedCustomerDeletionOperationLogTx(tx, {
-      actorId: actor.id,
-      targetCustomerId: customer.id,
-      action: "customer.imported_customer_delete.requested",
-      description: `提交导入客户删除申请：${customer.name}`,
-      afterData: {
+      if (!guard.canRequestDeletion) {
+        throw new Error(
+          guard.blockedReason ??
+            "当前客户不满足导入删除申请条件，请确认是否仍为导入新建、公海客户且没有交易数据。",
+        );
+      }
+
+      if (!reviewer) {
+        throw new Error("找不到可审批的团队主管，请先配置团队主管或由管理员处理。");
+      }
+
+      const request = await tx.importedCustomerDeletionRequest.create({
+        data: {
+          customerIdSnapshot: customer.id,
+          customerNameSnapshot: customer.name,
+          customerPhoneSnapshot: customer.phone,
+          sourceMode: guard.source!.mode,
+          sourceBatchId: guard.source!.batchId,
+          sourceBatchFileName: guard.source!.batchFileName,
+          sourceRowNumber: guard.source!.rowNumber,
+          requestReason: input.reason,
+          reviewerId: reviewer.id,
+          requestedById: actor.id,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      await createImportedCustomerDeletionOperationLogTx(tx, {
+        actorId: actor.id,
+        targetCustomerId: customer.id,
+        action: "customer.imported_customer_delete.requested",
+        description: `提交导入客户删除申请：${customer.name}`,
+        afterData: {
+          requestId: request.id,
+          reviewerId: reviewer.id,
+          reviewerName: reviewer.name,
+          requestReason: input.reason,
+          sourceMode: guard.source?.mode ?? null,
+          sourceBatchId: guard.source?.batchId ?? null,
+          sourceRowNumber: guard.source?.rowNumber ?? null,
+        },
+      });
+
+      return {
         requestId: request.id,
-        reviewerId: reviewer.id,
-        reviewerName: reviewer.name,
-        requestReason: input.reason,
-        sourceMode: guard.source?.mode ?? null,
-        sourceBatchId: guard.source?.batchId ?? null,
-        sourceRowNumber: guard.source?.rowNumber ?? null,
-      },
-    });
-
-    return {
-      requestId: request.id,
-      reviewer,
-      message: `已提交删除申请，等待 ${reviewer.name} 审批。`,
-    };
-  });
+        reviewer,
+        message: `已提交删除申请，等待 ${reviewer.name} 审批。`,
+      };
+    },
+    importedCustomerDeletionTransactionOptions,
+  );
 }
 
 export async function reviewImportedCustomerDeletion(
@@ -1097,123 +1123,168 @@ export async function reviewImportedCustomerDeletion(
     throw new Error("当前角色不能审批导入客户删除申请。");
   }
 
-  return prisma.$transaction(async (tx) => {
-    const request = await tx.importedCustomerDeletionRequest.findUnique({
-      where: {
-        id: input.requestId,
-      },
-      select: importedCustomerDeletionRequestSummarySelect,
-    });
+  return prisma.$transaction(
+    async (tx) => {
+      const request = await tx.importedCustomerDeletionRequest.findUnique({
+        where: {
+          id: input.requestId,
+        },
+        select: importedCustomerDeletionRequestSummarySelect,
+      });
 
-    if (!request) {
-      throw new Error("删除申请不存在或已失效。");
-    }
-
-    const requestSummary = summarizeImportedCustomerDeletionRequest(request);
-
-    if (requestSummary.status !== "PENDING_SUPERVISOR") {
-      throw new Error("该删除申请已处理，请刷新后查看最新状态。");
-    }
-
-    if (actor.role !== "ADMIN" && requestSummary.reviewer?.id !== actor.id) {
-      throw new Error("当前申请不在你的审批范围内。");
-    }
-
-    if (input.decision === "reject") {
-      const rejectReason = input.reason?.trim();
-
-      if (!rejectReason) {
-        throw new Error("请填写驳回原因。");
+      if (!request) {
+        throw new Error("删除申请不存在或已失效。");
       }
 
-      await tx.importedCustomerDeletionRequest.update({
-        where: {
-          id: requestSummary.id,
-        },
-        data: {
-          status: "REJECTED",
-          reviewerId: actor.id,
-          reviewedAt: new Date(),
-          rejectReason,
-        },
-      });
+      const requestSummary = summarizeImportedCustomerDeletionRequest(request);
 
-      await createImportedCustomerDeletionOperationLogTx(tx, {
-        actorId: actor.id,
-        targetCustomerId: requestSummary.customerIdSnapshot,
-        action: "customer.imported_customer_delete.rejected",
-        description: `驳回导入客户删除申请：${requestSummary.customerNameSnapshot}`,
-        afterData: {
+      if (requestSummary.status !== "PENDING_SUPERVISOR") {
+        throw new Error("该删除申请已处理，请刷新后查看最新状态。");
+      }
+
+      if (actor.role !== "ADMIN" && requestSummary.reviewer?.id !== actor.id) {
+        throw new Error("当前申请不在你的审批范围内。");
+      }
+
+      if (input.decision === "reject") {
+        const rejectReason = input.reason?.trim();
+
+        if (!rejectReason) {
+          throw new Error("请填写驳回原因。");
+        }
+
+        await tx.importedCustomerDeletionRequest.update({
+          where: {
+            id: requestSummary.id,
+          },
+          data: {
+            status: "REJECTED",
+            reviewerId: actor.id,
+            reviewedAt: new Date(),
+            rejectReason,
+          },
+        });
+
+        await createImportedCustomerDeletionOperationLogTx(tx, {
+          actorId: actor.id,
+          targetCustomerId: requestSummary.customerIdSnapshot,
+          action: "customer.imported_customer_delete.rejected",
+          description: `驳回导入客户删除申请：${requestSummary.customerNameSnapshot}`,
+          afterData: {
+            requestId: requestSummary.id,
+            rejectReason,
+          },
+        });
+
+        return {
+          status: "rejected",
           requestId: requestSummary.id,
-          rejectReason,
-        },
-      });
+          customerId: requestSummary.customerIdSnapshot,
+          customerName: requestSummary.customerNameSnapshot,
+          redirectTo: null,
+          batchId: requestSummary.sourceBatchId,
+          message: `已驳回 ${requestSummary.customerNameSnapshot} 的删除申请。`,
+        };
+      }
 
-      return {
-        status: "rejected",
-        requestId: requestSummary.id,
-        customerId: requestSummary.customerIdSnapshot,
-        customerName: requestSummary.customerNameSnapshot,
-        redirectTo: null,
-        batchId: requestSummary.sourceBatchId,
-        message: `已驳回 ${requestSummary.customerNameSnapshot} 的删除申请。`,
-      };
-    }
-
-    const customer = await findVisibleImportedCustomerForDeletionTx(
-      tx,
-      actor,
-      requestSummary.customerIdSnapshot,
-    );
-
-    if (!customer) {
-      const existingCustomer = await findImportedCustomerForDeletionByIdTx(
+      const customer = await findVisibleImportedCustomerForDeletionTx(
         tx,
+        actor,
         requestSummary.customerIdSnapshot,
       );
 
-      if (existingCustomer) {
+      if (!customer) {
+        const existingCustomer = await findImportedCustomerForDeletionByIdTx(
+          tx,
+          requestSummary.customerIdSnapshot,
+        );
+
+        if (existingCustomer) {
+          throw new Error(
+            "当前客户仍存在，但你已不在可审批范围内，请联系管理员或在对应团队下处理。",
+          );
+        }
+
+        await tx.importedCustomerDeletionRequest.update({
+          where: {
+            id: requestSummary.id,
+          },
+          data: {
+            status: "EXECUTED",
+            reviewerId: actor.id,
+            reviewedAt: new Date(),
+            executedById: actor.id,
+            executedAt: new Date(),
+            outcomeSnapshot: {
+              deletedElsewhere: true,
+            },
+          },
+        });
+
+        await createImportedCustomerDeletionOperationLogTx(tx, {
+          actorId: actor.id,
+          targetCustomerId: requestSummary.customerIdSnapshot,
+          action: "customer.imported_customer_delete.approved",
+          description: `审批通过导入客户删除申请：${requestSummary.customerNameSnapshot}`,
+          afterData: {
+            requestId: requestSummary.id,
+            deletedElsewhere: true,
+          },
+        });
+
+        await createImportedCustomerDeletionOperationLogTx(tx, {
+          actorId: actor.id,
+          targetCustomerId: requestSummary.customerIdSnapshot,
+          action: "customer.imported_customer_delete.executed",
+          description: `执行导入客户删除收口：${requestSummary.customerNameSnapshot}`,
+          afterData: {
+            requestId: requestSummary.id,
+            deletedElsewhere: true,
+          },
+        });
+
+        return {
+          status: "executed",
+          requestId: requestSummary.id,
+          customerId: requestSummary.customerIdSnapshot,
+          customerName: requestSummary.customerNameSnapshot,
+          redirectTo: null,
+          batchId: requestSummary.sourceBatchId,
+          message: `${requestSummary.customerNameSnapshot} 已不存在，申请已按已删除收口。`,
+        };
+      }
+
+      const [{ latestRequest, pendingRequest }, source, suggestedReviewer] =
+        await Promise.all([
+          findImportedCustomerDeletionRequestsTx(tx, customer.id),
+          findImportedCustomerDeletionOriginTx(tx, customer.id),
+          resolveSupervisorReviewerTx(tx, customer, actor.teamId),
+        ]);
+      const guard = buildGuard({
+        actor,
+        customer,
+        source,
+        latestRequest,
+        pendingRequest,
+        suggestedReviewer,
+      });
+
+      if (!guard.canReviewPendingRequest) {
         throw new Error(
-          "当前客户仍存在，但你已不在可审批范围内，请联系管理员或在对应团队下处理。",
+          guard.blockedReason ??
+            "当前客户已不满足删除条件，请确认负责人、公海状态和交易阻断数据。",
         );
       }
 
-      await tx.importedCustomerDeletionRequest.update({
-        where: {
+      const execution = await executeImportedCustomerDeletionTx(tx, {
+        actor,
+        customer,
+        guard,
+        request: {
           id: requestSummary.id,
+          reason: requestSummary.requestReason,
         },
-        data: {
-          status: "EXECUTED",
-          reviewerId: actor.id,
-          reviewedAt: new Date(),
-          executedById: actor.id,
-          executedAt: new Date(),
-          outcomeSnapshot: {
-            deletedElsewhere: true,
-          },
-        },
-      });
-
-      await createImportedCustomerDeletionOperationLogTx(tx, {
-        actorId: actor.id,
-        targetCustomerId: requestSummary.customerIdSnapshot,
-        action: "customer.imported_customer_delete.approved",
-        description: `审批通过导入客户删除申请：${requestSummary.customerNameSnapshot}`,
-        afterData: {
-          requestId: requestSummary.id,
-          deletedElsewhere: true,
-        },
-      });
-
-      await createImportedCustomerDeletionOperationLogTx(tx, {
-        actorId: actor.id,
-        targetCustomerId: requestSummary.customerIdSnapshot,
-        action: "customer.imported_customer_delete.executed",
-        description: `执行导入客户删除收口：${requestSummary.customerNameSnapshot}`,
-        afterData: {
-          requestId: requestSummary.id,
-          deletedElsewhere: true,
-        },
+        reason: requestSummary.requestReason,
       });
 
       return {
@@ -1221,55 +1292,13 @@ export async function reviewImportedCustomerDeletion(
         requestId: requestSummary.id,
         customerId: requestSummary.customerIdSnapshot,
         customerName: requestSummary.customerNameSnapshot,
-        redirectTo: null,
+        redirectTo: execution.redirectTo,
         batchId: requestSummary.sourceBatchId,
-        message: `${requestSummary.customerNameSnapshot} 已不存在，申请已按已删除收口。`,
+        message: `已审批并删除 ${requestSummary.customerNameSnapshot}。`,
       };
-    }
-
-    const [{ latestRequest, pendingRequest }, source, suggestedReviewer] =
-      await Promise.all([
-        findImportedCustomerDeletionRequestsTx(tx, customer.id),
-        findImportedCustomerDeletionOriginTx(tx, customer.id),
-        resolveSupervisorReviewerTx(tx, customer, actor.teamId),
-      ]);
-    const guard = buildGuard({
-      actor,
-      customer,
-      source,
-      latestRequest,
-      pendingRequest,
-      suggestedReviewer,
-    });
-
-    if (!guard.canReviewPendingRequest) {
-      throw new Error(
-        guard.blockedReason ??
-          "当前客户已不满足删除条件，请确认负责人、公海状态和交易阻断数据。",
-      );
-    }
-
-    const execution = await executeImportedCustomerDeletionTx(tx, {
-      actor,
-      customer,
-      guard,
-      request: {
-        id: requestSummary.id,
-        reason: requestSummary.requestReason,
-      },
-      reason: requestSummary.requestReason,
-    });
-
-    return {
-      status: "executed",
-      requestId: requestSummary.id,
-      customerId: requestSummary.customerIdSnapshot,
-      customerName: requestSummary.customerNameSnapshot,
-      redirectTo: execution.redirectTo,
-      batchId: requestSummary.sourceBatchId,
-      message: `已审批并删除 ${requestSummary.customerNameSnapshot}。`,
-    };
-  });
+    },
+    importedCustomerDeletionTransactionOptions,
+  );
 }
 
 export async function deleteImportedCustomersDirect(
@@ -1300,69 +1329,72 @@ export async function deleteImportedCustomersDirect(
 
   for (const customerId of uniqueCustomerIds) {
     try {
-      const item = await prisma.$transaction(async (tx) => {
-        const customer = await findVisibleImportedCustomerForDeletionTx(
-          tx,
-          actor,
-          customerId,
-        );
-
-        if (!customer) {
-          return {
+      const item = await prisma.$transaction(
+        async (tx) => {
+          const customer = await findVisibleImportedCustomerForDeletionTx(
+            tx,
+            actor,
             customerId,
-            customerName: customerId,
-            sourceBatchId: null,
-            redirectTo: null,
-            status: "skipped" as const,
-            message: "客户不存在、已删除，或不在当前可管理范围内。",
-          };
-        }
+          );
 
-        const [{ latestRequest, pendingRequest }, source, suggestedReviewer] =
-          await Promise.all([
-            findImportedCustomerDeletionRequestsTx(tx, customer.id),
-            findImportedCustomerDeletionOriginTx(tx, customer.id),
-            resolveSupervisorReviewerTx(tx, customer, actor.teamId),
-          ]);
-        const guard = buildGuard({
-          actor,
-          customer,
-          source,
-          latestRequest,
-          pendingRequest,
-          suggestedReviewer,
-        });
+          if (!customer) {
+            return {
+              customerId,
+              customerName: customerId,
+              sourceBatchId: null,
+              redirectTo: null,
+              status: "skipped" as const,
+              message: "客户不存在、已删除，或不在当前可管理范围内。",
+            };
+          }
 
-        if (!guard.canDirectDelete) {
+          const [{ latestRequest, pendingRequest }, source, suggestedReviewer] =
+            await Promise.all([
+              findImportedCustomerDeletionRequestsTx(tx, customer.id),
+              findImportedCustomerDeletionOriginTx(tx, customer.id),
+              resolveSupervisorReviewerTx(tx, customer, actor.teamId),
+            ]);
+          const guard = buildGuard({
+            actor,
+            customer,
+            source,
+            latestRequest,
+            pendingRequest,
+            suggestedReviewer,
+          });
+
+          if (!guard.canDirectDelete) {
+            return {
+              customerId: customer.id,
+              customerName: customer.name,
+              sourceBatchId: guard.source?.batchId ?? null,
+              redirectTo: null,
+              status: "skipped" as const,
+              message:
+                guard.blockedReason ??
+                "当前客户不满足直接删除条件，请检查负责人、公海状态或交易阻断数据。",
+            };
+          }
+
+          const execution = await executeImportedCustomerDeletionTx(tx, {
+            actor,
+            customer,
+            guard,
+            request: null,
+            reason: input.reason,
+          });
+
           return {
             customerId: customer.id,
             customerName: customer.name,
-            sourceBatchId: guard.source?.batchId ?? null,
-            redirectTo: null,
-            status: "skipped" as const,
-            message:
-              guard.blockedReason ??
-              "当前客户不满足直接删除条件，请检查负责人、公海状态或交易阻断数据。",
+            sourceBatchId: execution.sourceBatchId,
+            redirectTo: execution.redirectTo,
+            status: "deleted" as const,
+            message: `已删除 ${customer.name}。`,
           };
-        }
-
-        const execution = await executeImportedCustomerDeletionTx(tx, {
-          actor,
-          customer,
-          guard,
-          request: null,
-          reason: input.reason,
-        });
-
-        return {
-          customerId: customer.id,
-          customerName: customer.name,
-          sourceBatchId: execution.sourceBatchId,
-          redirectTo: execution.redirectTo,
-          status: "deleted" as const,
-          message: `已删除 ${customer.name}。`,
-        };
-      });
+        },
+        importedCustomerDeletionTransactionOptions,
+      );
 
       items.push(item);
 

@@ -178,6 +178,14 @@ type RollbackBatchRecord = Prisma.LeadImportBatchGetPayload<{
   select: typeof rollbackBatchSelect;
 }>;
 
+const leadImportBatchRollbackTransactionOptions: {
+  maxWait: number;
+  timeout: number;
+} = {
+  maxWait: 10_000,
+  timeout: 20_000,
+};
+
 const rollbackRowStateMeta: Record<
   LeadImportBatchRollbackRowState,
   {
@@ -1108,8 +1116,9 @@ export async function getLeadImportBatchRollbackPreview(
     throw new Error("当前账号角色已变更，请刷新后重试。");
   }
 
-  const prepared = await prisma.$transaction((tx) =>
-    prepareBatchRollbackTx(tx, actor, batchId, mode),
+  const prepared = await prisma.$transaction(
+    (tx) => prepareBatchRollbackTx(tx, actor, batchId, mode),
+    leadImportBatchRollbackTransactionOptions,
   );
 
   return {
@@ -1144,217 +1153,220 @@ export async function executeLeadImportBatchRollback(
   }
 
   try {
-    return await prisma.$transaction(async (tx) => {
-      const prepared = await prepareBatchRollbackTx(tx, actor, input.batchId, input.mode);
+    return await prisma.$transaction(
+      async (tx) => {
+        const prepared = await prepareBatchRollbackTx(tx, actor, input.batchId, input.mode);
 
-      if (!prepared.precheck.overallEligible) {
-        throw new LeadImportBatchRollbackBlockedError(prepared.precheck);
-      }
-
-      const now = new Date();
-      const executionRows: LeadImportBatchRollbackExecutionRow[] = [];
-      const affectedCustomerIds = new Set<string>();
-      const affectedLeadIds = new Set<string>();
-      let deletedCustomerRows = 0;
-      let alreadyRemovedCustomerRows = 0;
-      let auditPreservedLeadRows = 0;
-      let hardDeletedLeadRows = 0;
-      let ignoredRows = 0;
-
-      for (const row of prepared.rows) {
-        if (row.state === "IGNORED") {
-          ignoredRows += 1;
-          executionRows.push({
-            rowNumber: row.rowNumber,
-            outcome: "IGNORED",
-            note: row.reason,
-          });
-          continue;
+        if (!prepared.precheck.overallEligible) {
+          throw new LeadImportBatchRollbackBlockedError(prepared.precheck);
         }
 
-        if (row.customerRollback.state === "DELETE") {
-          await executeImportedCustomerDeletionTx(tx, {
-            actor,
-            customer: row.customerRollback.customer,
-            guard: row.customerRollback.guard,
-            request: null,
-            reason: executionReason,
-            operationContext: {
-              source: "lead_import_batch_rollback",
-              rollbackBatchId: prepared.batchId,
-              rollbackMode: prepared.mode,
-            },
-          });
-          deletedCustomerRows += 1;
-          affectedCustomerIds.add(row.customerRollback.customer.id);
-          executionRows.push({
-            rowNumber: row.rowNumber,
-            outcome: "CUSTOMER_DELETED",
-            note: "已删除本行新建客户。",
-          });
-        } else if (row.customerRollback.state === "ALREADY_REMOVED") {
-          alreadyRemovedCustomerRows += 1;
-          executionRows.push({
-            rowNumber: row.rowNumber,
-            outcome: "CUSTOMER_ALREADY_REMOVED",
-            note: row.customerRollback.reason,
-          });
-        }
+        const now = new Date();
+        const executionRows: LeadImportBatchRollbackExecutionRow[] = [];
+        const affectedCustomerIds = new Set<string>();
+        const affectedLeadIds = new Set<string>();
+        let deletedCustomerRows = 0;
+        let alreadyRemovedCustomerRows = 0;
+        let auditPreservedLeadRows = 0;
+        let hardDeletedLeadRows = 0;
+        let ignoredRows = 0;
 
-        if (row.leadAction === "AUDIT_PRESERVE" && row.leadRecord) {
-          await tx.lead.update({
-            where: { id: row.leadRecord.id },
-            data: {
-              customerId: null,
-              rolledBackAt: now,
-              rolledBackBatchId: prepared.batchId,
-            },
-          });
+        for (const row of prepared.rows) {
+          if (row.state === "IGNORED") {
+            ignoredRows += 1;
+            executionRows.push({
+              rowNumber: row.rowNumber,
+              outcome: "IGNORED",
+              note: row.reason,
+            });
+            continue;
+          }
 
-          await tx.operationLog.create({
-            data: {
-              actorId: actor.id,
-              module: "LEAD_IMPORT",
-              action: "lead_import.batch_rollback.lead_audit_preserved",
-              targetType: "LEAD",
-              targetId: row.leadRecord.id,
-              description: `整批撤销保留导入 Lead 审计记录：${row.leadRecord.name ?? row.leadRecord.phone}`,
-              beforeData: {
-                customerId: row.leadRecord.customerId,
-                rolledBackAt: row.leadRecord.rolledBackAt,
-              },
-              afterData: {
-                rolledBackAt: now.toISOString(),
-                rolledBackBatchId: prepared.batchId,
-                rollbackMode: prepared.mode,
-                rollbackReason: executionReason,
-              },
-            },
-          });
-
-          auditPreservedLeadRows += 1;
-          affectedLeadIds.add(row.leadRecord.id);
-          executionRows.push({
-            rowNumber: row.rowNumber,
-            outcome: "LEAD_AUDIT_PRESERVED",
-            note: "已保留导入 Lead 审计记录并从可见链路中移除。",
-          });
-        }
-
-        if (row.leadAction === "HARD_DELETE" && row.leadRecord) {
-          await tx.leadCustomerMergeLog.updateMany({
-            where: {
-              leadId: row.leadRecord.id,
-            },
-            data: {
-              leadId: null,
-              leadIdSnapshot: row.leadRecord.id,
-              leadNameSnapshot: row.leadRecord.name,
-              leadPhoneSnapshot: row.leadRecord.phone,
-            },
-          });
-
-          await tx.operationLog.create({
-            data: {
-              actorId: actor.id,
-              module: "LEAD_IMPORT",
-              action: "lead_import.batch_rollback.lead_hard_deleted",
-              targetType: "LEAD",
-              targetId: row.leadRecord.id,
-              description: `整批撤销硬删除导入 Lead：${row.leadRecord.name ?? row.leadRecord.phone}`,
-              beforeData: {
-                customerId: row.leadRecord.customerId,
-                status: row.leadRecord.status,
-                ownerId: row.leadRecord.ownerId,
-              },
-              afterData: {
-                leadDeleted: true,
+          if (row.customerRollback.state === "DELETE") {
+            await executeImportedCustomerDeletionTx(tx, {
+              actor,
+              customer: row.customerRollback.customer,
+              guard: row.customerRollback.guard,
+              request: null,
+              reason: executionReason,
+              operationContext: {
+                source: "lead_import_batch_rollback",
                 rollbackBatchId: prepared.batchId,
                 rollbackMode: prepared.mode,
-                rollbackReason: executionReason,
               },
-            },
-          });
+            });
+            deletedCustomerRows += 1;
+            affectedCustomerIds.add(row.customerRollback.customer.id);
+            executionRows.push({
+              rowNumber: row.rowNumber,
+              outcome: "CUSTOMER_DELETED",
+              note: "已删除本行新建客户。",
+            });
+          } else if (row.customerRollback.state === "ALREADY_REMOVED") {
+            alreadyRemovedCustomerRows += 1;
+            executionRows.push({
+              rowNumber: row.rowNumber,
+              outcome: "CUSTOMER_ALREADY_REMOVED",
+              note: row.customerRollback.reason,
+            });
+          }
 
-          await tx.lead.delete({
-            where: {
-              id: row.leadRecord.id,
-            },
-          });
+          if (row.leadAction === "AUDIT_PRESERVE" && row.leadRecord) {
+            await tx.lead.update({
+              where: { id: row.leadRecord.id },
+              data: {
+                customerId: null,
+                rolledBackAt: now,
+                rolledBackBatchId: prepared.batchId,
+              },
+            });
 
-          hardDeletedLeadRows += 1;
-          affectedLeadIds.add(row.leadRecord.id);
-          executionRows.push({
-            rowNumber: row.rowNumber,
-            outcome: "LEAD_HARD_DELETED",
-            note: "已硬删除导入 Lead，并保留归并快照。",
-          });
+            await tx.operationLog.create({
+              data: {
+                actorId: actor.id,
+                module: "LEAD_IMPORT",
+                action: "lead_import.batch_rollback.lead_audit_preserved",
+                targetType: "LEAD",
+                targetId: row.leadRecord.id,
+                description: `整批撤销保留导入 Lead 审计记录：${row.leadRecord.name ?? row.leadRecord.phone}`,
+                beforeData: {
+                  customerId: row.leadRecord.customerId,
+                  rolledBackAt: row.leadRecord.rolledBackAt,
+                },
+                afterData: {
+                  rolledBackAt: now.toISOString(),
+                  rolledBackBatchId: prepared.batchId,
+                  rollbackMode: prepared.mode,
+                  rollbackReason: executionReason,
+                },
+              },
+            });
+
+            auditPreservedLeadRows += 1;
+            affectedLeadIds.add(row.leadRecord.id);
+            executionRows.push({
+              rowNumber: row.rowNumber,
+              outcome: "LEAD_AUDIT_PRESERVED",
+              note: "已保留导入 Lead 审计记录并从可见链路中移除。",
+            });
+          }
+
+          if (row.leadAction === "HARD_DELETE" && row.leadRecord) {
+            await tx.leadCustomerMergeLog.updateMany({
+              where: {
+                leadId: row.leadRecord.id,
+              },
+              data: {
+                leadId: null,
+                leadIdSnapshot: row.leadRecord.id,
+                leadNameSnapshot: row.leadRecord.name,
+                leadPhoneSnapshot: row.leadRecord.phone,
+              },
+            });
+
+            await tx.operationLog.create({
+              data: {
+                actorId: actor.id,
+                module: "LEAD_IMPORT",
+                action: "lead_import.batch_rollback.lead_hard_deleted",
+                targetType: "LEAD",
+                targetId: row.leadRecord.id,
+                description: `整批撤销硬删除导入 Lead：${row.leadRecord.name ?? row.leadRecord.phone}`,
+                beforeData: {
+                  customerId: row.leadRecord.customerId,
+                  status: row.leadRecord.status,
+                  ownerId: row.leadRecord.ownerId,
+                },
+                afterData: {
+                  leadDeleted: true,
+                  rollbackBatchId: prepared.batchId,
+                  rollbackMode: prepared.mode,
+                  rollbackReason: executionReason,
+                },
+              },
+            });
+
+            await tx.lead.delete({
+              where: {
+                id: row.leadRecord.id,
+              },
+            });
+
+            hardDeletedLeadRows += 1;
+            affectedLeadIds.add(row.leadRecord.id);
+            executionRows.push({
+              rowNumber: row.rowNumber,
+              outcome: "LEAD_HARD_DELETED",
+              note: "已硬删除导入 Lead，并保留归并快照。",
+            });
+          }
         }
-      }
 
-      const executionSnapshot: LeadImportBatchRollbackExecutionSnapshot = {
-        version: "v1",
-        importKind: prepared.importKind,
-        mode: prepared.mode,
-        reason: executionReason,
-        executedAt: now.toISOString(),
-        summary: {
-          totalRows: prepared.rows.length,
-          processedRows: prepared.precheck.summary.rollbackableRows,
-          ignoredRows,
-          deletedCustomerRows,
-          alreadyRemovedCustomerRows,
-          auditPreservedLeadRows,
-          hardDeletedLeadRows,
-        },
-        rows: executionRows,
-      };
-
-      const rollbackRecord = await tx.leadImportBatchRollback.create({
-        data: {
-          batchId: prepared.batchId,
+        const executionSnapshot: LeadImportBatchRollbackExecutionSnapshot = {
+          version: "v1",
+          importKind: prepared.importKind,
           mode: prepared.mode,
-          actorId: actor.id,
-          precheckSnapshot: prepared.precheck,
-          executionSnapshot,
-        },
-        select: {
-          id: true,
-        },
-      });
+          reason: executionReason,
+          executedAt: now.toISOString(),
+          summary: {
+            totalRows: prepared.rows.length,
+            processedRows: prepared.precheck.summary.rollbackableRows,
+            ignoredRows,
+            deletedCustomerRows,
+            alreadyRemovedCustomerRows,
+            auditPreservedLeadRows,
+            hardDeletedLeadRows,
+          },
+          rows: executionRows,
+        };
 
-      await tx.operationLog.create({
-        data: {
-          actorId: actor.id,
-          module: "LEAD_IMPORT",
-          action: "lead_import.batch_rollback.executed",
-          targetType: "LEAD_IMPORT_BATCH",
-          targetId: prepared.batchId,
-          description: `执行导入批次整批撤销：${prepared.fileName}`,
-          afterData: {
-            rollbackId: rollbackRecord.id,
-            rollbackMode: prepared.mode,
-            rollbackReason: executionReason,
+        const rollbackRecord = await tx.leadImportBatchRollback.create({
+          data: {
+            batchId: prepared.batchId,
+            mode: prepared.mode,
+            actorId: actor.id,
             precheckSnapshot: prepared.precheck,
             executionSnapshot,
           },
-        },
-      });
+          select: {
+            id: true,
+          },
+        });
 
-      return {
-        rollbackId: rollbackRecord.id,
-        batchId: prepared.batchId,
-        fileName: prepared.fileName,
-        importKind: prepared.importKind,
-        mode: prepared.mode,
-        affectedCustomerIds: [...affectedCustomerIds],
-        affectedLeadIds: [...affectedLeadIds],
-        message:
-          prepared.mode === "HARD_DELETE"
-            ? `已对批次 ${prepared.fileName} 执行硬删除撤销。`
-            : `已对批次 ${prepared.fileName} 执行审计保留撤销。`,
-      };
-    });
+        await tx.operationLog.create({
+          data: {
+            actorId: actor.id,
+            module: "LEAD_IMPORT",
+            action: "lead_import.batch_rollback.executed",
+            targetType: "LEAD_IMPORT_BATCH",
+            targetId: prepared.batchId,
+            description: `执行导入批次整批撤销：${prepared.fileName}`,
+            afterData: {
+              rollbackId: rollbackRecord.id,
+              rollbackMode: prepared.mode,
+              rollbackReason: executionReason,
+              precheckSnapshot: prepared.precheck,
+              executionSnapshot,
+            },
+          },
+        });
+
+        return {
+          rollbackId: rollbackRecord.id,
+          batchId: prepared.batchId,
+          fileName: prepared.fileName,
+          importKind: prepared.importKind,
+          mode: prepared.mode,
+          affectedCustomerIds: [...affectedCustomerIds],
+          affectedLeadIds: [...affectedLeadIds],
+          message:
+            prepared.mode === "HARD_DELETE"
+              ? `已对批次 ${prepared.fileName} 执行硬删除撤销。`
+              : `已对批次 ${prepared.fileName} 执行审计保留撤销。`,
+        };
+      },
+      leadImportBatchRollbackTransactionOptions,
+    );
   } catch (error) {
     if (error instanceof LeadImportBatchRollbackBlockedError) {
       await createLeadImportBatchRollbackOperationLog({
