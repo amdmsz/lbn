@@ -4,6 +4,7 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ENV_FILE:-$PROJECT_ROOT/.env}"
 SERVICE_NAME="${SERVICE_NAME:-jiuzhuang-crm}"
+WORKER_SERVICE_NAME="${WORKER_SERVICE_NAME:-jiuzhuang-crm-import-worker}"
 SYSTEMCTL_BIN="${SYSTEMCTL_BIN:-systemctl}"
 TARGET_REF="${1:-}"
 APP_USER="${APP_USER:-}"
@@ -25,11 +26,13 @@ fi
 
 mkdir -p "$PROJECT_ROOT/public/exports/shipping"
 mkdir -p "$PROJECT_ROOT/public/uploads/avatars"
+mkdir -p "$PROJECT_ROOT/runtime/imports/lead-imports"
 
 if [[ -n "$APP_USER" && -n "$APP_GROUP" ]]; then
   chown -R "$APP_USER:$APP_GROUP" \
     "$PROJECT_ROOT/public/exports" \
-    "$PROJECT_ROOT/public/uploads"
+    "$PROJECT_ROOT/public/uploads" \
+    "$PROJECT_ROOT/runtime/imports"
 fi
 
 if [[ -n "$TARGET_REF" ]]; then
@@ -67,3 +70,13 @@ fi
 npm run build
 "$SYSTEMCTL_BIN" restart "$SERVICE_NAME"
 "$SYSTEMCTL_BIN" --no-pager --full status "$SERVICE_NAME"
+
+if [[ -n "$WORKER_SERVICE_NAME" ]]; then
+  if "$SYSTEMCTL_BIN" status "$WORKER_SERVICE_NAME" >/dev/null 2>&1 || \
+    "$SYSTEMCTL_BIN" is-enabled "$WORKER_SERVICE_NAME" >/dev/null 2>&1; then
+    "$SYSTEMCTL_BIN" restart "$WORKER_SERVICE_NAME"
+    "$SYSTEMCTL_BIN" --no-pager --full status "$WORKER_SERVICE_NAME"
+  else
+    echo "Worker service '$WORKER_SERVICE_NAME' not installed yet. Skipping worker restart."
+  fi
+fi

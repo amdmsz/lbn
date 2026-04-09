@@ -3,18 +3,34 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/session";
+import { createCustomerContinuationImportBatchAsync } from "@/lib/lead-imports/customer-continuation-import";
 import {
-  createLeadImportBatch,
+  createLeadImportBatchAsync,
   toggleLeadImportTemplate,
   upsertLeadImportTemplate,
 } from "@/lib/lead-imports/mutations";
 import {
   DEFAULT_LEAD_IMPORT_SOURCE,
+  buildLeadImportBatchProgress,
   isLeadImportMode,
   isLeadImportSourceValue,
   leadImportFieldDefinitions,
+  type LeadImportBatchProgressSnapshot,
   type LeadImportMode,
 } from "@/lib/lead-imports/metadata";
+
+type CreateLeadImportBatchActionPayload = {
+  batchId: string;
+  mode: LeadImportMode;
+  detailHref: string;
+  progress: LeadImportBatchProgressSnapshot;
+};
+
+export type CreateLeadImportBatchActionState = {
+  status: "idle" | "success" | "error";
+  message: string;
+  batch: CreateLeadImportBatchActionPayload | null;
+};
 
 function getValue(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -26,8 +42,8 @@ function isNextRedirectError(error: unknown): error is { digest: string } {
     typeof error === "object" &&
     error !== null &&
     "digest" in error &&
-    typeof error.digest === "string" &&
-    error.digest.startsWith("NEXT_REDIRECT")
+    typeof (error as { digest: unknown }).digest === "string" &&
+    (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
   );
 }
 
@@ -64,62 +80,87 @@ function getSafeLeadImportMode(value: string): LeadImportMode {
   return isLeadImportMode(value) ? value : "lead";
 }
 
-function getLeadImportsIndexHref(mode: LeadImportMode) {
-  return mode === "customer_continuation"
-    ? "/lead-imports?mode=customer_continuation"
-    : "/lead-imports";
-}
-
 function getLeadImportDetailHref(mode: LeadImportMode, batchId: string) {
   return mode === "customer_continuation"
     ? `/lead-imports/${batchId}?mode=customer_continuation`
     : `/lead-imports/${batchId}`;
 }
 
-export async function createLeadImportBatchAction(formData: FormData) {
+export async function createLeadImportBatchAction(
+  _previousState: CreateLeadImportBatchActionState,
+  formData: FormData,
+): Promise<CreateLeadImportBatchActionState> {
   const actor = await getActor();
   const file = formData.get("file");
   const importMode = getSafeLeadImportMode(getValue(formData, "importMode"));
 
   if (!(file instanceof File)) {
-    redirect(
-      buildRedirectTarget(
-        getLeadImportsIndexHref(importMode),
-        "error",
-        "请先选择导入文件。",
-      ),
-    );
+    return {
+      status: "error",
+      message: "请先选择导入文件。",
+      batch: null,
+    };
   }
 
   try {
-    const result = await createLeadImportBatch(actor, {
-      file,
-      templateId: getValue(formData, "templateId"),
-      defaultLeadSource: getSafeLeadImportSource(getValue(formData, "defaultLeadSource")),
-      mappingConfig: getValue(formData, "mappingConfig"),
-      importMode,
-    });
+    const result =
+      importMode === "customer_continuation"
+        ? await createCustomerContinuationImportBatchAsync(actor, {
+            file,
+            defaultLeadSource: getSafeLeadImportSource(
+              getValue(formData, "defaultLeadSource"),
+            ),
+            mappingConfig: getValue(formData, "mappingConfig"),
+          })
+        : await createLeadImportBatchAsync(actor, {
+            file,
+            templateId: getValue(formData, "templateId"),
+            defaultLeadSource: getSafeLeadImportSource(
+              getValue(formData, "defaultLeadSource"),
+            ),
+            mappingConfig: getValue(formData, "mappingConfig"),
+            importMode,
+          });
 
     revalidatePath("/lead-imports");
-    revalidatePath(`/lead-imports/${result.batchId}`);
+    revalidatePath(`/lead-imports/${result.id}`);
     revalidatePath("/customers");
     revalidatePath("/leads");
-    redirect(
-      buildRedirectTarget(
-        getLeadImportDetailHref(importMode, result.batchId),
-        "success",
+
+    return {
+      status: "success",
+      message:
         importMode === "customer_continuation"
-          ? `续接导入完成：成功导入 ${result.successRows} 位客户，新增客户 ${result.createdCustomerRows} 位，命中已有客户 ${result.matchedCustomerRows} 位，重复剔除 ${result.duplicateRows} 行。`
-          : `导入完成：成功导入 ${result.successRows} 条线索，新增客户 ${result.createdCustomerRows} 个，关联已有客户 ${result.matchedCustomerRows} 个，重复剔除 ${result.duplicateRows} 行。`,
-      ),
-    );
+          ? "客户续接批次已入队，系统正在后台处理。"
+          : "线索导入批次已入队，系统正在后台处理。",
+      batch: {
+        batchId: result.id,
+        mode: importMode,
+        detailHref: getLeadImportDetailHref(importMode, result.id),
+        progress: buildLeadImportBatchProgress({
+          status: result.status,
+          stage: result.stage,
+          totalRows: result.totalRows,
+          successRows: result.successRows,
+          failedRows: result.failedRows,
+          duplicateRows: result.duplicateRows,
+          errorMessage: result.errorMessage,
+          processingStartedAt: result.processingStartedAt,
+          lastHeartbeatAt: result.lastHeartbeatAt,
+          importedAt: result.importedAt,
+        }),
+      },
+    };
   } catch (error) {
     if (isNextRedirectError(error)) {
       throw error;
     }
 
-    const message = error instanceof Error ? error.message : "导入失败，请稍后重试。";
-    redirect(buildRedirectTarget(getLeadImportsIndexHref(importMode), "error", message));
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "导入失败，请稍后重试。",
+      batch: null,
+    };
   }
 }
 

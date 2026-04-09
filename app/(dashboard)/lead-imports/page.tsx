@@ -190,12 +190,12 @@ export default async function LeadImportsPage({
           {
             label: "批次总数",
             value: String(data.overview.totalBatches),
-            hint: "当前模式和筛选条件下的导入批次数量。",
+            hint: "当前模式和筛选条件下的批次总量。",
           },
           {
             label: "已完成",
             value: String(data.overview.completedBatches),
-            hint: "已经输出结果报告的导入批次。",
+            hint: "已经完成导入并产出结果的批次。",
           },
           {
             label: "异常批次",
@@ -203,15 +203,15 @@ export default async function LeadImportsPage({
             hint: "失败批次或仍包含失败行的批次。",
           },
           {
-            label: "导入中 / 待导入",
-            value: `${data.overview.importingBatches} / ${data.overview.draftBatches}`,
-            hint: "快速查看当前处理节奏。",
+            label: "排队 / 导入 / 草稿",
+            value: `${data.overview.queuedBatches} / ${data.overview.importingBatches} / ${data.overview.draftBatches}`,
+            hint: "快速查看当前后台处理节奏。",
           },
         ]}
       />
 
       <WorkspaceGuide
-        title={isCustomerContinuation ? "客户续接导入承接方式" : "线索导入承接方式"}
+        title={isCustomerContinuation ? "客户续接承接方式" : "线索导入承接方式"}
         description={
           isCustomerContinuation
             ? "客户续接导入直接落到 Customer 主链路，重点是保留负责人、标签和迁移摘要，并让客户进入后续承接视角。"
@@ -295,7 +295,9 @@ export default async function LeadImportsPage({
             <p className="mt-3 text-2xl font-semibold text-black/85">
               {data.statistics.totalRows}
             </p>
-            <p className="mt-2 text-sm leading-6 text-black/58">当前范围内所有批次累计行数。</p>
+            <p className="mt-2 text-sm leading-6 text-black/58">
+              当前范围内所有批次累计行数。
+            </p>
           </div>
           <div className="crm-section-card">
             <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-black/42">
@@ -306,8 +308,8 @@ export default async function LeadImportsPage({
             </p>
             <p className="mt-2 text-sm leading-6 text-black/58">
               {isCustomerContinuation
-                ? "成功导入客户数与本次新增客户数。"
-                : "成功导入的线索行与新增客户数量。"}
+                ? "成功导入客户数量与本次新增客户数量。"
+                : "成功导入的线索数与由此新增的客户数量。"}
             </p>
           </div>
           <div className="crm-section-card">
@@ -317,7 +319,9 @@ export default async function LeadImportsPage({
             <p className="mt-3 text-2xl font-semibold text-[var(--color-warning)]">
               {data.statistics.duplicateRows} / {data.statistics.failedRows}
             </p>
-            <p className="mt-2 text-sm leading-6 text-black/58">导入质量检查的核心指标。</p>
+            <p className="mt-2 text-sm leading-6 text-black/58">
+              导入质量检查的核心指标。
+            </p>
           </div>
         </div>
       </SectionCard>

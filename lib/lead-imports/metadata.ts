@@ -27,12 +27,23 @@ export const LEAD_IMPORT_SOURCE_VALUES = ["INFO_FLOW"] as const satisfies readon
 export const DEFAULT_LEAD_IMPORT_SOURCE: LeadSource = "INFO_FLOW";
 export const LEAD_IMPORT_BATCH_STATUS_VALUES = [
   "DRAFT",
+  "QUEUED",
   "IMPORTING",
   "COMPLETED",
   "FAILED",
 ] as const satisfies readonly LeadImportBatchStatus[];
+export const leadImportBatchStageValues = [
+  "QUEUED",
+  "PARSING",
+  "MATCHING",
+  "WRITING",
+  "FINALIZING",
+  "COMPLETED",
+  "FAILED",
+] as const;
 export const leadImportModeValues = ["lead", "customer_continuation"] as const;
 
+export type LeadImportBatchStageValue = (typeof leadImportBatchStageValues)[number];
 export type LeadImportMode = (typeof leadImportModeValues)[number];
 export type LeadImportKind = "LEAD" | "CUSTOMER_CONTINUATION";
 export type CustomerContinuationImportAction =
@@ -120,6 +131,41 @@ export type CustomerImportOperationLogData = {
   summary: CustomerContinuationImportSummary;
 };
 
+export type LeadImportBatchProgressInput = {
+  status: LeadImportBatchStatus;
+  stage: string | null | undefined;
+  totalRows: number;
+  successRows: number;
+  failedRows: number;
+  duplicateRows: number;
+  errorMessage?: string | null;
+  processingStartedAt?: Date | string | null;
+  lastHeartbeatAt?: Date | string | null;
+  importedAt?: Date | string | null;
+};
+
+export type LeadImportBatchProgressSnapshot = {
+  status: LeadImportBatchStatus;
+  stage: LeadImportBatchStageValue;
+  statusLabel: string;
+  statusVariant: StatusBadgeVariant;
+  stageLabel: string;
+  stageVariant: StatusBadgeVariant;
+  totalRows: number;
+  processedRows: number;
+  remainingRows: number;
+  successRows: number;
+  failedRows: number;
+  duplicateRows: number;
+  progressPercent: number;
+  isActive: boolean;
+  isTerminal: boolean;
+  errorMessage: string | null;
+  processingStartedAt: string | null;
+  lastHeartbeatAt: string | null;
+  importedAt: string | null;
+};
+
 export const customerContinuationImportOperationActions = [
   "customer.customer_import.created",
   "customer.customer_import.matched_existing",
@@ -142,11 +188,13 @@ export const leadImportModeMeta: Record<
     kind: "LEAD",
     label: "线索导入",
     title: "线索导入中心",
-    description: "继续承接线索批量导入、去重校验、客户归并和导入审计，不改现有主链路。",
+    description:
+      "继续承接线索批量导入、去重校验、客户归并和导入审计，不改现有 Lead 主链路。",
     templateFileName: "lead-import-template.csv",
     templateDownloadLabel: "下载线索模板",
     uploadTitle: "上传线索导入文件",
-    uploadDescription: "上传 Excel 或 CSV 后，系统会校验固定模板列、标准化手机号，并继续走现有 Lead 导入链路。",
+    uploadDescription:
+      "上传 Excel 或 CSV 后，系统会校验固定模板列、标准化手机号，并按异步批次导入。",
   },
   customer_continuation: {
     kind: "CUSTOMER_CONTINUATION",
@@ -355,6 +403,7 @@ export const leadImportSourceOptions = [
 
 export const leadImportBatchStatusOptions = [
   { value: "", label: "全部状态" },
+  { value: "QUEUED", label: "排队中" },
   { value: "COMPLETED", label: "已完成" },
   { value: "IMPORTING", label: "导入中" },
   { value: "FAILED", label: "已失败" },
@@ -369,7 +418,21 @@ const batchStatusMeta: Record<
   { label: string; variant: StatusBadgeVariant }
 > = {
   DRAFT: { label: "待导入", variant: "warning" },
+  QUEUED: { label: "排队中", variant: "info" },
   IMPORTING: { label: "导入中", variant: "info" },
+  COMPLETED: { label: "已完成", variant: "success" },
+  FAILED: { label: "已失败", variant: "danger" },
+};
+
+const batchStageMeta: Record<
+  LeadImportBatchStageValue,
+  { label: string; variant: StatusBadgeVariant }
+> = {
+  QUEUED: { label: "排队中", variant: "info" },
+  PARSING: { label: "解析文件", variant: "info" },
+  MATCHING: { label: "匹配承接", variant: "info" },
+  WRITING: { label: "写入数据", variant: "warning" },
+  FINALIZING: { label: "汇总结果", variant: "warning" },
   COMPLETED: { label: "已完成", variant: "success" },
   FAILED: { label: "已失败", variant: "danger" },
 };
@@ -397,7 +460,7 @@ const mergeActionMeta: Record<
   { label: string; variant: StatusBadgeVariant }
 > = {
   CREATED_CUSTOMER: { label: "新建客户", variant: "success" },
-  MATCHED_EXISTING_CUSTOMER: { label: "关联已有客户", variant: "info" },
+  MATCHED_EXISTING_CUSTOMER: { label: "命中已有客户", variant: "info" },
 };
 
 function getParamValue(value: SearchParamsValue) {
@@ -406,6 +469,15 @@ function getParamValue(value: SearchParamsValue) {
   }
 
   return value ?? "";
+}
+
+function toIsoString(value: Date | string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 export function parseLeadImportNotice(
@@ -452,12 +524,93 @@ export function getLeadImportModeFromKind(kind: LeadImportKind): LeadImportMode 
   return kind === "CUSTOMER_CONTINUATION" ? "customer_continuation" : "lead";
 }
 
+export function isLeadImportBatchStage(
+  value: string | null | undefined,
+): value is LeadImportBatchStageValue {
+  return leadImportBatchStageValues.includes(value as LeadImportBatchStageValue);
+}
+
+export function resolveLeadImportBatchStage(
+  status: LeadImportBatchStatus,
+  stage: string | null | undefined,
+): LeadImportBatchStageValue {
+  if (isLeadImportBatchStage(stage)) {
+    return stage;
+  }
+
+  if (status === "FAILED") {
+    return "FAILED";
+  }
+
+  if (status === "COMPLETED") {
+    return "COMPLETED";
+  }
+
+  if (status === "IMPORTING") {
+    return "WRITING";
+  }
+
+  return "QUEUED";
+}
+
+export function isLeadImportBatchActive(status: LeadImportBatchStatus) {
+  return status === "QUEUED" || status === "IMPORTING";
+}
+
 export function getLeadImportBatchStatusLabel(status: LeadImportBatchStatus) {
   return batchStatusMeta[status].label;
 }
 
 export function getLeadImportBatchStatusVariant(status: LeadImportBatchStatus) {
   return batchStatusMeta[status].variant;
+}
+
+export function getLeadImportBatchStageLabel(stage: LeadImportBatchStageValue) {
+  return batchStageMeta[stage].label;
+}
+
+export function getLeadImportBatchStageVariant(stage: LeadImportBatchStageValue) {
+  return batchStageMeta[stage].variant;
+}
+
+export function buildLeadImportBatchProgress(
+  input: LeadImportBatchProgressInput,
+): LeadImportBatchProgressSnapshot {
+  const stage = resolveLeadImportBatchStage(input.status, input.stage);
+  const processedRows = Math.min(
+    Math.max(0, input.totalRows),
+    Math.max(0, input.successRows + input.failedRows + input.duplicateRows),
+  );
+  const remainingRows = Math.max(0, input.totalRows - processedRows);
+  const isTerminal = input.status === "COMPLETED" || input.status === "FAILED";
+  const progressPercent =
+    input.totalRows <= 0
+      ? isTerminal
+        ? 100
+        : 0
+      : Math.max(0, Math.min(100, Math.round((processedRows / input.totalRows) * 100)));
+
+  return {
+    status: input.status,
+    stage,
+    statusLabel: getLeadImportBatchStatusLabel(input.status),
+    statusVariant: getLeadImportBatchStatusVariant(input.status),
+    stageLabel: getLeadImportBatchStageLabel(stage),
+    stageVariant: getLeadImportBatchStageVariant(stage),
+    totalRows: input.totalRows,
+    processedRows,
+    remainingRows,
+    successRows: input.successRows,
+    failedRows: input.failedRows,
+    duplicateRows: input.duplicateRows,
+    progressPercent,
+    isActive: isLeadImportBatchActive(input.status),
+    isTerminal,
+    errorMessage: input.errorMessage ?? null,
+    processingStartedAt: toIsoString(input.processingStartedAt),
+    lastHeartbeatAt: toIsoString(input.lastHeartbeatAt),
+    importedAt: toIsoString(input.importedAt),
+  };
 }
 
 export function getLeadImportRowStatusLabel(status: LeadImportRowStatus) {

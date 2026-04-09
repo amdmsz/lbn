@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   CustomerOwnershipMode,
   LeadCustomerMergeAction,
@@ -15,8 +16,15 @@ import { z } from "zod";
 import { canAccessLeadImportModule } from "@/lib/auth/access";
 import { createInitialPublicOwnershipEventTx } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
+import {
+  createLeadImportBatchCompletedLog,
+  createLeadImportBatchFailureLog,
+  createQueuedLeadImportBatch,
+  setLeadImportBatchFailed,
+  updateLeadImportBatchProgress,
+} from "@/lib/lead-imports/batch-state";
 import { createCustomerContinuationImportBatch } from "@/lib/lead-imports/customer-continuation-import";
-import { parseLeadImportFile } from "@/lib/lead-imports/file-parser";
+import { parseLeadImportBuffer, parseLeadImportFile } from "@/lib/lead-imports/file-parser";
 import {
   LEAD_IMPORT_TEMPLATE_NONE_VALUE,
   leadImportFieldDefinitions,
@@ -26,6 +34,8 @@ import {
   type LeadImportMode,
   type LeadImportMappingConfig,
 } from "@/lib/lead-imports/metadata";
+import { enqueueLeadImportBatchJob, getLeadImportChunkSize } from "@/lib/lead-imports/queue";
+import { readLeadImportSourceFile, saveLeadImportSourceFile } from "@/lib/lead-imports/storage";
 
 type Actor = {
   id: string;
@@ -33,6 +43,23 @@ type Actor = {
 };
 
 type ImportedLeadData = ReturnType<typeof buildMappedLeadData>["mappedData"];
+
+type LeadImportPersistedRowSummary = {
+  rowNumber: number;
+  status: LeadImportRowStatus;
+  normalizedPhone: string | null;
+  mergeAction: LeadCustomerMergeAction | null;
+};
+
+type LeadImportAggregateState = {
+  processedRowNumbers: Set<number>;
+  seenPhones: Map<string, number>;
+  successRows: number;
+  failedRows: number;
+  duplicateRows: number;
+  createdCustomerRows: number;
+  matchedCustomerRows: number;
+};
 
 const createBatchSchema = z.object({
   templateId: z.string().trim().optional(),
@@ -313,6 +340,379 @@ async function createOrMatchCustomerForLead(
     action,
     tagSynced,
   };
+}
+
+function buildLeadImportBatchReport(input: {
+  headers: string[];
+  mappingConfig: LeadImportMappingConfig;
+  templateName: string | null;
+}) {
+  return {
+    importKind: "LEAD",
+    headers: input.headers,
+    mappingConfig: input.mappingConfig,
+    templateName: input.templateName,
+    generatedAt: new Date().toISOString(),
+  } satisfies Prisma.InputJsonValue;
+}
+
+async function loadPersistedLeadImportState(batchId: string) {
+  const rows = await prisma.leadImportRow.findMany({
+    where: { batchId },
+    orderBy: { rowNumber: "asc" },
+    select: {
+      rowNumber: true,
+      status: true,
+      normalizedPhone: true,
+      mergeLogs: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          action: true,
+        },
+      },
+    },
+  });
+
+  return rows.reduce<LeadImportAggregateState>(
+    (summary, row) => {
+      summary.processedRowNumbers.add(row.rowNumber);
+
+      if (
+        row.normalizedPhone &&
+        row.status !== LeadImportRowStatus.DUPLICATE &&
+        !summary.seenPhones.has(row.normalizedPhone)
+      ) {
+        summary.seenPhones.set(row.normalizedPhone, row.rowNumber);
+      }
+
+      if (row.status === LeadImportRowStatus.IMPORTED) {
+        summary.successRows += 1;
+      }
+      if (row.status === LeadImportRowStatus.FAILED) {
+        summary.failedRows += 1;
+      }
+      if (row.status === LeadImportRowStatus.DUPLICATE) {
+        summary.duplicateRows += 1;
+      }
+
+      const mergeAction = row.mergeLogs[0]?.action ?? null;
+      if (mergeAction === LeadCustomerMergeAction.CREATED_CUSTOMER) {
+        summary.createdCustomerRows += 1;
+      }
+      if (mergeAction === LeadCustomerMergeAction.MATCHED_EXISTING_CUSTOMER) {
+        summary.matchedCustomerRows += 1;
+      }
+
+      return summary;
+    },
+    {
+      processedRowNumbers: new Set<number>(),
+      seenPhones: new Map<string, number>(),
+      successRows: 0,
+      failedRows: 0,
+      duplicateRows: 0,
+      createdCustomerRows: 0,
+      matchedCustomerRows: 0,
+    },
+  );
+}
+
+function applyLeadImportRowSummary(
+  summary: LeadImportAggregateState,
+  row: LeadImportPersistedRowSummary,
+) {
+  summary.processedRowNumbers.add(row.rowNumber);
+
+  if (
+    row.normalizedPhone &&
+    row.status !== LeadImportRowStatus.DUPLICATE &&
+    !summary.seenPhones.has(row.normalizedPhone)
+  ) {
+    summary.seenPhones.set(row.normalizedPhone, row.rowNumber);
+  }
+
+  if (row.status === LeadImportRowStatus.IMPORTED) {
+    summary.successRows += 1;
+  }
+  if (row.status === LeadImportRowStatus.FAILED) {
+    summary.failedRows += 1;
+  }
+  if (row.status === LeadImportRowStatus.DUPLICATE) {
+    summary.duplicateRows += 1;
+  }
+  if (row.mergeAction === LeadCustomerMergeAction.CREATED_CUSTOMER) {
+    summary.createdCustomerRows += 1;
+  }
+  if (row.mergeAction === LeadCustomerMergeAction.MATCHED_EXISTING_CUSTOMER) {
+    summary.matchedCustomerRows += 1;
+  }
+}
+
+async function processLeadImportRowTx(
+  input: {
+    actor: Actor;
+    actorTeamId: string | null;
+    batchId: string;
+    fileName: string;
+    row: { rowNumber: number; rawData: Record<string, string> };
+    mappingConfig: LeadImportMappingConfig;
+    defaultLeadSource: LeadSource;
+    existingLeadMap: Map<
+      string,
+      {
+        id: string;
+        phone: string;
+        name: string | null;
+      }
+    >;
+    existingCustomerMap: Map<
+      string,
+      {
+        id: string;
+        phone: string;
+        name: string;
+      }
+    >;
+    seenPhones: Map<string, number>;
+    sourceTag: {
+      id: string;
+      code: string;
+    } | null;
+  },
+): Promise<{
+  rowSummary: LeadImportPersistedRowSummary;
+  importedLead:
+    | {
+        id: string;
+        phone: string;
+        name: string | null;
+      }
+    | null;
+  customer:
+    | {
+        id: string;
+        phone: string;
+        name: string;
+      }
+    | null;
+}> {
+  return prisma.$transaction(async (tx) => {
+    const existingRow = await tx.leadImportRow.findUnique({
+      where: {
+        batchId_rowNumber: {
+          batchId: input.batchId,
+          rowNumber: input.row.rowNumber,
+        },
+      },
+      select: {
+        rowNumber: true,
+        status: true,
+        normalizedPhone: true,
+        mergeLogs: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: {
+            action: true,
+            customer: {
+              select: {
+                id: true,
+                phone: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (existingRow) {
+      return {
+        rowSummary: {
+          rowNumber: existingRow.rowNumber,
+          status: existingRow.status,
+          normalizedPhone: existingRow.normalizedPhone,
+          mergeAction: existingRow.mergeLogs[0]?.action ?? null,
+        },
+        importedLead: null,
+        customer: existingRow.mergeLogs[0]?.customer ?? null,
+      };
+    }
+
+    const { phoneRaw, normalizedPhone, mappedData } = buildMappedLeadData(
+      input.row.rawData,
+      input.mappingConfig,
+      input.defaultLeadSource,
+    );
+
+    let status: LeadImportRowStatus = LeadImportRowStatus.IMPORTED;
+    let errorReason: string | null = null;
+    let dedupType: LeadDedupType | null = null;
+    let matchedLeadId: string | null = null;
+    let importedLeadId: string | null = null;
+    let linkedCustomerId: string | null = null;
+    let linkedCustomerName: string | null = null;
+    let mergeAction: LeadCustomerMergeAction | null = null;
+    let tagSynced = false;
+    let importedLead:
+      | {
+          id: string;
+          phone: string;
+          name: string | null;
+          ownerId: string | null;
+        }
+      | null = null;
+    let customer:
+      | {
+          id: string;
+          phone: string;
+          name: string;
+        }
+      | null = null;
+
+    if (!phoneRaw.trim()) {
+      status = LeadImportRowStatus.FAILED;
+      errorReason = "手机号为空";
+    } else if (!normalizedPhone) {
+      status = LeadImportRowStatus.FAILED;
+      errorReason = "手机号格式无效";
+    } else if (input.seenPhones.has(normalizedPhone)) {
+      status = LeadImportRowStatus.DUPLICATE;
+      errorReason = `与本批次第 ${input.seenPhones.get(normalizedPhone)} 行手机号重复`;
+      dedupType = LeadDedupType.BATCH_DUPLICATE;
+    } else if (input.existingLeadMap.has(normalizedPhone)) {
+      status = LeadImportRowStatus.DUPLICATE;
+      errorReason = "系统内已存在相同手机号的线索";
+      dedupType = LeadDedupType.EXISTING_LEAD;
+      matchedLeadId = input.existingLeadMap.get(normalizedPhone)?.id ?? null;
+    } else {
+      importedLead = await tx.lead.create({
+        data: {
+          source: input.defaultLeadSource,
+          phone: normalizedPhone,
+          name: mappedData.name,
+          address: mappedData.address,
+          interestedProduct: mappedData.interestedProduct,
+          campaignName: mappedData.campaignName,
+          sourceDetail: mappedData.sourceDetail,
+          remark: mappedData.remark,
+          status: "NEW",
+        },
+        select: {
+          id: true,
+          phone: true,
+          name: true,
+          ownerId: true,
+        },
+      });
+
+      importedLeadId = importedLead.id;
+
+      await createOperationLog(tx, {
+        actor: { connect: { id: input.actor.id } },
+        module: OperationModule.LEAD_IMPORT,
+        action: "lead.imported_from_batch",
+        targetType: OperationTargetType.LEAD,
+        targetId: importedLead.id,
+        description: `通过导入批次 ${input.fileName} 创建线索 ${importedLead.name ?? importedLead.phone}`,
+        afterData: {
+          batchId: input.batchId,
+          rowNumber: input.row.rowNumber,
+          phone: importedLead.phone,
+          source: input.defaultLeadSource,
+        },
+      });
+
+      const mergeResult = await createOrMatchCustomerForLead(tx, {
+        actorId: input.actor.id,
+        batchId: input.batchId,
+        rowNumber: input.row.rowNumber,
+        fileName: input.fileName,
+        source: input.defaultLeadSource,
+        lead: importedLead,
+        mappedData,
+        existingCustomerMap: input.existingCustomerMap,
+        sourceTag: input.sourceTag,
+        actorTeamId: input.actorTeamId,
+      });
+
+      customer = mergeResult.customer;
+      linkedCustomerId = mergeResult.customer.id;
+      linkedCustomerName = mergeResult.customer.name;
+      mergeAction = mergeResult.action;
+      tagSynced = mergeResult.tagSynced;
+    }
+
+    const createdRow = await tx.leadImportRow.create({
+      data: {
+        batchId: input.batchId,
+        rowNumber: input.row.rowNumber,
+        status,
+        phoneRaw: normalizeOptional(phoneRaw),
+        normalizedPhone: normalizeOptional(normalizedPhone),
+        mappedName: mappedData.name,
+        errorReason,
+        rawData: input.row.rawData as Prisma.InputJsonValue,
+        mappedData: mappedData as Prisma.InputJsonValue,
+        dedupType,
+        matchedLeadId,
+        importedLeadId,
+      },
+      select: {
+        id: true,
+        rowNumber: true,
+        status: true,
+        normalizedPhone: true,
+      },
+    });
+
+    if (dedupType) {
+      await tx.leadDedupLog.create({
+        data: {
+          batchId: input.batchId,
+          rowId: createdRow.id,
+          phone: normalizedPhone || phoneRaw,
+          dedupType,
+          matchedLeadId,
+          reason: errorReason,
+        },
+      });
+    }
+
+    if (importedLeadId && linkedCustomerId && mergeAction) {
+      await tx.leadCustomerMergeLog.create({
+        data: {
+          batchId: input.batchId,
+          rowId: createdRow.id,
+          leadId: importedLeadId,
+          customerId: linkedCustomerId,
+          action: mergeAction,
+          source: input.defaultLeadSource,
+          phone: normalizedPhone || phoneRaw,
+          tagSynced,
+          actorId: input.actor.id,
+          note: linkedCustomerName,
+        },
+      });
+    }
+
+    return {
+      rowSummary: {
+        rowNumber: createdRow.rowNumber,
+        status: createdRow.status,
+        normalizedPhone: createdRow.normalizedPhone,
+        mergeAction,
+      },
+      importedLead: importedLead
+        ? {
+            id: importedLead.id,
+            phone: importedLead.phone,
+            name: importedLead.name,
+          }
+        : null,
+      customer,
+    };
+  });
 }
 
 export async function createLeadImportBatch(
@@ -707,6 +1107,383 @@ export async function createLeadImportBatch(
         },
       },
     });
+
+    throw error;
+  }
+}
+
+export async function processLeadImportBatchAsync(
+  batchId: string,
+  options?: {
+    queueJobId?: string | null;
+  },
+) {
+  const batch = await prisma.leadImportBatch.findUnique({
+    where: { id: batchId },
+    select: {
+      id: true,
+      createdById: true,
+      template: {
+        select: {
+          name: true,
+        },
+      },
+      fileName: true,
+      defaultLeadSource: true,
+      mappingConfig: true,
+      sourceFilePath: true,
+      status: true,
+      processingStartedAt: true,
+    },
+  });
+
+  if (!batch) {
+    throw new Error("导入批次不存在。");
+  }
+
+  if (!batch.sourceFilePath) {
+    throw new Error("导入批次缺少源文件，请重新上传。");
+  }
+
+  const processingStartedAt = batch.processingStartedAt ?? new Date();
+  const persistedState = await loadPersistedLeadImportState(batch.id);
+
+  await updateLeadImportBatchProgress({
+    batchId: batch.id,
+    status: LeadImportBatchStatus.IMPORTING,
+    stage: "PARSING",
+    queueJobId: options?.queueJobId ?? undefined,
+    successRows: persistedState.successRows,
+    failedRows: persistedState.failedRows,
+    duplicateRows: persistedState.duplicateRows,
+    createdCustomerRows: persistedState.createdCustomerRows,
+    matchedCustomerRows: persistedState.matchedCustomerRows,
+    errorMessage: null,
+    processingStartedAt,
+  });
+
+  const sourceBuffer = await readLeadImportSourceFile(batch.sourceFilePath);
+  const parsedFile = parseLeadImportBuffer(sourceBuffer, batch.fileName);
+  const mappingConfig = sanitizeLeadImportMapping(
+    (batch.mappingConfig && typeof batch.mappingConfig === "object"
+      ? batch.mappingConfig
+      : {}) as LeadImportMappingConfig,
+    parsedFile.headers,
+  );
+  const actorTeam = await prisma.user.findUnique({
+    where: { id: batch.createdById },
+    select: { teamId: true },
+  });
+
+  const uniqueCandidatePhones = [
+    ...new Set(
+      parsedFile.rows
+        .map((row) => normalizeImportedPhone(getMappedValue(row.rawData, mappingConfig, "phone")))
+        .filter(Boolean),
+    ),
+  ];
+
+  const [existingLeads, existingCustomers, sourceTag] = await Promise.all([
+    prisma.lead.findMany({
+      where: {
+        phone: {
+          in: uniqueCandidatePhones,
+        },
+      },
+      select: {
+        id: true,
+        phone: true,
+        name: true,
+      },
+    }),
+    prisma.customer.findMany({
+      where: {
+        phone: {
+          in: uniqueCandidatePhones,
+        },
+      },
+      select: {
+        id: true,
+        phone: true,
+        name: true,
+      },
+    }),
+    prisma.tag.findFirst({
+      where: {
+        isActive: true,
+        code: {
+          in: getSourceTagCodeCandidates(batch.defaultLeadSource),
+        },
+      },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        code: true,
+      },
+    }),
+  ]);
+
+  const existingLeadMap = new Map(existingLeads.map((lead) => [lead.phone, lead]));
+  const existingCustomerMap = new Map(
+    existingCustomers.map((customer) => [customer.phone, customer]),
+  );
+
+  await updateLeadImportBatchProgress({
+    batchId: batch.id,
+    status: LeadImportBatchStatus.IMPORTING,
+    stage: "MATCHING",
+    queueJobId: options?.queueJobId ?? undefined,
+    successRows: persistedState.successRows,
+    failedRows: persistedState.failedRows,
+    duplicateRows: persistedState.duplicateRows,
+    createdCustomerRows: persistedState.createdCustomerRows,
+    matchedCustomerRows: persistedState.matchedCustomerRows,
+    processingStartedAt,
+  });
+
+  const chunkSize = getLeadImportChunkSize();
+
+  for (let index = 0; index < parsedFile.rows.length; index += chunkSize) {
+    const chunkRows = parsedFile.rows.slice(index, index + chunkSize);
+
+    for (const row of chunkRows) {
+      if (persistedState.processedRowNumbers.has(row.rowNumber)) {
+        continue;
+      }
+
+      const result = await processLeadImportRowTx({
+        actor: {
+          id: batch.createdById,
+          role: "ADMIN",
+        },
+        actorTeamId: actorTeam?.teamId ?? null,
+        batchId: batch.id,
+        fileName: batch.fileName,
+        row,
+        mappingConfig,
+        defaultLeadSource: batch.defaultLeadSource,
+        existingLeadMap,
+        existingCustomerMap,
+        seenPhones: persistedState.seenPhones,
+        sourceTag,
+      });
+
+      if (!persistedState.processedRowNumbers.has(result.rowSummary.rowNumber)) {
+        applyLeadImportRowSummary(persistedState, result.rowSummary);
+      }
+
+      if (
+        result.rowSummary.normalizedPhone &&
+        result.rowSummary.status !== LeadImportRowStatus.DUPLICATE
+      ) {
+        persistedState.seenPhones.set(
+          result.rowSummary.normalizedPhone,
+          result.rowSummary.rowNumber,
+        );
+      }
+
+      if (result.importedLead) {
+        existingLeadMap.set(result.importedLead.phone, result.importedLead);
+      }
+
+      if (result.customer) {
+        existingCustomerMap.set(result.customer.phone, result.customer);
+      }
+    }
+
+    await updateLeadImportBatchProgress({
+      batchId: batch.id,
+      status: LeadImportBatchStatus.IMPORTING,
+      stage: "WRITING",
+      queueJobId: options?.queueJobId ?? undefined,
+      successRows: persistedState.successRows,
+      failedRows: persistedState.failedRows,
+      duplicateRows: persistedState.duplicateRows,
+      createdCustomerRows: persistedState.createdCustomerRows,
+      matchedCustomerRows: persistedState.matchedCustomerRows,
+      processingStartedAt,
+    });
+  }
+
+  const report = buildLeadImportBatchReport({
+    headers: parsedFile.headers,
+    mappingConfig,
+    templateName: batch.template?.name ?? null,
+  });
+
+  await updateLeadImportBatchProgress({
+    batchId: batch.id,
+    status: LeadImportBatchStatus.IMPORTING,
+    stage: "FINALIZING",
+    queueJobId: options?.queueJobId ?? undefined,
+    successRows: persistedState.successRows,
+    failedRows: persistedState.failedRows,
+    duplicateRows: persistedState.duplicateRows,
+    createdCustomerRows: persistedState.createdCustomerRows,
+    matchedCustomerRows: persistedState.matchedCustomerRows,
+    report,
+    processingStartedAt,
+  });
+
+  const importedAt = new Date();
+  const completedBatch = await updateLeadImportBatchProgress({
+    batchId: batch.id,
+    status: LeadImportBatchStatus.COMPLETED,
+    stage: "COMPLETED",
+    queueJobId: options?.queueJobId ?? undefined,
+    successRows: persistedState.successRows,
+    failedRows: persistedState.failedRows,
+    duplicateRows: persistedState.duplicateRows,
+    createdCustomerRows: persistedState.createdCustomerRows,
+    matchedCustomerRows: persistedState.matchedCustomerRows,
+    report,
+    errorMessage: null,
+    processingStartedAt,
+    importedAt,
+  });
+
+  await createLeadImportBatchCompletedLog({
+    actorId: batch.createdById,
+    batchId: batch.id,
+    fileName: batch.fileName,
+    importKind: "LEAD",
+    afterData: {
+      importKind: "LEAD",
+      totalRows: parsedFile.rows.length,
+      successRows: persistedState.successRows,
+      failedRows: persistedState.failedRows,
+      duplicateRows: persistedState.duplicateRows,
+      createdCustomerRows: persistedState.createdCustomerRows,
+      matchedCustomerRows: persistedState.matchedCustomerRows,
+      report,
+    },
+  });
+
+  return {
+    batchId: completedBatch.id,
+    successRows: completedBatch.successRows,
+    failedRows: completedBatch.failedRows,
+    duplicateRows: completedBatch.duplicateRows,
+    createdCustomerRows: completedBatch.createdCustomerRows,
+    matchedCustomerRows: completedBatch.matchedCustomerRows,
+  };
+}
+
+export async function createLeadImportBatchAsync(
+  actor: Actor,
+  input: {
+    file: File;
+    templateId?: string;
+    defaultLeadSource: LeadSource;
+    mappingConfig: string;
+    importMode?: LeadImportMode;
+  },
+) {
+  assertAccess(actor.role);
+
+  if (!input.file || input.file.size === 0) {
+    throw new Error("请先选择要上传的文件。");
+  }
+
+  const parsedInput = createBatchSchema.parse({
+    templateId: input.templateId,
+    defaultLeadSource: input.defaultLeadSource,
+    mappingConfig: input.mappingConfig,
+  });
+
+  const parsedFile = await parseLeadImportFile(input.file);
+  const mappingConfig = sanitizeLeadImportMapping(
+    parseMappingConfig(parsedInput.mappingConfig),
+    parsedFile.headers,
+  );
+
+  const missingHeaders = leadImportFieldDefinitions
+    .filter((field) => field.required && !mappingConfig[field.key])
+    .map((field) => field.label);
+
+  if (missingHeaders.length > 0) {
+    throw new Error(`导入文件缺少固定模板列：${missingHeaders.join(" / ")}`);
+  }
+
+  const template =
+    parsedInput.templateId &&
+    parsedInput.templateId !== LEAD_IMPORT_TEMPLATE_NONE_VALUE
+      ? await prisma.leadImportTemplate.findFirst({
+          where: {
+            id: parsedInput.templateId,
+            isActive: true,
+          },
+          select: {
+            id: true,
+            name: true,
+          },
+        })
+      : null;
+
+  const batchId = randomUUID();
+  let createdBatch:
+    | Awaited<ReturnType<typeof createQueuedLeadImportBatch>>
+    | null = null;
+
+  try {
+    const sourceFilePath = await saveLeadImportSourceFile({
+      batchId,
+      file: input.file,
+    });
+
+    createdBatch = await createQueuedLeadImportBatch({
+      batchId,
+      actorId: actor.id,
+      templateId: template?.id ?? null,
+      fileName: input.file.name,
+      fileType: parsedFile.fileType,
+      defaultLeadSource: parsedInput.defaultLeadSource,
+      mappingConfig: mappingConfig as Prisma.InputJsonValue,
+      headers: parsedFile.headers as Prisma.InputJsonValue,
+      totalRows: parsedFile.rows.length,
+      sourceFilePath,
+      report: {
+        importKind: "LEAD",
+        templateName: template?.name ?? null,
+      } satisfies Prisma.InputJsonValue,
+    });
+
+    const job = await enqueueLeadImportBatchJob({
+      batchId,
+      mode: "lead",
+    });
+
+    const queuedBatch = await updateLeadImportBatchProgress({
+      batchId,
+      status: LeadImportBatchStatus.QUEUED,
+      stage: "QUEUED",
+      queueJobId: job.id?.toString() ?? batchId,
+      successRows: createdBatch.successRows,
+      failedRows: createdBatch.failedRows,
+      duplicateRows: createdBatch.duplicateRows,
+      createdCustomerRows: createdBatch.createdCustomerRows,
+      matchedCustomerRows: createdBatch.matchedCustomerRows,
+      errorMessage: null,
+    });
+
+    return queuedBatch;
+  } catch (error) {
+    if (createdBatch) {
+      const message = error instanceof Error ? error.message : "导入入队失败，请稍后重试。";
+      await setLeadImportBatchFailed({
+        batchId: createdBatch.id,
+        message,
+      });
+      await createLeadImportBatchFailureLog({
+        actorId: actor.id,
+        batchId: createdBatch.id,
+        fileName: input.file.name,
+        importKind: "LEAD",
+        message,
+        attempt: 1,
+        attemptsAllowed: 1,
+      });
+    }
 
     throw error;
   }

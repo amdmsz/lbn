@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
+import { LeadImportBatchProgressCard } from "@/components/lead-imports/lead-import-batch-progress-card";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { DetailItem } from "@/components/shared/detail-item";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -15,10 +16,6 @@ import {
   formatImportDateTime,
   getLeadCustomerMergeActionLabel,
   getLeadCustomerMergeActionVariant,
-  getLeadDedupTypeLabel,
-  getLeadDedupTypeVariant,
-  getLeadImportBatchStatusLabel,
-  getLeadImportBatchStatusVariant,
   getLeadImportFileTypeLabel,
   getLeadImportRowStatusLabel,
   getLeadImportRowStatusVariant,
@@ -136,7 +133,12 @@ export default async function LeadImportDetailPage({
   const mode = batch.mode;
   const headers = getHeaders(batch.headers);
   const mapping = getMapping(batch.mappingConfig);
-  const backHref = mode === "customer_continuation" ? "/lead-imports?mode=customer_continuation" : "/lead-imports";
+  const backHref =
+    mode === "customer_continuation" ? "/lead-imports?mode=customer_continuation" : "/lead-imports";
+  const detailHref =
+    mode === "customer_continuation"
+      ? `/lead-imports/${batch.id}?mode=customer_continuation`
+      : `/lead-imports/${batch.id}`;
   const templateHref =
     mode === "customer_continuation"
       ? "/lead-imports/template?mode=customer_continuation"
@@ -176,18 +178,24 @@ export default async function LeadImportDetailPage({
               variant="neutral"
             />
             <StatusBadge
-              label={getLeadImportBatchStatusLabel(batch.status)}
-              variant={getLeadImportBatchStatusVariant(batch.status)}
-            />
-            <StatusBadge
               label={`${getLeadImportFileTypeLabel(batch.fileType)} / ${getLeadImportSourceLabel(batch.defaultLeadSource)}`}
               variant="info"
             />
+            <StatusBadge label={batch.progress.statusLabel} variant={batch.progress.statusVariant} />
           </div>
         }
       />
 
       {notice?.message ? <ActionBanner tone={notice.tone}>{notice.message}</ActionBanner> : null}
+
+      <LeadImportBatchProgressCard
+        batchId={batch.id}
+        mode={mode}
+        detailHref={detailHref}
+        initialProgress={batch.progress}
+        title="导入进度"
+        description="批次详情页会持续轮询后台 Worker 的处理阶段；批次完成后，下方结果区会保留最终报告和行明细。"
+      />
 
       <div className="crm-page-meta">
         <div className="flex flex-wrap items-center gap-4">
@@ -200,7 +208,7 @@ export default async function LeadImportDetailPage({
         </div>
         <p className="text-sm text-black/55">
           创建于 {formatImportDateTime(batch.createdAt)}，完成于{" "}
-          {batch.importedAt ? formatImportDateTime(batch.importedAt) : "未完成"}
+          {batch.importedAt ? formatImportDateTime(batch.importedAt) : "尚未完成"}
         </p>
       </div>
 
@@ -250,7 +258,11 @@ export default async function LeadImportDetailPage({
           />
           <DetailItem
             label="使用模板"
-            value={mode === "customer_continuation" ? "固定续接模板" : batch.template?.name ?? "固定模板导入"}
+            value={
+              mode === "customer_continuation"
+                ? "固定续接模板"
+                : batch.template?.name ?? "固定模板导入"
+            }
           />
           <DetailItem label="导入来源" value={getLeadImportSourceLabel(batch.defaultLeadSource)} />
         </div>
@@ -265,7 +277,7 @@ export default async function LeadImportDetailPage({
           <div className="crm-subtle-panel">
             <p className="crm-detail-label">固定模板映射</p>
             <p className="mt-2 text-sm leading-7 text-black/70">
-              {mappingSummary || "未记录字段映射"}
+              {mappingSummary || "未记录字段映射。"}
             </p>
           </div>
 
@@ -282,7 +294,7 @@ export default async function LeadImportDetailPage({
                   </span>
                 ))
               ) : (
-                <span className="text-sm text-black/55">未记录表头</span>
+                <span className="text-sm text-black/55">未记录表头。</span>
               )}
             </div>
           </div>
@@ -382,12 +394,6 @@ export default async function LeadImportDetailPage({
                       label={getLeadImportRowStatusLabel(row.status)}
                       variant={getLeadImportRowStatusVariant(row.status)}
                     />
-                    {row.dedupType ? (
-                      <StatusBadge
-                        label={getLeadDedupTypeLabel(row.dedupType)}
-                        variant={getLeadDedupTypeVariant(row.dedupType)}
-                      />
-                    ) : null}
                   </div>
                   <p className="mt-3 text-sm font-medium text-black/80">
                     第 {row.rowNumber} 行 / {row.mappedName || row.phoneRaw || "未识别"}
@@ -472,7 +478,8 @@ export default async function LeadImportDetailPage({
                           <div className="space-y-1 text-sm text-black/65">
                             <p>{continuation?.mappedCustomer.tags.join(" / ") || "无标签"}</p>
                             <p className="text-xs text-[var(--color-warning)]">
-                              {continuation?.mappedCustomer.unresolvedTags.join(" / ") || "无 warning"}
+                              {continuation?.mappedCustomer.unresolvedTags.join(" / ") ||
+                                "无 warning"}
                             </p>
                           </div>
                         </td>

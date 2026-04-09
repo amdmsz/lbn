@@ -1,5 +1,5 @@
 [Unit]
-Description=Jiuzhuang CRM Next.js application
+Description=Jiuzhuang CRM async lead import worker
 After=network-online.target mysql.service redis.service
 Wants=network-online.target
 
@@ -9,9 +9,8 @@ User=__APP_USER__
 Group=__APP_GROUP__
 WorkingDirectory=__APP_ROOT__
 Environment=NODE_ENV=production
-Environment=PORT=3000
 EnvironmentFile=__ENV_FILE__
-ExecStart=/usr/bin/env bash -lc 'npm run start -- --hostname 127.0.0.1 --port "${PORT:-3000}"'
+ExecStart=/usr/bin/env bash -lc 'npm run worker:lead-imports'
 Restart=always
 RestartSec=5
 KillSignal=SIGINT
@@ -20,7 +19,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
-ReadWritePaths=__APP_ROOT__/public/exports __APP_ROOT__/public/uploads __APP_ROOT__/runtime/imports
+ReadWritePaths=__APP_ROOT__/runtime/imports
 StandardOutput=journal
 StandardError=journal
 

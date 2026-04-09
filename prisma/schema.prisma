@@ -406,7 +406,18 @@ enum LeadImportFileType {
 
 enum LeadImportBatchStatus {
   DRAFT
+  QUEUED
   IMPORTING
+  COMPLETED
+  FAILED
+}
+
+enum LeadImportBatchStage {
+  QUEUED
+  PARSING
+  MATCHING
+  WRITING
+  FINALIZING
   COMPLETED
   FAILED
 }
@@ -1731,9 +1742,14 @@ model LeadImportBatch {
   fileName          String
   fileType          LeadImportFileType
   status            LeadImportBatchStatus @default(DRAFT)
+  stage             LeadImportBatchStage?
   defaultLeadSource LeadSource            @default(INFO_FLOW)
   mappingConfig     Json?
   headers           Json?
+  sourceFilePath    String?               @db.Text
+  queueJobId        String?
+  processingStartedAt DateTime?
+  lastHeartbeatAt   DateTime?
   totalRows         Int                   @default(0)
   successRows       Int                   @default(0)
   failedRows        Int                   @default(0)
@@ -1751,6 +1767,7 @@ model LeadImportBatch {
 
   @@index([createdById, createdAt])
   @@index([status, createdAt])
+  @@index([stage, createdAt])
   @@index([templateId])
   @@map("lead_import_batches")
 }

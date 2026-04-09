@@ -25,6 +25,7 @@
 *.pem
 /public/exports/
 /public/uploads/
+/runtime/
 /backups/
 /reports/*.json
 /prisma/_prisma_migrations_backup_*.json

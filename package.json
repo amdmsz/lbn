@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "worker:lead-imports": "tsx scripts/lead-import-worker.ts",
     "lint": "eslint",
     "test:lead-imports": "node --test --experimental-strip-types tests/lead-imports/customer-continuation-signals.test.mts",
     "postinstall": "prisma generate",
@@ -24,6 +25,7 @@
     "@prisma/adapter-mariadb": "^7.6.0",
     "@prisma/client": "^7.6.0",
     "@tanstack/react-table": "^8.21.3",
+    "bullmq": "^5.73.2",
     "clsx": "^2.1.1",
     "dayjs": "^1.11.20",
     "dotenv": "^17.2.3",
@@ -36,6 +38,7 @@
     "react-hook-form": "^7.72.0",
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.5.0",
+    "tsx": "^4.21.0",
     "xlsx": "^0.18.5",
     "zod": "^4.3.6"
   },

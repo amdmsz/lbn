@@ -166,3 +166,37 @@ npm run test:lead-imports
 - Existing owned customers are not reassigned by default
 - Full legacy raw rows remain available in `OperationLog.afterData`
 - This script intentionally does not manufacture order, payment, or shipping history from summary-only legacy data
+
+## Async import center rollout
+
+- `/lead-imports` and `/lead-imports?mode=customer_continuation` now submit batches asynchronously
+- the web request only validates the file, creates the batch, stores the source file under `runtime/imports/lead-imports`, and enqueues the batch
+- BullMQ + Redis + a dedicated worker process execute parsing, matching, and row writes in the background
+- both the import center and the batch detail page poll a shared batch-progress API and show:
+  - current batch status: `QUEUED / IMPORTING / COMPLETED / FAILED`
+  - current worker stage: `QUEUED / PARSING / MATCHING / WRITING / FINALIZING`
+  - processed row count, success count, duplicate count, failed count, and heartbeat time
+- batch detail pages keep the final report, failure rows, duplicate rows, and continuation mapping metrics after completion
+
+## Runtime requirements
+
+- production now requires `REDIS_URL`
+- start the async worker with:
+
+```bash
+npm run worker:lead-imports
+```
+
+- recommended runtime variables:
+
+```bash
+REDIS_URL=redis://127.0.0.1:6379
+LEAD_IMPORT_WORKER_CONCURRENCY=1
+LEAD_IMPORT_CHUNK_SIZE=20
+LEAD_IMPORT_JOB_ATTEMPTS=3
+```
+
+- v1 defaults stay conservative on purpose:
+  - worker concurrency defaults to `1`
+  - batches are processed in small chunks
+  - retries resume from persisted batch/row state instead of replaying the whole batch

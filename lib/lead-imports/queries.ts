@@ -13,6 +13,7 @@ import {
 } from "@/lib/lead-imports/customer-continuation-signals";
 import {
   LEAD_IMPORT_PAGE_SIZE,
+  buildLeadImportBatchProgress,
   getLeadImportBatchKind,
   getLeadImportMode,
   getLeadImportModeFromKind,
@@ -229,6 +230,19 @@ function buildReportMetrics(input: {
   ];
 }
 
+const leadImportBatchProgressSelect = {
+  status: true,
+  stage: true,
+  totalRows: true,
+  successRows: true,
+  failedRows: true,
+  duplicateRows: true,
+  errorMessage: true,
+  processingStartedAt: true,
+  lastHeartbeatAt: true,
+  importedAt: true,
+} satisfies Prisma.LeadImportBatchSelect;
+
 export function parseLeadImportListFilters(
   searchParams: Record<string, SearchParamsValue> | undefined,
 ) {
@@ -278,6 +292,7 @@ export async function getLeadImportListData(
     fileName: true,
     fileType: true,
     status: true,
+    stage: true,
     defaultLeadSource: true,
     totalRows: true,
     successRows: true,
@@ -285,6 +300,9 @@ export async function getLeadImportListData(
     duplicateRows: true,
     createdCustomerRows: true,
     matchedCustomerRows: true,
+    processingStartedAt: true,
+    lastHeartbeatAt: true,
+    errorMessage: true,
     importedAt: true,
     createdAt: true,
     report: true,
@@ -311,9 +329,22 @@ export async function getLeadImportListData(
   const filteredBatches = batches
     .map((batch) => {
       const importKind = getLeadImportBatchKind(batch.report);
+      const progress = buildLeadImportBatchProgress({
+        status: batch.status,
+        stage: batch.stage,
+        totalRows: batch.totalRows,
+        successRows: batch.successRows,
+        failedRows: batch.failedRows,
+        duplicateRows: batch.duplicateRows,
+        errorMessage: batch.errorMessage,
+        processingStartedAt: batch.processingStartedAt,
+        lastHeartbeatAt: batch.lastHeartbeatAt,
+        importedAt: batch.importedAt,
+      });
       return {
         ...batch,
         importKind,
+        progress,
       };
     })
     .filter((batch) => matchesMode(batch.importKind, filters.mode));
@@ -336,6 +367,9 @@ export async function getLeadImportListData(
       if (batch.status === LeadImportBatchStatus.IMPORTING) {
         summary.importingBatches += 1;
       }
+      if (batch.status === LeadImportBatchStatus.QUEUED) {
+        summary.queuedBatches += 1;
+      }
       if (batch.status === LeadImportBatchStatus.DRAFT) {
         summary.draftBatches += 1;
       }
@@ -352,6 +386,7 @@ export async function getLeadImportListData(
       totalBatches: 0,
       completedBatches: 0,
       importingBatches: 0,
+      queuedBatches: 0,
       failedBatches: 0,
       draftBatches: 0,
     },
@@ -438,6 +473,35 @@ export async function getLeadImportListData(
   };
 }
 
+export async function getLeadImportBatchProgressData(
+  viewer: LeadImportViewer,
+  batchId: string,
+) {
+  assertAccess(viewer.role);
+
+  const batch = await prisma.leadImportBatch.findUnique({
+    where: { id: batchId },
+    select: leadImportBatchProgressSelect,
+  });
+
+  if (!batch) {
+    return null;
+  }
+
+  return buildLeadImportBatchProgress({
+    status: batch.status,
+    stage: batch.stage,
+    totalRows: batch.totalRows,
+    successRows: batch.successRows,
+    failedRows: batch.failedRows,
+    duplicateRows: batch.duplicateRows,
+    errorMessage: batch.errorMessage,
+    processingStartedAt: batch.processingStartedAt,
+    lastHeartbeatAt: batch.lastHeartbeatAt,
+    importedAt: batch.importedAt,
+  });
+}
+
 export async function getLeadImportDetailData(
   viewer: LeadImportViewer,
   batchId: string,
@@ -451,6 +515,7 @@ export async function getLeadImportDetailData(
       fileName: true,
       fileType: true,
       status: true,
+      stage: true,
       defaultLeadSource: true,
       mappingConfig: true,
       headers: true,
@@ -463,6 +528,8 @@ export async function getLeadImportDetailData(
       report: true,
       importedAt: true,
       errorMessage: true,
+      processingStartedAt: true,
+      lastHeartbeatAt: true,
       createdAt: true,
       createdBy: {
         select: {
@@ -550,6 +617,18 @@ export async function getLeadImportDetailData(
     parsedCustomerContinuationReport,
     derivedCustomerContinuationMetrics,
   );
+  const progress = buildLeadImportBatchProgress({
+    status: batch.status,
+    stage: batch.stage,
+    totalRows: batch.totalRows,
+    successRows: batch.successRows,
+    failedRows: batch.failedRows,
+    duplicateRows: batch.duplicateRows,
+    errorMessage: batch.errorMessage,
+    processingStartedAt: batch.processingStartedAt,
+    lastHeartbeatAt: batch.lastHeartbeatAt,
+    importedAt: batch.importedAt,
+  });
   const customerContinuationMetricsEstimated =
     mode === "customer_continuation" &&
     (!parsedCustomerContinuationReport ||
@@ -561,6 +640,7 @@ export async function getLeadImportDetailData(
     importKind,
     mode,
     modeMeta: getLeadImportModeMeta(mode),
+    progress,
     customerContinuationReport: parsedCustomerContinuationReport,
     customerContinuationMetrics,
     customerContinuationMetricsEstimated,

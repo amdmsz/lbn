@@ -34,12 +34,20 @@ function detectFileType(fileName: string) {
   throw new Error("仅支持上传 CSV、XLS 或 XLSX 文件。");
 }
 
+function toArrayBuffer(buffer: ArrayBuffer | Uint8Array) {
+  if (buffer instanceof ArrayBuffer) {
+    return buffer;
+  }
+
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+}
+
 export function parseLeadImportBuffer(
-  buffer: ArrayBuffer,
+  buffer: ArrayBuffer | Uint8Array,
   fileName: string,
 ): ParsedLeadImportFile {
   const fileType = detectFileType(fileName);
-  const workbook = XLSX.read(buffer, { type: "array" });
+  const workbook = XLSX.read(toArrayBuffer(buffer), { type: "array" });
   const worksheetName = workbook.SheetNames[0];
 
   if (!worksheetName) {
@@ -64,19 +72,20 @@ export function parseLeadImportBuffer(
 
   const rows: ParsedLeadImportRow[] = dataRows
     .map((row, index) => {
-      const rawData = headers.reduce<Record<string, string>>((accumulator, header, cellIndex) => {
-        accumulator[header] = String(row[cellIndex] ?? "").trim();
-        return accumulator;
-      }, {});
+      const rawData = headers.reduce<Record<string, string>>(
+        (accumulator, header, cellIndex) => {
+          accumulator[header] = String(row[cellIndex] ?? "").trim();
+          return accumulator;
+        },
+        {},
+      );
 
       return {
         rowNumber: index + 2,
         rawData,
       };
     })
-    .filter((row) =>
-      Object.values(row.rawData).some((value) => value.trim().length > 0),
-    );
+    .filter((row) => Object.values(row.rawData).some((value) => value.trim().length > 0));
 
   if (rows.length === 0) {
     throw new Error("文件中没有可导入的数据行。");
