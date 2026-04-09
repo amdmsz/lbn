@@ -29,6 +29,8 @@ type DeletionActor = {
   teamId: string | null;
 };
 
+export type ImportedCustomerDeletionActor = DeletionActor;
+
 type ReviewerSummary = {
   id: string;
   name: string;
@@ -141,7 +143,7 @@ const importedCustomerDeletionRequestSummarySelect = {
   },
 } satisfies Prisma.ImportedCustomerDeletionRequestSelect;
 
-type ImportedCustomerDeletionCustomerRecord = Prisma.CustomerGetPayload<{
+export type ImportedCustomerDeletionCustomerRecord = Prisma.CustomerGetPayload<{
   select: typeof importedCustomerDeletionCustomerSelect;
 }>;
 
@@ -275,6 +277,10 @@ export type ImportedCustomerDeletionDirectResult = {
   successCount: number;
   skippedCount: number;
   failedCount: number;
+};
+
+type ImportedCustomerDeletionExecutionContext = {
+  operationContext?: Prisma.InputJsonValue | null;
 };
 
 function getCustomerVisibilityWhereInput(actor: DeletionActor): Prisma.CustomerWhereInput {
@@ -507,7 +513,7 @@ function buildGuard(input: {
   };
 }
 
-async function getDeletionActorTx(
+export async function getImportedCustomerDeletionActorTx(
   tx: Prisma.TransactionClient | typeof prisma,
   userId: string,
 ): Promise<DeletionActor> {
@@ -541,7 +547,7 @@ async function getDeletionActorTx(
   };
 }
 
-async function findVisibleCustomerForDeletionTx(
+export async function findVisibleImportedCustomerForDeletionTx(
   tx: Prisma.TransactionClient | typeof prisma,
   actor: DeletionActor,
   customerId: string,
@@ -564,7 +570,7 @@ async function findVisibleCustomerForDeletionTx(
   });
 }
 
-async function findCustomerForDeletionByIdTx(
+export async function findImportedCustomerForDeletionByIdTx(
   tx: Prisma.TransactionClient | typeof prisma,
   customerId: string,
 ) {
@@ -790,12 +796,12 @@ async function createImportedCustomerDeletionOperationLogTx(
   });
 }
 
-async function resolveGuardTx(
+export async function resolveImportedCustomerDeletionGuardTx(
   tx: Prisma.TransactionClient | typeof prisma,
   actor: DeletionActor,
   customerId: string,
 ) {
-  const customer = await findVisibleCustomerForDeletionTx(tx, actor, customerId);
+  const customer = await findVisibleImportedCustomerForDeletionTx(tx, actor, customerId);
 
   if (!customer) {
     return null;
@@ -818,7 +824,7 @@ async function resolveGuardTx(
   });
 }
 
-async function executeImportedCustomerDeletionTx(
+export async function executeImportedCustomerDeletionTx(
   tx: Prisma.TransactionClient,
   input: {
     actor: DeletionActor;
@@ -831,7 +837,7 @@ async function executeImportedCustomerDeletionTx(
         }
       | null;
     reason: string;
-  },
+  } & ImportedCustomerDeletionExecutionContext,
 ) {
   const detachedLeads = await tx.lead.updateMany({
     where: {
@@ -901,6 +907,7 @@ async function executeImportedCustomerDeletionTx(
     deletedWechatRecordCount: deletedWechatRecords.count,
     deletedLiveInvitationCount: deletedLiveInvitations.count,
     deletedOwnershipEventCount: deletedOwnershipEvents.count,
+    operationContext: input.operationContext ?? null,
   } satisfies Prisma.InputJsonValue;
 
   if (input.request) {
@@ -926,6 +933,7 @@ async function executeImportedCustomerDeletionTx(
       afterData: {
         requestId: input.request.id,
         requestReason: input.request.reason,
+        operationContext: input.operationContext ?? null,
       },
     });
   }
@@ -943,12 +951,14 @@ async function executeImportedCustomerDeletionTx(
     afterData: {
       outcomeSnapshot,
       requestId: input.request?.id ?? null,
+      operationContext: input.operationContext ?? null,
     },
   });
 
   return {
     sourceBatchId: input.guard.source?.batchId ?? null,
     redirectTo: input.guard.redirectAfterDelete,
+    outcomeSnapshot,
   };
 }
 
@@ -959,13 +969,13 @@ export async function resolveImportedCustomerDeletionGuard(
   },
   customerId: string,
 ) {
-  const actor = await getDeletionActorTx(prisma, viewer.id);
+  const actor = await getImportedCustomerDeletionActorTx(prisma, viewer.id);
 
   if (actor.role !== viewer.role) {
     throw new Error("当前账号角色已更新，请刷新后重试。");
   }
 
-  return resolveGuardTx(prisma, actor, customerId);
+  return resolveImportedCustomerDeletionGuardTx(prisma, actor, customerId);
 }
 
 export async function requestImportedCustomerDeletion(
@@ -978,7 +988,7 @@ export async function requestImportedCustomerDeletion(
     reason: string;
   },
 ): Promise<ImportedCustomerDeletionRequestResult> {
-  const actor = await getDeletionActorTx(prisma, viewer.id);
+  const actor = await getImportedCustomerDeletionActorTx(prisma, viewer.id);
 
   if (actor.role !== viewer.role) {
     throw new Error("当前账号角色已更新，请刷新后重试。");
@@ -989,7 +999,11 @@ export async function requestImportedCustomerDeletion(
   }
 
   return prisma.$transaction(async (tx) => {
-    const customer = await findVisibleCustomerForDeletionTx(tx, actor, input.customerId);
+    const customer = await findVisibleImportedCustomerForDeletionTx(
+      tx,
+      actor,
+      input.customerId,
+    );
 
     if (!customer) {
       throw new Error("当前客户不存在、已删除，或不在你的可见范围内。");
@@ -1073,7 +1087,7 @@ export async function reviewImportedCustomerDeletion(
     reason?: string;
   },
 ): Promise<ImportedCustomerDeletionReviewResult> {
-  const actor = await getDeletionActorTx(prisma, viewer.id);
+  const actor = await getImportedCustomerDeletionActorTx(prisma, viewer.id);
 
   if (actor.role !== viewer.role) {
     throw new Error("当前账号角色已更新，请刷新后重试。");
@@ -1146,14 +1160,14 @@ export async function reviewImportedCustomerDeletion(
       };
     }
 
-    const customer = await findVisibleCustomerForDeletionTx(
+    const customer = await findVisibleImportedCustomerForDeletionTx(
       tx,
       actor,
       requestSummary.customerIdSnapshot,
     );
 
     if (!customer) {
-      const existingCustomer = await findCustomerForDeletionByIdTx(
+      const existingCustomer = await findImportedCustomerForDeletionByIdTx(
         tx,
         requestSummary.customerIdSnapshot,
       );
@@ -1268,7 +1282,7 @@ export async function deleteImportedCustomersDirect(
     reason: string;
   },
 ): Promise<ImportedCustomerDeletionDirectResult> {
-  const actor = await getDeletionActorTx(prisma, viewer.id);
+  const actor = await getImportedCustomerDeletionActorTx(prisma, viewer.id);
 
   if (actor.role !== viewer.role) {
     throw new Error("当前账号角色已更新，请刷新后重试。");
@@ -1287,7 +1301,11 @@ export async function deleteImportedCustomersDirect(
   for (const customerId of uniqueCustomerIds) {
     try {
       const item = await prisma.$transaction(async (tx) => {
-        const customer = await findVisibleCustomerForDeletionTx(tx, actor, customerId);
+        const customer = await findVisibleImportedCustomerForDeletionTx(
+          tx,
+          actor,
+          customerId,
+        );
 
         if (!customer) {
           return {

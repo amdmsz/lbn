@@ -30,6 +30,7 @@ import {
 import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { buildOrderFulfillmentHref } from "@/lib/fulfillment/navigation";
+import { withVisibleLeadWhere } from "@/lib/leads/visibility";
 import {
   buildCollectionTaskScope,
   buildPaymentPlanScope,
@@ -198,7 +199,7 @@ function getScopedLeadWhere(viewer: ReportViewer): Prisma.LeadWhereInput | null 
     return null;
   }
 
-  return getLeadScope(viewer.role, viewer.id);
+  return withVisibleLeadWhere(getLeadScope(viewer.role, viewer.id));
 }
 
 function getScopedCustomerWhere(viewer: ReportViewer): Prisma.CustomerWhereInput | null {

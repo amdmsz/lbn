@@ -36,6 +36,7 @@ import {
 } from "@/lib/lead-imports/metadata";
 import { enqueueLeadImportBatchJob, getLeadImportChunkSize } from "@/lib/lead-imports/queue";
 import { readLeadImportSourceFile, saveLeadImportSourceFile } from "@/lib/lead-imports/storage";
+import { withVisibleLeadWhere } from "@/lib/leads/visibility";
 
 type Actor = {
   id: string;
@@ -685,6 +686,9 @@ async function processLeadImportRowTx(
           batchId: input.batchId,
           rowId: createdRow.id,
           leadId: importedLeadId,
+          leadIdSnapshot: importedLeadId,
+          leadNameSnapshot: importedLead?.name ?? null,
+          leadPhoneSnapshot: importedLead?.phone ?? normalizedPhone ?? phoneRaw,
           customerId: linkedCustomerId,
           action: mergeAction,
           source: input.defaultLeadSource,
@@ -807,11 +811,11 @@ export async function createLeadImportBatch(
 
     const [existingLeads, existingCustomers] = await Promise.all([
       prisma.lead.findMany({
-        where: {
+        where: withVisibleLeadWhere({
           phone: {
             in: uniqueCandidatePhones,
           },
-        },
+        }),
         select: {
           id: true,
           phone: true,
@@ -890,6 +894,10 @@ export async function createLeadImportBatch(
         let linkedCustomerName: string | null = null;
         let mergeAction: LeadCustomerMergeAction | null = null;
         let tagSynced = false;
+        let createdLeadSnapshot: {
+          name: string | null;
+          phone: string;
+        } | null = null;
 
         if (!phoneRaw.trim()) {
           status = LeadImportRowStatus.FAILED;
@@ -931,6 +939,10 @@ export async function createLeadImportBatch(
             },
           });
 
+          createdLeadSnapshot = {
+            name: createdLead.name,
+            phone: createdLead.phone,
+          };
           importedLeadId = createdLead.id;
           successRows += 1;
           seenPhones.set(normalizedPhone, row.rowNumber);
@@ -1022,6 +1034,10 @@ export async function createLeadImportBatch(
               batchId: batch.id,
               rowId: createdRow.id,
               leadId: importedLeadId,
+              leadIdSnapshot: importedLeadId,
+              leadNameSnapshot: createdLeadSnapshot?.name ?? null,
+              leadPhoneSnapshot:
+                createdLeadSnapshot?.phone ?? normalizedPhone ?? phoneRaw,
               customerId: linkedCustomerId,
               action: mergeAction,
               source: parsedInput.defaultLeadSource,
@@ -1185,11 +1201,11 @@ export async function processLeadImportBatchAsync(
 
   const [existingLeads, existingCustomers, sourceTag] = await Promise.all([
     prisma.lead.findMany({
-      where: {
+      where: withVisibleLeadWhere({
         phone: {
           in: uniqueCandidatePhones,
         },
-      },
+      }),
       select: {
         id: true,
         phone: true,

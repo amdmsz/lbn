@@ -5,14 +5,19 @@ import {
   type RoleCode,
 } from "@prisma/client";
 import { z } from "zod";
-import { canAccessLeadImportModule } from "@/lib/auth/access";
+import {
+  canAccessLeadImportModule,
+  canExecuteLeadImportBatchHardDelete,
+} from "@/lib/auth/access";
+import {
+  getLeadImportBatchRollbackPreview,
+  parseLeadImportBatchRollbackExecutionSnapshot,
+  parseLeadImportBatchRollbackPrecheckSnapshot,
+} from "@/lib/lead-imports/batch-rollback";
 import {
   getImportedCustomerDeletionRequestStatusLabel,
   getImportedCustomerDeletionRequestStatusVariant,
-  getImportedCustomerDeletionRowStateLabel,
-  getImportedCustomerDeletionRowStateVariant,
   getImportedCustomerDeletionSourceModeLabel,
-  type ImportedCustomerDeletionRowState,
 } from "@/lib/customers/imported-customer-deletion-metadata";
 import { prisma } from "@/lib/db/prisma";
 import {
@@ -23,12 +28,16 @@ import {
   LEAD_IMPORT_PAGE_SIZE,
   buildLeadImportBatchProgress,
   getLeadImportBatchKind,
+  getLeadImportBatchRollbackModeLabel,
+  getLeadImportBatchRollbackModeDescription,
+  getLeadImportBatchRollbackModeVariant,
   getLeadImportMode,
   getLeadImportModeFromKind,
   getLeadImportModeMeta,
   leadImportSourceOptions,
   parseLeadImportNotice,
   type CustomerContinuationBatchReport,
+  type LeadImportBatchRollbackMode,
   type CustomerContinuationRowMappedData,
   type LeadImportKind,
   type LeadImportMode,
@@ -145,6 +154,7 @@ type ImportedCustomerDeletionRequestRecord =
     select: typeof importedCustomerDeletionRequestSelect;
   }>;
 
+/*
 type ImportedCustomerDeletionCustomerSnapshot = Prisma.CustomerGetPayload<{
   select: {
     id: true;
@@ -187,6 +197,7 @@ const importedCustomerDeletionBlockerLabels = [
   ["codCollectionRecords", "已存在 COD 回款记录"],
 ] as const;
 
+*/
 function buildImportedCustomerDeletionRequestSummary(
   request: ImportedCustomerDeletionRequestRecord,
 ) {
@@ -214,6 +225,7 @@ function buildImportedCustomerDeletionRequestSummary(
   };
 }
 
+/*
 function getImportedCustomerDeletionBlockerLabelsForCustomer(
   customer: ImportedCustomerDeletionCustomerSnapshot | null | undefined,
 ) {
@@ -323,6 +335,23 @@ function buildImportedCustomerDeletionRowStatus(input: {
     hasLiveCustomer: Boolean(input.activeCustomer),
     selectable: state === "ELIGIBLE" && Boolean(rowCustomerId),
   };
+}
+*/
+
+function getSafeRollbackMode(
+  viewerRole: RoleCode,
+  importKind: LeadImportKind,
+  requestedMode: LeadImportBatchRollbackMode,
+) {
+  if (importKind !== "LEAD") {
+    return "AUDIT_PRESERVED" as const;
+  }
+
+  if (requestedMode === "HARD_DELETE" && canExecuteLeadImportBatchHardDelete(viewerRole)) {
+    return "HARD_DELETE" as const;
+  }
+
+  return "AUDIT_PRESERVED" as const;
 }
 
 function buildCustomerContinuationMetrics(
@@ -550,6 +579,21 @@ export async function getLeadImportListData(
         name: true,
       },
     },
+    rollback: {
+      select: {
+        id: true,
+        mode: true,
+        executedAt: true,
+        executionSnapshot: true,
+        actor: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
+      },
+    },
   } satisfies Prisma.LeadImportBatchSelect;
 
   const batches = await prisma.leadImportBatch.findMany({
@@ -577,6 +621,20 @@ export async function getLeadImportListData(
         ...batch,
         importKind,
         progress,
+        rollback: batch.rollback
+          ? {
+              id: batch.rollback.id,
+              mode: batch.rollback.mode,
+              modeLabel: getLeadImportBatchRollbackModeLabel(batch.rollback.mode),
+              modeVariant: getLeadImportBatchRollbackModeVariant(batch.rollback.mode),
+              executedAt: batch.rollback.executedAt,
+              actor: batch.rollback.actor,
+              executionSummary:
+                parseLeadImportBatchRollbackExecutionSnapshot(
+                  batch.rollback.executionSnapshot,
+                )?.summary ?? null,
+            }
+          : null,
       };
     })
     .filter((batch) => matchesMode(batch.importKind, filters.mode));
@@ -759,6 +817,7 @@ export async function getLeadImportBatchProgressData(
 export async function getLeadImportDetailData(
   viewer: LeadImportViewer,
   batchId: string,
+  requestedRollbackMode: LeadImportBatchRollbackMode = "AUDIT_PRESERVED",
 ) {
   assertAccess(viewer.role);
 
@@ -795,6 +854,22 @@ export async function getLeadImportDetailData(
         select: {
           id: true,
           name: true,
+        },
+      },
+      rollback: {
+        select: {
+          id: true,
+          mode: true,
+          executedAt: true,
+          precheckSnapshot: true,
+          executionSnapshot: true,
+          actor: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+            },
+          },
         },
       },
       rows: {
@@ -857,115 +932,41 @@ export async function getLeadImportDetailData(
 
   const importKind = getLeadImportBatchKind(batch.report);
   const mode = getLeadImportModeFromKind(importKind);
+  const selectedRollbackMode = getSafeRollbackMode(
+    viewer.role,
+    importKind,
+    requestedRollbackMode,
+  );
   const parsedCustomerContinuationReport = parseCustomerContinuationBatchReport(batch.report);
-  const viewerTeamId =
-    viewer.role === "SUPERVISOR"
-      ? (
-          await prisma.user.findUnique({
-            where: {
-              id: viewer.id,
-            },
-            select: {
-              teamId: true,
-            },
-          })
-        )?.teamId ?? null
+  const rollbackPreview =
+    !batch.rollback && batch.status === LeadImportBatchStatus.COMPLETED
+      ? await getLeadImportBatchRollbackPreview(viewer, batch.id, selectedRollbackMode)
       : null;
+  const executedRollbackPrecheck = batch.rollback
+    ? parseLeadImportBatchRollbackPrecheckSnapshot(batch.rollback.precheckSnapshot)
+    : null;
+  const executedRollbackExecution = batch.rollback
+    ? parseLeadImportBatchRollbackExecutionSnapshot(batch.rollback.executionSnapshot)
+    : null;
+  const activeRollbackPrecheck = rollbackPreview?.precheck ?? executedRollbackPrecheck ?? null;
+  const rollbackPreviewByRowNumber = new Map(
+    (activeRollbackPrecheck?.rows ?? []).map((row) => [row.rowNumber, row]),
+  );
+  const rollbackExecutionByRowNumber = new Map(
+    (executedRollbackExecution?.rows ?? []).map((row) => [row.rowNumber, row]),
+  );
   const rawRows = batch.rows.map((row) => ({
     ...row,
     customerMerge: row.mergeLogs[0] ?? null,
     customerContinuation: parseCustomerContinuationRowMappedData(row.mappedData),
   }));
-  const rowDeletionRequestRecords = await prisma.importedCustomerDeletionRequest.findMany({
-    where: {
-      sourceBatchId: batch.id,
-    },
-    orderBy: [{ createdAt: "desc" }],
-    select: importedCustomerDeletionRequestSelect,
-  });
-  const latestDeletionRequestByRow = new Map<
-    number,
-    ReturnType<typeof buildImportedCustomerDeletionRequestSummary>
-  >();
-
-  for (const record of rowDeletionRequestRecords) {
-    if (record.sourceRowNumber === null || latestDeletionRequestByRow.has(record.sourceRowNumber)) {
-      continue;
-    }
-
-    latestDeletionRequestByRow.set(
-      record.sourceRowNumber,
-      buildImportedCustomerDeletionRequestSummary(record),
-    );
-  }
-
-  const customerIds = [...new Set(
-    rawRows
-      .flatMap((row) => [
-        row.customerMerge?.customerId ?? null,
-        row.customerContinuation?.result.customerId ?? null,
-        latestDeletionRequestByRow.get(row.rowNumber)?.customerIdSnapshot ?? null,
-      ])
-      .filter((value): value is string => Boolean(value)),
-  )];
-  const activeCustomers = customerIds.length
-    ? await prisma.customer.findMany({
-        where: {
-          id: {
-            in: customerIds,
-          },
-        },
-        select: {
-          id: true,
-          name: true,
-          phone: true,
-          ownerId: true,
-          publicPoolTeamId: true,
-          owner: {
-            select: {
-              teamId: true,
-            },
-          },
-          _count: {
-            select: {
-              tradeOrders: true,
-              salesOrders: true,
-              orders: true,
-              giftRecords: true,
-              paymentPlans: true,
-              paymentRecords: true,
-              collectionTasks: true,
-              shippingTasks: true,
-              logisticsFollowUpTasks: true,
-              codCollectionRecords: true,
-            },
-          },
-        },
-      })
-    : [];
-  const activeCustomerMap = new Map(activeCustomers.map((customer) => [customer.id, customer]));
   const rows = rawRows.map((row) => {
-    const latestDeletionRequest = latestDeletionRequestByRow.get(row.rowNumber) ?? null;
-    const deletion = buildImportedCustomerDeletionRowStatus({
-      mode,
-      viewerRole: viewer.role,
-      viewerTeamId,
-      rowNumber: row.rowNumber,
-      customerMerge: row.customerMerge,
-      customerContinuation: row.customerContinuation,
-      request: latestDeletionRequest,
-      activeCustomer: activeCustomerMap.get(
-        mode === "customer_continuation"
-          ? row.customerContinuation?.result.customerId ??
-              latestDeletionRequest?.customerIdSnapshot ??
-              ""
-          : row.customerMerge?.customerId ?? latestDeletionRequest?.customerIdSnapshot ?? "",
-      ),
-    });
-
     return {
       ...row,
-      deletion,
+      rollback: {
+        preview: rollbackPreviewByRowNumber.get(row.rowNumber) ?? null,
+        execution: rollbackExecutionByRowNumber.get(row.rowNumber) ?? null,
+      },
     };
   });
 
@@ -1005,6 +1006,46 @@ export async function getLeadImportDetailData(
     customerContinuationMetrics,
     customerContinuationMetricsEstimated,
     rows,
+    rollback: {
+      selectedMode: selectedRollbackMode,
+      selectedModeLabel: getLeadImportBatchRollbackModeLabel(selectedRollbackMode),
+      selectedModeDescription: getLeadImportBatchRollbackModeDescription(
+        selectedRollbackMode,
+      ),
+      selectedModeVariant: getLeadImportBatchRollbackModeVariant(selectedRollbackMode),
+      availableModes: [
+        {
+          value: "AUDIT_PRESERVED" as const,
+          label: getLeadImportBatchRollbackModeLabel("AUDIT_PRESERVED"),
+          description: getLeadImportBatchRollbackModeDescription("AUDIT_PRESERVED"),
+          variant: getLeadImportBatchRollbackModeVariant("AUDIT_PRESERVED"),
+        },
+        ...(importKind === "LEAD" && canExecuteLeadImportBatchHardDelete(viewer.role)
+          ? [
+              {
+                value: "HARD_DELETE" as const,
+                label: getLeadImportBatchRollbackModeLabel("HARD_DELETE"),
+                description: getLeadImportBatchRollbackModeDescription("HARD_DELETE"),
+                variant: getLeadImportBatchRollbackModeVariant("HARD_DELETE"),
+              },
+            ]
+          : []),
+      ],
+      preview: rollbackPreview,
+      currentPrecheck: activeRollbackPrecheck,
+      executed: batch.rollback
+        ? {
+            id: batch.rollback.id,
+            mode: batch.rollback.mode,
+            modeLabel: getLeadImportBatchRollbackModeLabel(batch.rollback.mode),
+            modeVariant: getLeadImportBatchRollbackModeVariant(batch.rollback.mode),
+            executedAt: batch.rollback.executedAt,
+            actor: batch.rollback.actor,
+            precheck: executedRollbackPrecheck,
+            execution: executedRollbackExecution,
+          }
+        : null,
+    },
     reportMetrics: buildReportMetrics({
       importKind,
       totalRows: batch.totalRows,

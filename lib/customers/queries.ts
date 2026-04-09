@@ -34,6 +34,10 @@ import {
   customerContinuationImportOperationActions,
   type CustomerImportOperationLogData,
 } from "@/lib/lead-imports/metadata";
+import {
+  buildVisibleLeadWhereInput,
+  withVisibleLeadWhere,
+} from "@/lib/leads/visibility";
 import { getActiveTagOptions } from "@/lib/master-data/queries";
 
 type SearchParamsValue = string | string[] | undefined;
@@ -342,6 +346,7 @@ const customerSnapshotSelect = {
     },
   },
   leads: {
+    where: buildVisibleLeadWhereInput(),
     select: {
       id: true,
       createdAt: true,
@@ -1173,6 +1178,7 @@ async function fetchCustomerListItems(
           },
         },
         leads: {
+          where: buildVisibleLeadWhereInput(),
           orderBy: { createdAt: "desc" },
           take: 1,
           select: {
@@ -1204,7 +1210,9 @@ async function fetchCustomerListItems(
         },
         _count: {
           select: {
-            leads: true,
+            leads: {
+              where: buildVisibleLeadWhereInput(),
+            },
             callRecords: true,
           },
         },
@@ -1303,6 +1311,7 @@ export function buildPendingFirstCallCustomerWhereInput(): Prisma.CustomerWhereI
     },
     leads: {
       some: {
+        rolledBackAt: null,
         status: {
           in: [LeadStatus.NEW, LeadStatus.ASSIGNED, LeadStatus.FIRST_CALL_PENDING],
         },
@@ -1327,6 +1336,7 @@ export function buildPendingFollowUpCustomerWhereInput(now = new Date()): Prisma
       {
         leads: {
           some: {
+            rolledBackAt: null,
             nextFollowUpAt: {
               lte: now,
             },
@@ -1747,6 +1757,7 @@ export async function getCustomerDetail(viewer: CustomerViewer, customerId: stri
         },
       },
       leads: {
+        where: buildVisibleLeadWhereInput(),
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
@@ -1759,7 +1770,9 @@ export async function getCustomerDetail(viewer: CustomerViewer, customerId: stri
       },
       _count: {
         select: {
-          leads: true,
+          leads: {
+            where: buildVisibleLeadWhereInput(),
+          },
           callRecords: true,
           wechatRecords: true,
           liveInvitations: true,
@@ -2503,12 +2516,12 @@ export async function getCustomerDetailShell(
   const [firstLead, latestLead, latestCall, latestWechat, latestLive, operationLogCount, logisticsFollowUpCount] =
     await Promise.all([
       prisma.lead.findFirst({
-        where: { customerId: detail.customer.id },
+        where: withVisibleLeadWhere({ customerId: detail.customer.id }),
         orderBy: { createdAt: "asc" },
         select: { source: true, createdAt: true },
       }),
       prisma.lead.findFirst({
-        where: { customerId: detail.customer.id },
+        where: withVisibleLeadWhere({ customerId: detail.customer.id }),
         orderBy: { createdAt: "desc" },
         select: { source: true, createdAt: true },
       }),
@@ -2576,7 +2589,7 @@ export async function getCustomerDetailProfileData(
     importedCustomerDeletion,
   ] = await Promise.all([
     prisma.lead.findMany({
-      where: { customerId: detail.customer.id },
+      where: withVisibleLeadWhere({ customerId: detail.customer.id }),
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -2597,6 +2610,9 @@ export async function getCustomerDetailProfileData(
         source: true,
         tagSynced: true,
         createdAt: true,
+        leadIdSnapshot: true,
+        leadNameSnapshot: true,
+        leadPhoneSnapshot: true,
         batch: {
           select: {
             id: true,
@@ -2608,6 +2624,7 @@ export async function getCustomerDetailProfileData(
             id: true,
             name: true,
             phone: true,
+            rolledBackAt: true,
           },
         },
       },

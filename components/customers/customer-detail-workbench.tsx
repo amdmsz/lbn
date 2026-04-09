@@ -703,21 +703,42 @@ function renderProfileTab({
 
             {data.mergeLogs.length > 0 ? (
               <div className="space-y-3">
-                {data.mergeLogs.map((record) => (
-                  <CompactArchiveCard
-                    key={record.id}
-                    title={`${record.lead.name?.trim() || record.lead.phone} / ${record.batch.fileName}`}
-                    meta={[
-                      `来源 ${getLeadSourceLabel(record.source)}`,
-                      `动作 ${record.action}`,
-                      `标签同步 ${record.tagSynced ? "已同步" : "未同步"}`,
-                      `时间 ${formatDateTime(record.createdAt)}`,
-                    ]}
-                    description={`线索手机号：${record.lead.phone}`}
-                    href={`/leads/${record.lead.id}`}
-                    hrefLabel="查看线索"
-                  />
-                ))}
+                {data.mergeLogs.map((record) => {
+                  const liveLead =
+                    record.lead && !record.lead.rolledBackAt ? record.lead : null;
+                  const leadName =
+                    liveLead?.name?.trim() ||
+                    record.leadNameSnapshot?.trim() ||
+                    liveLead?.phone ||
+                    record.leadPhoneSnapshot ||
+                    record.leadIdSnapshot ||
+                    "未识别线索";
+                  const leadPhone =
+                    liveLead?.phone ||
+                    record.leadPhoneSnapshot ||
+                    record.leadIdSnapshot ||
+                    "-";
+
+                  return (
+                    <CompactArchiveCard
+                      key={record.id}
+                      title={`${leadName} / ${record.batch.fileName}`}
+                      meta={[
+                        `来源 ${getLeadSourceLabel(record.source)}`,
+                        `动作 ${record.action}`,
+                        `标签同步 ${record.tagSynced ? "已同步" : "未同步"}`,
+                        `时间 ${formatDateTime(record.createdAt)}`,
+                      ]}
+                      description={
+                        liveLead
+                          ? `线索手机号：${leadPhone}`
+                          : `线索手机号：${leadPhone}（历史快照）`
+                      }
+                      href={liveLead ? `/leads/${liveLead.id}` : undefined}
+                      hrefLabel={liveLead ? "查看线索" : undefined}
+                    />
+                  );
+                })}
               </div>
             ) : (
               <CustomerEmptyState

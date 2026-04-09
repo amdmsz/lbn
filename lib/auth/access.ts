@@ -61,6 +61,14 @@ export function canAccessLeadImportModule(role: RoleCode) {
   return role === "ADMIN" || role === "SUPERVISOR";
 }
 
+export function canExecuteLeadImportBatchRollback(role: RoleCode) {
+  return canAccessLeadImportModule(role);
+}
+
+export function canExecuteLeadImportBatchHardDelete(role: RoleCode) {
+  return role === "ADMIN";
+}
+
 export function canAccessPath(
   role: RoleCode,
   pathname: string,

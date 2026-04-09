@@ -17,6 +17,7 @@ import {
   LEADS_PAGE_SIZE_OPTIONS,
   UNASSIGNED_OWNER_VALUE,
 } from "@/lib/leads/metadata";
+import { withVisibleLeadWhere } from "@/lib/leads/visibility";
 import { getActiveTagOptions } from "@/lib/master-data/queries";
 
 type SearchParamsValue = string | string[] | undefined;
@@ -159,13 +160,13 @@ export function buildLeadWhereInput(viewer: LeadViewer, filters: LeadListFilters
     });
   }
 
-  if (andClauses.length === 0) {
-    return {};
-  }
-
-  return {
-    AND: andClauses,
-  } satisfies Prisma.LeadWhereInput;
+  return withVisibleLeadWhere(
+    andClauses.length === 0
+      ? {}
+      : ({
+          AND: andClauses,
+        } satisfies Prisma.LeadWhereInput),
+  );
 }
 
 export function parseLeadListFilters(
@@ -309,10 +310,10 @@ export async function getLeadDetail(viewer: LeadViewer, leadId: string) {
   }
 
   const lead = await prisma.lead.findFirst({
-    where: {
+    where: withVisibleLeadWhere({
       id: leadId,
       ...scope,
-    },
+    }),
     select: {
       id: true,
       name: true,

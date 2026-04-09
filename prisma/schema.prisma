@@ -450,6 +450,11 @@ enum ImportedCustomerDeletionSourceMode {
   CUSTOMER_CONTINUATION
 }
 
+enum LeadImportBatchRollbackMode {
+  AUDIT_PRESERVED
+  HARD_DELETE
+}
+
 enum OperationModule {
   USER
   TEAM
@@ -652,6 +657,7 @@ model User {
   requestedImportedCustomerDeletionRequests ImportedCustomerDeletionRequest[] @relation("ImportedCustomerDeletionRequestRequester")
   reviewedImportedCustomerDeletionRequests  ImportedCustomerDeletionRequest[] @relation("ImportedCustomerDeletionRequestReviewer")
   executedImportedCustomerDeletionRequests  ImportedCustomerDeletionRequest[] @relation("ImportedCustomerDeletionRequestExecutor")
+  executedLeadImportBatchRollbacks         LeadImportBatchRollback[]         @relation("LeadImportBatchRollbackActor")
   createdAt               DateTime         @default(now())
   updatedAt               DateTime         @updatedAt
 
@@ -699,6 +705,9 @@ model Lead {
   owner             User?                @relation("LeadOwner", fields: [ownerId], references: [id])
   customerId        String?
   customer          Customer?            @relation(fields: [customerId], references: [id])
+  rolledBackAt      DateTime?
+  rolledBackBatchId String?
+  rolledBackBatch   LeadImportBatch?     @relation("LeadRolledBackBatch", fields: [rolledBackBatchId], references: [id])
   lastFollowUpAt    DateTime?
   nextFollowUpAt    DateTime?
   assignments       LeadAssignment[]
@@ -717,6 +726,8 @@ model Lead {
   @@index([status])
   @@index([ownerId])
   @@index([customerId])
+  @@index([rolledBackAt])
+  @@index([rolledBackBatchId])
   @@index([nextFollowUpAt])
   @@index([createdAt])
 }
@@ -1777,6 +1788,8 @@ model LeadImportBatch {
   dedupLogs         LeadDedupLog[]
   mergeLogs         LeadCustomerMergeLog[]
   importedCustomerDeletionRequests ImportedCustomerDeletionRequest[] @relation("ImportedCustomerDeletionRequestBatch")
+  rollback          LeadImportBatchRollback?
+  rolledBackLeads   Lead[]                 @relation("LeadRolledBackBatch")
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
 
@@ -1856,8 +1869,11 @@ model LeadCustomerMergeLog {
   batch      LeadImportBatch         @relation(fields: [batchId], references: [id])
   rowId      String?
   row        LeadImportRow?          @relation(fields: [rowId], references: [id])
-  leadId     String
-  lead       Lead                    @relation(fields: [leadId], references: [id])
+  leadId     String?
+  lead       Lead?                   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  leadIdSnapshot String?
+  leadNameSnapshot String?
+  leadPhoneSnapshot String?
   customerId String?
   customer   Customer?               @relation(fields: [customerId], references: [id], onDelete: SetNull)
   action     LeadCustomerMergeAction
@@ -1875,6 +1891,24 @@ model LeadCustomerMergeLog {
   @@index([customerId, createdAt])
   @@index([phone, createdAt])
   @@map("lead_customer_merge_logs")
+}
+
+model LeadImportBatchRollback {
+  id                String                      @id @default(cuid())
+  batchId           String                      @unique
+  batch             LeadImportBatch             @relation(fields: [batchId], references: [id])
+  mode              LeadImportBatchRollbackMode
+  actorId           String
+  actor             User                        @relation("LeadImportBatchRollbackActor", fields: [actorId], references: [id])
+  precheckSnapshot  Json
+  executionSnapshot Json
+  executedAt        DateTime                    @default(now())
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+
+  @@index([actorId, executedAt])
+  @@index([mode, executedAt])
+  @@map("lead_import_batch_rollbacks")
 }
 
 model ImportedCustomerDeletionRequest {

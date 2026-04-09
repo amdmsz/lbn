@@ -21,13 +21,15 @@ import {
   getLeadImportRowStatusLabel,
   getLeadImportRowStatusVariant,
   getLeadImportSourceLabel,
+  isLeadImportBatchRollbackMode,
   summarizeCustomerContinuationImportMapping,
   summarizeLeadImportMapping,
   type CustomerContinuationImportSummary,
+  type LeadImportBatchRollbackMode,
   type LeadImportMappingConfig,
 } from "@/lib/lead-imports/metadata";
 import { getLeadImportDetailData } from "@/lib/lead-imports/queries";
-import { deleteImportedCustomersFromBatchAction } from "../actions";
+import { executeLeadImportBatchRollbackAction } from "../actions";
 
 type LeadImportDetailData = NonNullable<
   Awaited<ReturnType<typeof getLeadImportDetailData>>
@@ -91,11 +93,25 @@ function getOwnerOutcomeLabel(value: string) {
   }
 }
 
-function buildNoticeHref(
-  href: string,
-  status: "success" | "error",
-  message: string,
+function buildDetailHref(
+  batchId: string,
+  mode: LeadImportDetailData["mode"],
+  rollbackMode: LeadImportBatchRollbackMode,
 ) {
+  const params = new URLSearchParams();
+
+  if (mode === "customer_continuation") {
+    params.set("mode", "customer_continuation");
+  }
+  if (mode === "lead" && rollbackMode !== "AUDIT_PRESERVED") {
+    params.set("rollbackMode", rollbackMode);
+  }
+
+  const query = params.toString();
+  return query ? `/lead-imports/${batchId}?${query}` : `/lead-imports/${batchId}`;
+}
+
+function buildNoticeHref(href: string, status: "success" | "error", message: string) {
   const [pathname, queryString = ""] = href.split("?");
   const params = new URLSearchParams(queryString);
   params.set("noticeStatus", status);
@@ -103,69 +119,100 @@ function buildNoticeHref(
   return `${pathname}?${params.toString()}`;
 }
 
+function getRequestedRollbackMode(
+  searchParams: Record<string, string | string[] | undefined> | undefined,
+): LeadImportBatchRollbackMode {
+  const value = Array.isArray(searchParams?.rollbackMode)
+    ? searchParams.rollbackMode[0]
+    : searchParams?.rollbackMode;
+
+  return value && isLeadImportBatchRollbackMode(value)
+    ? value
+    : "AUDIT_PRESERVED";
+}
+
 function getRowCustomerSnapshot(row: LeadImportDetailRow) {
+  const customerRemoved =
+    row.rollback.execution?.outcome === "CUSTOMER_DELETED" ||
+    row.rollback.execution?.outcome === "CUSTOMER_ALREADY_REMOVED";
+
   if (row.customerContinuation) {
     return {
       name:
-        row.deletion?.latestRequest?.customerNameSnapshot ??
         row.customerContinuation.result.customerName ??
         row.mappedName ??
         row.phoneRaw ??
         "-",
-      phone:
-        row.deletion?.latestRequest?.customerPhoneSnapshot ??
-        row.normalizedPhone ??
-        row.phoneRaw ??
-        "-",
+      phone: row.normalizedPhone ?? row.phoneRaw ?? "-",
       href:
-        row.deletion?.hasLiveCustomer && row.deletion.customerId
-          ? `/customers/${row.deletion.customerId}`
+        !customerRemoved && row.customerContinuation.result.customerId
+          ? `/customers/${row.customerContinuation.result.customerId}`
           : null,
+      helper: customerRemoved ? "客户已删除，当前展示导入快照" : null,
     };
   }
 
+  const liveCustomer = row.customerMerge?.customer ?? null;
+
   return {
     name:
-      row.customerMerge?.customer?.name ??
-      row.deletion?.latestRequest?.customerNameSnapshot ??
-      row.customerMerge?.note ??
+      liveCustomer?.name ??
       row.mappedName ??
+      row.customerMerge?.note ??
       row.phoneRaw ??
       "-",
     phone:
-      row.customerMerge?.customer?.phone ??
-      row.deletion?.latestRequest?.customerPhoneSnapshot ??
+      liveCustomer?.phone ??
       row.customerMerge?.phone ??
       row.normalizedPhone ??
       row.phoneRaw ??
       "-",
     href:
-      row.customerMerge?.customer?.id ? `/customers/${row.customerMerge.customer.id}` : null,
+      !customerRemoved && liveCustomer?.id ? `/customers/${liveCustomer.id}` : null,
+    helper:
+      customerRemoved || !liveCustomer
+        ? "客户已删除或已脱离 live relation，当前展示导入快照"
+        : null,
   };
 }
 
-function getRowDeletionRequestNote(row: LeadImportDetailRow) {
-  const request = row.deletion?.latestRequest;
+function getRollbackActionSummary(row: LeadImportDetailRow) {
+  const preview = row.rollback.preview;
+  if (!preview) return null;
 
-  if (!request) {
-    return null;
+  const parts: string[] = [];
+
+  if (preview.customerAction === "DELETE") {
+    parts.push("删除本批新建客户");
+  } else if (preview.customerAction === "ALREADY_REMOVED") {
+    parts.push("客户已不存在");
   }
 
-  if (request.status === "PENDING_SUPERVISOR") {
-    return `申请人：${request.requestedBy.name}`;
+  if (preview.leadAction === "AUDIT_PRESERVE") {
+    parts.push("保留 Lead 审计");
+  } else if (preview.leadAction === "HARD_DELETE") {
+    parts.push("硬删 Lead");
   }
 
-  if (request.status === "REJECTED") {
-    return request.rejectReason?.trim() || "申请已驳回";
-  }
+  return parts.length > 0 ? parts.join(" / ") : null;
+}
 
-  if (request.status === "EXECUTED") {
-    return request.executedAt
-      ? `执行于 ${formatImportDateTime(request.executedAt)}`
-      : "客户已删除";
+function getRollbackExecutionMeta(
+  outcome: NonNullable<LeadImportDetailRow["rollback"]["execution"]>["outcome"],
+) {
+  switch (outcome) {
+    case "CUSTOMER_DELETED":
+      return { label: "已删客户", variant: "success" as const };
+    case "CUSTOMER_ALREADY_REMOVED":
+      return { label: "客户已不存在", variant: "neutral" as const };
+    case "LEAD_AUDIT_PRESERVED":
+      return { label: "Lead 已审计保留", variant: "info" as const };
+    case "LEAD_HARD_DELETED":
+      return { label: "Lead 已硬删", variant: "danger" as const };
+    case "IGNORED":
+    default:
+      return { label: "无需执行", variant: "neutral" as const };
   }
-
-  return null;
 }
 
 export default async function LeadImportDetailPage({
@@ -176,11 +223,7 @@ export default async function LeadImportDetailPage({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }>) {
   const session = await auth();
-
-  if (!session?.user) {
-    redirect("/login");
-  }
-
+  if (!session?.user) redirect("/login");
   if (!canAccessLeadImportModule(session.user.role)) {
     redirect(getDefaultRouteForRole(session.user.role));
   }
@@ -188,17 +231,14 @@ export default async function LeadImportDetailPage({
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const batch = await getLeadImportDetailData(
-    {
-      id: session.user.id,
-      role: session.user.role,
-    },
+    { id: session.user.id, role: session.user.role },
     id,
+    getRequestedRollbackMode(resolvedSearchParams),
   );
 
-  if (!batch) {
-    notFound();
-  }
+  if (!batch) notFound();
 
+  const batchId = batch.id;
   const notice =
     resolvedSearchParams && "noticeMessage" in resolvedSearchParams
       ? {
@@ -214,24 +254,18 @@ export default async function LeadImportDetailPage({
               : resolvedSearchParams.noticeMessage) ?? "",
         }
       : null;
-  const batchId = batch.id;
+
   const mode = batch.mode;
+  const detailHref = buildDetailHref(batchId, mode, batch.rollback.selectedMode);
   const headers = getHeaders(batch.headers);
   const mapping = getMapping(batch.mappingConfig);
-  const backHref =
-    mode === "customer_continuation" ? "/lead-imports?mode=customer_continuation" : "/lead-imports";
-  const detailHref =
-    mode === "customer_continuation"
-      ? `/lead-imports/${batchId}?mode=customer_continuation`
-      : `/lead-imports/${batchId}`;
-  const templateHref =
-    mode === "customer_continuation"
-      ? "/lead-imports/template?mode=customer_continuation"
-      : "/lead-imports/template";
   const mappingSummary =
     mode === "customer_continuation"
       ? summarizeCustomerContinuationImportMapping(mapping as never)
       : summarizeLeadImportMapping(mapping);
+  const rollbackPrecheck = batch.rollback.currentPrecheck;
+  const rollbackSummary = rollbackPrecheck?.summary ?? null;
+  const rollbackExecutionSummary = batch.rollback.executed?.execution?.summary ?? null;
   const customerContinuationMetricCards =
     mode === "customer_continuation"
       ? [
@@ -240,34 +274,32 @@ export default async function LeadImportDetailPage({
           { label: "C 类标签", value: batch.customerContinuationMetrics.categoryCCustomers },
           { label: "D 类标签", value: batch.customerContinuationMetrics.categoryDCustomers },
           { label: "已加微信", value: batch.customerContinuationMetrics.wechatAddedCustomers },
-          { label: "待邀约", value: batch.customerContinuationMetrics.pendingInvitationCustomers },
+          {
+            label: "待邀约",
+            value: batch.customerContinuationMetrics.pendingInvitationCustomers,
+          },
           { label: "待回访", value: batch.customerContinuationMetrics.pendingCallbackCustomers },
-          { label: "拒绝添加", value: batch.customerContinuationMetrics.refusedWechatCustomers },
-          { label: "无效号码", value: batch.customerContinuationMetrics.invalidNumberCustomers },
         ]
       : [];
 
-  const deletableRows = batch.rows.filter((row) => row.deletion?.selectable);
-
-  async function deleteImportedCustomersFormAction(formData: FormData) {
+  async function executeRollbackFormAction(formData: FormData) {
     "use server";
-
-    const customerIds = formData
-      .getAll("customerIds")
-      .map((value) => (typeof value === "string" ? value : ""))
-      .filter(Boolean);
+    const rollbackModeValue = formData.get("rollbackMode");
     const reasonValue = formData.get("reason");
-    const reason = typeof reasonValue === "string" ? reasonValue : "";
-    const result = await deleteImportedCustomersFromBatchAction({
+    const result = await executeLeadImportBatchRollbackAction({
       batchId,
-      customerIds,
-      reason,
+      mode:
+        typeof rollbackModeValue === "string" &&
+        isLeadImportBatchRollbackMode(rollbackModeValue)
+          ? rollbackModeValue
+          : "AUDIT_PRESERVED",
+      reason: typeof reasonValue === "string" ? reasonValue : "",
     });
 
     redirect(
       buildNoticeHref(
-        detailHref,
-        result.status === "success" ? "success" : "error",
+        buildDetailHref(batchId, mode, result.rollbackMode),
+        result.status,
         result.message,
       ),
     );
@@ -277,11 +309,7 @@ export default async function LeadImportDetailPage({
     <div className="crm-page">
       <PageHeader
         title={mode === "customer_continuation" ? "客户续接导入详情" : "导入批次详情"}
-        description={
-          mode === "customer_continuation"
-            ? "查看续接迁移批次的客户命中、负责人解析、标签 warning 与迁移摘要。"
-            : "查看该批次的线索导入结果、重复剔除、客户归并结果以及固定模板字段映射。"
-        }
+        description="查看导入结果、批次预检，以及整批撤销的执行快照。"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge
@@ -305,18 +333,10 @@ export default async function LeadImportDetailPage({
         detailHref={detailHref}
         initialProgress={batch.progress}
         title="导入进度"
-        description="批次详情页会持续轮询后台 Worker 的处理阶段；批次完成后，下方结果区会保留最终报告和行明细。"
+        description="批次完成后会保留结果和整批撤销快照。"
       />
 
       <div className="crm-page-meta">
-        <div className="flex flex-wrap items-center gap-4">
-          <Link href={backHref} className="crm-text-link">
-            返回导入中心
-          </Link>
-          <Link href={templateHref} className="crm-text-link">
-            下载当前模板
-          </Link>
-        </div>
         <p className="text-sm text-black/55">
           创建于 {formatImportDateTime(batch.createdAt)}，完成于{" "}
           {batch.importedAt ? formatImportDateTime(batch.importedAt) : "尚未完成"}
@@ -338,7 +358,7 @@ export default async function LeadImportDetailPage({
             <div>
               <h2 className="text-lg font-semibold text-black/85">映射统计</h2>
               <p className="mt-1 text-sm leading-6 text-black/58">
-                直接查看这批续接客户里旧分类和承接结果的命中情况，方便复核标签、待邀约和待回访是否符合预期。
+                方便复核这批续接客户的旧分类、标签和承接结果是否符合预期。
               </p>
             </div>
             <StatusBadge
@@ -346,8 +366,7 @@ export default async function LeadImportDetailPage({
               variant={batch.customerContinuationMetricsEstimated ? "warning" : "info"}
             />
           </div>
-
-          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {customerContinuationMetricCards.map((metric) => (
               <div key={metric.label} className="crm-section-card">
                 <p className="text-xs uppercase tracking-[0.18em] text-black/45">
@@ -363,84 +382,424 @@ export default async function LeadImportDetailPage({
       <section className="crm-card p-6">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <DetailItem label="文件名" value={batch.fileName} />
-          <DetailItem
-            label="创建人"
-            value={`${batch.createdBy.name} (@${batch.createdBy.username})`}
-          />
-          <DetailItem
-            label="使用模板"
-            value={
-              mode === "customer_continuation"
-                ? "固定续接模板"
-                : batch.template?.name ?? "固定模板导入"
-            }
-          />
+          <DetailItem label="创建人" value={`${batch.createdBy.name} (@${batch.createdBy.username})`} />
+          <DetailItem label="模板映射" value={mappingSummary || "未记录字段映射"} />
           <DetailItem label="导入来源" value={getLeadImportSourceLabel(batch.defaultLeadSource)} />
         </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {headers.map((header) => (
+            <span
+              key={header}
+              className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-xs text-black/60"
+            >
+              {header}
+            </span>
+          ))}
+        </div>
+      </section>
 
-        {batch.errorMessage ? (
-          <div className="mt-4">
-            <ActionBanner tone="danger">{batch.errorMessage}</ActionBanner>
-          </div>
-        ) : null}
-
-        <div className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-          <div className="crm-subtle-panel">
-            <p className="crm-detail-label">固定模板映射</p>
-            <p className="mt-2 text-sm leading-7 text-black/70">
-              {mappingSummary || "未记录字段映射。"}
+      <section className="crm-card p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-black/85">整批撤销导入</h2>
+            <p className="mt-1 text-sm leading-6 text-black/58">
+              必须先做整批预检，只有整批所有有效行都可逆时才允许执行；不会做 partial rollback。
             </p>
           </div>
-
-          <div className="crm-subtle-panel">
-            <p className="crm-detail-label">实际表头</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {headers.length > 0 ? (
-                headers.map((header) => (
-                  <span
-                    key={header}
-                    className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-xs text-black/60"
-                  >
-                    {header}
-                  </span>
-                ))
-              ) : (
-                <span className="text-sm text-black/55">未记录表头。</span>
-              )}
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge
+              label={batch.rollback.selectedModeLabel}
+              variant={batch.rollback.selectedModeVariant}
+            />
+            {batch.rollback.executed ? (
+              <StatusBadge
+                label={`已撤销 · ${batch.rollback.executed.modeLabel}`}
+                variant={batch.rollback.executed.modeVariant}
+              />
+            ) : rollbackPrecheck ? (
+              <StatusBadge
+                label={rollbackPrecheck.overallEligible ? "预检通过" : "预检未通过"}
+                variant={rollbackPrecheck.overallEligible ? "success" : "danger"}
+              />
+            ) : null}
           </div>
         </div>
 
-        {mode === "customer_continuation" && batch.customerContinuationReport ? (
-          <div className="mt-4 grid gap-4 xl:grid-cols-2">
-            <div className="crm-subtle-panel">
-              <p className="crm-detail-label">批次 warning</p>
-              <div className="mt-3 space-y-2 text-sm text-black/62">
-                <p>未识别负责人：{batch.customerContinuationReport.summary.unresolvedOwners}</p>
-                <p>未识别标签：{batch.customerContinuationReport.summary.unresolvedTags}</p>
-              </div>
+        {!batch.rollback.executed && batch.rollback.availableModes.length > 1 ? (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {batch.rollback.availableModes.map((item) => {
+              const active = item.value === batch.rollback.selectedMode;
+
+              return (
+                <Link
+                  key={item.value}
+                  href={buildDetailHref(batch.id, mode, item.value)}
+                  scroll={false}
+                  aria-current={active ? "page" : undefined}
+                  className={
+                    active
+                      ? "inline-flex items-center rounded-full border border-[#c8d8ee] bg-[#eef4fb] px-3 py-1.5 text-sm font-semibold text-[#18324d]"
+                      : "inline-flex items-center rounded-full border border-black/8 bg-white/70 px-3 py-1.5 text-sm text-black/62 transition hover:text-black/84"
+                  }
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        ) : null}
+
+        <div className="mt-4 crm-subtle-panel">
+          <p className="crm-detail-label">当前回滚策略</p>
+          <p className="mt-2 text-sm leading-7 text-black/68">
+            {batch.rollback.selectedModeDescription}
+          </p>
+        </div>
+
+        {rollbackSummary ? (
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="crm-section-card">
+              <p className="text-xs uppercase tracking-[0.18em] text-black/45">有效行</p>
+              <p className="mt-3 text-3xl font-semibold text-black/85">
+                {rollbackSummary.effectiveRows}
+              </p>
             </div>
-            <div className="crm-subtle-panel">
-              <p className="crm-detail-label">负责人 / 标签样本</p>
-              <div className="mt-3 space-y-2 text-sm text-black/62">
-                <p>
-                  负责人 warning：
-                  {batch.customerContinuationReport.warnings.unresolvedOwnerValues
-                    .slice(0, 3)
-                    .map((item) => `${item.value} (${item.count})`)
-                    .join(" / ") || "无"}
-                </p>
-                <p>
-                  标签 warning：
-                  {batch.customerContinuationReport.warnings.unresolvedTagValues
-                    .slice(0, 3)
-                    .map((item) => `${item.value} (${item.count})`)
-                    .join(" / ") || "无"}
-                </p>
-              </div>
+            <div className="crm-section-card">
+              <p className="text-xs uppercase tracking-[0.18em] text-black/45">可逆行</p>
+              <p className="mt-3 text-3xl font-semibold text-[var(--color-success)]">
+                {rollbackSummary.rollbackableRows}
+              </p>
+            </div>
+            <div className="crm-section-card">
+              <p className="text-xs uppercase tracking-[0.18em] text-black/45">阻断行</p>
+              <p className="mt-3 text-3xl font-semibold text-[var(--color-danger)]">
+                {rollbackSummary.blockedRows}
+              </p>
+            </div>
+            <div className="crm-section-card">
+              <p className="text-xs uppercase tracking-[0.18em] text-black/45">删客 / Lead</p>
+              <p className="mt-3 text-3xl font-semibold text-black/85">
+                {rollbackSummary.customerDeleteRows} /{" "}
+                {batch.rollback.selectedMode === "HARD_DELETE"
+                  ? rollbackSummary.hardDeleteLeadRows
+                  : rollbackSummary.auditPreservedLeadRows}
+              </p>
             </div>
           </div>
         ) : null}
+
+        {rollbackPrecheck?.blockedReason ? (
+          <div className="mt-4">
+            <ActionBanner tone="danger">{rollbackPrecheck.blockedReason}</ActionBanner>
+          </div>
+        ) : null}
+
+        {batch.rollback.executed ? (
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            <div className="crm-subtle-panel">
+              <p className="crm-detail-label">执行快照</p>
+              <div className="mt-3 space-y-2 text-sm text-black/62">
+                <p>执行时间：{formatImportDateTime(batch.rollback.executed.executedAt)}</p>
+                <p>
+                  执行人：{batch.rollback.executed.actor.name} (@
+                  {batch.rollback.executed.actor.username})
+                </p>
+                <p>删除客户：{rollbackExecutionSummary?.deletedCustomerRows ?? 0}</p>
+                <p>
+                  Lead 处理：
+                  {batch.rollback.executed.mode === "HARD_DELETE"
+                    ? rollbackExecutionSummary?.hardDeletedLeadRows ?? 0
+                    : rollbackExecutionSummary?.auditPreservedLeadRows ?? 0}
+                </p>
+              </div>
+            </div>
+            <div className="crm-subtle-panel">
+              <p className="crm-detail-label">预检快照</p>
+              <div className="mt-3 space-y-2 text-sm text-black/62">
+                <p>有效行：{rollbackSummary?.effectiveRows ?? 0}</p>
+                <p>可逆行：{rollbackSummary?.rollbackableRows ?? 0}</p>
+                <p>阻断行：{rollbackSummary?.blockedRows ?? 0}</p>
+                <p>执行原因：{batch.rollback.executed.execution?.reason || "未记录"}</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <form
+            id="lead-import-rollback-form"
+            action={executeRollbackFormAction}
+            className="mt-4"
+          >
+            <StickyActionBar
+              title="执行整批撤销"
+              description={
+                rollbackPrecheck?.overallEligible
+                  ? "执行时会在事务中重新预检，确保整批仍然可逆。"
+                  : "当前预检未通过，整批撤销按钮会保持禁用。"
+              }
+            >
+              <input
+                type="hidden"
+                name="rollbackMode"
+                value={batch.rollback.selectedMode}
+              />
+              <input
+                name="reason"
+                required
+                className="crm-input w-full lg:min-w-[20rem]"
+                placeholder="请填写本次整批撤销原因"
+              />
+              <button
+                type="submit"
+                disabled={!rollbackPrecheck?.overallEligible}
+                className="crm-button crm-button-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                执行整批撤销
+              </button>
+            </StickyActionBar>
+          </form>
+        )}
+      </section>
+
+      <section className="crm-card p-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-black/85">
+            {mode === "customer_continuation" ? "续接结果" : "导入结果"}
+          </h2>
+          <StatusBadge label={`展示前 ${batch.rows.length} 行`} variant="neutral" />
+        </div>
+
+        {batch.rows.length > 0 ? (
+          mode === "customer_continuation" ? (
+            <div className="mt-4 crm-table-shell">
+              <table className="crm-table">
+                <thead>
+                  <tr>
+                    <th>撤销预检</th>
+                    <th>执行结果</th>
+                    <th>行号</th>
+                    <th>导入状态</th>
+                    <th>客户</th>
+                    <th>负责人结果</th>
+                    <th>标签结果</th>
+                    <th>迁移摘要</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {batch.rows.map((row) => {
+                    const continuation = row.customerContinuation;
+                    const customer = getRowCustomerSnapshot(row);
+                    const rollbackAction = getRollbackActionSummary(row);
+                    const executionMeta = row.rollback.execution
+                      ? getRollbackExecutionMeta(row.rollback.execution.outcome)
+                      : null;
+
+                    return (
+                      <tr key={row.id}>
+                        <td>
+                          {row.rollback.preview ? (
+                            <div className="space-y-1.5">
+                              <StatusBadge
+                                label={row.rollback.preview.stateLabel}
+                                variant={row.rollback.preview.stateVariant}
+                              />
+                              <p className="text-xs leading-5 text-black/55">
+                                {row.rollback.preview.reason}
+                              </p>
+                              {rollbackAction ? (
+                                <p className="text-xs leading-5 text-black/45">
+                                  {rollbackAction}
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                        <td>
+                          {row.rollback.execution && executionMeta ? (
+                            <div className="space-y-1.5">
+                              <StatusBadge
+                                label={executionMeta.label}
+                                variant={executionMeta.variant}
+                              />
+                              <p className="text-xs leading-5 text-black/55">
+                                {row.rollback.execution.note}
+                              </p>
+                            </div>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                        <td>{row.rowNumber}</td>
+                        <td>
+                          <StatusBadge
+                            label={getLeadImportRowStatusLabel(row.status)}
+                            variant={getLeadImportRowStatusVariant(row.status)}
+                          />
+                        </td>
+                        <td>
+                          <div className="space-y-1">
+                            {customer.href ? (
+                              <Link href={customer.href} className="crm-text-link">
+                                {customer.name}
+                              </Link>
+                            ) : (
+                              <p>{customer.name}</p>
+                            )}
+                            <p className="text-xs text-black/45">{customer.phone}</p>
+                            {customer.helper ? (
+                              <p className="text-xs text-[var(--color-warning)]">
+                                {customer.helper}
+                              </p>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="space-y-1 text-sm text-black/65">
+                            <p>{getOwnerOutcomeLabel(continuation?.result.ownerOutcome ?? "-")}</p>
+                            <p className="text-xs text-black/45">
+                              {formatSummaryValue(continuation?.mappedCustomer.ownerUsername)}
+                            </p>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="space-y-1 text-sm text-black/65">
+                            <p>{continuation?.mappedCustomer.tags.join(" / ") || "无标签"}</p>
+                            <p className="text-xs text-[var(--color-warning)]">
+                              {continuation?.mappedCustomer.unresolvedTags.join(" / ") ||
+                                "无 warning"}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="max-w-[26rem]">
+                          {continuation
+                            ? formatCustomerContinuationSummary(
+                                continuation.mappedCustomer.summary,
+                              ) || "-"
+                            : "-"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="mt-4 crm-table-shell">
+              <table className="crm-table">
+                <thead>
+                  <tr>
+                    <th>撤销预检</th>
+                    <th>执行结果</th>
+                    <th>行号</th>
+                    <th>导入状态</th>
+                    <th>姓名</th>
+                    <th>手机号</th>
+                    <th>Lead</th>
+                    <th>客户</th>
+                    <th>归并结果</th>
+                    <th>标签同步</th>
+                    <th>说明</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {batch.rows.map((row) => {
+                    const customer = getRowCustomerSnapshot(row);
+                    const rollbackAction = getRollbackActionSummary(row);
+                    const executionMeta = row.rollback.execution
+                      ? getRollbackExecutionMeta(row.rollback.execution.outcome)
+                      : null;
+
+                    return (
+                      <tr key={row.id}>
+                        <td>
+                          {row.rollback.preview ? (
+                            <div className="space-y-1.5">
+                              <StatusBadge
+                                label={row.rollback.preview.stateLabel}
+                                variant={row.rollback.preview.stateVariant}
+                              />
+                              <p className="text-xs leading-5 text-black/55">
+                                {row.rollback.preview.reason}
+                              </p>
+                              {rollbackAction ? (
+                                <p className="text-xs leading-5 text-black/45">
+                                  {rollbackAction}
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                        <td>
+                          {row.rollback.execution && executionMeta ? (
+                            <div className="space-y-1.5">
+                              <StatusBadge
+                                label={executionMeta.label}
+                                variant={executionMeta.variant}
+                              />
+                              <p className="text-xs leading-5 text-black/55">
+                                {row.rollback.execution.note}
+                              </p>
+                            </div>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                        <td>{row.rowNumber}</td>
+                        <td>
+                          <StatusBadge
+                            label={getLeadImportRowStatusLabel(row.status)}
+                            variant={getLeadImportRowStatusVariant(row.status)}
+                          />
+                        </td>
+                        <td>{row.mappedName || "-"}</td>
+                        <td>{row.normalizedPhone || row.phoneRaw || "-"}</td>
+                        <td>{row.importedLeadId || row.matchedLeadId || "-"}</td>
+                        <td>
+                          <div className="space-y-1">
+                            {customer.href ? (
+                              <Link href={customer.href} className="crm-text-link">
+                                {customer.name}
+                              </Link>
+                            ) : (
+                              <p>{customer.name}</p>
+                            )}
+                            <p className="text-xs text-black/45">{customer.phone}</p>
+                            {customer.helper ? (
+                              <p className="text-xs text-[var(--color-warning)]">
+                                {customer.helper}
+                              </p>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td>
+                          {row.customerMerge ? (
+                            <StatusBadge
+                              label={getLeadCustomerMergeActionLabel(row.customerMerge.action)}
+                              variant={getLeadCustomerMergeActionVariant(
+                                row.customerMerge.action,
+                              )}
+                            />
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                        <td>{row.customerMerge ? (row.customerMerge.tagSynced ? "已同步" : "未同步") : "-"}</td>
+                        <td>{row.rollback.preview?.reason || row.errorReason || "-"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : (
+          <div className="mt-4">
+            <EmptyState title="没有行结果" description="该批次尚未生成可展示的行结果。" />
+          </div>
+        )}
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
@@ -449,7 +808,6 @@ export default async function LeadImportDetailPage({
             <h2 className="text-lg font-semibold text-black/85">失败行</h2>
             <StatusBadge label={`${batch.failureRows.length} 行`} variant="danger" />
           </div>
-
           {batch.failureRows.length > 0 ? (
             <div className="mt-4 crm-table-shell">
               <table className="crm-table">
@@ -495,7 +853,6 @@ export default async function LeadImportDetailPage({
             <h2 className="text-lg font-semibold text-black/85">重复剔除</h2>
             <StatusBadge label={`${batch.duplicateRows.length} 行`} variant="warning" />
           </div>
-
           {batch.duplicateRows.length > 0 ? (
             <div className="mt-4 space-y-3">
               {batch.duplicateRows.map((row) => (
@@ -524,260 +881,6 @@ export default async function LeadImportDetailPage({
             </div>
           )}
         </div>
-      </section>
-
-      <section className="crm-card p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-black/85">
-            {mode === "customer_continuation" ? "续接结果" : "导入结果"}
-          </h2>
-          <StatusBadge label={`展示前 ${batch.rows.length} 行`} variant="neutral" />
-        </div>
-
-        {batch.rows.length > 0 ? (
-          <form action={deleteImportedCustomersFormAction} className="mt-4 space-y-4">
-            <StickyActionBar
-              title="批量删除导入客户"
-              description={
-                deletableRows.length > 0
-                  ? `当前批次有 ${deletableRows.length} 行满足“导入新建、无交易阻断、当前可删”条件。`
-                  : "当前批次没有满足直接删除条件的导入新建客户，仍可通过下方状态回看审批与删除结果。"
-              }
-            >
-              {deletableRows.length > 0 ? (
-                <>
-                  <input
-                    name="reason"
-                    required
-                    className="crm-input w-full lg:min-w-[20rem]"
-                    placeholder="请填写本次批量删除原因"
-                  />
-                  <button type="submit" className="crm-button crm-button-primary">
-                    删除选中客户
-                  </button>
-                </>
-              ) : null}
-            </StickyActionBar>
-
-            {mode === "customer_continuation" ? (
-            <div className="crm-table-shell">
-              <table className="crm-table">
-                <thead>
-                  <tr>
-                    <th>选择</th>
-                    <th>删除状态</th>
-                    <th>行号</th>
-                    <th>状态</th>
-                    <th>客户</th>
-                    <th>负责人结果</th>
-                    <th>标签结果</th>
-                    <th>迁移摘要</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {batch.rows.map((row) => {
-                    const continuation = row.customerContinuation;
-                    const customer = getRowCustomerSnapshot(row);
-                    const deletionRequestNote = getRowDeletionRequestNote(row);
-                    return (
-                      <tr key={row.id}>
-                        <td>
-                          {row.deletion?.selectable && row.deletion.customerId ? (
-                            <input
-                              type="checkbox"
-                              name="customerIds"
-                              value={row.deletion.customerId}
-                              className="h-4 w-4 rounded border border-black/20"
-                            />
-                          ) : (
-                            <span className="text-xs text-black/30">-</span>
-                          )}
-                        </td>
-                        <td>
-                          {row.deletion ? (
-                            <div className="space-y-1.5">
-                              <StatusBadge
-                                label={row.deletion.stateLabel}
-                                variant={row.deletion.stateVariant}
-                              />
-                              <p className="text-xs leading-5 text-black/55">
-                                {row.deletion.reason}
-                              </p>
-                              {deletionRequestNote ? (
-                                <p className="text-xs leading-5 text-black/45">
-                                  {deletionRequestNote}
-                                </p>
-                              ) : null}
-                            </div>
-                          ) : (
-                            "-"
-                          )}
-                        </td>
-                        <td>{row.rowNumber}</td>
-                        <td>
-                          <StatusBadge
-                            label={getLeadImportRowStatusLabel(row.status)}
-                            variant={getLeadImportRowStatusVariant(row.status)}
-                          />
-                        </td>
-                        <td>
-                          <div className="space-y-1">
-                            {customer.href ? (
-                              <Link href={customer.href} className="crm-text-link">
-                                {customer.name}
-                              </Link>
-                            ) : (
-                              <p>{customer.name}</p>
-                            )}
-                            <p className="text-xs text-black/45">{customer.phone}</p>
-                            {!customer.href && row.deletion?.latestRequest?.status === "EXECUTED" ? (
-                              <p className="text-xs text-[var(--color-warning)]">
-                                客户已删除，当前展示导入快照
-                              </p>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td>
-                          <div className="space-y-1 text-sm text-black/65">
-                            <p>{getOwnerOutcomeLabel(continuation?.result.ownerOutcome ?? "-")}</p>
-                            <p className="text-xs text-black/45">
-                              {formatSummaryValue(continuation?.mappedCustomer.ownerUsername)}
-                            </p>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="space-y-1 text-sm text-black/65">
-                            <p>{continuation?.mappedCustomer.tags.join(" / ") || "无标签"}</p>
-                            <p className="text-xs text-[var(--color-warning)]">
-                              {continuation?.mappedCustomer.unresolvedTags.join(" / ") ||
-                                "无 warning"}
-                            </p>
-                          </div>
-                        </td>
-                        <td className="max-w-[26rem]">
-                          {continuation
-                            ? formatCustomerContinuationSummary(
-                                continuation.mappedCustomer.summary,
-                              ) || "-"
-                            : "-"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="crm-table-shell">
-              <table className="crm-table">
-                <thead>
-                  <tr>
-                    <th>选择</th>
-                    <th>删除状态</th>
-                    <th>行号</th>
-                    <th>状态</th>
-                    <th>姓名</th>
-                    <th>手机号</th>
-                    <th>线索</th>
-                    <th>客户</th>
-                    <th>归并结果</th>
-                    <th>标签同步</th>
-                    <th>原因</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {batch.rows.map((row) => {
-                    const customer = getRowCustomerSnapshot(row);
-                    const deletionRequestNote = getRowDeletionRequestNote(row);
-
-                    return (
-                    <tr key={row.id}>
-                      <td>
-                        {row.deletion?.selectable && row.deletion.customerId ? (
-                          <input
-                            type="checkbox"
-                            name="customerIds"
-                            value={row.deletion.customerId}
-                            className="h-4 w-4 rounded border border-black/20"
-                          />
-                        ) : (
-                          <span className="text-xs text-black/30">-</span>
-                        )}
-                      </td>
-                      <td>
-                        {row.deletion ? (
-                          <div className="space-y-1.5">
-                            <StatusBadge
-                              label={row.deletion.stateLabel}
-                              variant={row.deletion.stateVariant}
-                            />
-                            <p className="text-xs leading-5 text-black/55">
-                              {row.deletion.reason}
-                            </p>
-                            {deletionRequestNote ? (
-                              <p className="text-xs leading-5 text-black/45">
-                                {deletionRequestNote}
-                              </p>
-                            ) : null}
-                          </div>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-                      <td>{row.rowNumber}</td>
-                      <td>
-                        <StatusBadge
-                          label={getLeadImportRowStatusLabel(row.status)}
-                          variant={getLeadImportRowStatusVariant(row.status)}
-                        />
-                      </td>
-                      <td>{row.mappedName || "-"}</td>
-                      <td>{row.normalizedPhone || row.phoneRaw || "-"}</td>
-                      <td>{row.importedLeadId || row.matchedLeadId || "-"}</td>
-                      <td>
-                        <div className="space-y-1">
-                          {customer.href ? (
-                            <Link href={customer.href} className="crm-text-link">
-                              {customer.name}
-                            </Link>
-                          ) : (
-                            <p>{customer.name}</p>
-                          )}
-                          <p className="text-xs text-black/45">{customer.phone}</p>
-                          {!customer.href && row.deletion?.latestRequest?.status === "EXECUTED" ? (
-                            <p className="text-xs text-[var(--color-warning)]">
-                              客户已删除，当前展示归并快照
-                            </p>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td>
-                        {row.customerMerge ? (
-                          <StatusBadge
-                            label={getLeadCustomerMergeActionLabel(row.customerMerge.action)}
-                            variant={getLeadCustomerMergeActionVariant(
-                              row.customerMerge.action,
-                            )}
-                          />
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-                      <td>{row.customerMerge ? (row.customerMerge.tagSynced ? "已同步" : "未同步") : "-"}</td>
-                      <td>{row.errorReason || "-"}</td>
-                    </tr>
-                  );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-          </form>
-        ) : (
-          <div className="mt-4">
-            <EmptyState title="没有行结果" description="该批次尚未生成可展示的行结果。" />
-          </div>
-        )}
       </section>
     </div>
   );

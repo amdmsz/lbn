@@ -25,6 +25,7 @@ import {
   type PublicPoolAutoAssignStrategyValue,
 } from "@/lib/customers/public-pool-metadata";
 import { prisma } from "@/lib/db/prisma";
+import { buildVisibleLeadWhereInput } from "@/lib/leads/visibility";
 import { getLeadSourceLabel } from "@/lib/leads/metadata";
 
 type SearchParamsValue = string | string[] | undefined;
@@ -109,6 +110,7 @@ const publicPoolCustomerSelect = {
     },
   },
   leads: {
+    where: buildVisibleLeadWhereInput(),
     orderBy: { createdAt: "desc" },
     take: 1,
     select: {
@@ -171,6 +173,7 @@ const recycleCustomerSelect = {
     },
   },
   leads: {
+    where: buildVisibleLeadWhereInput(),
     orderBy: { createdAt: "desc" },
     take: 1,
     select: {

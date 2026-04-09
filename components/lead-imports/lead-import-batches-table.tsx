@@ -31,14 +31,20 @@ type LeadImportBatchListItem = {
   createdAt: Date;
   importKind: LeadImportKind;
   progress: LeadImportBatchProgressSnapshot;
-  createdBy: {
-    name: string;
-    username: string;
-  };
-  template: {
+  rollback: {
     id: string;
-    name: string;
+    modeLabel: string;
+    modeVariant: "neutral" | "success" | "danger" | "warning" | "info";
+    executedAt: Date;
+    actor: { id: string; name: string; username: string };
+    executionSummary: {
+      deletedCustomerRows: number;
+      auditPreservedLeadRows: number;
+      hardDeletedLeadRows: number;
+    } | null;
   } | null;
+  createdBy: { name: string; username: string };
+  template: { id: string; name: string } | null;
 };
 
 type LeadImportListFilters = {
@@ -57,23 +63,10 @@ type PaginationData = {
 
 function buildPageHref(filters: LeadImportListFilters, page: number) {
   const params = new URLSearchParams();
-
-  if (filters.mode && filters.mode !== "lead") {
-    params.set("mode", filters.mode);
-  }
-
-  if (filters.keyword) {
-    params.set("keyword", filters.keyword);
-  }
-
-  if (filters.status) {
-    params.set("status", filters.status);
-  }
-
-  if (page > 1) {
-    params.set("page", String(page));
-  }
-
+  if (filters.mode && filters.mode !== "lead") params.set("mode", filters.mode);
+  if (filters.keyword) params.set("keyword", filters.keyword);
+  if (filters.status) params.set("status", filters.status);
+  if (page > 1) params.set("page", String(page));
   const query = params.toString();
   return query ? `/lead-imports?${query}` : "/lead-imports";
 }
@@ -119,101 +112,106 @@ export function LeadImportBatchesTable({
             </tr>
           </thead>
           <tbody>
-            {items.map((item) => (
-              <tr key={item.id}>
-                <td>
-                  <div className="space-y-0.5">
-                    <p className="font-medium text-black/80">{item.fileName}</p>
-                    <p className="text-xs text-black/50">
-                      {getLeadImportFileTypeLabel(item.fileType)}
-                    </p>
-                  </div>
-                </td>
-                <td>
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <StatusBadge
-                        label={item.progress.statusLabel}
-                        variant={item.progress.statusVariant}
-                      />
-                      <StatusBadge
-                        label={item.progress.stageLabel}
-                        variant={item.progress.stageVariant}
-                      />
-                    </div>
-                    <p className="text-xs text-black/50">
-                      {item.progress.isTerminal
-                        ? "批次已结束，可进入详情页查看结果。"
-                        : `已处理 ${item.progress.processedRows} / ${item.progress.totalRows}，剩余 ${item.progress.remainingRows}。`}
-                    </p>
-                  </div>
-                </td>
-                <td>
-                  {item.importKind === "CUSTOMER_CONTINUATION" ? "客户续接" : "线索导入"}
-                </td>
-                <td>{getLeadImportSourceLabel(item.defaultLeadSource)}</td>
-                <td>
-                  <div className="space-y-2">
-                    <div className="h-2 overflow-hidden rounded-full bg-black/6">
-                      <div
-                        className="h-full rounded-full bg-[linear-gradient(90deg,#4d8fe6_0%,#7ab4ff_100%)]"
-                        style={{ width: `${item.progress.progressPercent}%` }}
-                      />
-                    </div>
-                    <div className="space-y-0.5 text-sm text-black/65">
-                      <p>{item.progress.progressPercent}%</p>
-                      <p>
-                        {item.importKind === "CUSTOMER_CONTINUATION" ? "成功客户" : "成功线索"}：
-                        {item.successRows}
+            {items.map((item) => {
+              const rollbackLeadRows =
+                item.rollback?.executionSummary?.hardDeletedLeadRows ||
+                item.rollback?.executionSummary?.auditPreservedLeadRows ||
+                0;
+
+              return (
+                <tr key={item.id}>
+                  <td>
+                    <div className="space-y-0.5">
+                      <p className="font-medium text-black/80">{item.fileName}</p>
+                      <p className="text-xs text-black/50">
+                        {getLeadImportFileTypeLabel(item.fileType)}
                       </p>
-                      <p className="text-[var(--color-warning)]">重复剔除：{item.duplicateRows}</p>
-                      <p className="text-[var(--color-danger)]">失败行：{item.failedRows}</p>
                     </div>
-                  </div>
-                </td>
-                <td>
-                  <div className="space-y-0.5 text-sm text-black/65">
-                    <p className="text-[var(--color-success)]">
-                      新增客户：{item.createdCustomerRows}
-                    </p>
-                    <p className="text-[var(--color-info)]">
-                      命中已有：{item.matchedCustomerRows}
-                    </p>
-                  </div>
-                </td>
-                <td>
-                  {item.createdBy.name}
-                  <p className="text-xs text-black/45">@{item.createdBy.username}</p>
-                </td>
-                <td className="whitespace-nowrap">
-                  <div className="space-y-0.5 text-sm text-black/65">
-                    <p>创建：{formatImportDateTime(item.createdAt)}</p>
-                    <p>
-                      {item.progress.lastHeartbeatAt
-                        ? `心跳：${formatImportDateTime(item.progress.lastHeartbeatAt)}`
-                        : "心跳：-"}
-                    </p>
-                    <p>
-                      完成：
-                      {item.importedAt ? formatImportDateTime(item.importedAt) : "-"}
-                    </p>
-                  </div>
-                </td>
-                <td>
-                  <Link
-                    href={
-                      item.importKind === "CUSTOMER_CONTINUATION"
-                        ? `/lead-imports/${item.id}?mode=customer_continuation`
-                        : `/lead-imports/${item.id}`
-                    }
-                    scroll={false}
-                    className="crm-text-link"
-                  >
-                    查看报告
-                  </Link>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td>
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <StatusBadge label={item.progress.statusLabel} variant={item.progress.statusVariant} />
+                        <StatusBadge label={item.progress.stageLabel} variant={item.progress.stageVariant} />
+                        {item.rollback ? (
+                          <StatusBadge
+                            label={`已撤销 · ${item.rollback.modeLabel}`}
+                            variant={item.rollback.modeVariant}
+                          />
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-black/50">
+                        {item.rollback
+                          ? `执行于 ${formatImportDateTime(item.rollback.executedAt)} / ${item.rollback.actor.name}`
+                          : item.progress.isTerminal
+                            ? "批次已结束，可进入详情页查看结果。"
+                            : `已处理 ${item.progress.processedRows} / ${item.progress.totalRows}，剩余 ${item.progress.remainingRows}。`}
+                      </p>
+                    </div>
+                  </td>
+                  <td>{item.importKind === "CUSTOMER_CONTINUATION" ? "客户续接" : "线索导入"}</td>
+                  <td>{getLeadImportSourceLabel(item.defaultLeadSource)}</td>
+                  <td>
+                    <div className="space-y-2">
+                      <div className="h-2 overflow-hidden rounded-full bg-black/6">
+                        <div
+                          className="h-full rounded-full bg-[linear-gradient(90deg,#4d8fe6_0%,#7ab4ff_100%)]"
+                          style={{ width: `${item.progress.progressPercent}%` }}
+                        />
+                      </div>
+                      <div className="space-y-0.5 text-sm text-black/65">
+                        <p>{item.progress.progressPercent}%</p>
+                        <p>
+                          {item.importKind === "CUSTOMER_CONTINUATION" ? "成功客户" : "成功线索"}：
+                          {item.successRows}
+                        </p>
+                        <p className="text-[var(--color-warning)]">重复剔除：{item.duplicateRows}</p>
+                        <p className="text-[var(--color-danger)]">失败行：{item.failedRows}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <div className="space-y-0.5 text-sm text-black/65">
+                      <p className="text-[var(--color-success)]">新增客户：{item.createdCustomerRows}</p>
+                      <p className="text-[var(--color-info)]">命中已有：{item.matchedCustomerRows}</p>
+                      {item.rollback?.executionSummary ? (
+                        <p className="text-xs text-black/50">
+                          删客 {item.rollback.executionSummary.deletedCustomerRows} / Lead {rollbackLeadRows}
+                        </p>
+                      ) : null}
+                    </div>
+                  </td>
+                  <td>
+                    {item.createdBy.name}
+                    <p className="text-xs text-black/45">@{item.createdBy.username}</p>
+                  </td>
+                  <td className="whitespace-nowrap">
+                    <div className="space-y-0.5 text-sm text-black/65">
+                      <p>创建：{formatImportDateTime(item.createdAt)}</p>
+                      <p>
+                        {item.progress.lastHeartbeatAt
+                          ? `心跳：${formatImportDateTime(item.progress.lastHeartbeatAt)}`
+                          : "心跳：-"}
+                      </p>
+                      <p>完成：{item.importedAt ? formatImportDateTime(item.importedAt) : "-"}</p>
+                    </div>
+                  </td>
+                  <td>
+                    <Link
+                      href={
+                        item.importKind === "CUSTOMER_CONTINUATION"
+                          ? `/lead-imports/${item.id}?mode=customer_continuation`
+                          : `/lead-imports/${item.id}`
+                      }
+                      scroll={false}
+                      className="crm-text-link"
+                    >
+                      查看报告
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

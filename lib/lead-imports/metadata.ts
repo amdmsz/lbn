@@ -42,10 +42,16 @@ export const leadImportBatchStageValues = [
   "FAILED",
 ] as const;
 export const leadImportModeValues = ["lead", "customer_continuation"] as const;
+export const leadImportBatchRollbackModeValues = [
+  "AUDIT_PRESERVED",
+  "HARD_DELETE",
+] as const;
 
 export type LeadImportBatchStageValue = (typeof leadImportBatchStageValues)[number];
 export type LeadImportMode = (typeof leadImportModeValues)[number];
 export type LeadImportKind = "LEAD" | "CUSTOMER_CONTINUATION";
+export type LeadImportBatchRollbackMode =
+  (typeof leadImportBatchRollbackModeValues)[number];
 export type CustomerContinuationImportAction =
   | "CREATED_CUSTOMER"
   | "MATCHED_EXISTING_CUSTOMER"
@@ -170,6 +176,26 @@ export const customerContinuationImportOperationActions = [
   "customer.customer_import.created",
   "customer.customer_import.matched_existing",
 ] as const;
+
+const leadImportBatchRollbackModeMeta: Record<
+  LeadImportBatchRollbackMode,
+  {
+    label: string;
+    description: string;
+    variant: StatusBadgeVariant;
+  }
+> = {
+  AUDIT_PRESERVED: {
+    label: "审计保留",
+    description: "删除本批次新建客户并保留回滚后的 Lead 审计历史。",
+    variant: "info",
+  },
+  HARD_DELETE: {
+    label: "硬删除",
+    description: "删除本批次新建客户，并在满足额外安全条件时硬删导入 Lead。",
+    variant: "danger",
+  },
+};
 
 export const leadImportModeMeta: Record<
   LeadImportMode,
@@ -563,6 +589,32 @@ export function getLeadImportBatchStatusLabel(status: LeadImportBatchStatus) {
 
 export function getLeadImportBatchStatusVariant(status: LeadImportBatchStatus) {
   return batchStatusMeta[status].variant;
+}
+
+export function isLeadImportBatchRollbackMode(
+  value: string,
+): value is LeadImportBatchRollbackMode {
+  return leadImportBatchRollbackModeValues.includes(
+    value as LeadImportBatchRollbackMode,
+  );
+}
+
+export function getLeadImportBatchRollbackModeLabel(
+  mode: LeadImportBatchRollbackMode,
+) {
+  return leadImportBatchRollbackModeMeta[mode].label;
+}
+
+export function getLeadImportBatchRollbackModeDescription(
+  mode: LeadImportBatchRollbackMode,
+) {
+  return leadImportBatchRollbackModeMeta[mode].description;
+}
+
+export function getLeadImportBatchRollbackModeVariant(
+  mode: LeadImportBatchRollbackMode,
+) {
+  return leadImportBatchRollbackModeMeta[mode].variant;
 }
 
 export function getLeadImportBatchStageLabel(stage: LeadImportBatchStageValue) {

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { auth } from "@/lib/auth/session";
 import { deleteImportedCustomersDirect } from "@/lib/customers/imported-customer-deletion";
+import { executeLeadImportBatchRollback } from "@/lib/lead-imports/batch-rollback";
 import { createCustomerContinuationImportBatchAsync } from "@/lib/lead-imports/customer-continuation-import";
 import {
   createLeadImportBatchAsync,
@@ -14,10 +15,12 @@ import {
 import {
   DEFAULT_LEAD_IMPORT_SOURCE,
   buildLeadImportBatchProgress,
+  isLeadImportBatchRollbackMode,
   isLeadImportMode,
   isLeadImportSourceValue,
   leadImportFieldDefinitions,
   type LeadImportBatchProgressSnapshot,
+  type LeadImportBatchRollbackMode,
   type LeadImportMode,
 } from "@/lib/lead-imports/metadata";
 
@@ -46,6 +49,18 @@ export type DeleteImportedCustomersBatchActionResult = {
   successCount: number;
   skippedCount: number;
   failedCount: number;
+};
+
+const leadImportBatchRollbackSchema = z.object({
+  batchId: z.string().trim().min(1, "缺少批次 ID"),
+  mode: z.string().trim().refine(isLeadImportBatchRollbackMode, "撤销模式无效"),
+  reason: z.string().trim().min(1, "请填写整批撤销原因").max(500, "撤销原因不能超过 500 字"),
+});
+
+export type ExecuteLeadImportBatchRollbackActionResult = {
+  status: "success" | "error";
+  message: string;
+  rollbackMode: LeadImportBatchRollbackMode;
 };
 
 function getValue(formData: FormData, key: string) {
@@ -104,6 +119,54 @@ export async function deleteImportedCustomersFromBatchAction(
       successCount: 0,
       skippedCount: 0,
       failedCount: 0,
+    };
+  }
+}
+
+export async function executeLeadImportBatchRollbackAction(
+  input: z.input<typeof leadImportBatchRollbackSchema>,
+): Promise<ExecuteLeadImportBatchRollbackActionResult> {
+  const actor = await getActor();
+  const parsed = leadImportBatchRollbackSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      status: "error",
+      message: parsed.error.issues[0]?.message ?? "提交数据不完整。",
+      rollbackMode: "AUDIT_PRESERVED",
+    };
+  }
+
+  try {
+    const result = await executeLeadImportBatchRollback(actor, {
+      batchId: parsed.data.batchId,
+      mode: parsed.data.mode,
+      reason: parsed.data.reason,
+    });
+
+    revalidatePath("/customers");
+    revalidatePath("/customers/public-pool");
+    revalidatePath("/lead-imports");
+    revalidatePath(`/lead-imports/${parsed.data.batchId}`);
+    revalidatePath(`/lead-imports/${parsed.data.batchId}?mode=customer_continuation`);
+    revalidatePath("/leads");
+    revalidatePath("/dashboard");
+    revalidatePath("/reports");
+
+    for (const customerId of result.affectedCustomerIds) {
+      revalidatePath(`/customers/${customerId}`);
+    }
+
+    return {
+      status: "success",
+      message: result.message,
+      rollbackMode: result.mode,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "整批撤销失败，请稍后重试。",
+      rollbackMode: parsed.data.mode,
     };
   }
 }
