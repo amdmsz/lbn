@@ -27,6 +27,8 @@ import {
   type CustomerQueueKey,
   type CustomerWorkStatusKey,
 } from "@/lib/customers/metadata";
+import { parseCustomerImportOperationLogData } from "@/lib/customers/customer-import-operation-log";
+import { resolveImportedCustomerDeletionGuard } from "@/lib/customers/imported-customer-deletion";
 import { prisma } from "@/lib/db/prisma";
 import {
   customerContinuationImportOperationActions,
@@ -462,26 +464,6 @@ function getMaxDate(values: Array<Date | null | undefined>) {
 
     return latest;
   }, null);
-}
-
-function parseCustomerImportOperationLogData(
-  value: Prisma.JsonValue | null | undefined,
-): CustomerImportOperationLogData | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
-
-  const customerImport = value.customerImport;
-
-  if (!customerImport || typeof customerImport !== "object" || Array.isArray(customerImport)) {
-    return null;
-  }
-
-  if (customerImport.importKind !== "CUSTOMER_CONTINUATION") {
-    return null;
-  }
-
-  return customerImport as CustomerImportOperationLogData;
 }
 
 async function getLatestCustomerImportMap(customerIds: string[]) {
@@ -2585,7 +2567,14 @@ export async function getCustomerDetailProfileData(
     return null;
   }
 
-  const [leads, mergeLogs, customerTags, availableTags, latestCustomerImportLog] = await Promise.all([
+  const [
+    leads,
+    mergeLogs,
+    customerTags,
+    availableTags,
+    latestCustomerImportLog,
+    importedCustomerDeletion,
+  ] = await Promise.all([
     prisma.lead.findMany({
       where: { customerId: detail.customer.id },
       orderBy: { createdAt: "desc" },
@@ -2655,6 +2644,7 @@ export async function getCustomerDetailProfileData(
         afterData: true,
       },
     }),
+    resolveImportedCustomerDeletionGuard(viewer, detail.customer.id),
   ]);
 
   return {
@@ -2662,6 +2652,7 @@ export async function getCustomerDetailProfileData(
     mergeLogs,
     customerTags,
     availableTags,
+    importedCustomerDeletion,
     customerImportSummary: latestCustomerImportLog
       ? {
           createdAt: latestCustomerImportLog.createdAt,

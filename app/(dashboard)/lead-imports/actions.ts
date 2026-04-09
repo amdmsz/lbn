@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 import { auth } from "@/lib/auth/session";
+import { deleteImportedCustomersDirect } from "@/lib/customers/imported-customer-deletion";
 import { createCustomerContinuationImportBatchAsync } from "@/lib/lead-imports/customer-continuation-import";
 import {
   createLeadImportBatchAsync,
@@ -32,9 +34,78 @@ export type CreateLeadImportBatchActionState = {
   batch: CreateLeadImportBatchActionPayload | null;
 };
 
+const importedCustomerBatchDeleteSchema = z.object({
+  batchId: z.string().trim().min(1, "缺少批次 ID"),
+  customerIds: z.array(z.string().trim().min(1)).min(1, "请先选择客户"),
+  reason: z.string().trim().min(1, "请填写删除原因").max(500, "删除原因不能超过 500 字"),
+});
+
+export type DeleteImportedCustomersBatchActionResult = {
+  status: "success" | "error";
+  message: string;
+  successCount: number;
+  skippedCount: number;
+  failedCount: number;
+};
+
 function getValue(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value : "";
+}
+export async function deleteImportedCustomersFromBatchAction(
+  input: z.input<typeof importedCustomerBatchDeleteSchema>,
+): Promise<DeleteImportedCustomersBatchActionResult> {
+  const actor = await getActor();
+  const parsed = importedCustomerBatchDeleteSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      status: "error",
+      message: parsed.error.issues[0]?.message ?? "提交数据不完整。",
+      successCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+    };
+  }
+
+  try {
+    const result = await deleteImportedCustomersDirect(actor, {
+      customerIds: parsed.data.customerIds,
+      reason: parsed.data.reason,
+    });
+
+    revalidatePath("/customers");
+    revalidatePath("/customers/public-pool");
+    revalidatePath("/lead-imports");
+    revalidatePath(`/lead-imports/${parsed.data.batchId}`);
+    revalidatePath("/leads");
+    revalidatePath("/dashboard");
+
+    for (const customerId of parsed.data.customerIds) {
+      revalidatePath(`/customers/${customerId}`);
+    }
+
+    const message =
+      result.successCount > 0
+        ? `已删除 ${result.successCount} 位客户，跳过 ${result.skippedCount} 位，失败 ${result.failedCount} 位。`
+        : result.items[0]?.message ?? "没有客户满足删除条件。";
+
+    return {
+      status: result.successCount > 0 ? "success" : "error",
+      message,
+      successCount: result.successCount,
+      skippedCount: result.skippedCount,
+      failedCount: result.failedCount,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "批量删除失败，请稍后重试。",
+      successCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+    };
+  }
 }
 
 function isNextRedirectError(error: unknown): error is { digest: string } {

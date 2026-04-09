@@ -178,6 +178,18 @@ export function canAccessCustomerPublicPool(role: RoleCode) {
   return canAccessCustomerModule(role);
 }
 
+export function canRequestImportedCustomerDeletion(role: RoleCode) {
+  return role === "SALES";
+}
+
+export function canReviewImportedCustomerDeletion(role: RoleCode) {
+  return role === "ADMIN" || role === "SUPERVISOR";
+}
+
+export function canForceDeleteImportedCustomer(role: RoleCode) {
+  return role === "ADMIN" || role === "SUPERVISOR";
+}
+
 export function canClaimPublicPoolCustomer(role: RoleCode) {
   return role === "SALES";
 }

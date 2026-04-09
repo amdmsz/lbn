@@ -439,6 +439,17 @@ enum LeadCustomerMergeAction {
   MATCHED_EXISTING_CUSTOMER
 }
 
+enum ImportedCustomerDeletionRequestStatus {
+  PENDING_SUPERVISOR
+  REJECTED
+  EXECUTED
+}
+
+enum ImportedCustomerDeletionSourceMode {
+  LEAD
+  CUSTOMER_CONTINUATION
+}
+
 enum OperationModule {
   USER
   TEAM
@@ -638,6 +649,9 @@ model User {
   customerOwnershipEventsAsActor CustomerOwnershipEvent[] @relation("CustomerOwnershipEventActor")
   customerOwnershipEventsFrom CustomerOwnershipEvent[] @relation("CustomerOwnershipEventFromOwner")
   customerOwnershipEventsTo CustomerOwnershipEvent[] @relation("CustomerOwnershipEventToOwner")
+  requestedImportedCustomerDeletionRequests ImportedCustomerDeletionRequest[] @relation("ImportedCustomerDeletionRequestRequester")
+  reviewedImportedCustomerDeletionRequests  ImportedCustomerDeletionRequest[] @relation("ImportedCustomerDeletionRequestReviewer")
+  executedImportedCustomerDeletionRequests  ImportedCustomerDeletionRequest[] @relation("ImportedCustomerDeletionRequestExecutor")
   createdAt               DateTime         @default(now())
   updatedAt               DateTime         @updatedAt
 
@@ -1762,6 +1776,7 @@ model LeadImportBatch {
   rows              LeadImportRow[]
   dedupLogs         LeadDedupLog[]
   mergeLogs         LeadCustomerMergeLog[]
+  importedCustomerDeletionRequests ImportedCustomerDeletionRequest[] @relation("ImportedCustomerDeletionRequestBatch")
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
 
@@ -1843,8 +1858,8 @@ model LeadCustomerMergeLog {
   row        LeadImportRow?          @relation(fields: [rowId], references: [id])
   leadId     String
   lead       Lead                    @relation(fields: [leadId], references: [id])
-  customerId String
-  customer   Customer                @relation(fields: [customerId], references: [id])
+  customerId String?
+  customer   Customer?               @relation(fields: [customerId], references: [id], onDelete: SetNull)
   action     LeadCustomerMergeAction
   source     LeadSource
   phone      String
@@ -1860,6 +1875,39 @@ model LeadCustomerMergeLog {
   @@index([customerId, createdAt])
   @@index([phone, createdAt])
   @@map("lead_customer_merge_logs")
+}
+
+model ImportedCustomerDeletionRequest {
+  id                    String                                @id @default(cuid())
+  customerIdSnapshot    String
+  customerNameSnapshot  String
+  customerPhoneSnapshot String
+  sourceMode            ImportedCustomerDeletionSourceMode
+  sourceBatchId         String
+  sourceBatch           LeadImportBatch                       @relation("ImportedCustomerDeletionRequestBatch", fields: [sourceBatchId], references: [id])
+  sourceBatchFileName   String
+  sourceRowNumber       Int?
+  status                ImportedCustomerDeletionRequestStatus @default(PENDING_SUPERVISOR)
+  requestReason         String                                @db.Text
+  requestedById         String
+  requestedBy           User                                  @relation("ImportedCustomerDeletionRequestRequester", fields: [requestedById], references: [id])
+  reviewerId            String?
+  reviewer              User?                                 @relation("ImportedCustomerDeletionRequestReviewer", fields: [reviewerId], references: [id])
+  reviewedAt            DateTime?
+  rejectReason          String?                               @db.Text
+  executedById          String?
+  executedBy            User?                                 @relation("ImportedCustomerDeletionRequestExecutor", fields: [executedById], references: [id])
+  executedAt            DateTime?
+  outcomeSnapshot       Json?
+  createdAt             DateTime                              @default(now())
+  updatedAt             DateTime                              @updatedAt
+
+  @@index([customerIdSnapshot, createdAt], map: "imp_cust_del_req_customer_created_idx")
+  @@index([sourceBatchId, createdAt], map: "imp_cust_del_req_batch_created_idx")
+  @@index([status, reviewerId, createdAt], map: "imp_cust_del_req_status_reviewer_created_idx")
+  @@index([requestedById, createdAt], map: "imp_cust_del_req_requester_created_idx")
+  @@index([executedById, createdAt], map: "imp_cust_del_req_executor_created_idx")
+  @@map("imported_customer_deletion_requests")
 }
 
 model Category {

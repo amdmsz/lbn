@@ -29,6 +29,15 @@ function buildModeHref(mode: LeadImportMode) {
     : "/lead-imports";
 }
 
+function buildDeletionBatchHref(input: {
+  sourceBatchId: string;
+  sourceMode: "LEAD" | "CUSTOMER_CONTINUATION";
+}) {
+  return input.sourceMode === "CUSTOMER_CONTINUATION"
+    ? `/lead-imports/${input.sourceBatchId}?mode=customer_continuation`
+    : `/lead-imports/${input.sourceBatchId}`;
+}
+
 function LeadImportModeSwitch({ activeMode }: Readonly<{ activeMode: LeadImportMode }>) {
   return (
     <div className="inline-flex rounded-full border border-black/8 bg-[rgba(247,248,250,0.92)] p-1 shadow-[0_8px_20px_rgba(18,24,31,0.04)]">
@@ -269,6 +278,79 @@ export default async function LeadImportsPage({
       {data.notice ? (
         <ActionBanner tone={data.notice.tone}>{data.notice.message}</ActionBanner>
       ) : null}
+
+      <SectionCard
+          eyebrow="删除审批"
+          title="待审批导入客户删除"
+          description="在导入中心直接回看最近的删除申请，主管和管理员可以从这里快速进入客户详情或批次详情处理。"
+          actions={
+            <StatusBadge
+              label={`${data.pendingImportedCustomerDeletionRequests.totalCount} 条待审批`}
+              variant={
+                data.pendingImportedCustomerDeletionRequests.totalCount > 0
+                  ? "warning"
+                  : "neutral"
+              }
+            />
+          }
+        >
+          {data.pendingImportedCustomerDeletionRequests.items.length > 0 ? (
+            <div className="space-y-3">
+              {data.pendingImportedCustomerDeletionRequests.items.map((item) => (
+                <div key={item.id} className="crm-subtle-panel">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold text-black/82">
+                          {item.customerNameSnapshot}
+                        </p>
+                        <StatusBadge
+                          label={item.statusLabel}
+                          variant={item.statusVariant}
+                        />
+                        <StatusBadge label={item.sourceModeLabel} variant="info" />
+                      </div>
+                      <p className="text-[13px] leading-6 text-black/56">
+                        手机号：{item.customerPhoneSnapshot} / 申请人：{item.requestedBy.name}
+                      </p>
+                      <p className="text-[13px] leading-6 text-black/56">
+                        批次：{item.sourceBatchFileName}
+                        {item.sourceRowNumber ? ` / 第 ${item.sourceRowNumber} 行` : ""}
+                      </p>
+                      <p className="text-[13px] leading-6 text-black/56">
+                        原因：{item.requestReason}
+                      </p>
+                      <p className="text-[12px] leading-5 text-black/45">
+                        提交时间：{formatImportDateTime(item.createdAt)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Link
+                        href={`/customers/${item.customerIdSnapshot}`}
+                        className="crm-text-link"
+                      >
+                        查看客户
+                      </Link>
+                      <Link
+                        href={buildDeletionBatchHref({
+                          sourceBatchId: item.sourceBatchId,
+                          sourceMode: item.sourceMode,
+                        })}
+                        className="crm-text-link"
+                      >
+                        查看批次
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-black/10 bg-white/40 px-4 py-5 text-sm leading-6 text-black/55">
+              当前没有待审批的导入客户删除申请。
+            </div>
+          )}
+      </SectionCard>
 
       <SectionCard
         eyebrow="上传导入"

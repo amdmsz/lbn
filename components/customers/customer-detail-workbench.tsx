@@ -3,6 +3,7 @@ import Link from "next/link";
 import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { CustomerCallRecordsSection } from "@/components/customers/customer-call-records-section";
 import { CustomerDetailTabs } from "@/components/customers/customer-detail-tabs";
+import { ImportedCustomerDeletionPanel } from "@/components/customers/imported-customer-deletion-panel";
 import { CustomerLiveRecordsSection } from "@/components/customers/customer-live-records-section";
 import {
   CustomerMobileDialButton,
@@ -94,6 +95,25 @@ type CustomerLogsData = NonNullable<
 type CustomerCallResultOptions = NonNullable<
   Awaited<ReturnType<typeof getCustomerDetailCallsData>>
 >["callResultOptions"];
+
+type ImportedCustomerDeletionAction = (input: {
+  customerId: string;
+  reason: string;
+}) => Promise<{
+  status: "success" | "error";
+  message: string;
+  redirectTo: string | null;
+}>;
+
+type ImportedCustomerDeletionReviewAction = (input: {
+  requestId: string;
+  decision: "approve" | "reject";
+  reason?: string;
+}) => Promise<{
+  status: "success" | "error";
+  message: string;
+  redirectTo: string | null;
+}>;
 
 type CustomerDetailTabDataMap = {
   profile: CustomerProfileData;
@@ -457,11 +477,17 @@ function renderProfileTab({
   data,
   canManageTags,
   navigationContext,
+  requestImportedCustomerDeletionAction,
+  reviewImportedCustomerDeletionAction,
+  deleteImportedCustomerDirectAction,
 }: Readonly<{
   shell: CustomerDetailShellData;
   data: CustomerProfileData;
   canManageTags: boolean;
   navigationContext?: CustomerDetailNavigationContext;
+  requestImportedCustomerDeletionAction: ImportedCustomerDeletionAction;
+  reviewImportedCustomerDeletionAction: ImportedCustomerDeletionReviewAction;
+  deleteImportedCustomerDirectAction: ImportedCustomerDeletionAction;
 }>) {
   const archiveHref = buildCustomerTabHref(shell.id, "profile", navigationContext);
 
@@ -703,6 +729,15 @@ function renderProfileTab({
           </div>
         </div>
       </CustomerTabSection>
+
+      <CustomerTabSection eyebrow="删除审批" title="导入客户删除">
+        <ImportedCustomerDeletionPanel
+          guard={data.importedCustomerDeletion}
+          requestAction={requestImportedCustomerDeletionAction}
+          reviewAction={reviewImportedCustomerDeletionAction}
+          directDeleteAction={deleteImportedCustomerDirectAction}
+        />
+      </CustomerTabSection>
     </div>
   );
 }
@@ -923,6 +958,9 @@ function renderTabContent({
   navigationContext,
   saveTradeOrderDraftAction,
   submitTradeOrderForReviewAction,
+  requestImportedCustomerDeletionAction,
+  reviewImportedCustomerDeletionAction,
+  deleteImportedCustomerDirectAction,
 }: Readonly<{
   activeTab: CustomerDetailTab;
   shell: CustomerDetailShellData;
@@ -936,6 +974,9 @@ function renderTabContent({
   navigationContext?: CustomerDetailNavigationContext;
   saveTradeOrderDraftAction?: (formData: FormData) => Promise<void>;
   submitTradeOrderForReviewAction?: (formData: FormData) => Promise<void>;
+  requestImportedCustomerDeletionAction: ImportedCustomerDeletionAction;
+  reviewImportedCustomerDeletionAction: ImportedCustomerDeletionReviewAction;
+  deleteImportedCustomerDirectAction: ImportedCustomerDeletionAction;
 }>) {
   switch (activeTab) {
     case "profile":
@@ -944,6 +985,9 @@ function renderTabContent({
         data: tabData as CustomerProfileData,
         canManageTags,
         navigationContext,
+        requestImportedCustomerDeletionAction,
+        reviewImportedCustomerDeletionAction,
+        deleteImportedCustomerDirectAction,
       });
     case "calls":
       return (
@@ -1008,6 +1052,9 @@ export function CustomerDetailWorkbench({
   navigationContext,
   saveTradeOrderDraftAction,
   submitTradeOrderForReviewAction,
+  requestImportedCustomerDeletionAction,
+  reviewImportedCustomerDeletionAction,
+  deleteImportedCustomerDirectAction,
 }: Readonly<{
   shell: CustomerDetailShellData;
   navigationContext: CustomerDetailNavigationContext;
@@ -1023,6 +1070,9 @@ export function CustomerDetailWorkbench({
   tradeOrderComposer: TradeOrderComposerData | null;
   saveTradeOrderDraftAction?: (formData: FormData) => Promise<void>;
   submitTradeOrderForReviewAction?: (formData: FormData) => Promise<void>;
+  requestImportedCustomerDeletionAction: ImportedCustomerDeletionAction;
+  reviewImportedCustomerDeletionAction: ImportedCustomerDeletionReviewAction;
+  deleteImportedCustomerDirectAction: ImportedCustomerDeletionAction;
 }>) {
   const activeTabMeta = getCustomerDetailTabMeta(activeTab);
   const activeGroupMeta = getCustomerDetailTabGroupMeta(activeTab);
@@ -1306,6 +1356,9 @@ export function CustomerDetailWorkbench({
         navigationContext,
         saveTradeOrderDraftAction,
         submitTradeOrderForReviewAction,
+        requestImportedCustomerDeletionAction,
+        reviewImportedCustomerDeletionAction,
+        deleteImportedCustomerDirectAction,
       })}
 
       {canCreateCalls ? (

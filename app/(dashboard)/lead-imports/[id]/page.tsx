@@ -7,6 +7,7 @@ import { DetailItem } from "@/components/shared/detail-item";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { StickyActionBar } from "@/components/shared/sticky-action-bar";
 import {
   canAccessLeadImportModule,
   getDefaultRouteForRole,
@@ -26,6 +27,12 @@ import {
   type LeadImportMappingConfig,
 } from "@/lib/lead-imports/metadata";
 import { getLeadImportDetailData } from "@/lib/lead-imports/queries";
+import { deleteImportedCustomersFromBatchAction } from "../actions";
+
+type LeadImportDetailData = NonNullable<
+  Awaited<ReturnType<typeof getLeadImportDetailData>>
+>;
+type LeadImportDetailRow = LeadImportDetailData["rows"][number];
 
 function getHeaders(value: Prisma.JsonValue | null) {
   return Array.isArray(value)
@@ -84,6 +91,83 @@ function getOwnerOutcomeLabel(value: string) {
   }
 }
 
+function buildNoticeHref(
+  href: string,
+  status: "success" | "error",
+  message: string,
+) {
+  const [pathname, queryString = ""] = href.split("?");
+  const params = new URLSearchParams(queryString);
+  params.set("noticeStatus", status);
+  params.set("noticeMessage", message);
+  return `${pathname}?${params.toString()}`;
+}
+
+function getRowCustomerSnapshot(row: LeadImportDetailRow) {
+  if (row.customerContinuation) {
+    return {
+      name:
+        row.deletion?.latestRequest?.customerNameSnapshot ??
+        row.customerContinuation.result.customerName ??
+        row.mappedName ??
+        row.phoneRaw ??
+        "-",
+      phone:
+        row.deletion?.latestRequest?.customerPhoneSnapshot ??
+        row.normalizedPhone ??
+        row.phoneRaw ??
+        "-",
+      href:
+        row.deletion?.hasLiveCustomer && row.deletion.customerId
+          ? `/customers/${row.deletion.customerId}`
+          : null,
+    };
+  }
+
+  return {
+    name:
+      row.customerMerge?.customer?.name ??
+      row.deletion?.latestRequest?.customerNameSnapshot ??
+      row.customerMerge?.note ??
+      row.mappedName ??
+      row.phoneRaw ??
+      "-",
+    phone:
+      row.customerMerge?.customer?.phone ??
+      row.deletion?.latestRequest?.customerPhoneSnapshot ??
+      row.customerMerge?.phone ??
+      row.normalizedPhone ??
+      row.phoneRaw ??
+      "-",
+    href:
+      row.customerMerge?.customer?.id ? `/customers/${row.customerMerge.customer.id}` : null,
+  };
+}
+
+function getRowDeletionRequestNote(row: LeadImportDetailRow) {
+  const request = row.deletion?.latestRequest;
+
+  if (!request) {
+    return null;
+  }
+
+  if (request.status === "PENDING_SUPERVISOR") {
+    return `申请人：${request.requestedBy.name}`;
+  }
+
+  if (request.status === "REJECTED") {
+    return request.rejectReason?.trim() || "申请已驳回";
+  }
+
+  if (request.status === "EXECUTED") {
+    return request.executedAt
+      ? `执行于 ${formatImportDateTime(request.executedAt)}`
+      : "客户已删除";
+  }
+
+  return null;
+}
+
 export default async function LeadImportDetailPage({
   params,
   searchParams,
@@ -130,6 +214,7 @@ export default async function LeadImportDetailPage({
               : resolvedSearchParams.noticeMessage) ?? "",
         }
       : null;
+  const batchId = batch.id;
   const mode = batch.mode;
   const headers = getHeaders(batch.headers);
   const mapping = getMapping(batch.mappingConfig);
@@ -137,8 +222,8 @@ export default async function LeadImportDetailPage({
     mode === "customer_continuation" ? "/lead-imports?mode=customer_continuation" : "/lead-imports";
   const detailHref =
     mode === "customer_continuation"
-      ? `/lead-imports/${batch.id}?mode=customer_continuation`
-      : `/lead-imports/${batch.id}`;
+      ? `/lead-imports/${batchId}?mode=customer_continuation`
+      : `/lead-imports/${batchId}`;
   const templateHref =
     mode === "customer_continuation"
       ? "/lead-imports/template?mode=customer_continuation"
@@ -161,6 +246,32 @@ export default async function LeadImportDetailPage({
           { label: "无效号码", value: batch.customerContinuationMetrics.invalidNumberCustomers },
         ]
       : [];
+
+  const deletableRows = batch.rows.filter((row) => row.deletion?.selectable);
+
+  async function deleteImportedCustomersFormAction(formData: FormData) {
+    "use server";
+
+    const customerIds = formData
+      .getAll("customerIds")
+      .map((value) => (typeof value === "string" ? value : ""))
+      .filter(Boolean);
+    const reasonValue = formData.get("reason");
+    const reason = typeof reasonValue === "string" ? reasonValue : "";
+    const result = await deleteImportedCustomersFromBatchAction({
+      batchId,
+      customerIds,
+      reason,
+    });
+
+    redirect(
+      buildNoticeHref(
+        detailHref,
+        result.status === "success" ? "success" : "error",
+        result.message,
+      ),
+    );
+  }
 
   return (
     <div className="crm-page">
@@ -424,11 +535,37 @@ export default async function LeadImportDetailPage({
         </div>
 
         {batch.rows.length > 0 ? (
-          mode === "customer_continuation" ? (
-            <div className="mt-4 crm-table-shell">
+          <form action={deleteImportedCustomersFormAction} className="mt-4 space-y-4">
+            <StickyActionBar
+              title="批量删除导入客户"
+              description={
+                deletableRows.length > 0
+                  ? `当前批次有 ${deletableRows.length} 行满足“导入新建、无交易阻断、当前可删”条件。`
+                  : "当前批次没有满足直接删除条件的导入新建客户，仍可通过下方状态回看审批与删除结果。"
+              }
+            >
+              {deletableRows.length > 0 ? (
+                <>
+                  <input
+                    name="reason"
+                    required
+                    className="crm-input w-full lg:min-w-[20rem]"
+                    placeholder="请填写本次批量删除原因"
+                  />
+                  <button type="submit" className="crm-button crm-button-primary">
+                    删除选中客户
+                  </button>
+                </>
+              ) : null}
+            </StickyActionBar>
+
+            {mode === "customer_continuation" ? (
+            <div className="crm-table-shell">
               <table className="crm-table">
                 <thead>
                   <tr>
+                    <th>选择</th>
+                    <th>删除状态</th>
                     <th>行号</th>
                     <th>状态</th>
                     <th>客户</th>
@@ -440,8 +577,42 @@ export default async function LeadImportDetailPage({
                 <tbody>
                   {batch.rows.map((row) => {
                     const continuation = row.customerContinuation;
+                    const customer = getRowCustomerSnapshot(row);
+                    const deletionRequestNote = getRowDeletionRequestNote(row);
                     return (
                       <tr key={row.id}>
+                        <td>
+                          {row.deletion?.selectable && row.deletion.customerId ? (
+                            <input
+                              type="checkbox"
+                              name="customerIds"
+                              value={row.deletion.customerId}
+                              className="h-4 w-4 rounded border border-black/20"
+                            />
+                          ) : (
+                            <span className="text-xs text-black/30">-</span>
+                          )}
+                        </td>
+                        <td>
+                          {row.deletion ? (
+                            <div className="space-y-1.5">
+                              <StatusBadge
+                                label={row.deletion.stateLabel}
+                                variant={row.deletion.stateVariant}
+                              />
+                              <p className="text-xs leading-5 text-black/55">
+                                {row.deletion.reason}
+                              </p>
+                              {deletionRequestNote ? (
+                                <p className="text-xs leading-5 text-black/45">
+                                  {deletionRequestNote}
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
                         <td>{row.rowNumber}</td>
                         <td>
                           <StatusBadge
@@ -450,21 +621,21 @@ export default async function LeadImportDetailPage({
                           />
                         </td>
                         <td>
-                          {continuation?.result.customerId ? (
-                            <div className="space-y-1">
-                              <Link
-                                href={`/customers/${continuation.result.customerId}`}
-                                className="crm-text-link"
-                              >
-                                {continuation.result.customerName || row.mappedName || "-"}
+                          <div className="space-y-1">
+                            {customer.href ? (
+                              <Link href={customer.href} className="crm-text-link">
+                                {customer.name}
                               </Link>
-                              <p className="text-xs text-black/45">
-                                {row.normalizedPhone || row.phoneRaw || "-"}
+                            ) : (
+                              <p>{customer.name}</p>
+                            )}
+                            <p className="text-xs text-black/45">{customer.phone}</p>
+                            {!customer.href && row.deletion?.latestRequest?.status === "EXECUTED" ? (
+                              <p className="text-xs text-[var(--color-warning)]">
+                                客户已删除，当前展示导入快照
                               </p>
-                            </div>
-                          ) : (
-                            row.mappedName || row.phoneRaw || "-"
-                          )}
+                            ) : null}
+                          </div>
                         </td>
                         <td>
                           <div className="space-y-1 text-sm text-black/65">
@@ -497,10 +668,12 @@ export default async function LeadImportDetailPage({
               </table>
             </div>
           ) : (
-            <div className="mt-4 crm-table-shell">
+            <div className="crm-table-shell">
               <table className="crm-table">
                 <thead>
                   <tr>
+                    <th>选择</th>
+                    <th>删除状态</th>
                     <th>行号</th>
                     <th>状态</th>
                     <th>姓名</th>
@@ -513,8 +686,44 @@ export default async function LeadImportDetailPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {batch.rows.map((row) => (
+                  {batch.rows.map((row) => {
+                    const customer = getRowCustomerSnapshot(row);
+                    const deletionRequestNote = getRowDeletionRequestNote(row);
+
+                    return (
                     <tr key={row.id}>
+                      <td>
+                        {row.deletion?.selectable && row.deletion.customerId ? (
+                          <input
+                            type="checkbox"
+                            name="customerIds"
+                            value={row.deletion.customerId}
+                            className="h-4 w-4 rounded border border-black/20"
+                          />
+                        ) : (
+                          <span className="text-xs text-black/30">-</span>
+                        )}
+                      </td>
+                      <td>
+                        {row.deletion ? (
+                          <div className="space-y-1.5">
+                            <StatusBadge
+                              label={row.deletion.stateLabel}
+                              variant={row.deletion.stateVariant}
+                            />
+                            <p className="text-xs leading-5 text-black/55">
+                              {row.deletion.reason}
+                            </p>
+                            {deletionRequestNote ? (
+                              <p className="text-xs leading-5 text-black/45">
+                                {deletionRequestNote}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
                       <td>{row.rowNumber}</td>
                       <td>
                         <StatusBadge
@@ -526,16 +735,21 @@ export default async function LeadImportDetailPage({
                       <td>{row.normalizedPhone || row.phoneRaw || "-"}</td>
                       <td>{row.importedLeadId || row.matchedLeadId || "-"}</td>
                       <td>
-                        {row.customerMerge?.customer ? (
-                          <div className="space-y-1">
-                            <p>{row.customerMerge.customer.name}</p>
-                            <p className="text-xs text-black/45">
-                              {row.customerMerge.customer.phone}
+                        <div className="space-y-1">
+                          {customer.href ? (
+                            <Link href={customer.href} className="crm-text-link">
+                              {customer.name}
+                            </Link>
+                          ) : (
+                            <p>{customer.name}</p>
+                          )}
+                          <p className="text-xs text-black/45">{customer.phone}</p>
+                          {!customer.href && row.deletion?.latestRequest?.status === "EXECUTED" ? (
+                            <p className="text-xs text-[var(--color-warning)]">
+                              客户已删除，当前展示归并快照
                             </p>
-                          </div>
-                        ) : (
-                          "-"
-                        )}
+                          ) : null}
+                        </div>
                       </td>
                       <td>
                         {row.customerMerge ? (
@@ -552,11 +766,13 @@ export default async function LeadImportDetailPage({
                       <td>{row.customerMerge ? (row.customerMerge.tagSynced ? "已同步" : "未同步") : "-"}</td>
                       <td>{row.errorReason || "-"}</td>
                     </tr>
-                  ))}
+                  );
+                  })}
                 </tbody>
               </table>
             </div>
-          )
+          )}
+          </form>
         ) : (
           <div className="mt-4">
             <EmptyState title="没有行结果" description="该批次尚未生成可展示的行结果。" />

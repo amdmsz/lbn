@@ -161,7 +161,22 @@ export default async function LeadDetailPage({
 
         {lead.mergeLogs.length > 0 ? (
           <div className="mt-4 space-y-3">
-            {lead.mergeLogs.map((record) => (
+            {lead.mergeLogs.map((mergeLog) => {
+              const mergedCustomerName =
+                mergeLog.customer?.name ?? mergeLog.note?.trim() ?? "已删除客户";
+              const mergedCustomerPhone =
+                mergeLog.customer?.phone ?? mergeLog.phone ?? "暂无手机号";
+              const customerDeleted = !mergeLog.customer;
+              const record = {
+                ...mergeLog,
+                customer: mergeLog.customer ?? {
+                  id: null,
+                  name: mergedCustomerName,
+                  phone: mergedCustomerPhone,
+                },
+              };
+
+              return (
               <div key={record.id} className="crm-subtle-panel">
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge
@@ -172,6 +187,9 @@ export default async function LeadDetailPage({
                     label={getLeadImportSourceLabel(record.source)}
                     variant="neutral"
                   />
+                  {customerDeleted ? (
+                    <StatusBadge label="客户已删除" variant="warning" />
+                  ) : null}
                 </div>
                 <p className="mt-3 text-sm font-medium text-black/80">
                   客户：{record.customer.name} ({record.customer.phone})
@@ -186,7 +204,8 @@ export default async function LeadDetailPage({
                   时间：{formatDateTime(record.createdAt)}
                 </p>
               </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="mt-4">

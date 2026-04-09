@@ -196,6 +196,15 @@ LEAD_IMPORT_CHUNK_SIZE=20
 LEAD_IMPORT_JOB_ATTEMPTS=3
 ```
 
+- current local deployment example:
+
+```bash
+REDIS_URL=redis://172.31.186.171:6379
+LEAD_IMPORT_WORKER_CONCURRENCY=1
+LEAD_IMPORT_CHUNK_SIZE=20
+LEAD_IMPORT_JOB_ATTEMPTS=3
+```
+
 - v1 defaults stay conservative on purpose:
   - worker concurrency defaults to `1`
   - batches are processed in small chunks

@@ -400,6 +400,9 @@ export async function getLeadDetail(viewer: LeadViewer, leadId: string) {
           id: true,
           action: true,
           source: true,
+          customerId: true,
+          phone: true,
+          note: true,
           tagSynced: true,
           createdAt: true,
           batch: {

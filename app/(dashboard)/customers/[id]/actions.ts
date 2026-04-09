@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 import {
   buildRedirectTarget,
   getFormValue,
@@ -10,9 +10,31 @@ import {
 } from "@/lib/action-notice";
 import { auth } from "@/lib/auth/session";
 import {
+  deleteImportedCustomersDirect,
+  requestImportedCustomerDeletion,
+  reviewImportedCustomerDeletion,
+} from "@/lib/customers/imported-customer-deletion";
+import {
   saveTradeOrderDraft,
   submitTradeOrderForReview,
 } from "@/lib/trade-orders/mutations";
+
+const importedCustomerDeletionSchema = z.object({
+  customerId: z.string().trim().min(1, "缺少客户 ID"),
+  reason: z.string().trim().min(1, "请填写原因").max(500, "原因不能超过 500 字"),
+});
+
+const importedCustomerDeletionReviewSchema = z.object({
+  requestId: z.string().trim().min(1, "缺少删除申请 ID"),
+  decision: z.enum(["approve", "reject"]),
+  reason: z.string().trim().max(500, "原因不能超过 500 字").optional(),
+});
+
+export type ImportedCustomerDeletionActionResult = {
+  status: "success" | "error";
+  message: string;
+  redirectTo: string | null;
+};
 
 function getErrorMessage(error: unknown) {
   if (error instanceof ZodError) {
@@ -41,6 +63,22 @@ function buildCustomerOrdersRedirect(
   }
 
   return `/customers/${customerId}?${params.toString()}`;
+}
+
+function revalidateImportedCustomerDeletionPaths(input: {
+  customerId: string;
+  batchId?: string | null;
+}) {
+  revalidatePath("/customers");
+  revalidatePath("/customers/public-pool");
+  revalidatePath("/lead-imports");
+  revalidatePath("/leads");
+  revalidatePath("/dashboard");
+  revalidatePath(`/customers/${input.customerId}`);
+
+  if (input.batchId) {
+    revalidatePath(`/lead-imports/${input.batchId}`);
+  }
 }
 
 function parseTradeOrderLinesJson(rawValue: string) {
@@ -286,5 +324,176 @@ export async function submitTradeOrderForReviewAction(formData: FormData) {
   } catch (error) {
     rethrowRedirectError(error);
     redirect(buildRedirectTarget(errorRedirect, "error", getErrorMessage(error)));
+  }
+}
+
+export async function requestImportedCustomerDeletionAction(
+  input: z.input<typeof importedCustomerDeletionSchema>,
+): Promise<ImportedCustomerDeletionActionResult> {
+  const session = await auth();
+
+  if (!session?.user) {
+    return {
+      status: "error",
+      message: "登录状态已失效，请重新登录后再试。",
+      redirectTo: null,
+    };
+  }
+
+  const parsed = importedCustomerDeletionSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      status: "error",
+      message: parsed.error.issues[0]?.message ?? "提交数据不完整。",
+      redirectTo: null,
+    };
+  }
+
+  try {
+    const result = await requestImportedCustomerDeletion(
+      {
+        id: session.user.id,
+        role: session.user.role,
+      },
+      parsed.data,
+    );
+
+    revalidateImportedCustomerDeletionPaths({
+      customerId: parsed.data.customerId,
+    });
+
+    return {
+      status: "success",
+      message: result.message,
+      redirectTo: null,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: getErrorMessage(error),
+      redirectTo: null,
+    };
+  }
+}
+
+export async function reviewImportedCustomerDeletionAction(
+  input: z.input<typeof importedCustomerDeletionReviewSchema>,
+): Promise<ImportedCustomerDeletionActionResult> {
+  const session = await auth();
+
+  if (!session?.user) {
+    return {
+      status: "error",
+      message: "登录状态已失效，请重新登录后再试。",
+      redirectTo: null,
+    };
+  }
+
+  const parsed = importedCustomerDeletionReviewSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      status: "error",
+      message: parsed.error.issues[0]?.message ?? "提交数据不完整。",
+      redirectTo: null,
+    };
+  }
+
+  try {
+    const result = await reviewImportedCustomerDeletion(
+      {
+        id: session.user.id,
+        role: session.user.role,
+      },
+      parsed.data,
+    );
+
+    revalidateImportedCustomerDeletionPaths({
+      customerId: result.customerId,
+      batchId: result.batchId,
+    });
+
+    return {
+      status: "success",
+      message: result.message,
+      redirectTo:
+        result.redirectTo && result.status === "executed"
+          ? buildRedirectTarget(result.redirectTo, "success", result.message)
+          : null,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: getErrorMessage(error),
+      redirectTo: null,
+    };
+  }
+}
+
+export async function deleteImportedCustomerDirectAction(
+  input: z.input<typeof importedCustomerDeletionSchema>,
+): Promise<ImportedCustomerDeletionActionResult> {
+  const session = await auth();
+
+  if (!session?.user) {
+    return {
+      status: "error",
+      message: "登录状态已失效，请重新登录后再试。",
+      redirectTo: null,
+    };
+  }
+
+  const parsed = importedCustomerDeletionSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      status: "error",
+      message: parsed.error.issues[0]?.message ?? "提交数据不完整。",
+      redirectTo: null,
+    };
+  }
+
+  try {
+    const result = await deleteImportedCustomersDirect(
+      {
+        id: session.user.id,
+        role: session.user.role,
+      },
+      {
+        customerIds: [parsed.data.customerId],
+        reason: parsed.data.reason,
+      },
+    );
+    const item = result.items[0];
+
+    revalidateImportedCustomerDeletionPaths({
+      customerId: parsed.data.customerId,
+      batchId: item?.sourceBatchId ?? null,
+    });
+
+    if (!item || item.status !== "deleted") {
+      return {
+        status: "error",
+        message:
+          item?.message ??
+          "当前客户不满足直接删除条件，请确认是否仍为导入新建客户。",
+        redirectTo: null,
+      };
+    }
+
+    return {
+      status: "success",
+      message: item.message,
+      redirectTo: item.redirectTo
+        ? buildRedirectTarget(item.redirectTo, "success", item.message)
+        : null,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: getErrorMessage(error),
+      redirectTo: null,
+    };
   }
 }

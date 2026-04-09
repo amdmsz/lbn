@@ -28,7 +28,10 @@ import {
 import { parseMasterDataNotice } from "@/lib/master-data/metadata";
 import { getCustomerTradeOrderComposerData } from "@/lib/trade-orders/queries";
 import {
+  deleteImportedCustomerDirectAction,
+  requestImportedCustomerDeletionAction,
   saveTradeOrderDraftAction,
+  reviewImportedCustomerDeletionAction,
   submitTradeOrderForReviewAction,
 } from "./actions";
 
@@ -177,6 +180,9 @@ export default async function CustomerDetailPage({
       tradeOrderComposer={tradeOrderComposer}
       saveTradeOrderDraftAction={saveTradeOrderDraftAction}
       submitTradeOrderForReviewAction={submitTradeOrderForReviewAction}
+      requestImportedCustomerDeletionAction={requestImportedCustomerDeletionAction}
+      reviewImportedCustomerDeletionAction={reviewImportedCustomerDeletionAction}
+      deleteImportedCustomerDirectAction={deleteImportedCustomerDirectAction}
     />
   );
 }

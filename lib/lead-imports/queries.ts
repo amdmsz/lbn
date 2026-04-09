@@ -6,6 +6,14 @@ import {
 } from "@prisma/client";
 import { z } from "zod";
 import { canAccessLeadImportModule } from "@/lib/auth/access";
+import {
+  getImportedCustomerDeletionRequestStatusLabel,
+  getImportedCustomerDeletionRequestStatusVariant,
+  getImportedCustomerDeletionRowStateLabel,
+  getImportedCustomerDeletionRowStateVariant,
+  getImportedCustomerDeletionSourceModeLabel,
+  type ImportedCustomerDeletionRowState,
+} from "@/lib/customers/imported-customer-deletion-metadata";
 import { prisma } from "@/lib/db/prisma";
 import {
   collectCustomerContinuationCategories,
@@ -91,6 +99,230 @@ function parseCustomerContinuationRowMappedData(
 
 function matchesMode(kind: LeadImportKind, mode: LeadImportMode) {
   return getLeadImportModeFromKind(kind) === mode;
+}
+
+const importedCustomerDeletionRequestSelect = {
+  id: true,
+  customerIdSnapshot: true,
+  customerNameSnapshot: true,
+  customerPhoneSnapshot: true,
+  sourceMode: true,
+  sourceBatchId: true,
+  sourceBatchFileName: true,
+  sourceRowNumber: true,
+  status: true,
+  requestReason: true,
+  rejectReason: true,
+  createdAt: true,
+  reviewedAt: true,
+  executedAt: true,
+  reviewerId: true,
+  requestedBy: {
+    select: {
+      id: true,
+      name: true,
+      username: true,
+    },
+  },
+  reviewer: {
+    select: {
+      id: true,
+      name: true,
+      username: true,
+    },
+  },
+  executedBy: {
+    select: {
+      id: true,
+      name: true,
+      username: true,
+    },
+  },
+} satisfies Prisma.ImportedCustomerDeletionRequestSelect;
+
+type ImportedCustomerDeletionRequestRecord =
+  Prisma.ImportedCustomerDeletionRequestGetPayload<{
+    select: typeof importedCustomerDeletionRequestSelect;
+  }>;
+
+type ImportedCustomerDeletionCustomerSnapshot = Prisma.CustomerGetPayload<{
+  select: {
+    id: true;
+    name: true;
+    phone: true;
+    ownerId: true;
+    publicPoolTeamId: true;
+    owner: {
+      select: {
+        teamId: true;
+      };
+    };
+    _count: {
+      select: {
+        tradeOrders: true;
+        salesOrders: true;
+        orders: true;
+        giftRecords: true;
+        paymentPlans: true;
+        paymentRecords: true;
+        collectionTasks: true;
+        shippingTasks: true;
+        logisticsFollowUpTasks: true;
+        codCollectionRecords: true;
+      };
+    };
+  };
+}>;
+
+const importedCustomerDeletionBlockerLabels = [
+  ["tradeOrders", "已存在成交主单"],
+  ["salesOrders", "已存在供应商子单"],
+  ["orders", "已存在历史订单"],
+  ["giftRecords", "已存在礼品履约记录"],
+  ["paymentPlans", "已存在收款计划"],
+  ["paymentRecords", "已存在收款记录"],
+  ["collectionTasks", "已存在催收任务"],
+  ["shippingTasks", "已存在发货任务"],
+  ["logisticsFollowUpTasks", "已存在物流跟进任务"],
+  ["codCollectionRecords", "已存在 COD 回款记录"],
+] as const;
+
+function buildImportedCustomerDeletionRequestSummary(
+  request: ImportedCustomerDeletionRequestRecord,
+) {
+  return {
+    id: request.id,
+    customerIdSnapshot: request.customerIdSnapshot,
+    customerNameSnapshot: request.customerNameSnapshot,
+    customerPhoneSnapshot: request.customerPhoneSnapshot,
+    sourceMode: request.sourceMode,
+    sourceModeLabel: getImportedCustomerDeletionSourceModeLabel(request.sourceMode),
+    sourceBatchId: request.sourceBatchId,
+    sourceBatchFileName: request.sourceBatchFileName,
+    sourceRowNumber: request.sourceRowNumber,
+    status: request.status,
+    statusLabel: getImportedCustomerDeletionRequestStatusLabel(request.status),
+    statusVariant: getImportedCustomerDeletionRequestStatusVariant(request.status),
+    requestReason: request.requestReason,
+    rejectReason: request.rejectReason,
+    createdAt: request.createdAt,
+    reviewedAt: request.reviewedAt,
+    executedAt: request.executedAt,
+    requestedBy: request.requestedBy,
+    reviewer: request.reviewer,
+    executedBy: request.executedBy,
+  };
+}
+
+function getImportedCustomerDeletionBlockerLabelsForCustomer(
+  customer: ImportedCustomerDeletionCustomerSnapshot | null | undefined,
+) {
+  if (!customer) {
+    return [];
+  }
+
+  return importedCustomerDeletionBlockerLabels.flatMap(([key, label]) =>
+    customer._count[key] > 0 ? [label] : [],
+  );
+}
+
+function buildImportedCustomerDeletionRowStatus(input: {
+  mode: LeadImportMode;
+  viewerRole: RoleCode;
+  viewerTeamId: string | null;
+  rowNumber: number;
+  customerMerge:
+    | {
+        action: string;
+        customerId: string | null;
+      }
+    | null
+    | undefined;
+  customerContinuation: CustomerContinuationRowMappedData | null;
+  request:
+    | ReturnType<typeof buildImportedCustomerDeletionRequestSummary>
+    | null
+    | undefined;
+  activeCustomer: ImportedCustomerDeletionCustomerSnapshot | null | undefined;
+}) {
+  const rowCustomerId =
+    input.mode === "customer_continuation"
+      ? input.customerContinuation?.result.customerId ??
+        input.request?.customerIdSnapshot ??
+        null
+      : input.customerMerge?.customerId ?? input.request?.customerIdSnapshot ?? null;
+  const createdByImport =
+    input.mode === "customer_continuation"
+      ? input.customerContinuation?.result.action === "CREATED_CUSTOMER"
+      : input.customerMerge?.action === "CREATED_CUSTOMER";
+
+  let state: ImportedCustomerDeletionRowState = "BLOCKED";
+  let reason = "仅导入新建客户可删除。";
+
+  if (!createdByImport) {
+    return {
+      state,
+      stateLabel: getImportedCustomerDeletionRowStateLabel(state),
+      stateVariant: getImportedCustomerDeletionRowStateVariant(state),
+      reason,
+      customerId: rowCustomerId,
+      latestRequest: input.request ?? null,
+      hasLiveCustomer: Boolean(input.activeCustomer),
+      selectable: false,
+    };
+  }
+
+  if (input.request?.status === "EXECUTED") {
+    state = "DELETED";
+    reason = input.request.executedAt
+      ? `已于 ${input.request.executedAt.toLocaleString("zh-CN")} 删除。`
+      : "客户已删除。";
+  } else if (input.request?.status === "PENDING_SUPERVISOR") {
+    state = "PENDING";
+    reason = input.request.reviewer
+      ? `待 ${input.request.reviewer.name} 审批。`
+      : "当前客户已有待审批删除申请。";
+  } else if (!rowCustomerId || !input.activeCustomer) {
+    state = "BLOCKED";
+    reason = "客户已不存在或无法定位当前客户。";
+  } else {
+    const blockerLabels = getImportedCustomerDeletionBlockerLabelsForCustomer(
+      input.activeCustomer,
+    );
+
+    if (blockerLabels.length > 0) {
+      state = "BLOCKED";
+      reason = blockerLabels.join("、");
+    } else if (input.viewerRole !== "ADMIN" && input.activeCustomer.ownerId) {
+      state = "BLOCKED";
+      reason = "当前客户已有负责人，主管不可直接删除。";
+    } else if (
+      input.viewerRole === "SUPERVISOR" &&
+      input.viewerTeamId &&
+      input.activeCustomer.ownerId === null &&
+      input.activeCustomer.publicPoolTeamId !== input.viewerTeamId
+    ) {
+      state = "BLOCKED";
+      reason = "当前客户不在你的公海团队范围内。";
+    } else if (input.viewerRole === "SUPERVISOR" && !input.viewerTeamId) {
+      state = "BLOCKED";
+      reason = "当前主管未配置团队范围。";
+    } else {
+      state = "ELIGIBLE";
+      reason = "满足导入新建、公海/无负责人、无交易阻断条件。";
+    }
+  }
+
+  return {
+    state,
+    stateLabel: getImportedCustomerDeletionRowStateLabel(state),
+    stateVariant: getImportedCustomerDeletionRowStateVariant(state),
+    reason,
+    customerId: rowCustomerId,
+    latestRequest: input.request ?? null,
+    hasLiveCustomer: Boolean(input.activeCustomer),
+    selectable: state === "ELIGIBLE" && Boolean(rowCustomerId),
+  };
 }
 
 function buildCustomerContinuationMetrics(
@@ -440,6 +672,22 @@ export async function getLeadImportListData(
           tagLookupValues: [...new Set(tags.flatMap((item) => [item.name, item.code]))],
         }))
       : null;
+  const pendingImportedCustomerDeletionWhere = {
+    status: "PENDING_SUPERVISOR",
+    ...(viewer.role === "SUPERVISOR" ? { reviewerId: viewer.id } : {}),
+  } satisfies Prisma.ImportedCustomerDeletionRequestWhereInput;
+  const [pendingImportedCustomerDeletionCount, pendingImportedCustomerDeletionItems] =
+    await Promise.all([
+      prisma.importedCustomerDeletionRequest.count({
+        where: pendingImportedCustomerDeletionWhere,
+      }),
+      prisma.importedCustomerDeletionRequest.findMany({
+        where: pendingImportedCustomerDeletionWhere,
+        orderBy: [{ createdAt: "desc" }],
+        take: 6,
+        select: importedCustomerDeletionRequestSelect,
+      }),
+    ]);
 
   return {
     notice: parseLeadImportNotice(rawSearchParams),
@@ -464,6 +712,12 @@ export async function getLeadImportListData(
     },
     sourceOptions: leadImportSourceOptions,
     customerContinuationPreviewLookups,
+    pendingImportedCustomerDeletionRequests: {
+      totalCount: pendingImportedCustomerDeletionCount,
+      items: pendingImportedCustomerDeletionItems.map(
+        buildImportedCustomerDeletionRequestSummary,
+      ),
+    },
     pagination: {
       page: currentPage,
       pageSize: LEAD_IMPORT_PAGE_SIZE,
@@ -566,7 +820,9 @@ export async function getLeadImportDetailData(
               id: true,
               action: true,
               customerId: true,
+              phone: true,
               tagSynced: true,
+              note: true,
               createdAt: true,
               customer: {
                 select: {
@@ -602,12 +858,116 @@ export async function getLeadImportDetailData(
   const importKind = getLeadImportBatchKind(batch.report);
   const mode = getLeadImportModeFromKind(importKind);
   const parsedCustomerContinuationReport = parseCustomerContinuationBatchReport(batch.report);
-
-  const rows = batch.rows.map((row) => ({
+  const viewerTeamId =
+    viewer.role === "SUPERVISOR"
+      ? (
+          await prisma.user.findUnique({
+            where: {
+              id: viewer.id,
+            },
+            select: {
+              teamId: true,
+            },
+          })
+        )?.teamId ?? null
+      : null;
+  const rawRows = batch.rows.map((row) => ({
     ...row,
     customerMerge: row.mergeLogs[0] ?? null,
     customerContinuation: parseCustomerContinuationRowMappedData(row.mappedData),
   }));
+  const rowDeletionRequestRecords = await prisma.importedCustomerDeletionRequest.findMany({
+    where: {
+      sourceBatchId: batch.id,
+    },
+    orderBy: [{ createdAt: "desc" }],
+    select: importedCustomerDeletionRequestSelect,
+  });
+  const latestDeletionRequestByRow = new Map<
+    number,
+    ReturnType<typeof buildImportedCustomerDeletionRequestSummary>
+  >();
+
+  for (const record of rowDeletionRequestRecords) {
+    if (record.sourceRowNumber === null || latestDeletionRequestByRow.has(record.sourceRowNumber)) {
+      continue;
+    }
+
+    latestDeletionRequestByRow.set(
+      record.sourceRowNumber,
+      buildImportedCustomerDeletionRequestSummary(record),
+    );
+  }
+
+  const customerIds = [...new Set(
+    rawRows
+      .flatMap((row) => [
+        row.customerMerge?.customerId ?? null,
+        row.customerContinuation?.result.customerId ?? null,
+        latestDeletionRequestByRow.get(row.rowNumber)?.customerIdSnapshot ?? null,
+      ])
+      .filter((value): value is string => Boolean(value)),
+  )];
+  const activeCustomers = customerIds.length
+    ? await prisma.customer.findMany({
+        where: {
+          id: {
+            in: customerIds,
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          ownerId: true,
+          publicPoolTeamId: true,
+          owner: {
+            select: {
+              teamId: true,
+            },
+          },
+          _count: {
+            select: {
+              tradeOrders: true,
+              salesOrders: true,
+              orders: true,
+              giftRecords: true,
+              paymentPlans: true,
+              paymentRecords: true,
+              collectionTasks: true,
+              shippingTasks: true,
+              logisticsFollowUpTasks: true,
+              codCollectionRecords: true,
+            },
+          },
+        },
+      })
+    : [];
+  const activeCustomerMap = new Map(activeCustomers.map((customer) => [customer.id, customer]));
+  const rows = rawRows.map((row) => {
+    const latestDeletionRequest = latestDeletionRequestByRow.get(row.rowNumber) ?? null;
+    const deletion = buildImportedCustomerDeletionRowStatus({
+      mode,
+      viewerRole: viewer.role,
+      viewerTeamId,
+      rowNumber: row.rowNumber,
+      customerMerge: row.customerMerge,
+      customerContinuation: row.customerContinuation,
+      request: latestDeletionRequest,
+      activeCustomer: activeCustomerMap.get(
+        mode === "customer_continuation"
+          ? row.customerContinuation?.result.customerId ??
+              latestDeletionRequest?.customerIdSnapshot ??
+              ""
+          : row.customerMerge?.customerId ?? latestDeletionRequest?.customerIdSnapshot ?? "",
+      ),
+    });
+
+    return {
+      ...row,
+      deletion,
+    };
+  });
 
   const failureRows = rows.filter((row) => row.status === LeadImportRowStatus.FAILED);
   const duplicateRows = rows.filter((row) => row.status === LeadImportRowStatus.DUPLICATE);
