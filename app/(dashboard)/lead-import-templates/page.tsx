@@ -12,6 +12,8 @@ import {
 } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
 import {
+  customerContinuationImportFieldDefinitions,
+  getLeadImportMode,
   getLeadImportSourceLabel,
   getTemplateDefaultMappingValue,
   leadImportFieldDefinitions,
@@ -46,20 +48,26 @@ export default async function LeadImportTemplatesPage({
 
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const notice = parseLeadImportNotice(resolvedSearchParams);
+  const requestedMode = getLeadImportMode(resolvedSearchParams);
   const data = await getLeadImportTemplatePageData({
     id: session.user.id,
     role: session.user.role,
   });
+  const backHref =
+    requestedMode === "customer_continuation"
+      ? "/lead-imports?mode=customer_continuation"
+      : "/lead-imports";
 
   return (
     <div className="crm-page">
       <PageHeader
-        title="导入模板"
-        description="保存常用字段映射和导入来源，减少重复配置。模板只做轻量复用，不参与复杂规则引擎。"
+        title="导入模板管理"
+        description="统一查看线索导入自定义模板和客户续接固定模板，减少重复解释和字段口径不一致。"
         actions={
           <>
             <StatusBadge label={`${data.items.length} 个模板`} variant="info" />
-            <Link href="/lead-imports" className="crm-button crm-button-secondary">
+            <StatusBadge label="客户续接固定模板" variant="neutral" />
+            <Link href={backHref} className="crm-button crm-button-secondary">
               返回导入中心
             </Link>
           </>
@@ -67,6 +75,61 @@ export default async function LeadImportTemplatesPage({
       />
 
       {notice ? <ActionBanner tone={notice.tone}>{notice.message}</ActionBanner> : null}
+
+      <DataTableWrapper
+        title="客户续接固定模板"
+        description="客户续接当前走固定模板，不单独保存数据库模板；这里统一查看字段别名、下载模板和承接规则。"
+        toolbar={
+          <a
+            href="/lead-imports/template?mode=customer_continuation"
+            download
+            className="crm-button crm-button-secondary"
+          >
+            下载续接模板
+          </a>
+        }
+      >
+        <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {customerContinuationImportFieldDefinitions.map((field) => (
+              <div key={field.key} className="crm-subtle-panel">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-black/82">{field.label}</p>
+                  <StatusBadge
+                    label={field.required ? "必填" : "可选"}
+                    variant={field.required ? "warning" : "neutral"}
+                  />
+                </div>
+                <p className="mt-2 text-xs leading-6 text-black/55">
+                  别名：{field.aliases.slice(0, 5).join(" / ")}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-3">
+            <div className="crm-subtle-panel">
+              <p className="crm-detail-label">标签与承接规则</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <StatusBadge label="A/B/C/D -> 已加微信" variant="success" />
+                <StatusBadge label="D -> 待邀约" variant="info" />
+                <StatusBadge label="未接/拒接 -> 挂断待回访" variant="warning" />
+                <StatusBadge label="拒绝添加 / 无效号码" variant="danger" />
+              </div>
+              <p className="mt-3 text-sm leading-6 text-black/60">
+                跟进客户、拒绝添加、无效客户这类信号词不会被当成业务标签 warning，它们会直接映射到对应承接结果。
+              </p>
+            </div>
+
+            <div className="crm-subtle-panel">
+              <p className="crm-detail-label">使用建议</p>
+              <p className="mt-2 text-sm leading-7 text-black/60">
+                负责人建议填写销售账号；标签列优先放 A/B/C/D 这类业务标签，老系统跟进结果也可以继续写在标签列或跟进结果列，系统会自动识别。
+              </p>
+            </div>
+          </div>
+        </div>
+      </DataTableWrapper>
 
       <DataTableWrapper
         title="新建模板"

@@ -13,6 +13,7 @@ import {
   getLeadImportBatchStatusVariant,
   getLeadImportFileTypeLabel,
   getLeadImportSourceLabel,
+  type LeadImportKind,
 } from "@/lib/lead-imports/metadata";
 
 type LeadImportBatchListItem = {
@@ -29,6 +30,7 @@ type LeadImportBatchListItem = {
   matchedCustomerRows: number;
   importedAt: Date | null;
   createdAt: Date;
+  importKind: LeadImportKind;
   createdBy: {
     name: string;
     username: string;
@@ -40,6 +42,7 @@ type LeadImportBatchListItem = {
 };
 
 type LeadImportListFilters = {
+  mode: string;
   keyword: string;
   status: string;
   page: number;
@@ -54,6 +57,10 @@ type PaginationData = {
 
 function buildPageHref(filters: LeadImportListFilters, page: number) {
   const params = new URLSearchParams();
+
+  if (filters.mode && filters.mode !== "lead") {
+    params.set("mode", filters.mode);
+  }
 
   if (filters.keyword) {
     params.set("keyword", filters.keyword);
@@ -86,7 +93,7 @@ export function LeadImportBatchesTable({
     return (
       <EmptyState
         title="暂无导入批次"
-        description="还没有线索导入记录。你可以先下载模板并上传 Excel 或 CSV，系统会按手机号去重后导入线索。"
+        description="当前模式下还没有批次记录。你可以先下载模板并上传 Excel 或 CSV。"
       />
     );
   }
@@ -102,9 +109,10 @@ export function LeadImportBatchesTable({
             <tr>
               <th>文件</th>
               <th>状态</th>
-              <th>导入来源</th>
+              <th>导入类型</th>
+              <th>来源</th>
               <th>导入结果</th>
-              <th>客户归并</th>
+              <th>客户结果</th>
               <th>创建人</th>
               <th>时间</th>
               <th>操作</th>
@@ -127,22 +135,24 @@ export function LeadImportBatchesTable({
                     variant={getLeadImportBatchStatusVariant(item.status)}
                   />
                 </td>
+                <td>
+                  {item.importKind === "CUSTOMER_CONTINUATION" ? "客户续接" : "线索导入"}
+                </td>
                 <td>{getLeadImportSourceLabel(item.defaultLeadSource)}</td>
                 <td>
                   <div className="space-y-0.5 text-sm text-black/65">
-                    <p>成功导入：{item.successRows}</p>
+                    <p>
+                      {item.importKind === "CUSTOMER_CONTINUATION" ? "成功客户" : "成功线索"}：
+                      {item.successRows}
+                    </p>
                     <p className="text-[var(--color-warning)]">重复剔除：{item.duplicateRows}</p>
                     <p className="text-[var(--color-danger)]">失败行：{item.failedRows}</p>
                   </div>
                 </td>
                 <td>
                   <div className="space-y-0.5 text-sm text-black/65">
-                    <p className="text-[var(--color-success)]">
-                      新增客户：{item.createdCustomerRows}
-                    </p>
-                    <p className="text-[var(--color-info)]">
-                      关联已有：{item.matchedCustomerRows}
-                    </p>
+                    <p className="text-[var(--color-success)]">新增客户：{item.createdCustomerRows}</p>
+                    <p className="text-[var(--color-info)]">命中已有：{item.matchedCustomerRows}</p>
                   </div>
                 </td>
                 <td>
@@ -156,7 +166,15 @@ export function LeadImportBatchesTable({
                   </div>
                 </td>
                 <td>
-                  <Link href={`/lead-imports/${item.id}`} scroll={false} className="crm-text-link">
+                  <Link
+                    href={
+                      item.importKind === "CUSTOMER_CONTINUATION"
+                        ? `/lead-imports/${item.id}?mode=customer_continuation`
+                        : `/lead-imports/${item.id}`
+                    }
+                    scroll={false}
+                    className="crm-text-link"
+                  >
                     查看报告
                   </Link>
                 </td>

@@ -15,6 +15,7 @@ import { z } from "zod";
 import { canAccessLeadImportModule } from "@/lib/auth/access";
 import { createInitialPublicOwnershipEventTx } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
+import { createCustomerContinuationImportBatch } from "@/lib/lead-imports/customer-continuation-import";
 import { parseLeadImportFile } from "@/lib/lead-imports/file-parser";
 import {
   LEAD_IMPORT_TEMPLATE_NONE_VALUE,
@@ -22,6 +23,7 @@ import {
   normalizeImportedPhone,
   sanitizeLeadImportMapping,
   type LeadImportFieldKey,
+  type LeadImportMode,
   type LeadImportMappingConfig,
 } from "@/lib/lead-imports/metadata";
 
@@ -320,9 +322,18 @@ export async function createLeadImportBatch(
     templateId?: string;
     defaultLeadSource: LeadSource;
     mappingConfig: string;
+    importMode?: LeadImportMode;
   },
 ) {
   assertAccess(actor.role);
+
+  if (input.importMode === "customer_continuation") {
+    return createCustomerContinuationImportBatch(actor, {
+      file: input.file,
+      defaultLeadSource: input.defaultLeadSource,
+      mappingConfig: input.mappingConfig,
+    });
+  }
 
   if (!input.file || input.file.size === 0) {
     throw new Error("请先选择要上传的文件。");

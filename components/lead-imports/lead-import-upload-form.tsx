@@ -4,15 +4,23 @@ import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import type { LeadSource } from "@prisma/client";
 import { createLeadImportBatchAction } from "@/app/(dashboard)/lead-imports/actions";
+import { StatusBadge } from "@/components/shared/status-badge";
 import {
-  buildLeadImportPreviewRows,
-  parseLeadImportFile,
-  type ParsedLeadImportFile,
-} from "@/lib/lead-imports/file-parser";
+  buildCustomerContinuationTagLookupSet,
+  getCustomerContinuationOutcomeBadges,
+  hasMatchingImportedTag,
+  isCustomerContinuationSignalOnlyTagValue,
+  splitCustomerContinuationValues,
+  type CustomerContinuationOutcomeBadge,
+} from "@/lib/lead-imports/customer-continuation-signals";
+import { parseLeadImportFile, type ParsedLeadImportFile } from "@/lib/lead-imports/file-parser";
 import {
   DEFAULT_LEAD_IMPORT_SOURCE,
+  LEAD_IMPORT_PREVIEW_ROW_COUNT,
+  buildFixedCustomerContinuationImportMapping,
   buildFixedLeadImportMapping,
   normalizeImportedPhone,
+  type LeadImportMode,
   type LeadImportMappingConfig,
 } from "@/lib/lead-imports/metadata";
 
@@ -26,6 +34,39 @@ type PreviewSummary = {
   fileDuplicateRows: number;
   validPhoneRows: number;
   invalidPhoneRows: number;
+};
+
+type PreviewWarningItem = {
+  value: string;
+  count: number;
+};
+
+type PreviewWarnings = {
+  unresolvedOwners: PreviewWarningItem[];
+  unresolvedTags: PreviewWarningItem[];
+};
+
+type CustomerContinuationLookups = {
+  ownerUsernames: string[];
+  tagLookupValues: string[];
+};
+
+type CustomerContinuationLookupSets = {
+  ownerLookup: Set<string>;
+  tagLookup: ReadonlySet<string>;
+};
+
+type PreviewRow = {
+  rowNumber: number;
+  name: string;
+  phone: string;
+  normalizedPhone: string;
+  ownerUsername: string;
+  tags: string;
+  expectedOutcomes: CustomerContinuationOutcomeBadge[];
+  unresolvedOwner: boolean;
+  unresolvedTags: string[];
+  rawData: Record<string, string>;
 };
 
 function SubmitButton({ disabled }: Readonly<{ disabled: boolean }>) {
@@ -42,10 +83,162 @@ function SubmitButton({ disabled }: Readonly<{ disabled: boolean }>) {
   );
 }
 
+function normalizeOwnerLookupValue(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function sortPreviewWarnings(items: Map<string, number>) {
+  return [...items.entries()]
+    .map(([value, count]) => ({ value, count }))
+    .sort((left, right) => right.count - left.count || left.value.localeCompare(right.value));
+}
+
+function buildCustomerContinuationLookupSets(
+  lookups: CustomerContinuationLookups | null | undefined,
+) {
+  if (!lookups) {
+    return null;
+  }
+
+  return {
+    ownerLookup: new Set(
+      lookups.ownerUsernames.map((value) => normalizeOwnerLookupValue(value)).filter(Boolean),
+    ),
+    tagLookup: buildCustomerContinuationTagLookupSet(lookups.tagLookupValues),
+  } satisfies CustomerContinuationLookupSets;
+}
+
+function buildCustomerContinuationPreviewMeta(
+  rawData: Record<string, string>,
+  mapping: Record<string, string | undefined>,
+  lookupSets: CustomerContinuationLookupSets | null,
+) {
+  const ownerUsername = mapping.ownerUsername ? rawData[mapping.ownerUsername] ?? "" : "";
+  const tags = mapping.tags ? rawData[mapping.tags] ?? "" : "";
+  const tagValues = splitCustomerContinuationValues(tags);
+  const expectedOutcomes = getCustomerContinuationOutcomeBadges({
+    tags: tagValues,
+    summary: {
+      latestFollowUpResult: mapping.latestFollowUpResult
+        ? rawData[mapping.latestFollowUpResult] ?? ""
+        : "",
+      latestIntent: mapping.latestIntent ? rawData[mapping.latestIntent] ?? "" : "",
+      note: mapping.note ? rawData[mapping.note] ?? "" : "",
+    },
+  });
+
+  if (!lookupSets) {
+    return {
+      ownerUsername,
+      tags,
+      expectedOutcomes,
+      unresolvedOwner: false,
+      unresolvedTags: [] as string[],
+    };
+  }
+
+  const unresolvedOwner =
+    Boolean(ownerUsername.trim()) &&
+    !lookupSets.ownerLookup.has(normalizeOwnerLookupValue(ownerUsername));
+  const unresolvedTags = tagValues.filter(
+    (value) =>
+      !isCustomerContinuationSignalOnlyTagValue(value) &&
+      !hasMatchingImportedTag(value, lookupSets.tagLookup),
+  );
+
+  return {
+    ownerUsername,
+    tags,
+    expectedOutcomes,
+    unresolvedOwner,
+    unresolvedTags,
+  };
+}
+
+function buildPreviewWarnings(
+  rows: ParsedLeadImportFile["rows"],
+  mapping: LeadImportMappingConfig,
+  mode: LeadImportMode,
+  lookups: CustomerContinuationLookups | null | undefined,
+) {
+  if (mode !== "customer_continuation" || !lookups) {
+    return null;
+  }
+
+  const runtimeMapping = mapping as Record<string, string | undefined>;
+  const lookupSets = buildCustomerContinuationLookupSets(lookups);
+  const unresolvedOwnerMap = new Map<string, number>();
+  const unresolvedTagMap = new Map<string, number>();
+
+  for (const row of rows) {
+    const previewMeta = buildCustomerContinuationPreviewMeta(
+      row.rawData,
+      runtimeMapping,
+      lookupSets,
+    );
+
+    if (previewMeta.unresolvedOwner) {
+      unresolvedOwnerMap.set(
+        previewMeta.ownerUsername,
+        (unresolvedOwnerMap.get(previewMeta.ownerUsername) ?? 0) + 1,
+      );
+    }
+
+    for (const unresolvedTag of previewMeta.unresolvedTags) {
+      unresolvedTagMap.set(
+        unresolvedTag,
+        (unresolvedTagMap.get(unresolvedTag) ?? 0) + 1,
+      );
+    }
+  }
+
+  return {
+    unresolvedOwners: sortPreviewWarnings(unresolvedOwnerMap),
+    unresolvedTags: sortPreviewWarnings(unresolvedTagMap),
+  } satisfies PreviewWarnings;
+}
+
+function buildPreviewRows(
+  rows: ParsedLeadImportFile["rows"],
+  mapping: LeadImportMappingConfig,
+  mode: LeadImportMode,
+  lookups: CustomerContinuationLookups | null | undefined,
+) {
+  const runtimeMapping = mapping as Record<string, string | undefined>;
+  const lookupSets = buildCustomerContinuationLookupSets(lookups);
+
+  return rows.slice(0, LEAD_IMPORT_PREVIEW_ROW_COUNT).map((row) => {
+    const continuationPreview =
+      mode === "customer_continuation"
+        ? buildCustomerContinuationPreviewMeta(row.rawData, runtimeMapping, lookupSets)
+        : null;
+
+    return {
+      rowNumber: row.rowNumber,
+      name: mapping.name ? row.rawData[mapping.name] ?? "" : "",
+      phone: mapping.phone ? row.rawData[mapping.phone] ?? "" : "",
+      normalizedPhone:
+        mapping.phone && row.rawData[mapping.phone]
+          ? normalizeImportedPhone(row.rawData[mapping.phone] ?? "")
+          : "",
+      ownerUsername: continuationPreview?.ownerUsername ?? "",
+      tags: continuationPreview?.tags ?? "",
+      expectedOutcomes: continuationPreview?.expectedOutcomes ?? [],
+      unresolvedOwner: continuationPreview?.unresolvedOwner ?? false,
+      unresolvedTags: continuationPreview?.unresolvedTags ?? [],
+      rawData: row.rawData,
+    };
+  });
+}
+
 export function LeadImportUploadForm({
   sourceOptions,
+  mode,
+  customerContinuationLookups,
 }: Readonly<{
   sourceOptions: readonly SourceOption[];
+  mode: LeadImportMode;
+  customerContinuationLookups?: CustomerContinuationLookups | null;
 }>) {
   const [defaultLeadSource, setDefaultLeadSource] = useState<LeadSource>(
     sourceOptions[0]?.value ?? DEFAULT_LEAD_IMPORT_SOURCE,
@@ -53,15 +246,8 @@ export function LeadImportUploadForm({
   const [mapping, setMapping] = useState<LeadImportMappingConfig>({});
   const [parsedFile, setParsedFile] = useState<ParsedLeadImportFile | null>(null);
   const [previewSummary, setPreviewSummary] = useState<PreviewSummary | null>(null);
-  const [previewRows, setPreviewRows] = useState<
-    Array<{
-      rowNumber: number;
-      name: string;
-      phone: string;
-      normalizedPhone: string;
-      rawData: Record<string, string>;
-    }>
-  >([]);
+  const [previewRows, setPreviewRows] = useState<PreviewRow[]>([]);
+  const [previewWarnings, setPreviewWarnings] = useState<PreviewWarnings | null>(null);
   const [parseError, setParseError] = useState("");
   const [formError, setFormError] = useState("");
   const [isParsing, setIsParsing] = useState(false);
@@ -72,6 +258,7 @@ export function LeadImportUploadForm({
     setMapping({});
     setPreviewRows([]);
     setPreviewSummary(null);
+    setPreviewWarnings(null);
     setMissingHeaders([]);
   }
 
@@ -79,7 +266,18 @@ export function LeadImportUploadForm({
     nextParsedFile: ParsedLeadImportFile,
     nextMapping: LeadImportMappingConfig,
   ) {
-    const nextPreviewRows = buildLeadImportPreviewRows(nextParsedFile.rows, nextMapping);
+    const nextPreviewRows = buildPreviewRows(
+      nextParsedFile.rows,
+      nextMapping,
+      mode,
+      customerContinuationLookups,
+    );
+    const nextPreviewWarnings = buildPreviewWarnings(
+      nextParsedFile.rows,
+      nextMapping,
+      mode,
+      customerContinuationLookups,
+    );
     const seenPhones = new Set<string>();
     let validPhoneRows = 0;
     let invalidPhoneRows = 0;
@@ -87,9 +285,7 @@ export function LeadImportUploadForm({
 
     for (const row of nextParsedFile.rows) {
       const mappedPhone = nextMapping.phone ? row.rawData[nextMapping.phone] ?? "" : "";
-      const normalizedPhone = mappedPhone.trim()
-        ? normalizeImportedPhone(mappedPhone)
-        : "";
+      const normalizedPhone = mappedPhone.trim() ? normalizeImportedPhone(mappedPhone) : "";
 
       if (!mappedPhone.trim() || !normalizedPhone) {
         invalidPhoneRows += 1;
@@ -107,6 +303,7 @@ export function LeadImportUploadForm({
     }
 
     setPreviewRows(nextPreviewRows);
+    setPreviewWarnings(nextPreviewWarnings);
     setPreviewSummary({
       totalRows: nextParsedFile.rows.length,
       fileDuplicateRows,
@@ -129,21 +326,24 @@ export function LeadImportUploadForm({
 
     try {
       const nextParsedFile = await parseLeadImportFile(file);
-      const nextMappingResult = buildFixedLeadImportMapping(nextParsedFile.headers);
+      const nextMappingResult =
+        mode === "customer_continuation"
+          ? buildFixedCustomerContinuationImportMapping(nextParsedFile.headers)
+          : buildFixedLeadImportMapping(nextParsedFile.headers);
 
       if (nextMappingResult.missingHeaders.length > 0) {
         resetParsedState();
         setMissingHeaders(nextMappingResult.missingHeaders);
         setParseError(
-          `缺少必填列：${nextMappingResult.missingHeaders.join(" / ")}。其他列可以留空，但这三列必须存在。`,
+          `缺少必填列：${nextMappingResult.missingHeaders.join(" / ")}。请先补齐固定模板列。`,
         );
         return;
       }
 
       setParsedFile(nextParsedFile);
-      setMapping(nextMappingResult.mapping);
+      setMapping(nextMappingResult.mapping as LeadImportMappingConfig);
       setMissingHeaders([]);
-      updatePreview(nextParsedFile, nextMappingResult.mapping);
+      updatePreview(nextParsedFile, nextMappingResult.mapping as LeadImportMappingConfig);
     } catch (error) {
       resetParsedState();
       setParseError(error instanceof Error ? error.message : "文件解析失败，请重新上传。");
@@ -165,17 +365,39 @@ export function LeadImportUploadForm({
       return;
     }
 
-    if (!mapping.phone || !mapping.name || !mapping.address) {
+    const hasRequiredMapping =
+      mode === "customer_continuation"
+        ? Boolean(mapping.phone)
+        : Boolean(mapping.phone && mapping.name && mapping.address);
+
+    if (!hasRequiredMapping) {
       event.preventDefault();
-      setFormError("固定模板必须包含手机号、姓名、地址三列。");
+      setFormError(
+        mode === "customer_continuation"
+          ? "客户续接模板至少需要映射手机号列。"
+          : "固定模板必须包含手机号、姓名、地址三列。",
+      );
       return;
     }
 
     setFormError("");
   }
 
+  const canSubmit =
+    Boolean(parsedFile) &&
+    Boolean(mapping.phone) &&
+    (mode === "customer_continuation" || Boolean(mapping.name && mapping.address)) &&
+    !isParsing;
+
   return (
     <form action={createLeadImportBatchAction} onSubmit={handleSubmit} className="space-y-4">
+      <input type="hidden" name="importMode" value={mode} />
+      <input
+        type="hidden"
+        name="defaultLeadSource"
+        value={mode === "customer_continuation" ? DEFAULT_LEAD_IMPORT_SOURCE : defaultLeadSource}
+      />
+
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_220px]">
         <label className="space-y-1.5">
           <span className="crm-label">导入文件</span>
@@ -188,26 +410,36 @@ export function LeadImportUploadForm({
             required
           />
           <p className="text-sm text-black/55">
-            固定模板必填列只有：手机号、姓名、地址。其余列可以省略或留空。
+            {mode === "customer_continuation"
+              ? "固定模板至少需要手机号列；标签列可直接填写 A/B/C/D、跟进客户（未接通/拒接）、拒绝添加、无效客户（空号/停机）。"
+              : "固定模板必填列为手机号、姓名、地址，其余列可以留空。"}
           </p>
         </label>
 
-        <label className="space-y-1.5">
-          <span className="crm-label">导入来源</span>
-          <select
-            name="defaultLeadSource"
-            value={defaultLeadSource}
-            onChange={(event) => setDefaultLeadSource(event.target.value as LeadSource)}
-            className="crm-select"
-          >
-            {sourceOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <p className="text-sm text-black/55">导入中心来源已统一收口为“信息流”。</p>
-        </label>
+        {mode === "customer_continuation" ? (
+          <div className="space-y-1.5 rounded-[1rem] border border-black/8 bg-[rgba(248,250,252,0.78)] px-4 py-3">
+            <span className="crm-label">续接导入规则</span>
+            <p className="text-sm leading-6 text-black/60">
+              命中已有客户时默认只补空字段并保留原负责人；A/B/C/D 会承接为已加微信，跟进客户会承接为挂断待回访，拒绝添加和无效客户会写入对应通话结果。
+            </p>
+          </div>
+        ) : (
+          <label className="space-y-1.5">
+            <span className="crm-label">导入来源</span>
+            <select
+              value={defaultLeadSource}
+              onChange={(event) => setDefaultLeadSource(event.target.value as LeadSource)}
+              className="crm-select"
+            >
+              {sourceOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-sm text-black/55">导入中心来源当前统一收口为“信息流”。</p>
+          </label>
+        )}
       </div>
 
       <input type="hidden" name="mappingConfig" value={JSON.stringify(mapping)} />
@@ -251,6 +483,59 @@ export function LeadImportUploadForm({
             </div>
           </div>
 
+          {mode === "customer_continuation" &&
+          previewWarnings &&
+          (previewWarnings.unresolvedOwners.length > 0 ||
+            previewWarnings.unresolvedTags.length > 0) ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-[1rem] border border-[rgba(155,106,29,0.24)] bg-[rgba(155,106,29,0.08)] px-4 py-3.5">
+                <p className="text-sm font-semibold text-[var(--color-warning)]">
+                  负责人预警
+                </p>
+                <p className="mt-1 text-sm leading-6 text-black/62">
+                  这些账号不会阻塞导入，但不会自动命中负责人。
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {previewWarnings.unresolvedOwners.length > 0 ? (
+                    previewWarnings.unresolvedOwners.slice(0, 6).map((item) => (
+                      <span
+                        key={`owner-${item.value}`}
+                        className="rounded-full border border-[rgba(155,106,29,0.18)] bg-white/75 px-3 py-1 text-xs text-[var(--color-warning)]"
+                      >
+                        {item.value} x {item.count}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-sm text-black/55">未发现未识别负责人。</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-[1rem] border border-[rgba(155,106,29,0.24)] bg-[rgba(155,106,29,0.08)] px-4 py-3.5">
+                <p className="text-sm font-semibold text-[var(--color-warning)]">
+                  标签预警
+                </p>
+                <p className="mt-1 text-sm leading-6 text-black/62">
+                  未识别业务标签会进入 warning；跟进客户、拒绝添加、无效客户这类信号词不会误报。
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {previewWarnings.unresolvedTags.length > 0 ? (
+                    previewWarnings.unresolvedTags.slice(0, 6).map((item) => (
+                      <span
+                        key={`tag-${item.value}`}
+                        className="rounded-full border border-[rgba(155,106,29,0.18)] bg-white/75 px-3 py-1 text-xs text-[var(--color-warning)]"
+                      >
+                        {item.value} x {item.count}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-sm text-black/55">未发现未识别标签。</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="crm-table-shell">
             <table className="crm-table">
               <thead>
@@ -259,6 +544,8 @@ export function LeadImportUploadForm({
                   <th>姓名</th>
                   <th>原始手机号</th>
                   <th>标准化手机号</th>
+                  {mode === "customer_continuation" ? <th>负责人 / 标签</th> : null}
+                  {mode === "customer_continuation" ? <th>预计承接结果</th> : null}
                   <th>预览</th>
                 </tr>
               </thead>
@@ -279,10 +566,51 @@ export function LeadImportUploadForm({
                         {row.normalizedPhone || "无效手机号"}
                       </span>
                     </td>
+                    {mode === "customer_continuation" ? (
+                      <td>
+                        <div className="space-y-1 text-sm text-black/60">
+                          <p
+                            className={
+                              row.unresolvedOwner
+                                ? "font-medium text-[var(--color-warning)]"
+                                : undefined
+                            }
+                          >
+                            {row.ownerUsername || "未填写负责人"}
+                          </p>
+                          <p
+                            className={
+                              row.unresolvedTags.length > 0
+                                ? "font-medium text-[var(--color-warning)]"
+                                : undefined
+                            }
+                          >
+                            {row.tags || "未填写标签"}
+                          </p>
+                        </div>
+                      </td>
+                    ) : null}
+                    {mode === "customer_continuation" ? (
+                      <td>
+                        <div className="flex max-w-[16rem] flex-wrap gap-2">
+                          {row.expectedOutcomes.length > 0 ? (
+                            row.expectedOutcomes.map((item) => (
+                              <StatusBadge
+                                key={`${row.rowNumber}-${item.key}`}
+                                label={item.label}
+                                variant={item.variant}
+                              />
+                            ))
+                          ) : (
+                            <span className="text-sm text-black/45">未命中自动承接规则</span>
+                          )}
+                        </div>
+                      </td>
+                    ) : null}
                     <td className="max-w-xl">
                       <div className="flex flex-wrap gap-2">
                         {Object.entries(row.rawData)
-                          .slice(0, 4)
+                          .slice(0, mode === "customer_continuation" ? 5 : 4)
                           .map(([key, value]) => (
                             <span
                               key={`${row.rowNumber}-${key}`}
@@ -303,13 +631,11 @@ export function LeadImportUploadForm({
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/8 pt-2">
         <p className="text-sm text-black/58">
-          重复手机号会直接剔除，但仍保留批次行结果和去重日志。
+          {mode === "customer_continuation"
+            ? "重复手机号会在批次内直接剔除；未识别负责人和标签会进入 warning，不阻塞客户导入。"
+            : "重复手机号会直接剔除，但仍保留批次行结果和去重日志。"}
         </p>
-        <SubmitButton
-          disabled={
-            !parsedFile || !mapping.phone || !mapping.name || !mapping.address || isParsing
-          }
-        />
+        <SubmitButton disabled={!canSubmit} />
       </div>
     </form>
   );

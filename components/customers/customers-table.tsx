@@ -167,7 +167,7 @@ export function CustomersTable({
       </div>
 
       {viewMode === "cards" ? (
-        <div className="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+        <div className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3 min-[1680px]:grid-cols-4">
           {items.map((item) => (
             <CustomerListCard
               key={item.id}

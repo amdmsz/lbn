@@ -1,0 +1,18 @@
+{
+  "filePath": "C:/Users/yourname/Downloads/老.xlsx",
+  "sheetName": "导入模板",
+  "headerRowIndex": 2,
+  "actorUsername": "admin",
+  "ownerCodeMap": {
+    "S014": "sales",
+    "S003": "sales2"
+  },
+  "assignNewCustomersToMappedOwner": true,
+  "assignExistingUnownedToMappedOwner": false,
+  "mergeExistingStrategy": "fill-empty",
+  "ownerAssignmentExcludedCategories": [
+    "拒绝添加",
+    "无效客户（空号/停机）"
+  ],
+  "legacyRemarkPrefix": "[legacy-import]"
+}

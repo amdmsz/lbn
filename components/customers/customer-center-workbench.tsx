@@ -134,6 +134,20 @@ function getSummaryItems(role: RoleCode, data: CustomerCenterData): SummaryMetri
         data.filters.statuses[0] === "pending_invitation",
     },
     {
+      label: "待接续跟进",
+      value: String(data.summary.migrationPendingFollowUpCount),
+      note: "迁移导入后尚未形成新跟进",
+      href: buildCustomersHref(data.filters, {
+        statuses: ["migration_pending_follow_up"],
+        queue: "migration_pending_follow_up",
+        page: 1,
+      }),
+      emphasis: "warning",
+      active:
+        data.filters.statuses.length === 1 &&
+        data.filters.statuses[0] === "migration_pending_follow_up",
+    },
+    {
       label: "今日新增",
       value: String(data.summary.todayNewImportedCount),
       note: "今日导入客户",
@@ -246,7 +260,7 @@ export function CustomerCenterWorkbench({
       }
       summary={
         <div className={cn(sectionShellClassName, "mb-5")}>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
             {summaryItems.map((item) => (
               <SummaryMetricCard key={item.label} item={item} />
             ))}

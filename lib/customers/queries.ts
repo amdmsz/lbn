@@ -7,6 +7,7 @@ import {
   LeadStatus,
   LiveSessionStatus,
   SalesOrderReviewStatus,
+  TradeOrderStatus,
   WechatAddStatus,
   type Prisma,
   type RoleCode,
@@ -27,6 +28,10 @@ import {
   type CustomerWorkStatusKey,
 } from "@/lib/customers/metadata";
 import { prisma } from "@/lib/db/prisma";
+import {
+  customerContinuationImportOperationActions,
+  type CustomerImportOperationLogData,
+} from "@/lib/lead-imports/metadata";
 import { getActiveTagOptions } from "@/lib/master-data/queries";
 
 type SearchParamsValue = string | string[] | undefined;
@@ -46,12 +51,14 @@ type CustomerSnapshot = Prisma.CustomerGetPayload<{
 type CustomerSnapshotState = {
   latestLeadAt: Date | null;
   latestFollowUpAt: Date | null;
+  latestCustomerImportAt: Date | null;
   newImported: boolean;
   pendingFirstCall: boolean;
   pendingFollowUp: boolean;
   pendingWechat: boolean;
   pendingInvitation: boolean;
   pendingDeal: boolean;
+  migrationPendingFollowUp: boolean;
   workingStatuses: CustomerWorkStatusKey[];
   latestInterestedProduct: string | null;
   latestPurchasedProduct: string | null;
@@ -103,6 +110,7 @@ export type CustomerSummaryStats = {
   pendingWechatCount: number;
   pendingInvitationCount: number;
   pendingDealCount: number;
+  migrationPendingFollowUpCount: number;
   latestFollowUpAt: Date | null;
 };
 
@@ -125,6 +133,7 @@ export type TeamOverviewItem = {
   pendingFollowUpCount: number;
   pendingInvitationCount: number;
   pendingDealCount: number;
+  migrationPendingFollowUpCount: number;
 };
 
 export type SalesRepBoardItem = {
@@ -138,6 +147,7 @@ export type SalesRepBoardItem = {
   pendingFirstCallCount: number;
   pendingFollowUpCount: number;
   pendingDealCount: number;
+  migrationPendingFollowUpCount: number;
   latestFollowUpAt: Date | null;
 };
 
@@ -153,6 +163,8 @@ export type CustomerListItem = {
   createdAt: Date;
   latestImportAt: Date | null;
   latestFollowUpAt: Date | null;
+  latestTradeAt: Date | null;
+  lifetimeTradeAmount: string;
   latestInterestedProduct: string | null;
   latestPurchasedProduct: string | null;
   workingStatuses: CustomerWorkStatusKey[];
@@ -227,6 +239,7 @@ const customerQueueValues = [
   "pending_wechat",
   "pending_invitation",
   "pending_deal",
+  "migration_pending_follow_up",
 ] as const satisfies CustomerQueueKey[];
 
 const customerWorkStatusValues = [
@@ -236,6 +249,7 @@ const customerWorkStatusValues = [
   "pending_wechat",
   "pending_invitation",
   "pending_deal",
+  "migration_pending_follow_up",
 ] as const satisfies CustomerWorkStatusKey[];
 
 const pendingFirstCallLeadStatuses: LeadStatus[] = [
@@ -308,6 +322,7 @@ const customerSnapshotSelect = {
   phone: true,
   remark: true,
   createdAt: true,
+  lastEffectiveFollowUpAt: true,
   ownerId: true,
   owner: {
     select: {
@@ -447,6 +462,70 @@ function getMaxDate(values: Array<Date | null | undefined>) {
 
     return latest;
   }, null);
+}
+
+function parseCustomerImportOperationLogData(
+  value: Prisma.JsonValue | null | undefined,
+): CustomerImportOperationLogData | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const customerImport = value.customerImport;
+
+  if (!customerImport || typeof customerImport !== "object" || Array.isArray(customerImport)) {
+    return null;
+  }
+
+  if (customerImport.importKind !== "CUSTOMER_CONTINUATION") {
+    return null;
+  }
+
+  return customerImport as CustomerImportOperationLogData;
+}
+
+async function getLatestCustomerImportMap(customerIds: string[]) {
+  if (customerIds.length === 0) {
+    return new Map<string, { createdAt: Date; data: CustomerImportOperationLogData }>();
+  }
+
+  const logs = await prisma.operationLog.findMany({
+    where: {
+      targetType: "CUSTOMER",
+      targetId: {
+        in: customerIds,
+      },
+      action: {
+        in: [...customerContinuationImportOperationActions],
+      },
+    },
+    orderBy: [{ createdAt: "desc" }],
+    select: {
+      targetId: true,
+      createdAt: true,
+      afterData: true,
+    },
+  });
+
+  const latestMap = new Map<string, { createdAt: Date; data: CustomerImportOperationLogData }>();
+
+  for (const log of logs) {
+    if (latestMap.has(log.targetId)) {
+      continue;
+    }
+
+    const parsed = parseCustomerImportOperationLogData(log.afterData);
+    if (!parsed) {
+      continue;
+    }
+
+    latestMap.set(log.targetId, {
+      createdAt: log.createdAt,
+      data: parsed,
+    });
+  }
+
+  return latestMap;
 }
 
 function parseDateOnly(value: string, boundary: "start" | "end") {
@@ -731,6 +810,7 @@ function getSnapshotProductEntries(snapshot: CustomerSnapshot) {
 
 function getCustomerSnapshotState(
   snapshot: CustomerSnapshot,
+  latestCustomerImportAt: Date | null,
   now: Date,
   todayStart: Date,
   todayEnd: Date,
@@ -763,6 +843,11 @@ function getCustomerSnapshotState(
     !hasApprovedSalesOrder &&
     (hasInvitation ||
       snapshot.leads.some((lead) => pendingDealLeadStatuses.includes(lead.status)));
+  const migrationPendingFollowUp = Boolean(
+    latestCustomerImportAt &&
+      (!snapshot.lastEffectiveFollowUpAt ||
+        snapshot.lastEffectiveFollowUpAt.getTime() < latestCustomerImportAt.getTime()),
+  );
   const workingStatuses = customerWorkStatusValues.filter((status) => {
     switch (status) {
       case "new_imported":
@@ -777,6 +862,8 @@ function getCustomerSnapshotState(
         return pendingInvitation;
       case "pending_deal":
         return pendingDeal;
+      case "migration_pending_follow_up":
+        return migrationPendingFollowUp;
       default:
         return false;
     }
@@ -789,12 +876,14 @@ function getCustomerSnapshotState(
   return {
     latestLeadAt,
     latestFollowUpAt,
+    latestCustomerImportAt,
     newImported,
     pendingFirstCall,
     pendingFollowUp,
     pendingWechat,
     pendingInvitation,
     pendingDeal,
+    migrationPendingFollowUp,
     workingStatuses,
     latestInterestedProduct,
     latestPurchasedProduct,
@@ -817,6 +906,8 @@ function getQueueMatch(state: CustomerSnapshotState, queue: CustomerQueueKey) {
       return state.pendingInvitation;
     case "pending_deal":
       return state.pendingDeal;
+    case "migration_pending_follow_up":
+      return state.migrationPendingFollowUp;
     case "all":
     default:
       return true;
@@ -843,6 +934,9 @@ function buildSummaryStats(
     pendingInvitationCount: snapshots.filter((item) => stateMap.get(item.id)?.pendingInvitation)
       .length,
     pendingDealCount: snapshots.filter((item) => stateMap.get(item.id)?.pendingDeal).length,
+    migrationPendingFollowUpCount: snapshots.filter(
+      (item) => stateMap.get(item.id)?.migrationPendingFollowUp,
+    ).length,
     latestFollowUpAt: getMaxDate(
       snapshots.map((item) => stateMap.get(item.id)?.latestFollowUpAt ?? null),
     ),
@@ -929,19 +1023,23 @@ function matchesImportedDateRange(
     return true;
   }
 
-  const latestLeadAt = state?.latestLeadAt;
-  if (!latestLeadAt) {
+  const importedAt = getMaxDate([
+    state?.latestLeadAt ?? null,
+    state?.latestCustomerImportAt ?? null,
+  ]);
+
+  if (!importedAt) {
     return false;
   }
 
   const from = parseDateOnly(importedFrom, "start");
   const to = parseDateOnly(importedTo, "end");
 
-  if (from && latestLeadAt.getTime() < from.getTime()) {
+  if (from && importedAt.getTime() < from.getTime()) {
     return false;
   }
 
-  if (to && latestLeadAt.getTime() > to.getTime()) {
+  if (to && importedAt.getTime() > to.getTime()) {
     return false;
   }
 
@@ -981,8 +1079,16 @@ function compareCustomerSnapshots(
 ) {
   const leftState = stateMap.get(left.id);
   const rightState = stateMap.get(right.id);
-  const leftAnchor = leftState?.latestFollowUpAt ?? leftState?.latestLeadAt ?? left.createdAt;
-  const rightAnchor = rightState?.latestFollowUpAt ?? rightState?.latestLeadAt ?? right.createdAt;
+  const leftAnchor =
+    leftState?.latestFollowUpAt ??
+    leftState?.latestCustomerImportAt ??
+    leftState?.latestLeadAt ??
+    left.createdAt;
+  const rightAnchor =
+    rightState?.latestFollowUpAt ??
+    rightState?.latestCustomerImportAt ??
+    rightState?.latestLeadAt ??
+    right.createdAt;
 
   if (rightAnchor.getTime() !== leftAnchor.getTime()) {
     return rightAnchor.getTime() - leftAnchor.getTime();
@@ -1060,82 +1166,99 @@ async function fetchCustomerListItems(
     return [];
   }
 
-  const items = await prisma.customer.findMany({
-    where: {
-      id: {
-        in: customerIds,
-      },
-    },
-    select: {
-      id: true,
-      name: true,
-      phone: true,
-      province: true,
-      city: true,
-      district: true,
-      address: true,
-      status: true,
-      createdAt: true,
-      owner: {
-        select: {
-          id: true,
-          name: true,
-          username: true,
+  const [items, tradeOrderSummaries] = await Promise.all([
+    prisma.customer.findMany({
+      where: {
+        id: {
+          in: customerIds,
         },
       },
-      leads: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        select: {
-          id: true,
-          source: true,
-          status: true,
-          interestedProduct: true,
-          createdAt: true,
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        province: true,
+        city: true,
+        district: true,
+        address: true,
+        status: true,
+        createdAt: true,
+        owner: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
         },
-      },
-      callRecords: {
-        orderBy: [{ callTime: "desc" }, { id: "desc" }],
-        take: 8,
-        select: {
-          id: true,
-          callTime: true,
-          durationSeconds: true,
-          result: true,
-          resultCode: true,
-          remark: true,
-          nextFollowUpAt: true,
-          sales: {
-            select: {
-              name: true,
-              username: true,
+        leads: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: {
+            id: true,
+            source: true,
+            status: true,
+            interestedProduct: true,
+            createdAt: true,
+          },
+        },
+        callRecords: {
+          orderBy: [{ callTime: "desc" }, { id: "desc" }],
+          take: 8,
+          select: {
+            id: true,
+            callTime: true,
+            durationSeconds: true,
+            result: true,
+            resultCode: true,
+            remark: true,
+            nextFollowUpAt: true,
+            sales: {
+              select: {
+                name: true,
+                username: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            leads: true,
+            callRecords: true,
+          },
+        },
+        customerTags: {
+          orderBy: [{ tag: { sortOrder: "asc" } }, { createdAt: "asc" }],
+          take: 5,
+          select: {
+            id: true,
+            tagId: true,
+            tag: {
+              select: {
+                id: true,
+                name: true,
+                color: true,
+              },
             },
           },
         },
       },
-      _count: {
-        select: {
-          leads: true,
-          callRecords: true,
+    }),
+    prisma.tradeOrder.groupBy({
+      by: ["customerId"],
+      where: {
+        customerId: {
+          in: customerIds,
         },
+        tradeStatus: TradeOrderStatus.APPROVED,
       },
-      customerTags: {
-        orderBy: [{ tag: { sortOrder: "asc" } }, { createdAt: "asc" }],
-        take: 5,
-        select: {
-          id: true,
-          tagId: true,
-          tag: {
-            select: {
-              id: true,
-              name: true,
-              color: true,
-            },
-          },
-        },
+      _sum: {
+        finalAmount: true,
       },
-    },
-  });
+      _max: {
+        createdAt: true,
+      },
+    }),
+  ]);
 
   const labeledCallRecords = await hydrateCallResultLabels(
     items.flatMap((item) => item.callRecords),
@@ -1143,10 +1266,20 @@ async function fetchCustomerListItems(
   const labeledCallRecordMap = new Map(
     labeledCallRecords.map((item) => [item.id, item]),
   );
+  const tradeOrderSummaryMap = new Map(
+    tradeOrderSummaries.map((item) => [
+      item.customerId,
+      {
+        lifetimeTradeAmount: item._sum.finalAmount?.toString() ?? "0",
+        latestTradeAt: item._max.createdAt ?? null,
+      },
+    ]),
+  );
   const itemMap = new Map(items.map((item) => [item.id, item]));
   return customerIds.reduce<CustomerListItem[]>((result, id) => {
     const item = itemMap.get(id);
     const state = stateMap.get(id);
+    const tradeOrderSummary = tradeOrderSummaryMap.get(id);
 
     if (item) {
       result.push({
@@ -1169,6 +1302,8 @@ async function fetchCustomerListItems(
         }),
         latestImportAt: state?.latestLeadAt ?? null,
         latestFollowUpAt: state?.latestFollowUpAt ?? null,
+        latestTradeAt: tradeOrderSummary?.latestTradeAt ?? null,
+        lifetimeTradeAmount: tradeOrderSummary?.lifetimeTradeAmount ?? "0",
         latestInterestedProduct: state?.latestInterestedProduct ?? null,
         latestPurchasedProduct: state?.latestPurchasedProduct ?? null,
         workingStatuses: state?.workingStatuses ?? [],
@@ -1370,6 +1505,9 @@ export async function getCustomerCenterData(
     }),
     getActiveTagOptions(),
   ]);
+  const latestCustomerImportMap = await getLatestCustomerImportMap(
+    customerSnapshots.map((snapshot) => snapshot.id),
+  );
 
   const parsedFilters = parseCustomerCenterFilters(rawSearchParams);
   const salesById = new Map(salesUsers.map((item) => [item.id, item]));
@@ -1418,7 +1556,13 @@ export async function getCustomerCenterData(
   const stateMap = new Map(
     customerSnapshots.map((snapshot) => [
       snapshot.id,
-      getCustomerSnapshotState(snapshot, now, todayStart, todayEnd),
+      getCustomerSnapshotState(
+        snapshot,
+        latestCustomerImportMap.get(snapshot.id)?.createdAt ?? null,
+        now,
+        todayStart,
+        todayEnd,
+      ),
     ]),
   );
 
@@ -1446,6 +1590,7 @@ export async function getCustomerCenterData(
       pendingFollowUpCount: stats.pendingFollowUpCount,
       pendingInvitationCount: stats.pendingInvitationCount,
       pendingDealCount: stats.pendingDealCount,
+      migrationPendingFollowUpCount: stats.migrationPendingFollowUpCount,
     };
   });
 
@@ -1466,6 +1611,7 @@ export async function getCustomerCenterData(
         pendingFirstCallCount: stats.pendingFirstCallCount,
         pendingFollowUpCount: stats.pendingFollowUpCount,
         pendingDealCount: stats.pendingDealCount,
+        migrationPendingFollowUpCount: stats.migrationPendingFollowUpCount,
         latestFollowUpAt: stats.latestFollowUpAt,
       };
     })
@@ -2439,7 +2585,7 @@ export async function getCustomerDetailProfileData(
     return null;
   }
 
-  const [leads, mergeLogs, customerTags, availableTags] = await Promise.all([
+  const [leads, mergeLogs, customerTags, availableTags, latestCustomerImportLog] = await Promise.all([
     prisma.lead.findMany({
       where: { customerId: detail.customer.id },
       orderBy: { createdAt: "desc" },
@@ -2494,6 +2640,21 @@ export async function getCustomerDetailProfileData(
       },
     }),
     getActiveTagOptions(),
+    prisma.operationLog.findFirst({
+      where: {
+        targetType: "CUSTOMER",
+        targetId: detail.customer.id,
+        action: {
+          in: [...customerContinuationImportOperationActions],
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        createdAt: true,
+        afterData: true,
+      },
+    }),
   ]);
 
   return {
@@ -2501,6 +2662,12 @@ export async function getCustomerDetailProfileData(
     mergeLogs,
     customerTags,
     availableTags,
+    customerImportSummary: latestCustomerImportLog
+      ? {
+          createdAt: latestCustomerImportLog.createdAt,
+          data: parseCustomerImportOperationLogData(latestCustomerImportLog.afterData),
+        }
+      : null,
   };
 }
 

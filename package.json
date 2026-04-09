@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:lead-imports": "node --test --experimental-strip-types tests/lead-imports/customer-continuation-signals.test.mts",
     "postinstall": "prisma generate",
     "admin:bootstrap": "node scripts/bootstrap-admin.mjs",
     "db:seed": "node prisma/seed.mjs",
@@ -15,7 +16,8 @@
     "db:backfill-payment-layer": "node scripts/backfill-sales-order-payment-layer.mjs --apply",
     "db:backfill-trade-order:report": "node scripts/backfill-phase2-trade-order.mjs --report-only",
     "db:backfill-trade-order:preview": "node scripts/backfill-phase2-trade-order.mjs --dry-run",
-    "db:backfill-trade-order": "node scripts/backfill-phase2-trade-order.mjs --apply"
+    "db:backfill-trade-order": "node scripts/backfill-phase2-trade-order.mjs --apply",
+    "db:import-legacy-customers": "node scripts/import-legacy-customers.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

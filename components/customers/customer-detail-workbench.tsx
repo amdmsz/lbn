@@ -502,6 +502,97 @@ function renderProfileTab({
         </div>
       </CustomerTabSection>
 
+      {data.customerImportSummary?.data ? (
+        <CustomerTabSection eyebrow="续接承接" title="续接摘要">
+          <DetailFieldGrid
+            columns="three"
+            items={[
+              {
+                label: "导入批次",
+                value: (
+                  <Link
+                    href={`/lead-imports/${data.customerImportSummary.data.batchId}?mode=customer_continuation`}
+                    className="crm-text-link"
+                  >
+                    {data.customerImportSummary.data.batchFileName}
+                  </Link>
+                ),
+              },
+              {
+                label: "导入时间",
+                value: formatDateTime(data.customerImportSummary.createdAt),
+              },
+              {
+                label: "本次结果",
+                value:
+                  data.customerImportSummary.data.action === "CREATED_CUSTOMER"
+                    ? "新建客户"
+                    : "命中已有客户",
+              },
+              {
+                label: "负责人结果",
+                value:
+                  data.customerImportSummary.data.ownerOutcome === "ASSIGNED"
+                    ? "已匹配负责人"
+                    : data.customerImportSummary.data.ownerOutcome === "KEPT_EXISTING"
+                      ? "保留原负责人"
+                      : data.customerImportSummary.data.ownerOutcome === "PUBLIC_POOL"
+                        ? "进入公海"
+                        : "负责人未识别",
+              },
+              {
+                label: "迁移前累计消费",
+                value: data.customerImportSummary.data.summary.historicalTotalSpent || "暂无",
+              },
+              {
+                label: "购买次数",
+                value:
+                  data.customerImportSummary.data.summary.purchaseCount !== null
+                    ? String(data.customerImportSummary.data.summary.purchaseCount)
+                    : "暂无",
+              },
+              {
+                label: "最近购买商品",
+                value:
+                  data.customerImportSummary.data.summary.latestPurchasedProduct || "暂无",
+              },
+              {
+                label: "最近意向",
+                value: data.customerImportSummary.data.summary.latestIntent || "暂无",
+              },
+              {
+                label: "最近跟进时间",
+                value: data.customerImportSummary.data.summary.latestFollowUpAt || "暂无",
+              },
+              {
+                label: "最近跟进结果",
+                value:
+                  data.customerImportSummary.data.summary.latestFollowUpResult || "暂无",
+              },
+              {
+                label: "已挂接标签",
+                value:
+                  data.customerImportSummary.data.tags.assigned.join(" / ") || "暂无",
+                span: "full",
+              },
+              {
+                label: "未识别标签",
+                value:
+                  data.customerImportSummary.data.tags.unresolved.join(" / ") || "无",
+              },
+              {
+                label: "迁移备注摘要",
+                value: data.customerImportSummary.data.summary.note || "暂无",
+                span: "full",
+              },
+            ]}
+          />
+          <p className="mt-4 text-sm leading-6 text-black/52">
+            这里展示的是迁移承接参考摘要，不会并入新系统真实累计成交。
+          </p>
+        </CustomerTabSection>
+      ) : null}
+
       <CustomerTabSection
         eyebrow="经营脉络"
         title="来源、归并与导入历史"

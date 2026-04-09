@@ -427,6 +427,18 @@ export function CustomerFilterToolbar({
           queue: "pending_invitation",
         }),
     },
+    {
+      key: "migration_pending_follow_up",
+      label: "待接续",
+      active:
+        filters.statuses.length === 1 &&
+        filters.statuses[0] === "migration_pending_follow_up",
+      onClick: () =>
+        applyFilters({
+          statuses: ["migration_pending_follow_up"],
+          queue: "migration_pending_follow_up",
+        }),
+    },
   ] as const;
 
   return (

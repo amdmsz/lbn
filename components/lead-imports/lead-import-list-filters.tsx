@@ -10,6 +10,7 @@ type StatusOption = {
 };
 
 type LeadImportListFilters = {
+  mode: string;
   keyword: string;
   status: string;
   page: number;
@@ -26,6 +27,10 @@ export function LeadImportListFiltersForm({
 }>) {
   const pathname = usePathname();
   const router = useRouter();
+  const resetHref =
+    filters.mode === "customer_continuation"
+      ? "/lead-imports?mode=customer_continuation"
+      : "/lead-imports";
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -43,6 +48,10 @@ export function LeadImportListFiltersForm({
       params.set(key, normalizedValue);
     }
 
+    if (!params.has("mode") && filters.mode) {
+      params.set("mode", filters.mode);
+    }
+
     const query = params.toString();
     if (scrollTargetId) {
       scheduleSmartScroll(scrollTargetId);
@@ -52,6 +61,7 @@ export function LeadImportListFiltersForm({
 
   return (
     <form onSubmit={handleSubmit} className="crm-filter-panel">
+      <input type="hidden" name="mode" value={filters.mode} />
       <div className="crm-filter-grid md:grid-cols-[minmax(0,1fr)_210px_auto]">
         <label className="space-y-1">
           <span className="crm-label">关键词</span>
@@ -66,11 +76,7 @@ export function LeadImportListFiltersForm({
 
         <label className="space-y-1">
           <span className="crm-label">状态</span>
-          <select
-            name="status"
-            defaultValue={filters.status}
-            className="crm-select"
-          >
+          <select name="status" defaultValue={filters.status} className="crm-select">
             {statusOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -83,7 +89,7 @@ export function LeadImportListFiltersForm({
           <button type="submit" className="crm-button crm-button-primary">
             筛选
           </button>
-          <Link href="/lead-imports" scroll={false} className="crm-button crm-button-secondary">
+          <Link href={resetHref} scroll={false} className="crm-button crm-button-secondary">
             清空
           </Link>
         </div>

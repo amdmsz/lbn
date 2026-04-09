@@ -62,6 +62,11 @@ export const customerQueueOptions = [
     label: "待成交",
     description: "已经进入邀约或成交推进阶段，但还没有已支付订单的客户。",
   },
+  {
+    value: "migration_pending_follow_up",
+    label: "待接续跟进",
+    description: "来自客户续接导入、但导入后还没有形成新有效跟进的客户。",
+  },
 ] as const;
 
 export const customerRoleHeaderMeta: Record<
@@ -193,6 +198,7 @@ const customerWorkStatusMeta: Record<
   pending_wechat: { label: "待加微", variant: "info" },
   pending_invitation: { label: "待邀约", variant: "success" },
   pending_deal: { label: "待成交", variant: "info" },
+  migration_pending_follow_up: { label: "待接续跟进", variant: "warning" },
 };
 
 export function getCustomerStatusLabel(status: CustomerStatus) {

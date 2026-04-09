@@ -10,8 +10,10 @@ import {
 } from "@/lib/lead-imports/mutations";
 import {
   DEFAULT_LEAD_IMPORT_SOURCE,
+  isLeadImportMode,
   isLeadImportSourceValue,
   leadImportFieldDefinitions,
+  type LeadImportMode,
 } from "@/lib/lead-imports/metadata";
 
 function getValue(formData: FormData, key: string) {
@@ -58,12 +60,35 @@ function getSafeLeadImportSource(value: string) {
   return isLeadImportSourceValue(value) ? value : DEFAULT_LEAD_IMPORT_SOURCE;
 }
 
+function getSafeLeadImportMode(value: string): LeadImportMode {
+  return isLeadImportMode(value) ? value : "lead";
+}
+
+function getLeadImportsIndexHref(mode: LeadImportMode) {
+  return mode === "customer_continuation"
+    ? "/lead-imports?mode=customer_continuation"
+    : "/lead-imports";
+}
+
+function getLeadImportDetailHref(mode: LeadImportMode, batchId: string) {
+  return mode === "customer_continuation"
+    ? `/lead-imports/${batchId}?mode=customer_continuation`
+    : `/lead-imports/${batchId}`;
+}
+
 export async function createLeadImportBatchAction(formData: FormData) {
   const actor = await getActor();
   const file = formData.get("file");
+  const importMode = getSafeLeadImportMode(getValue(formData, "importMode"));
 
   if (!(file instanceof File)) {
-    redirect(buildRedirectTarget("/lead-imports", "error", "请先选择导入文件。"));
+    redirect(
+      buildRedirectTarget(
+        getLeadImportsIndexHref(importMode),
+        "error",
+        "请先选择导入文件。",
+      ),
+    );
   }
 
   try {
@@ -72,6 +97,7 @@ export async function createLeadImportBatchAction(formData: FormData) {
       templateId: getValue(formData, "templateId"),
       defaultLeadSource: getSafeLeadImportSource(getValue(formData, "defaultLeadSource")),
       mappingConfig: getValue(formData, "mappingConfig"),
+      importMode,
     });
 
     revalidatePath("/lead-imports");
@@ -80,9 +106,11 @@ export async function createLeadImportBatchAction(formData: FormData) {
     revalidatePath("/leads");
     redirect(
       buildRedirectTarget(
-        `/lead-imports/${result.batchId}`,
+        getLeadImportDetailHref(importMode, result.batchId),
         "success",
-        `导入完成：成功导入 ${result.successRows} 条线索，新增客户 ${result.createdCustomerRows} 个，关联已有客户 ${result.matchedCustomerRows} 个，重复剔除 ${result.duplicateRows} 行。`,
+        importMode === "customer_continuation"
+          ? `续接导入完成：成功导入 ${result.successRows} 位客户，新增客户 ${result.createdCustomerRows} 位，命中已有客户 ${result.matchedCustomerRows} 位，重复剔除 ${result.duplicateRows} 行。`
+          : `导入完成：成功导入 ${result.successRows} 条线索，新增客户 ${result.createdCustomerRows} 个，关联已有客户 ${result.matchedCustomerRows} 个，重复剔除 ${result.duplicateRows} 行。`,
       ),
     );
   } catch (error) {
@@ -91,7 +119,7 @@ export async function createLeadImportBatchAction(formData: FormData) {
     }
 
     const message = error instanceof Error ? error.message : "导入失败，请稍后重试。";
-    redirect(buildRedirectTarget("/lead-imports", "error", message));
+    redirect(buildRedirectTarget(getLeadImportsIndexHref(importMode), "error", message));
   }
 }
 
