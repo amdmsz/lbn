@@ -3,7 +3,7 @@
 ## 文档状态
 
 - 版本：商业级当前基线
-- 更新时间：2026-04-05
+- 更新时间：2026-04-10
 - 用途：作为仓库内唯一产品基线文档，约束当前交易模型、页面主视角、执行边界与后续切流方向
 
 ---
@@ -47,13 +47,25 @@
 - `PaymentPlan / PaymentRecord / CollectionTask` 是 payment layer 真相
 - `CodCollectionRecord` 与 `LogisticsFollowUpTask` 分别承接 COD 与物流执行结果
 
-### 2.3 当前页面主视角
+### 2.3 当前页面主视角与入口基线
 
+- `/customers` 仍是 Sales 主工作台
 - `/customers/[id]` 已切到 `TradeOrder` 新写路径
-- `/orders` 已切到 `TradeOrder` 父单视角
-- `/orders/[id]` 已切到父单详情页，供应商子单作为次级执行对象
-- `/shipping`、`/payment-records`、`/collection-tasks` 仍保持子单执行主视角
+- `/fulfillment` 是订单履约域统一一级入口
+- `/fulfillment?tab=trade-orders` 是父单总览与管理主视角
+- `/fulfillment?tab=shipping` 是 supplier 执行工作池主视角
+- `/fulfillment?tab=batches` 是冻结结果 / 审计主视角
+- `/orders`、`/shipping`、`/shipping/export-batches` 当前仅作为兼容跳转
+- `/orders/[id]` 当前是父单优先、子单 fallback 的兼容详情页
+- `/products` 是商品域唯一一级入口
+- supplier 管理在 `/products?tab=suppliers`
 - `/customers/public-pool` 已切到 `Customer ownership lifecycle` 工作台，并继续分出规则页与报表页
+
+### 2.4 UI / IA 边界
+
+- `DESIGN.md` 负责视觉系统、页面层级、组件风格与 UI 重构约束
+- `UI_ENTRYPOINTS.md` 负责主入口、兼容路由、高风险 CTA 与切流检查点
+- UI 重构可以升级页面结构与视觉层级，但不能静默改变业务主线、路由主入口、兼容跳转或权限边界
 
 ---
 
@@ -79,7 +91,7 @@
 - 不允许再把 `SalesOrder` 当作交易主单思考
 - 不允许绕过 `TradeOrderItemComponent` 去做跨 supplier 履约
 - 不允许把订单赠品重新写回自由文本 `SalesOrderGiftItem`
-- 不允许让 `/shipping`、`/payment-records`、`/collection-tasks` 提前切成父单主视角
+- 不允许让 `/payment-records`、`/collection-tasks` 提前切成父单主视角
 
 ---
 
@@ -177,15 +189,14 @@
 
 - 主要在 `/fulfillment?tab=shipping` 工作
 - 处理 supplier 维度报单、导出、回填单号、推进履约状态
-- 可进入 `/live-sessions` 维护直播场次基础信息，用于活动协同与后续回看
-- 可进入 `/products` 维护履约协同所需的商品与 supplier 主数据
 - 不承担交易审核与支付确认
-- 不因直播场次权限而获得客户经营主链
+- 不因执行协同而获得销售客户主链
 
 ### OPS
 
 - 主要在直播与运营配置区域工作
 - 不默认获得销售客户视图
+- 不默认进入交易审核与支付确认主台
 
 ---
 
@@ -193,23 +204,28 @@
 
 - 不改 Prisma schema，除非进入新的 schema 里程碑
 - 不回退 `TradeOrder` 写路径
-- 不把 `/shipping`、`/payment-records`、`/collection-tasks` 改成父单主视角
+- 不把 `/payment-records`、`/collection-tasks` 改成父单主视角
 - 不回头扩大 `GiftRecord` 写链
 - 不扩展 legacy `Order`
 - 不扩展 legacy `ShippingTask.orderId`
 - 重要动作必须继续写 `OperationLog`
+- UI 重构不得漂移主入口、兼容路由与关键 CTA 指向
 
 ---
 
 ## 9. 下一阶段建议
 
-当前推荐的后续方向不是再改 schema，而是继续做 V2 交易主线的执行层收口：
+当前推荐的后续方向不是再改 schema，而是继续做当前主线上的执行层与工作台收口：
 
 - 统一 execution surfaces 中的 `tradeNo / subOrderNo / supplier` 展示
-- 补订单中心与子单执行页的产品层体验
+- 补订单履约域与子单执行页的产品层体验
 - 继续完善 bundle / gift 在执行侧的可读性
+- 在不改业务真相的前提下，升级客户中心与客户详情的 UI / IA
 - 仅在确有必要时再评估新的 schema 里程碑
-## 0. 2026-04-02 Product Center Baseline Addendum
+
+---
+
+## 10. Product Center Baseline Addendum
 
 - Product Center and supplier management are now one product-domain surface.
 - `/products` remains the default first-level entry for product work.
@@ -218,7 +234,9 @@
 - Product create and product detail editing should use the same supplier interaction pattern: searchable supplier selection plus inline supplier creation with automatic backfill.
 - This baseline does not introduce procurement, inventory, settlement, or schema changes.
 
-## 0. 2026-04-03 Order Fulfillment Center Baseline Addendum
+---
+
+## 11. Order Fulfillment Center Baseline Addendum
 
 - `/fulfillment` is now the unified first-level business entry for order fulfillment.
 - The fulfillment domain is organized into exactly 3 views:
@@ -245,7 +263,9 @@
 - Do not collapse transaction / payment / fulfillment layers back into one mixed workflow.
 - For the current frozen baseline and handoff-safe summary, see `STAGE_FREEZE_2026-04-03.md`.
 
-## 0. 2026-04-03 Trade-Order Scanning And Logistics Interaction Addendum
+---
+
+## 12. Trade-Order Scanning And Logistics Interaction Addendum
 
 - The current `trade-orders` view is now frozen as a denser parent-order overview rather than a thick card list.
 - The default list state should answer only:
@@ -267,7 +287,9 @@
 - The logistics trace query path is server-side only and remains routed through `/api/logistics/track`.
 - No schema change is required for this closeout.
 
-## 0. 2026-04-04 Customer Public Pool Baseline Addendum
+---
+
+## 13. Customer Public Pool Baseline Addendum
 
 - Customer public pool is now a `Customer` ownership lifecycle surface, not a Lead 2.0 clone.
 - The mainline entry is `/customers/public-pool`.

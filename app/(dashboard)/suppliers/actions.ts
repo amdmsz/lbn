@@ -5,8 +5,10 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/session";
 import {
   buildRedirectTarget,
+  getRedirectPathname,
   getFormValue,
   rethrowRedirectError,
+  sanitizeRedirectTarget,
 } from "@/lib/action-notice";
 import { toggleSupplier, upsertSupplier } from "@/lib/suppliers/mutations";
 
@@ -33,16 +35,12 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "操作失败，请稍后重试。";
 }
 
-function normalizeRedirectPath(input: string) {
-  return input.split("?")[0] || "/products";
-}
-
 async function runSupplierAction(
   formData: FormData,
   fallbackPath: string,
   action: (actor: Awaited<ReturnType<typeof getActor>>) => Promise<void>,
 ) {
-  const redirectTo = getFormValue(formData, "redirectTo") || fallbackPath;
+  const redirectTo = sanitizeRedirectTarget(getFormValue(formData, "redirectTo"), fallbackPath);
   const actor = await getActor();
 
   try {
@@ -60,14 +58,14 @@ async function runSupplierInlineAction(
   fallbackPath: string,
   action: (actor: Awaited<ReturnType<typeof getActor>>) => Promise<void>,
 ): Promise<SupplierActionResult> {
-  const redirectTo = getFormValue(formData, "redirectTo") || fallbackPath;
+  const redirectTo = sanitizeRedirectTarget(getFormValue(formData, "redirectTo"), fallbackPath);
   const actor = await getActor();
 
   try {
     await action(actor);
     revalidatePath("/products");
     revalidatePath("/suppliers");
-    revalidatePath(normalizeRedirectPath(redirectTo));
+    revalidatePath(getRedirectPathname(redirectTo));
 
     return {
       status: "success",

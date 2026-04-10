@@ -3,6 +3,7 @@
 import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { buildRedirectTarget, sanitizeRedirectTarget } from "@/lib/action-notice";
 import { getAccountActor } from "@/lib/account-management/access";
 import {
   changeOwnPassword,
@@ -25,18 +26,6 @@ export type AccountActionState = {
 function getValue(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value : "";
-}
-
-function buildRedirectTarget(
-  redirectTo: string,
-  status: "success" | "error",
-  message: string,
-) {
-  const [pathname, queryString = ""] = redirectTo.split("?");
-  const params = new URLSearchParams(queryString);
-  params.set("noticeStatus", status);
-  params.set("noticeMessage", message);
-  return `${pathname}?${params.toString()}`;
 }
 
 function formatActionError(error: unknown) {
@@ -269,7 +258,7 @@ export async function changeOwnPasswordAction(
 }
 
 export async function upsertTeamAction(formData: FormData) {
-  const redirectTo = getValue(formData, "redirectTo") || "/settings/teams";
+  const redirectTo = sanitizeRedirectTarget(getValue(formData, "redirectTo"), "/settings/teams");
 
   try {
     const actor = await getActor();

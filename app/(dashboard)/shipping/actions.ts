@@ -4,9 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ZodError } from "zod";
 import {
+  appendRedirectSearchParams,
   buildRedirectTarget,
   getFormValue,
   rethrowRedirectError,
+  sanitizeRedirectTarget,
 } from "@/lib/action-notice";
 import { auth } from "@/lib/auth/session";
 import {
@@ -46,23 +48,6 @@ function getFormValues(formData: FormData, key: string) {
     .filter((value): value is string => typeof value === "string");
 }
 
-function buildRedirectWithExtraParams(
-  redirectTo: string,
-  extraParams: Record<string, string>,
-) {
-  const [pathname, queryString = ""] = redirectTo.split("?");
-  const params = new URLSearchParams(queryString);
-
-  for (const [key, value] of Object.entries(extraParams)) {
-    if (value) {
-      params.set(key, value);
-    }
-  }
-
-  const nextQueryString = params.toString();
-  return nextQueryString ? `${pathname}?${nextQueryString}` : pathname;
-}
-
 export async function createShippingExportBatchAction(formData: FormData) {
   const session = await auth();
 
@@ -70,7 +55,7 @@ export async function createShippingExportBatchAction(formData: FormData) {
     redirect("/login");
   }
 
-  const redirectTo = getFormValue(formData, "redirectTo") || "/shipping";
+  const redirectTo = sanitizeRedirectTarget(getFormValue(formData, "redirectTo"), "/shipping");
   const sourceStage =
     getFormValue(formData, "sourceStage") === "PENDING_TRACKING"
       ? "PENDING_TRACKING"
@@ -108,7 +93,7 @@ export async function createShippingExportBatchAction(formData: FormData) {
         : result.fileGenerated
           ? `已生成批次 ${result.exportNo}，${result.movedTaskCount} 个${exportScopeLabel}已进入待填物流，文件已按冻结快照生成。`
           : `已生成批次 ${result.exportNo}，${result.movedTaskCount} 个${exportScopeLabel}已进入待填物流；文件暂未生成，请到批次记录重生成。`;
-    const successRedirectTo = buildRedirectWithExtraParams(redirectTo, {
+    const successRedirectTo = appendRedirectSearchParams(redirectTo, {
       stageView: "PENDING_TRACKING",
       batchViewId: result.id,
     });
@@ -127,7 +112,10 @@ export async function regenerateShippingExportBatchFileAction(formData: FormData
     redirect("/login");
   }
 
-  const redirectTo = getFormValue(formData, "redirectTo") || "/shipping/export-batches";
+  const redirectTo = sanitizeRedirectTarget(
+    getFormValue(formData, "redirectTo"),
+    "/shipping/export-batches",
+  );
 
   try {
     const result = await regenerateShippingExportBatchFile(
@@ -162,7 +150,7 @@ export async function updateSalesOrderShippingAction(formData: FormData) {
     redirect("/login");
   }
 
-  const redirectTo = getFormValue(formData, "redirectTo") || "/shipping";
+  const redirectTo = sanitizeRedirectTarget(getFormValue(formData, "redirectTo"), "/shipping");
 
   try {
     const result = await updateSalesOrderShipping(
@@ -222,7 +210,7 @@ export async function bulkUpdateSalesOrderShippingAction(formData: FormData) {
     redirect("/login");
   }
 
-  const redirectTo = getFormValue(formData, "redirectTo") || "/shipping";
+  const redirectTo = sanitizeRedirectTarget(getFormValue(formData, "redirectTo"), "/shipping");
 
   try {
     const shippingTaskIds = getFormValues(formData, "shippingTaskId");
@@ -310,7 +298,7 @@ export async function updateLogisticsFollowUpTaskAction(formData: FormData) {
     redirect("/login");
   }
 
-  const redirectTo = getFormValue(formData, "redirectTo") || "/orders";
+  const redirectTo = sanitizeRedirectTarget(getFormValue(formData, "redirectTo"), "/orders");
 
   try {
     const result = await updateLogisticsFollowUpTask(

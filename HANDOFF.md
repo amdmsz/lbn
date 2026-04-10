@@ -1,5 +1,5 @@
 # HANDOFF
-更新时间：2026-04-05
+更新时间：2026-04-10
 
 ## 当前交接结论
 
@@ -11,12 +11,15 @@
 - 重新拆 schema
 - 把批次记录做回第一执行入口
 - 把 `/shipping` 改回普通平铺执行列表
+- 把页面美化误做成主入口漂移或工作台重做
 
 当前真实基线应以：
 
 - `AGENTS.md`
+- `DESIGN.md`
 - `PRD.md`
 - `PLANS.md`
+- `UI_ENTRYPOINTS.md`
 - `STAGE_FREEZE_2026-04-03.md`
 - `docs/deployment-baseline.md`
 
@@ -51,19 +54,26 @@
 - supplier 管理已收进 `/products?tab=suppliers`
 - `/suppliers` 仅保留为兼容跳转
 
-### 订单履约中心
+### 订单履约域
 
 - `/fulfillment` 已落地为统一域入口
 - 3 个稳定视图：
-  - `交易单`
-  - `发货执行`
-  - `批次记录`
+  - `trade-orders`
+  - `shipping`
+  - `batches`
 
 旧入口兼容：
 
 - `/orders -> /fulfillment?tab=trade-orders`
 - `/shipping -> /fulfillment?tab=shipping`
 - `/shipping/export-batches -> /fulfillment?tab=batches`
+
+### 客户与公海池
+
+- Sales 主工作入口仍是 `/customers`
+- 客户详情建单仍走 `/customers/[id]?tab=orders&createTradeOrder=1`
+- `/customers/public-pool` 是 `Customer ownership lifecycle` 工作台
+- `/customers/public-pool/settings` 与 `/customers/public-pool/reports` 为稳定子入口
 
 ---
 
@@ -74,7 +84,6 @@
 - TradeOrder Phase 1 additive schema 已完成
 - Phase 2 backfill 已完成
 - `/customers/[id]` 已切 TradeOrder 建单路径
-- `/orders` 已切父单视角
 - `/orders/[id]` 父单优先，子单 fallback
 
 ### GIFT / BUNDLE
@@ -85,7 +94,7 @@
 
 ### 执行与导出
 
-- `/shipping /payment-records /collection-tasks` 仍保持子单执行主视角
+- `/payment-records /collection-tasks` 仍保持子单执行主视角
 - `tradeNo / subOrderNo / supplier` 识别信息已补齐
 - M8A 已完成：导出真相切到 `ShippingExportLine`
 
@@ -111,7 +120,7 @@
 
 ## 4. 当前页面定位
 
-### 交易单
+### 交易单视图
 
 主对象：`TradeOrder`
 
@@ -122,7 +131,12 @@
 - supplier 拆单结果回看入口
 - 父单履约摘要入口
 
-### 发货执行
+注意：
+
+- 真实一级入口是 `/fulfillment?tab=trade-orders`
+- `/orders` 仅为兼容跳转，不再视作一级工作台
+
+### 发货执行视图
 
 主对象：`SalesOrder + ShippingTask`
 
@@ -139,7 +153,12 @@
 - 当前 supplier 发货池
 - supplier 级批量动作
 
-### 批次记录
+注意：
+
+- 真实一级入口是 `/fulfillment?tab=shipping`
+- `/shipping` 仅为兼容跳转
+
+### 批次记录视图
 
 主对象：`ShippingExportBatch + ShippingExportLine`
 
@@ -152,54 +171,85 @@
 
 不再作为第一执行入口。
 
+注意：
+
+- 真实一级入口是 `/fulfillment?tab=batches`
+- `/shipping/export-batches` 仅为兼容跳转
+
 ---
 
 ## 5. 当前不要回退的边界
 
 - 不要把系统回退成旧 `SalesOrder` 主单认知
 - 不要重开 schema 改造，除非有明确硬缺字段
-- 不要把 `/shipping` 改成父单主视角
+- 不要把 `/payment-records`、`/collection-tasks` 改成父单主视角
 - 不要把批次记录重新升成主工作台
 - 不要动 `GiftRecord` 主链去替代订单 gift 主链
 - 不要混 payment truth 和 fulfillment truth
+- 不要在 UI 重构时漂移主入口、兼容路由或 CTA 指向
+- 不要把工作台页面做成 marketplace / marketing 风格
 
 ---
 
-## 6. 当前推荐阅读顺序
+## 6. 当前 UI / 设计交接规则
 
-1. `AGENTS.md`
-2. `PRD.md`
-3. `PLANS.md`
-4. `STAGE_FREEZE_2026-04-03.md`
-5. `docs/deployment-baseline.md`
-6. `app/(dashboard)/fulfillment/page.tsx`
-7. `components/fulfillment/order-fulfillment-center.tsx`
-8. `app/(dashboard)/customers/public-pool/*`
-9. `components/customers/public-pool-*`
-10. `components/trade-orders/*`
-11. `components/shipping/*`
-12. `lib/trade-orders/*`
-13. `lib/shipping/*`
+当前 UI 方向已经固定为：
+
+- `Linear`：骨架、层级、工作台精度
+- `Cohere`：KPI 行、数据密度、主管视图
+- `Vercel`：排版、间距、边框、细节克制
+- `Claude / Notion`：详情页、空状态、写作表面的少量温和感
+
+当前 UI 任务执行原则：
+
+- 先看 `DESIGN.md`
+- 再看 `UI_ENTRYPOINTS.md`
+- 不改变业务主线与页面主入口
+- 先抽共享基元，再落具体页面
+- 优先做模块级渐进重构，不做无边界全站重写
 
 ---
 
-## 7. 当前后续建议
+## 7. 当前推荐阅读顺序
+
+1. `README.md`
+2. `AGENTS.md`
+3. `DESIGN.md`
+4. `PRD.md`
+5. `PLANS.md`
+6. `UI_ENTRYPOINTS.md`
+7. `STAGE_FREEZE_2026-04-03.md`
+8. `docs/deployment-baseline.md`
+9. `app/(dashboard)/fulfillment/page.tsx`
+10. `components/fulfillment/order-fulfillment-center.tsx`
+11. `app/(dashboard)/customers/public-pool/*`
+12. `components/customers/public-pool-*`
+13. `components/trade-orders/*`
+14. `components/shipping/*`
+15. `lib/trade-orders/*`
+16. `lib/shipping/*`
+
+---
+
+## 8. 当前后续建议
 
 当前后续建议优先级：
 
 1. 在现有模型上做 workflow enhancement
-2. 单独规划 finance / reconciliation
-3. 在新的 replayable migration 基线上继续维护 schema 变更
+2. 做客户中心与客户详情的 bounded UI / IA 升级
+3. 单独规划 finance / reconciliation
+4. 在新的 replayable migration 基线上继续维护 schema 变更
 
 不建议：
 
 - 重新设计交易模型
 - 重开大范围 schema 里程碑
 - 在没有新目标时随意重构 truth layer
+- 在没有明确 scope 时顺手做全站 UI 重写
 
 ---
 
-## 8. 验证基线
+## 9. 验证基线
 
 当前阶段封板和文档同步后，验证命令保持：
 
@@ -210,7 +260,7 @@
 
 ---
 
-## 9. 2026-04-03 Trade-Orders UX / Logistics Closeout
+## 10. 2026-04-03 Trade-Orders UX / Logistics Closeout
 
 当前 `trade-orders` 视图的扫描效率与物流交互已经完成 closeout：
 
@@ -227,7 +277,7 @@
 
 ---
 
-## 10. 当前部署基线补充
+## 11. 当前部署基线补充
 
 - 登录页 UI 已不再把 demo 账号与默认密码当作正式基线暴露
 - 正式环境不再依赖 `prisma/seed.mjs` 初始化账号
@@ -238,7 +288,7 @@
 
 ---
 
-## 11. 当前 Staging 验收边界
+## 12. 当前 Staging 验收边界
 
 当前建议进入 staging 验收的范围：
 
@@ -254,3 +304,4 @@
 - 新功能扩展
 - 新 schema 改造
 - 与当前 release 无关的二次 schema 重构
+- 无边界全站 UI 翻修

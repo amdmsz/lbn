@@ -2,6 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import {
+  buildRedirectTarget,
+  getRedirectPathname,
+  sanitizeRedirectTarget,
+} from "@/lib/action-notice";
 import { auth } from "@/lib/auth/session";
 import {
   assignCustomerTag,
@@ -27,18 +32,6 @@ function getValue(formData: FormData, key: string) {
   return typeof value === "string" ? value : "";
 }
 
-function buildRedirectTarget(
-  redirectTo: string,
-  status: "success" | "error",
-  message: string,
-) {
-  const [pathname, queryString = ""] = redirectTo.split("?");
-  const params = new URLSearchParams(queryString);
-  params.set("noticeStatus", status);
-  params.set("noticeMessage", message);
-  return `${pathname}?${params.toString()}`;
-}
-
 async function getActor() {
   const session = await auth();
 
@@ -57,7 +50,7 @@ async function runWithRedirect(
   fallbackPath: string,
   action: (actor: Awaited<ReturnType<typeof getActor>>) => Promise<void>,
 ) {
-  const redirectTo = getValue(formData, "redirectTo") || fallbackPath;
+  const redirectTo = sanitizeRedirectTarget(getValue(formData, "redirectTo"), fallbackPath);
   const actor = await getActor();
 
   try {
@@ -67,7 +60,7 @@ async function runWithRedirect(
     redirect(buildRedirectTarget(redirectTo, "error", message));
   }
 
-  revalidatePath(redirectTo.split("?")[0] ?? redirectTo);
+  revalidatePath(getRedirectPathname(redirectTo));
   redirect(buildRedirectTarget(redirectTo, "success", "保存成功"));
 }
 

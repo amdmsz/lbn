@@ -7,6 +7,7 @@ import {
   buildRedirectTarget,
   getFormValue,
   rethrowRedirectError,
+  sanitizeRedirectTarget,
 } from "@/lib/action-notice";
 import { auth } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
@@ -35,7 +36,7 @@ export async function saveSalesOrderAction(formData: FormData) {
     redirect("/login");
   }
 
-  const redirectTo = getFormValue(formData, "redirectTo") || "/orders";
+  const redirectTo = sanitizeRedirectTarget(getFormValue(formData, "redirectTo"), "/orders");
 
   try {
     const result = await saveSalesOrder(
@@ -104,7 +105,7 @@ export async function reviewSalesOrderAction(formData: FormData) {
     redirect("/login");
   }
 
-  const redirectTo = getFormValue(formData, "redirectTo") || "/orders";
+  const redirectTo = sanitizeRedirectTarget(getFormValue(formData, "redirectTo"), "/orders");
   const reviewStatus = getFormValue(formData, "reviewStatus");
   const salesOrderId = getFormValue(formData, "salesOrderId");
 
@@ -186,7 +187,7 @@ export async function reviewTradeOrderAction(formData: FormData) {
     redirect("/login");
   }
 
-  const redirectTo = getFormValue(formData, "redirectTo") || "/orders";
+  const redirectTo = sanitizeRedirectTarget(getFormValue(formData, "redirectTo"), "/orders");
 
   try {
     const result = await reviewTradeOrder(
@@ -241,7 +242,10 @@ export async function submitPaymentRecordAction(formData: FormData) {
     redirect("/login");
   }
 
-  const redirectTo = getFormValue(formData, "redirectTo") || "/payment-records";
+  const redirectTo = sanitizeRedirectTarget(
+    getFormValue(formData, "redirectTo"),
+    "/payment-records",
+  );
 
   try {
     const result = await submitPaymentRecord(
@@ -290,7 +294,10 @@ export async function reviewPaymentRecordAction(formData: FormData) {
     redirect("/login");
   }
 
-  const redirectTo = getFormValue(formData, "redirectTo") || "/payment-records";
+  const redirectTo = sanitizeRedirectTarget(
+    getFormValue(formData, "redirectTo"),
+    "/payment-records",
+  );
 
   try {
     const result = await reviewPaymentRecord(
@@ -336,7 +343,10 @@ export async function upsertCollectionTaskAction(formData: FormData) {
     redirect("/login");
   }
 
-  const redirectTo = getFormValue(formData, "redirectTo") || "/collection-tasks";
+  const redirectTo = sanitizeRedirectTarget(
+    getFormValue(formData, "redirectTo"),
+    "/collection-tasks",
+  );
 
   try {
     const result = await upsertCollectionTask(
@@ -384,7 +394,10 @@ export async function updateCollectionTaskAction(formData: FormData) {
     redirect("/login");
   }
 
-  const redirectTo = getFormValue(formData, "redirectTo") || "/collection-tasks";
+  const redirectTo = sanitizeRedirectTarget(
+    getFormValue(formData, "redirectTo"),
+    "/collection-tasks",
+  );
 
   try {
     const result = await updateCollectionTask(
@@ -432,7 +445,7 @@ export async function updateLogisticsFollowUpTaskAction(formData: FormData) {
     redirect("/login");
   }
 
-  const redirectTo = getFormValue(formData, "redirectTo") || "/orders";
+  const redirectTo = sanitizeRedirectTarget(getFormValue(formData, "redirectTo"), "/orders");
 
   try {
     const result = await updateLogisticsFollowUpTask(
