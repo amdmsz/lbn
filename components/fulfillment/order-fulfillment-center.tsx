@@ -72,14 +72,14 @@ function getSummaryItems(
       {
         label: "待审核",
         value: String(tradeOrdersData.summary.pendingReviewCount),
-        note: "待主管或管理员审核",
+        note: "等待主管或管理员处理",
         href: buildOrderFulfillmentHref("trade-orders", { statusView: "PENDING_REVIEW" }),
         emphasis: "warning",
       },
       {
         label: "已审核",
         value: String(tradeOrdersData.summary.approvedCount),
-        note: "已进入执行层",
+        note: "已进入履约与收款执行",
         href: buildOrderFulfillmentHref("trade-orders", { statusView: "APPROVED" }),
         emphasis: "success",
       },
@@ -209,6 +209,10 @@ function getShippingStageCount(shippingData: ShippingData) {
   }
 }
 
+function getTradeOrdersFocusLabel(tradeOrdersData: TradeOrdersData) {
+  return tradeOrdersData.filters.focusView || tradeOrdersData.filters.statusView || "全部";
+}
+
 export function OrderFulfillmentCenter({
   role,
   activeView,
@@ -242,6 +246,7 @@ export function OrderFulfillmentCenter({
   const viewMeta = getViewMeta(activeView);
   const accessibleViews = getOrderFulfillmentViewsForRole(role);
   const isShippingView = activeView === "shipping" && shippingData !== null;
+  const isTradeOrdersView = activeView === "trade-orders" && tradeOrdersData !== null;
   const summaryItems = getSummaryItems(
     activeView,
     tradeOrdersData,
@@ -253,7 +258,9 @@ export function OrderFulfillmentCenter({
 
   const headerDescription = isShippingView
     ? "按阶段和 supplier 组织发货执行工作面，保留统一入口与导航语义，只把执行层收口成更稳定的 supplier workbench。"
-    : roleMeta.description;
+    : isTradeOrdersView
+      ? "以 TradeOrder 为父单主叙事，统一承接审核、履约摘要和跨执行视图跳转，不回退到子单主视角。"
+      : roleMeta.description;
 
   const headerMeta = isShippingView ? (
     <>
@@ -270,6 +277,19 @@ export function OrderFulfillmentCenter({
         label={`stage ${shippingData.filters.stageView}`}
         variant={shippingData.filters.stageView === "EXCEPTION" ? "warning" : "info"}
       />
+    </>
+  ) : isTradeOrdersView ? (
+    <>
+      <StatusBadge label={roleMeta.scope} variant="info" />
+      <StatusBadge
+        label={`当前视图 ${getOrderFulfillmentViewLabel(activeView)}`}
+        variant="success"
+      />
+      <StatusBadge
+        label={`当前焦点 ${getTradeOrdersFocusLabel(tradeOrdersData)}`}
+        variant="neutral"
+      />
+      <StatusBadge label="详情语义 parent-first" variant="info" />
     </>
   ) : (
     <>
@@ -315,6 +335,33 @@ export function OrderFulfillmentCenter({
         density="strip"
       />
     </div>
+  ) : isTradeOrdersView ? (
+    <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+      <MetricCard
+        label="父单总数"
+        value={String(tradeOrdersData.summary.totalCount)}
+        note="当前筛选范围内的成交主单"
+        density="strip"
+      />
+      <MetricCard
+        label="待审核"
+        value={String(tradeOrdersData.summary.pendingReviewCount)}
+        note="等待主管或管理员处理"
+        density="strip"
+      />
+      <MetricCard
+        label="已审核"
+        value={String(tradeOrdersData.summary.approvedCount)}
+        note="已进入履约与收款执行"
+        density="strip"
+      />
+      <MetricCard
+        label="待回收金额"
+        value={formatCurrency(tradeOrdersData.summary.totalRemainingAmount)}
+        note="支付与催收仍在执行链路中"
+        density="strip"
+      />
+    </div>
   ) : summaryItems.length > 0 ? (
     <PageSummaryStrip items={summaryItems} />
   ) : undefined;
@@ -357,6 +404,46 @@ export function OrderFulfillmentCenter({
           当前聚焦于阶段 {shippingData.filters.stageView}，supplier 为{" "}
           {shippingData.activeSupplier?.supplier.name ?? "待选择"}。保留 tab、stageView、
           supplierViewId 等导航参数不变，只收口执行层级与信息密度。
+        </div>
+      </div>
+    </SectionCard>
+  ) : isTradeOrdersView ? (
+    <SectionCard
+      eyebrow="TradeOrder Workbench"
+      title="父单总览工作台"
+      description="先按焦点切换，再在当前父单池里完成审核、履约概览和跨执行视图跳转。默认态更利于扫描，次级动作后置。"
+      density="compact"
+      className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+      actions={
+        <div className="flex flex-wrap gap-1.5">
+          <StatusBadge
+            label={`待审核 ${tradeOrdersData.summary.pendingReviewCount}`}
+            variant={tradeOrdersData.summary.pendingReviewCount > 0 ? "warning" : "neutral"}
+          />
+          <StatusBadge
+            label={`已审核 ${tradeOrdersData.summary.approvedCount}`}
+            variant="success"
+          />
+          <StatusBadge
+            label={canAccessSalesOrderModule(role) ? "保留父单主叙事" : "只读总览视角"}
+            variant={canAccessSalesOrderModule(role) ? "info" : "neutral"}
+          />
+        </div>
+      }
+    >
+      <div className="space-y-3">
+        <RecordTabs
+          activeValue={activeView}
+          items={accessibleViews.map((view) => ({
+            value: view,
+            label: getOrderFulfillmentViewLabel(view),
+            href: buildOrderFulfillmentHref(view),
+          }))}
+        />
+        <div className="rounded-[0.95rem] border border-black/8 bg-[rgba(247,248,250,0.72)] px-3.5 py-3 text-sm leading-6 text-black/66">
+          当前焦点为 {getTradeOrdersFocusLabel(tradeOrdersData)}，审核状态筛选为{" "}
+          {tradeOrdersData.filters.statusView || "全部"}。保留 parent-first 详情语义和
+          `/orders/[id]` 兼容跳转，只收口父单列表层级与动作优先级。
         </div>
       </div>
     </SectionCard>
@@ -423,24 +510,18 @@ export function OrderFulfillmentCenter({
       {notice ? <ActionBanner tone={notice.tone}>{notice.message}</ActionBanner> : null}
 
       {activeView === "trade-orders" && tradeOrdersData ? (
-        <SectionCard
-          eyebrow="交易单"
-          title="TradeOrder 父单总览"
-          description="回看父单、审核与拆单。"
-        >
-          <TradeOrdersSection
-            summary={tradeOrdersData.summary}
-            items={tradeOrdersData.items}
-            filters={tradeOrdersData.filters}
-            suppliers={tradeOrdersData.suppliers}
-            pagination={tradeOrdersData.pagination}
-            canCreate={canCreateTradeOrder}
-            canReview={canReviewTradeOrder}
-            reviewAction={reviewTradeOrderAction}
-            basePath="/fulfillment"
-            baseSearchParams={{ tab: "trade-orders" }}
-          />
-        </SectionCard>
+        <TradeOrdersSection
+          summary={tradeOrdersData.summary}
+          items={tradeOrdersData.items}
+          filters={tradeOrdersData.filters}
+          suppliers={tradeOrdersData.suppliers}
+          pagination={tradeOrdersData.pagination}
+          canCreate={canCreateTradeOrder}
+          canReview={canReviewTradeOrder}
+          reviewAction={reviewTradeOrderAction}
+          basePath="/fulfillment"
+          baseSearchParams={{ tab: "trade-orders" }}
+        />
       ) : null}
 
       {activeView === "shipping" && shippingData ? (
