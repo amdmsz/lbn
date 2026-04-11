@@ -7,6 +7,8 @@ import { ProductFormDrawer } from "@/components/products/product-form-drawer";
 import { MasterDataStatusBadge } from "@/components/settings/master-data-status-badge";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { EmptyState } from "@/components/shared/empty-state";
+import { SectionCard } from "@/components/shared/section-card";
+import { StatusBadge } from "@/components/shared/status-badge";
 import { formatDateTime } from "@/lib/customers/metadata";
 
 type SupplierOption = {
@@ -123,6 +125,8 @@ export function ProductsSection({
   const [initialDrawerPendingClose, setInitialDrawerPendingClose] = useState(initialCreateOpen);
   const [pendingToggleId, startToggleTransition] = useTransition();
 
+  const hasActiveFilters = Boolean(filters.q || filters.status || filters.supplierId || filters.category);
+
   function openCreateDrawer() {
     setDrawerProduct(null);
     setDrawerMode("create");
@@ -168,23 +172,34 @@ export function ProductsSection({
   }
 
   return (
-    <div className="space-y-5">
-      <section className="crm-filter-panel space-y-4">
-        <form
-          method="get"
-          className="crm-filter-grid md:grid-cols-2 2xl:grid-cols-[minmax(0,1.25fr)_repeat(3,minmax(0,0.82fr))_auto]"
-        >
-          <label className="space-y-2">
+    <div className="space-y-4">
+      <SectionCard
+        density="compact"
+        title="筛选与控制"
+        description="先按商品名缩小范围，再结合状态与供应商定位需要维护的主数据。"
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge label={`当前结果 ${items.length}`} variant="neutral" />
+            {filters.category ? (
+              <StatusBadge label={`保留分类 ${filters.category}`} variant="neutral" />
+            ) : null}
+          </div>
+        }
+      >
+        <form method="get" className="flex flex-col gap-3 xl:flex-row xl:items-end">
+          {filters.category ? <input type="hidden" name="category" value={filters.category} /> : null}
+
+          <label className="min-w-0 flex-1 space-y-2">
             <span className="crm-label">搜索</span>
             <input
               name="q"
               defaultValue={filters.q}
-              placeholder="商品名 / SKU / 供货商"
+              placeholder="商品名、编码、SKU 或供应商"
               className="crm-input"
             />
           </label>
 
-          <label className="space-y-2">
+          <label className="space-y-2 xl:w-[10rem]">
             <span className="crm-label">状态</span>
             <select name="status" defaultValue={filters.status} className="crm-select">
               <option value="">全部</option>
@@ -193,17 +208,10 @@ export function ProductsSection({
             </select>
           </label>
 
-          <label className="space-y-2">
-            <span className="crm-label">类目</span>
-            <select name="category" defaultValue={filters.category} className="crm-select" disabled>
-              <option value="">类目待补充</option>
-            </select>
-          </label>
-
-          <label className="space-y-2">
-            <span className="crm-label">供货商</span>
+          <label className="space-y-2 xl:w-[14rem]">
+            <span className="crm-label">供应商</span>
             <select name="supplierId" defaultValue={filters.supplierId} className="crm-select">
-              <option value="">全部供货商</option>
+              <option value="">全部供应商</option>
               {suppliers.map((supplier) => (
                 <option key={supplier.id} value={supplier.id}>
                   {supplier.name} ({supplier.code}){supplier.enabled ? "" : " - 已停用"}
@@ -212,9 +220,9 @@ export function ProductsSection({
             </select>
           </label>
 
-          <div className="crm-filter-actions md:col-span-2 2xl:col-span-1">
+          <div className="flex flex-wrap gap-2 xl:justify-end">
             <button type="submit" className="crm-button crm-button-primary">
-              应用
+              应用筛选
             </button>
             <Link
               href={buildProductsHref({ q: "", status: "", category: "", supplierId: "" })}
@@ -225,25 +233,12 @@ export function ProductsSection({
           </div>
         </form>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/6 pt-4">
-          <div className="text-sm text-black/58">
-            默认先筛选和浏览商品，再决定是否新建或进入详情管理 SKU。
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {canCreate ? (
-              <button type="button" onClick={openCreateDrawer} className="crm-button crm-button-primary">
-                新建商品
-              </button>
-            ) : null}
-            {canAccessSupplierTab ? (
-              <Link href={manageSuppliersHref} className="crm-button crm-button-secondary">
-                供货商管理
-              </Link>
-            ) : null}
-          </div>
-        </div>
-      </section>
+        {filters.category ? (
+          <p className="mt-3 text-[12px] leading-5 text-black/48">
+            当前仍保留旧链接带入的分类参数，主工具条不再单独展示该占位控件。
+          </p>
+        ) : null}
+      </SectionCard>
 
       {notice ? (
         <ActionBanner tone={notice.status === "success" ? "success" : "danger"}>
@@ -251,89 +246,132 @@ export function ProductsSection({
         </ActionBanner>
       ) : null}
 
-      {items.length > 0 ? (
-        <div className="grid gap-3">
-          {items.map((item) => (
-            <div key={item.id} className="crm-card-muted px-5 py-4">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="min-w-0 flex-1 space-y-3">
+      <SectionCard
+        density="compact"
+        title="商品列表"
+        description={
+          hasActiveFilters
+            ? "优先扫描商品名、供应商和更新时间，再进入详情或编辑。"
+            : "聚焦商品主数据、SKU 覆盖和引用情况，默认保持列表扫描效率。"
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge label={`SKU ${items.reduce((sum, item) => sum + item._count.skus, 0)}`} variant="neutral" />
+            <StatusBadge
+              label={`引用 ${items.reduce((sum, item) => sum + item._count.salesOrderItems, 0)}`}
+              variant="neutral"
+            />
+          </div>
+        }
+        contentClassName="p-0"
+      >
+        {items.length > 0 ? (
+          <div className="divide-y divide-black/6">
+            {items.map((item) => (
+              <article
+                key={item.id}
+                className="group flex flex-col gap-3 px-4 py-3.5 md:px-5 lg:flex-row lg:items-start lg:justify-between"
+              >
+                <div className="min-w-0 flex-1 space-y-2.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <MasterDataStatusBadge isActive={item.enabled} />
-                    <span className="rounded-full border border-black/10 px-2.5 py-1 text-xs text-black/55">
+                    <span className="rounded-full border border-black/10 px-2.5 py-1 text-[11px] font-medium text-black/55">
                       {item.code}
                     </span>
-                    <span className="rounded-full border border-black/10 px-2.5 py-1 text-xs text-black/55">
-                      SKU {item._count.skus}
-                    </span>
-                    <span className="rounded-full border border-black/10 px-2.5 py-1 text-xs text-black/55">
-                      成交引用 {item._count.salesOrderItems}
-                    </span>
                   </div>
 
-                  <div className="min-w-0">
-                    <div className="truncate text-base font-semibold text-black/84">{item.name}</div>
-                    <div className="mt-1 text-sm text-black/58">
-                      {item.supplier.name} ({item.supplier.code})
+                  <div className="min-w-0 space-y-1">
+                    <Link
+                      href={`/products/${item.id}`}
+                      className="block truncate text-[15px] font-semibold text-black/86 transition-colors hover:text-[var(--color-accent)]"
+                    >
+                      {item.name}
+                    </Link>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-black/58">
+                      <span>{item.supplier.name}</span>
+                      <span className="text-black/24">•</span>
+                      <span>{item.supplier.code}</span>
                     </div>
                     {item.description ? (
-                      <div className="mt-1 line-clamp-2 text-sm text-black/52">{item.description}</div>
+                      <p className="line-clamp-1 text-[13px] leading-5 text-black/50">
+                        {item.description}
+                      </p>
                     ) : null}
+                  </div>
+
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] leading-5 text-black/48">
+                    <span>SKU {item._count.skus}</span>
+                    <span>成交引用 {item._count.salesOrderItems}</span>
+                    <span>最近更新 {formatDateTime(item.updatedAt)}</span>
                   </div>
                 </div>
 
-                <div className="w-full space-y-1 text-left text-sm text-black/56 sm:w-auto sm:min-w-[11rem] sm:text-right">
-                  <div>最近更新：{formatDateTime(item.updatedAt)}</div>
-                  <div>创建时间：{formatDateTime(item.createdAt)}</div>
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-col gap-3 border-t border-black/6 pt-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="text-sm text-black/54">默认进入详情页管理 SKU 和查看商品摘要。</div>
-
-                <div className="flex flex-wrap gap-2">
-                  <Link href={`/products/${item.id}`} className="crm-button crm-button-secondary">
+                <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                  <Link href={`/products/${item.id}`} className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm">
                     查看详情
                   </Link>
                   {canManage ? (
                     <button
                       type="button"
                       onClick={() => openEditDrawer(item)}
-                      className="crm-button crm-button-secondary"
+                      className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
                     >
                       编辑商品
                     </button>
                   ) : null}
-                  <Link href={`/products/${item.id}`} className="crm-button crm-button-secondary">
-                    管理 SKU
-                  </Link>
                   {canManage ? (
                     <button
                       type="button"
                       onClick={() => handleToggle(item)}
                       disabled={pendingToggleId}
-                      className="crm-button crm-button-secondary"
+                      className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {item.enabled ? "停用" : "启用"}
                     </button>
                   ) : null}
                 </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <EmptyState
-          title="暂无商品"
-          description="先调整筛选，或直接新建商品。"
-          action={
-            canCreate ? (
-              <button type="button" onClick={openCreateDrawer} className="crm-button crm-button-primary">
-                新建商品
-              </button>
-            ) : undefined
-          }
-        />
-      )}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="p-4 md:p-5">
+            <EmptyState
+              title={hasActiveFilters ? "当前筛选下没有商品" : "商品主数据还未建立"}
+              description={
+                hasActiveFilters
+                  ? "调整搜索、状态或供应商条件后再继续扫描当前工作台。"
+                  : "先建立商品主数据，再进入详情维护 SKU 和供应商挂接。"
+              }
+              action={
+                <div className="flex flex-wrap justify-center gap-2">
+                  {hasActiveFilters ? (
+                    <Link
+                      href={buildProductsHref({ q: "", status: "", category: "", supplierId: "" })}
+                      className="crm-button crm-button-secondary"
+                    >
+                      清空筛选
+                    </Link>
+                  ) : null}
+                  {canCreate ? (
+                    <button
+                      type="button"
+                      onClick={openCreateDrawer}
+                      className="crm-button crm-button-primary"
+                    >
+                      新建商品
+                    </button>
+                  ) : null}
+                  {!hasActiveFilters && canAccessSupplierTab ? (
+                    <Link href={manageSuppliersHref} className="crm-button crm-button-secondary">
+                      查看供应商
+                    </Link>
+                  ) : null}
+                </div>
+              }
+            />
+          </div>
+        )}
+      </SectionCard>
 
       <ProductFormDrawer
         open={drawerMode !== null}

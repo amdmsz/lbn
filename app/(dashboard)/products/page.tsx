@@ -1,9 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { ProductsSection } from "@/components/products/products-section";
 import { SuppliersSection } from "@/components/suppliers/suppliers-section";
 import { ActionBanner } from "@/components/shared/action-banner";
+import { MetricCard } from "@/components/shared/metric-card";
 import { PageHeader } from "@/components/shared/page-header";
+import { RecordTabs } from "@/components/shared/record-tabs";
+import { SectionCard } from "@/components/shared/section-card";
+import { StatusBadge } from "@/components/shared/status-badge";
 import { getParamValue } from "@/lib/action-notice";
 import {
   canAccessProductModule,
@@ -134,91 +139,160 @@ export default async function ProductsPage({
       supplierStatus: "",
     },
   );
-  const initialCreateProduct = activeTab === "products" && getParamValue(resolvedSearchParams?.createProduct) === "1";
-  const initialCreateSupplier = activeTab === "suppliers" && getParamValue(resolvedSearchParams?.createSupplier) === "1";
+  const initialCreateProduct =
+    activeTab === "products" && getParamValue(resolvedSearchParams?.createProduct) === "1";
+  const initialCreateSupplier =
+    activeTab === "suppliers" && getParamValue(resolvedSearchParams?.createSupplier) === "1";
+
+  const visibleProductCount = productData.items.length;
+  const enabledProductCount = productData.items.filter((item) => item.enabled).length;
+  const totalSkuCount = productData.items.reduce((sum, item) => sum + item._count.skus, 0);
+  const visibleSupplierCount = new Set(productData.items.map((item) => item.supplier.id)).size;
+  const activeStatusLabel =
+    productData.filters.status === "enabled"
+      ? "仅看启用"
+      : productData.filters.status === "disabled"
+        ? "仅看停用"
+        : "全部状态";
+
+  const viewTabs = [
+    {
+      value: "products",
+      label: "商品",
+      href: "/products",
+      count: visibleProductCount,
+    },
+    ...(canAccessSupplierTab
+      ? [
+          {
+            value: "suppliers",
+            label: "供应商",
+            href: "/products?tab=suppliers",
+            count: productData.suppliers.length,
+          },
+        ]
+      : []),
+  ];
 
   return (
-    <div className="crm-page">
-      <PageHeader
-        title="商品中心"
-        description="统一管理商品、SKU 与供货商。"
-        actions={
-          <div className="crm-toolbar-cluster">
-            {activeTab === "products" && canCreate ? (
-              <Link
-                href={buildProductsHref(productData.filters, { createProduct: "1" })}
-                className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
-              >
-                新建商品
-              </Link>
-            ) : null}
-            {activeTab === "products" && canAccessSupplierTab ? (
-              <Link
-                href={buildSuppliersHref(
-                  supplierData?.filters ?? {
-                    supplierQ: "",
-                    supplierStatus: "",
-                  },
-                )}
-                className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-              >
-                供货商管理
-              </Link>
-            ) : null}
-            {activeTab === "suppliers" ? (
-              <Link
-                href={productWorkspaceHref}
-                className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-              >
-                商品列表
-              </Link>
-            ) : null}
-            {activeTab === "suppliers" && canManageSupplierData ? (
-              <Link
-                href={buildSuppliersHref(
-                  supplierData?.filters ?? {
-                    supplierQ: "",
-                    supplierStatus: "",
-                  },
-                  { createSupplier: "1" },
-                )}
-                className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
-              >
-                新增供货商
-              </Link>
-            ) : null}
-          </div>
-        }
-      />
-
-      <div className="rounded-[1.35rem] border border-black/7 bg-white/92 p-2 shadow-[0_18px_36px_rgba(16,24,40,0.04)]">
-        <div className="flex flex-col gap-2 md:flex-row">
-          <Link
-            href="/products"
-            className={
-              activeTab === "products"
-                ? "flex-1 rounded-[1rem] border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm font-semibold text-emerald-800"
-                : "flex-1 rounded-[1rem] border border-transparent px-4 py-3 text-sm font-medium text-black/62 hover:border-black/8 hover:bg-black/[0.03]"
+    <WorkbenchLayout
+      header={
+        <div className="mb-4">
+          <PageHeader
+            eyebrow="商品主数据工作台"
+            title="商品中心"
+            description="统一管理商品主数据、SKU 覆盖与供应商挂接，先在当前工作台完成筛选和识别，再进入详情维护。"
+            meta={
+              <>
+                <StatusBadge
+                  label={activeTab === "products" ? "商品主数据" : "供应商管理"}
+                  variant="info"
+                />
+                <StatusBadge label={activeStatusLabel} variant="neutral" />
+                {productData.filters.supplierId ? (
+                  <StatusBadge label="已限定供应商" variant="neutral" />
+                ) : null}
+              </>
             }
-          >
-            商品列表
-          </Link>
-
-          {canAccessSupplierTab ? (
-            <Link
-              href="/products?tab=suppliers"
-              className={
-                activeTab === "suppliers"
-                  ? "flex-1 rounded-[1rem] border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm font-semibold text-amber-800"
-                  : "flex-1 rounded-[1rem] border border-transparent px-4 py-3 text-sm font-medium text-black/62 hover:border-black/8 hover:bg-black/[0.03]"
-              }
-            >
-              供货商管理
-            </Link>
-          ) : null}
+            actions={
+              <div className="flex flex-wrap gap-2 lg:justify-end">
+                {activeTab === "products" && canCreate ? (
+                  <Link
+                    href={buildProductsHref(productData.filters, { createProduct: "1" })}
+                    className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
+                  >
+                    新建商品
+                  </Link>
+                ) : null}
+                {activeTab === "products" && canAccessSupplierTab ? (
+                  <Link
+                    href={buildSuppliersHref(
+                      supplierData?.filters ?? {
+                        supplierQ: "",
+                        supplierStatus: "",
+                      },
+                    )}
+                    className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                  >
+                    供应商管理
+                  </Link>
+                ) : null}
+                {activeTab === "suppliers" ? (
+                  <Link
+                    href={productWorkspaceHref}
+                    className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                  >
+                    返回商品列表
+                  </Link>
+                ) : null}
+                {activeTab === "suppliers" && canManageSupplierData ? (
+                  <Link
+                    href={buildSuppliersHref(
+                      supplierData?.filters ?? {
+                        supplierQ: "",
+                        supplierStatus: "",
+                      },
+                      { createSupplier: "1" },
+                    )}
+                    className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
+                  >
+                    新增供应商
+                  </Link>
+                ) : null}
+              </div>
+            }
+          />
         </div>
-      </div>
-
+      }
+      summary={
+        activeTab === "products" ? (
+          <div className="mb-5 grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard
+              label="当前结果"
+              value={String(visibleProductCount)}
+              note="基于当前筛选条件可见的商品条目"
+              density="strip"
+            />
+            <MetricCard
+              label="启用商品"
+              value={String(enabledProductCount)}
+              note="当前结果中仍可直接参与下单的商品"
+              density="strip"
+            />
+            <MetricCard
+              label="SKU 总量"
+              value={String(totalSkuCount)}
+              note="当前结果挂接的 SKU 总数"
+              density="strip"
+            />
+            <MetricCard
+              label="覆盖供应商"
+              value={String(visibleSupplierCount)}
+              note="当前结果涉及的供应商范围"
+              density="strip"
+            />
+          </div>
+        ) : undefined
+      }
+      toolbar={
+        <div className="mb-5">
+          <SectionCard
+            density="compact"
+            title="域内切换"
+            description="保持 /products 为商品域唯一一级入口，供应商管理继续作为域内次级视图。"
+          >
+            <div className="space-y-3">
+              <RecordTabs activeValue={activeTab} items={viewTabs} />
+              {activeTab === "products" ? (
+                <div className="rounded-[0.95rem] border border-black/8 bg-[rgba(247,248,250,0.72)] px-3.5 py-3 text-sm leading-6 text-black/62">
+                  搜索、状态和供应商筛选集中留在商品主列表内，避免把 supplier tab 做成平行一级页面。
+                </div>
+              ) : null}
+            </div>
+          </SectionCard>
+        </div>
+      }
+    >
       {notice ? <ActionBanner tone={notice.tone}>{notice.message}</ActionBanner> : null}
 
       {activeTab === "products" ? (
@@ -248,6 +322,6 @@ export default async function ProductsPage({
           toggleAction={toggleSupplierInlineAction}
         />
       ) : null}
-    </div>
+    </WorkbenchLayout>
   );
 }
