@@ -4,11 +4,6 @@ import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { MetricCard } from "@/components/shared/metric-card";
 import { PageHeader } from "@/components/shared/page-header";
-import {
-  PageSummaryStrip,
-  type PageSummaryStripItem,
-} from "@/components/shared/page-summary-strip";
-import { PageToolbar } from "@/components/shared/page-toolbar";
 import { RecordTabs } from "@/components/shared/record-tabs";
 import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -41,156 +36,17 @@ function getRoleMeta(role: RoleCode) {
     case "SHIPPER":
       return {
         scope: "发货执行默认入口",
-        description: "统一查看交易单、发货执行与批次。",
+        description: "统一查看交易单、发货执行与批次结果。",
       };
     case "SALES":
       return {
         scope: "交易单默认入口",
-        description: "统一回看成交与履约。",
+        description: "统一回看成交父单与履约结果。",
       };
     default:
       return {
         scope: "域级总览入口",
-        description: "统一承接交易、发货与批次。",
-      };
-  }
-}
-
-function getSummaryItems(
-  activeView: OrderFulfillmentView,
-  tradeOrdersData: TradeOrdersData | null,
-  shippingData: ShippingData | null,
-  batchData: BatchData | null,
-): PageSummaryStripItem[] {
-  if (activeView === "trade-orders" && tradeOrdersData) {
-    return [
-      {
-        label: "父单总数",
-        value: String(tradeOrdersData.summary.totalCount),
-        note: "当前筛选范围内的成交主单",
-      },
-      {
-        label: "待审核",
-        value: String(tradeOrdersData.summary.pendingReviewCount),
-        note: "等待主管或管理员处理",
-        href: buildOrderFulfillmentHref("trade-orders", { statusView: "PENDING_REVIEW" }),
-        emphasis: "warning",
-      },
-      {
-        label: "已审核",
-        value: String(tradeOrdersData.summary.approvedCount),
-        note: "已进入履约与收款执行",
-        href: buildOrderFulfillmentHref("trade-orders", { statusView: "APPROVED" }),
-        emphasis: "success",
-      },
-      {
-        label: "待回收金额",
-        value: formatCurrency(tradeOrdersData.summary.totalRemainingAmount),
-        note: "支付与催收仍在执行链路中",
-        emphasis: "info",
-      },
-    ];
-  }
-
-  if (activeView === "shipping" && shippingData) {
-    return [
-      {
-        label: "履约任务",
-        value: String(shippingData.summary.totalCount),
-        note: "当前范围内的 supplier 子单执行任务",
-      },
-      {
-        label: "待报单",
-        value: String(shippingData.summary.pendingReportCount),
-        note: "尚未冻结并导出给 supplier",
-        href: buildOrderFulfillmentHref("shipping", { stageView: "PENDING_REPORT" }),
-        emphasis: "warning",
-      },
-      {
-        label: "待回物流",
-        value: String(shippingData.summary.pendingTrackingCount),
-        note: "已报单但尚未回填物流单号",
-        href: buildOrderFulfillmentHref("shipping", { stageView: "PENDING_TRACKING" }),
-        emphasis: "info",
-      },
-      {
-        label: "已发货",
-        value: String(shippingData.summary.shippedCount),
-        note: "已进入签收与回款关注",
-        href: buildOrderFulfillmentHref("shipping", { stageView: "SHIPPED" }),
-        emphasis: "success",
-      },
-      {
-        label: "履约异常",
-        value: String(shippingData.summary.exceptionCount),
-        note: "优先处理取消、文件异常和状态冲突",
-        href: buildOrderFulfillmentHref("shipping", { stageView: "EXCEPTION" }),
-        emphasis: "warning",
-      },
-    ];
-  }
-
-  if (activeView === "batches" && batchData) {
-    const currentLineCount = batchData.items.reduce((sum, item) => sum + item._count.lines, 0);
-    const readyCount = batchData.items.filter((item) => item.fileState === "READY").length;
-    const pendingGenerationCount = batchData.items.filter(
-      (item) => item.fileState === "MISSING" || item.fileState === "PENDING",
-    ).length;
-
-    return [
-      {
-        label: "批次总数",
-        value: String(batchData.pagination.totalCount),
-        note: "冻结导出快照与历史批次",
-      },
-      {
-        label: "本页冻结行",
-        value: String(currentLineCount),
-        note: "当前页 ShippingExportLine 快照行数",
-      },
-      {
-        label: "已生成文件",
-        value: String(readyCount),
-        note: "当前页可直接下载的批次",
-        emphasis: "success",
-      },
-      {
-        label: "待重生成",
-        value: String(pendingGenerationCount),
-        note: "快照已冻结，但文件尚未生成或缺失",
-        emphasis: pendingGenerationCount > 0 ? "warning" : "default",
-      },
-    ];
-  }
-
-  return [];
-}
-
-function getViewMeta(activeView: OrderFulfillmentView) {
-  switch (activeView) {
-    case "trade-orders":
-      return {
-        title: "交易单",
-        description: "查看成交审核与父单履约。",
-        eyebrow: "父单叙事",
-      };
-    case "shipping":
-      return {
-        title: "发货执行",
-        description: "按阶段和 supplier 处理发货执行。",
-        eyebrow: "执行视图",
-      };
-    case "batches":
-      return {
-        title: "批次记录",
-        description: "查看冻结批次与文件。",
-        eyebrow: "结果与审计",
-      };
-    default:
-      return {
-        title: "",
-        description: "",
-        eyebrow: "",
+        description: "统一承接交易、发货与批次回看。",
       };
   }
 }
@@ -211,6 +67,40 @@ function getShippingStageCount(shippingData: ShippingData) {
 
 function getTradeOrdersFocusLabel(tradeOrdersData: TradeOrdersData) {
   return tradeOrdersData.filters.focusView || tradeOrdersData.filters.statusView || "全部";
+}
+
+function getBatchFileViewLabel(fileView: string) {
+  switch (fileView) {
+    case "READY":
+      return "文件就绪";
+    case "MISSING":
+    case "MISSING_FILE":
+      return "文件缺失";
+    case "PENDING":
+      return "待生成";
+    case "LEGACY":
+      return "历史兼容";
+    default:
+      return "全部文件状态";
+  }
+}
+
+function getBatchCurrentLineCount(batchData: BatchData) {
+  return batchData.items.reduce((sum, item) => sum + item._count.lines, 0);
+}
+
+function getBatchReadyCount(batchData: BatchData) {
+  return batchData.items.filter((item) => item.fileState === "READY").length;
+}
+
+function getBatchPendingCount(batchData: BatchData) {
+  return batchData.items.filter(
+    (item) => item.fileState === "MISSING" || item.fileState === "PENDING",
+  ).length;
+}
+
+function getBatchLegacyCount(batchData: BatchData) {
+  return batchData.items.filter((item) => item.fileState === "LEGACY").length;
 }
 
 export function OrderFulfillmentCenter({
@@ -243,26 +133,41 @@ export function OrderFulfillmentCenter({
   regenerateShippingExportBatchFileAction: (formData: FormData) => Promise<void>;
 }>) {
   const roleMeta = getRoleMeta(role);
-  const viewMeta = getViewMeta(activeView);
   const accessibleViews = getOrderFulfillmentViewsForRole(role);
-  const isShippingView = activeView === "shipping" && shippingData !== null;
+  const viewTabs = accessibleViews.map((view) => ({
+    value: view,
+    label: getOrderFulfillmentViewLabel(view),
+    href: buildOrderFulfillmentHref(view),
+  }));
+
   const isTradeOrdersView = activeView === "trade-orders" && tradeOrdersData !== null;
-  const summaryItems = getSummaryItems(
-    activeView,
-    tradeOrdersData,
-    shippingData,
-    batchData,
-  );
+  const isShippingView = activeView === "shipping" && shippingData !== null;
+  const isBatchesView = activeView === "batches" && batchData !== null;
   const notice =
     tradeOrdersData?.notice ?? shippingData?.notice ?? batchData?.notice ?? null;
 
-  const headerDescription = isShippingView
-    ? "按阶段和 supplier 组织发货执行工作面，保留统一入口与导航语义，只把执行层收口成更稳定的 supplier workbench。"
-    : isTradeOrdersView
-      ? "以 TradeOrder 为父单主叙事，统一承接审核、履约摘要和跨执行视图跳转，不回退到子单主视角。"
-      : roleMeta.description;
+  const headerDescription = isTradeOrdersView
+    ? "以 TradeOrder 为父单主叙事，统一承接审核、履约摘要和跨执行视图跳转，不回退到子单主视角。"
+    : isShippingView
+      ? "按阶段和 supplier 组织发货执行工作面，保留统一入口与导航语义，只收口执行层级与信息密度。"
+      : isBatchesView
+        ? "批次视图只承接冻结结果、文件状态与审计回看，不重新做成第一执行入口。"
+        : roleMeta.description;
 
-  const headerMeta = isShippingView ? (
+  const headerMeta = isTradeOrdersView ? (
+    <>
+      <StatusBadge label={roleMeta.scope} variant="info" />
+      <StatusBadge
+        label={`当前视图 ${getOrderFulfillmentViewLabel(activeView)}`}
+        variant="success"
+      />
+      <StatusBadge
+        label={`当前焦点 ${getTradeOrdersFocusLabel(tradeOrdersData)}`}
+        variant="neutral"
+      />
+      <StatusBadge label="详情语义 parent-first" variant="info" />
+    </>
+  ) : isShippingView ? (
     <>
       <StatusBadge label={roleMeta.scope} variant="info" />
       <StatusBadge
@@ -278,7 +183,7 @@ export function OrderFulfillmentCenter({
         variant={shippingData.filters.stageView === "EXCEPTION" ? "warning" : "info"}
       />
     </>
-  ) : isTradeOrdersView ? (
+  ) : isBatchesView ? (
     <>
       <StatusBadge label={roleMeta.scope} variant="info" />
       <StatusBadge
@@ -286,10 +191,10 @@ export function OrderFulfillmentCenter({
         variant="success"
       />
       <StatusBadge
-        label={`当前焦点 ${getTradeOrdersFocusLabel(tradeOrdersData)}`}
-        variant="neutral"
+        label={`文件过滤 ${getBatchFileViewLabel(batchData.filters.fileView)}`}
+        variant={batchData.filters.fileView ? "info" : "neutral"}
       />
-      <StatusBadge label="详情语义 parent-first" variant="info" />
+      <StatusBadge label="定位 结果 / 审计" variant="neutral" />
     </>
   ) : (
     <>
@@ -298,11 +203,37 @@ export function OrderFulfillmentCenter({
         label={`当前视图 ${getOrderFulfillmentViewLabel(activeView)}`}
         variant="success"
       />
-      <StatusBadge label="兼容路由持续可用" variant="neutral" />
     </>
   );
 
-  const summary = isShippingView ? (
+  const summary = isTradeOrdersView ? (
+    <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+      <MetricCard
+        label="父单总数"
+        value={String(tradeOrdersData.summary.totalCount)}
+        note="当前筛选范围内的成交主单"
+        density="strip"
+      />
+      <MetricCard
+        label="待审核"
+        value={String(tradeOrdersData.summary.pendingReviewCount)}
+        note="等待主管或管理员处理"
+        density="strip"
+      />
+      <MetricCard
+        label="已审核"
+        value={String(tradeOrdersData.summary.approvedCount)}
+        note="已进入履约与收款执行"
+        density="strip"
+      />
+      <MetricCard
+        label="待回收金额"
+        value={formatCurrency(tradeOrdersData.summary.totalRemainingAmount)}
+        note="支付与催收仍在执行链路中"
+        density="strip"
+      />
+    </div>
+  ) : isShippingView ? (
     <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-5">
       <MetricCard
         label="当前阶段"
@@ -335,38 +266,69 @@ export function OrderFulfillmentCenter({
         density="strip"
       />
     </div>
-  ) : isTradeOrdersView ? (
+  ) : isBatchesView ? (
     <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
       <MetricCard
-        label="父单总数"
-        value={String(tradeOrdersData.summary.totalCount)}
-        note="当前筛选范围内的成交主单"
+        label="批次总数"
+        value={String(batchData.pagination.totalCount)}
+        note="当前可见范围内的冻结导出批次"
         density="strip"
       />
       <MetricCard
-        label="待审核"
-        value={String(tradeOrdersData.summary.pendingReviewCount)}
-        note="等待主管或管理员处理"
+        label="本页冻结行"
+        value={String(getBatchCurrentLineCount(batchData))}
+        note="当前页 ShippingExportLine 快照行数"
         density="strip"
       />
       <MetricCard
-        label="已审核"
-        value={String(tradeOrdersData.summary.approvedCount)}
-        note="已进入履约与收款执行"
+        label="文件就绪"
+        value={String(getBatchReadyCount(batchData))}
+        note="当前页可直接下载的批次"
         density="strip"
       />
       <MetricCard
-        label="待回收金额"
-        value={formatCurrency(tradeOrdersData.summary.totalRemainingAmount)}
-        note="支付与催收仍在执行链路中"
+        label="待补文件"
+        value={String(getBatchPendingCount(batchData))}
+        note="待生成或文件缺失的批次"
         density="strip"
       />
     </div>
-  ) : summaryItems.length > 0 ? (
-    <PageSummaryStrip items={summaryItems} />
   ) : undefined;
 
-  const toolbar = isShippingView ? (
+  const toolbar = isTradeOrdersView ? (
+    <SectionCard
+      eyebrow="TradeOrder Workbench"
+      title="父单总览工作台"
+      description="先按焦点切换，再在当前父单池里完成审核、履约概览和跨执行视图跳转。默认态更利于扫描，次级动作后置。"
+      density="compact"
+      className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+      actions={
+        <div className="flex flex-wrap gap-1.5">
+          <StatusBadge
+            label={`待审核 ${tradeOrdersData.summary.pendingReviewCount}`}
+            variant={tradeOrdersData.summary.pendingReviewCount > 0 ? "warning" : "neutral"}
+          />
+          <StatusBadge
+            label={`已审核 ${tradeOrdersData.summary.approvedCount}`}
+            variant="success"
+          />
+          <StatusBadge
+            label={canAccessSalesOrderModule(role) ? "保留父单主叙事" : "只读总览视角"}
+            variant={canAccessSalesOrderModule(role) ? "info" : "neutral"}
+          />
+        </div>
+      }
+    >
+      <div className="space-y-3">
+        <RecordTabs activeValue={activeView} items={viewTabs} />
+        <div className="rounded-[0.95rem] border border-black/8 bg-[rgba(247,248,250,0.72)] px-3.5 py-3 text-sm leading-6 text-black/66">
+          当前焦点为 {getTradeOrdersFocusLabel(tradeOrdersData)}，审核筛选为{" "}
+          {tradeOrdersData.filters.statusView || "全部"}。保留 parent-first 详情语义和
+          `/orders/[id]` 兼容跳转，只收口父单列表层级与动作优先级。
+        </div>
+      </div>
+    </SectionCard>
+  ) : isShippingView ? (
     <SectionCard
       eyebrow="Supplier Workbench"
       title="发货执行工作面"
@@ -392,87 +354,51 @@ export function OrderFulfillmentCenter({
       }
     >
       <div className="space-y-3">
-        <RecordTabs
-          activeValue={activeView}
-          items={accessibleViews.map((view) => ({
-            value: view,
-            label: getOrderFulfillmentViewLabel(view),
-            href: buildOrderFulfillmentHref(view),
-          }))}
-        />
+        <RecordTabs activeValue={activeView} items={viewTabs} />
         <div className="rounded-[0.95rem] border border-black/8 bg-[rgba(247,248,250,0.72)] px-3.5 py-3 text-sm leading-6 text-black/66">
-          当前聚焦于阶段 {shippingData.filters.stageView}，supplier 为{" "}
+          当前聚焦阶段 {shippingData.filters.stageView}，supplier 为{" "}
           {shippingData.activeSupplier?.supplier.name ?? "待选择"}。保留 tab、stageView、
-          supplierViewId 等导航参数不变，只收口执行层级与信息密度。
+          supplierViewId 等导航参数语义不变，只收口执行层级与信息密度。
         </div>
       </div>
     </SectionCard>
-  ) : isTradeOrdersView ? (
+  ) : isBatchesView ? (
     <SectionCard
-      eyebrow="TradeOrder Workbench"
-      title="父单总览工作台"
-      description="先按焦点切换，再在当前父单池里完成审核、履约概览和跨执行视图跳转。默认态更利于扫描，次级动作后置。"
+      eyebrow="Frozen Result Workbench"
+      title="冻结结果与审计回看"
+      description="统一回看冻结快照、文件状态和跨视图追溯入口，但不把批次页重新做成执行主入口。"
       density="compact"
       className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
       actions={
         <div className="flex flex-wrap gap-1.5">
           <StatusBadge
-            label={`待审核 ${tradeOrdersData.summary.pendingReviewCount}`}
-            variant={tradeOrdersData.summary.pendingReviewCount > 0 ? "warning" : "neutral"}
+            label={`当前过滤 ${getBatchFileViewLabel(batchData.filters.fileView)}`}
+            variant={batchData.filters.fileView ? "info" : "neutral"}
           />
           <StatusBadge
-            label={`已审核 ${tradeOrdersData.summary.approvedCount}`}
-            variant="success"
+            label={`文件就绪 ${getBatchReadyCount(batchData)}`}
+            variant={getBatchReadyCount(batchData) > 0 ? "success" : "neutral"}
           />
           <StatusBadge
-            label={canAccessSalesOrderModule(role) ? "保留父单主叙事" : "只读总览视角"}
-            variant={canAccessSalesOrderModule(role) ? "info" : "neutral"}
+            label={`待补文件 ${getBatchPendingCount(batchData)}`}
+            variant={getBatchPendingCount(batchData) > 0 ? "warning" : "neutral"}
+          />
+          <StatusBadge
+            label={`历史批次 ${getBatchLegacyCount(batchData)}`}
+            variant="neutral"
           />
         </div>
       }
     >
       <div className="space-y-3">
-        <RecordTabs
-          activeValue={activeView}
-          items={accessibleViews.map((view) => ({
-            value: view,
-            label: getOrderFulfillmentViewLabel(view),
-            href: buildOrderFulfillmentHref(view),
-          }))}
-        />
+        <RecordTabs activeValue={activeView} items={viewTabs} />
         <div className="rounded-[0.95rem] border border-black/8 bg-[rgba(247,248,250,0.72)] px-3.5 py-3 text-sm leading-6 text-black/66">
-          当前焦点为 {getTradeOrdersFocusLabel(tradeOrdersData)}，审核状态筛选为{" "}
-          {tradeOrdersData.filters.statusView || "全部"}。保留 parent-first 详情语义和
-          `/orders/[id]` 兼容跳转，只收口父单列表层级与动作优先级。
+          当前文件过滤为 {getBatchFileViewLabel(batchData.filters.fileView)}。保留
+          `/fulfillment?tab=batches` 的结果 / 审计定位，以及回到发货执行、回看来源父单的既有导航语义。
         </div>
       </div>
     </SectionCard>
-  ) : (
-    <PageToolbar
-      eyebrow={viewMeta.eyebrow}
-      title={viewMeta.title}
-      description={viewMeta.description}
-      secondary={
-        <>
-          <StatusBadge label={`可见视图 ${accessibleViews.length}`} variant="neutral" />
-          <StatusBadge
-            label={canAccessSalesOrderModule(role) ? "保留父单叙事" : "仅执行视角"}
-            variant={canAccessSalesOrderModule(role) ? "info" : "warning"}
-          />
-        </>
-      }
-      primary={
-        <RecordTabs
-          activeValue={activeView}
-          items={accessibleViews.map((view) => ({
-            value: view,
-            label: getOrderFulfillmentViewLabel(view),
-            href: buildOrderFulfillmentHref(view),
-          }))}
-        />
-      }
-    />
-  );
+  ) : undefined;
 
   return (
     <WorkbenchLayout
@@ -547,25 +473,19 @@ export function OrderFulfillmentCenter({
       ) : null}
 
       {activeView === "batches" && batchData ? (
-        <SectionCard
-          eyebrow="批次记录"
-          title="ShippingExportBatch 冻结结果与审计"
-          description="查看批次、文件与审计。"
-        >
-          <ShippingExportBatchesSection
-            items={batchData.items}
-            filters={batchData.filters}
-            pagination={batchData.pagination}
-            canManageReporting={canManageShippingReporting}
-            regenerateFileAction={regenerateShippingExportBatchFileAction}
-            basePath="/fulfillment"
-            baseSearchParams={{ tab: "batches" }}
-            backHref={buildOrderFulfillmentHref(
-              canAccessShippingModule(role) ? "shipping" : "trade-orders",
-            )}
-            backLabel={canAccessShippingModule(role) ? "返回发货执行" : "返回交易单"}
-          />
-        </SectionCard>
+        <ShippingExportBatchesSection
+          items={batchData.items}
+          filters={batchData.filters}
+          pagination={batchData.pagination}
+          canManageReporting={canManageShippingReporting}
+          regenerateFileAction={regenerateShippingExportBatchFileAction}
+          basePath="/fulfillment"
+          baseSearchParams={{ tab: "batches" }}
+          backHref={buildOrderFulfillmentHref(
+            canAccessShippingModule(role) ? "shipping" : "trade-orders",
+          )}
+          backLabel={canAccessShippingModule(role) ? "返回发货执行" : "返回交易单"}
+        />
       ) : null}
     </WorkbenchLayout>
   );

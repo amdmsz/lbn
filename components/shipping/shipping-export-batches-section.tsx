@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PaginationControls } from "@/components/shared/pagination-controls";
+import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/shared/status-badge";
 import { formatDateTime } from "@/lib/customers/metadata";
 import {
@@ -63,34 +64,54 @@ function getFileStateMeta(fileState: ExportBatchItem["fileState"]): {
   switch (fileState) {
     case "READY":
       return {
-        label: "文件可下载",
+        label: "文件就绪",
         variant: "success",
-        note: "冻结快照和导出文件都可直接使用。",
+        note: "冻结快照与导出文件都已可直接回看和下载。",
       };
     case "MISSING":
       return {
         label: "文件缺失",
         variant: "danger",
-        note: "批次记录保留了文件地址，但磁盘文件不存在，应尽快重生成。",
+        note: "冻结快照仍在，但原文件路径已失效，应尽快重生成。",
       };
     case "PENDING":
       return {
         label: "待生成",
         variant: "warning",
-        note: "冻结快照已写入，但导出文件还未可用，可从这里生成。",
+        note: "冻结快照已写入，但导出文件尚未可用。",
       };
     case "LEGACY":
     default:
       return {
-        label: "历史批次",
+        label: "历史兼容",
         variant: "neutral",
-        note: "旧批次尚未回填 ShippingExportLine，本轮仅保留兼容回看。",
+        note: "旧批次仍可回看，但以兼容审计视角为主。",
       };
   }
 }
 
+function getFileViewLabel(fileView: string) {
+  switch (fileView) {
+    case "READY":
+      return "文件就绪";
+    case "MISSING":
+    case "MISSING_FILE":
+      return "文件缺失";
+    case "PENDING":
+      return "待生成";
+    case "LEGACY":
+      return "历史兼容";
+    default:
+      return "全部文件状态";
+  }
+}
+
+function getBatchKeyword(item: ExportBatchItem) {
+  return item.sourceTradeOrders.length === 1 ? item.sourceTradeOrders[0]?.tradeNo ?? "" : "";
+}
+
 function getPrimaryShippingHref(item: ExportBatchItem) {
-  const keyword = item.sourceTradeOrders.length === 1 ? item.sourceTradeOrders[0]?.tradeNo : "";
+  const keyword = getBatchKeyword(item);
 
   if (item.fileState === "MISSING" || item.fileState === "PENDING") {
     return buildFulfillmentShippingHref({
@@ -115,6 +136,176 @@ function getPrimaryShippingHref(item: ExportBatchItem) {
   });
 }
 
+function getPendingTrackingHref(item: ExportBatchItem) {
+  return buildFulfillmentShippingHref({
+    supplierViewId: item.supplier.id,
+    stageView: "PENDING_TRACKING",
+    keyword: getBatchKeyword(item),
+  });
+}
+
+function getShippedHref(item: ExportBatchItem) {
+  return buildFulfillmentShippingHref({
+    supplierViewId: item.supplier.id,
+    stageView: "SHIPPED",
+    keyword: getBatchKeyword(item),
+  });
+}
+
+function getExporterLabel(item: ExportBatchItem) {
+  return item.exportedBy?.name || item.exportedBy?.username || "系统";
+}
+
+function BatchResultItem({
+  item,
+  canManageReporting,
+  regenerateFileAction,
+  redirectTo,
+}: Readonly<{
+  item: ExportBatchItem;
+  canManageReporting: boolean;
+  regenerateFileAction: (formData: FormData) => Promise<void>;
+  redirectTo: string;
+}>) {
+  const fileState = getFileStateMeta(item.fileState);
+  const shippingHref = getPrimaryShippingHref(item);
+  const metrics = [
+    { label: "冻结行", value: String(item._count.lines) },
+    { label: "子单", value: String(item.subOrderCount) },
+    { label: "父单", value: String(item.tradeOrderCount) },
+    { label: "待物流", value: String(item.stageSummary.pendingTrackingCount) },
+    { label: "已发货", value: String(item.stageSummary.shippedCount) },
+  ];
+
+  return (
+    <article className="overflow-hidden rounded-[1rem] border border-black/7 bg-[rgba(255,255,255,0.94)] shadow-[0_8px_20px_rgba(18,24,31,0.04)]">
+      <div className="flex flex-col gap-3 border-b border-black/7 bg-[rgba(251,252,253,0.94)] px-4 py-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-[15px] font-semibold tracking-tight text-black/86">
+              {item.exportNo}
+            </h3>
+            <StatusBadge label={fileState.label} variant={fileState.variant} />
+            <StatusBadge label={`supplier ${item.supplier.name}`} variant="neutral" />
+          </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-black/50">
+            <span>导出 {formatDateTime(item.exportedAt)}</span>
+            <span>导出人 {getExporterLabel(item)}</span>
+            <span>{item._count.lines} 行冻结快照</span>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+          {item.canDownload && item.fileUrl ? (
+            <a
+              href={buildShippingExportBatchDownloadHref(item.id)}
+              className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-xs"
+            >
+              下载文件
+            </a>
+          ) : (
+            <span className="inline-flex min-h-0 items-center rounded-full border border-black/10 bg-[rgba(247,248,250,0.82)] px-3 py-1.5 text-xs text-black/50">
+              文件未就绪
+            </span>
+          )}
+
+          {canManageReporting && item.canRegenerate ? (
+            <form action={regenerateFileAction}>
+              <input type="hidden" name="exportBatchId" value={item.id} />
+              <input type="hidden" name="redirectTo" value={redirectTo} />
+              <button type="submit" className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-xs">
+                {item.fileState === "READY" ? "重生成文件" : "生成文件"}
+              </button>
+            </form>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="border-b border-black/7 bg-[rgba(247,248,250,0.64)] px-4 py-3">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+          {metrics.map((metric) => (
+            <div
+              key={metric.label}
+              className="rounded-[0.82rem] border border-black/8 bg-white/88 px-3 py-2.5"
+            >
+              <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-black/40">
+                {metric.label}
+              </div>
+              <div className="mt-1 text-sm font-semibold text-black/82">{metric.value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-px bg-black/6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.95fr)]">
+        <div className="bg-white/98 px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">
+            来源父单
+          </p>
+          {item.sourceTradeOrders.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {item.sourceTradeOrders.map((tradeOrder) => (
+                <Link
+                  key={`${item.id}-${tradeOrder.id}`}
+                  href={buildFulfillmentTradeOrdersHref({ keyword: tradeOrder.tradeNo })}
+                  className="rounded-full border border-black/8 bg-[rgba(247,248,250,0.85)] px-3 py-1.5 text-xs text-black/62 transition hover:border-black/14 hover:bg-white"
+                >
+                  {tradeOrder.tradeNo}
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-3 text-sm text-black/52">
+              当前批次还没有来源父单快照，保留为历史兼容回看记录。
+            </div>
+          )}
+
+          {item.remark ? (
+            <div className="mt-3 rounded-[0.9rem] border border-black/8 bg-[rgba(247,248,250,0.82)] px-3.5 py-3">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                备注
+              </div>
+              <div className="mt-1.5 text-sm leading-6 text-black/62">{item.remark}</div>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="bg-white/98 px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">
+            文件与审计
+          </p>
+          <div className="mt-2 space-y-1.5 text-sm text-black/64">
+            <div>文件名：{item.fileName}</div>
+            <div>状态说明：{fileState.note}</div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link href={shippingHref} className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-xs">
+              回到发货执行
+            </Link>
+            {item.stageSummary.pendingTrackingCount > 0 ? (
+              <Link
+                href={getPendingTrackingHref(item)}
+                className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-xs"
+              >
+                看待物流
+              </Link>
+            ) : null}
+            {item.stageSummary.shippedCount > 0 ? (
+              <Link
+                href={getShippedHref(item)}
+                className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-xs"
+              >
+                看已发货
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export function ShippingExportBatchesSection({
   items,
   filters,
@@ -136,74 +327,74 @@ export function ShippingExportBatchesSection({
   backHref?: string;
   backLabel?: string;
 }>) {
-  if (items.length === 0) {
-    return (
-      <div className="space-y-5">
-        <div className="rounded-2xl border border-black/8 bg-[rgba(249,250,252,0.72)] px-4 py-3.5 text-sm leading-7 text-black/62">
-          批次记录承接冻结快照、文件下载、重生成和历史审计。它不是第一执行入口，新批次仍应回到发货执行按 supplier 工作池创建。
-        </div>
-        <EmptyState
-          title="暂无报单批次"
-          description="当前筛选条件下没有批次记录。请先回到发货执行生成 supplier 批次，之后再来这里回看冻结结果。"
-          action={
-            <Link href={backHref} className="crm-button crm-button-primary">
-              {backLabel}
-            </Link>
-          }
-        />
-      </div>
-    );
-  }
-
+  const readyCount = items.filter((item) => item.fileState === "READY").length;
+  const pendingCount = items.filter(
+    (item) => item.fileState === "MISSING" || item.fileState === "PENDING",
+  ).length;
+  const currentPageHref = buildPageHref(
+    filters,
+    { page: pagination.page },
+    basePath,
+    baseSearchParams,
+  );
   const pageStart = (pagination.page - 1) * pagination.pageSize + 1;
   const pageEnd = Math.min(pagination.page * pagination.pageSize, pagination.totalCount);
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-black/8 bg-[rgba(249,250,252,0.72)] px-4 py-3.5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            <div className="text-sm font-medium text-black/82">冻结结果与审计回看</div>
-            <div className="text-xs leading-6 text-black/55">
-              批次记录负责保存当时导出了什么、文件是否可下载、是否需要重生成，以及这些批次来自哪些父单与 supplier。
-            </div>
+      <SectionCard
+        eyebrow="Batch Filters"
+        title="结果筛选与回看"
+        description="按批次号、来源父单和文件状态过滤冻结结果。保留跨视图返回语义，不把这里重新做成执行主入口。"
+        density="compact"
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {filters.supplierId ? (
+              <StatusBadge label="已锁定 supplier 视角" variant="info" />
+            ) : null}
+            <StatusBadge
+              label={`当前过滤 ${getFileViewLabel(filters.fileView)}`}
+              variant={filters.fileView ? "info" : "neutral"}
+            />
+            <Link href={backHref} className="crm-text-link text-sm">
+              {backLabel}
+            </Link>
           </div>
-          <Link href={backHref} className="crm-text-link">
-            {backLabel}
-          </Link>
-        </div>
-      </div>
-
-      <div className="crm-filter-panel">
-        <form method="get" className="grid gap-3 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.5fr)_14rem_auto]">
+        }
+      >
+        <form
+          method="get"
+          className="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_14rem_auto]"
+        >
           {Object.entries(baseSearchParams ?? {}).map(([key, value]) => (
             <input key={key} type="hidden" name={key} value={value} />
           ))}
           {filters.supplierId ? (
             <input type="hidden" name="supplierId" value={filters.supplierId} />
           ) : null}
-          <label className="space-y-2">
-            <span className="crm-label">搜索批次 / 父单 / 子单 / 供货商</span>
+
+          <label className="space-y-1.5">
+            <span className="crm-label">搜索批次 / 父单 / 子单 / 供应商</span>
             <input
               name="keyword"
               defaultValue={filters.keyword}
               className="crm-input"
-              placeholder="batchNo / tradeNo / subOrderNo / 供货商"
+              placeholder="batchNo / tradeNo / subOrderNo / supplier"
             />
           </label>
 
-          <label className="space-y-2">
+          <label className="space-y-1.5">
             <span className="crm-label">文件状态</span>
             <select name="fileView" defaultValue={filters.fileView} className="crm-select">
               <option value="">全部状态</option>
-              <option value="READY">文件可下载</option>
+              <option value="READY">文件就绪</option>
               <option value="MISSING">文件缺失</option>
               <option value="PENDING">待生成</option>
-              <option value="LEGACY">历史批次</option>
+              <option value="LEGACY">历史兼容</option>
             </select>
           </label>
 
-          <div className="crm-filter-actions md:col-span-2 2xl:col-span-1">
+          <div className="crm-filter-actions xl:justify-end">
             <button type="submit" className="crm-button crm-button-primary">
               应用筛选
             </button>
@@ -220,186 +411,68 @@ export function ShippingExportBatchesSection({
             </Link>
           </div>
         </form>
-      </div>
+      </SectionCard>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-black/60">
-        <span>
-          共 {pagination.totalCount} 个批次，当前第 {pagination.page} / {pagination.totalPages} 页
-        </span>
-        <span>当前列表优先服务冻结快照回看、文件下载与审计联动。</span>
-      </div>
-
-      <div className="grid gap-4">
-        {items.map((item) => {
-          const fileState = getFileStateMeta(item.fileState);
-          const shippingHref = getPrimaryShippingHref(item);
-
-          return (
-            <div key={item.id} className="crm-card-muted p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="font-medium text-black/82">{item.exportNo}</div>
-                    <StatusBadge label={fileState.label} variant={fileState.variant} />
-                  </div>
-                  <div className="text-xs text-black/48">
-                    供货商：{item.supplier.name} / 导出时间：{formatDateTime(item.exportedAt)}
-                  </div>
-                </div>
-                <div className="text-right text-xs text-black/48">
-                  <div>导出人：{item.exportedBy?.name || item.exportedBy?.username || "系统"}</div>
-                  <div>{fileState.note}</div>
-                </div>
-              </div>
-
-              <div className="mt-4 grid gap-3 lg:grid-cols-6">
-                <div className="rounded-2xl border border-black/8 bg-white/70 p-4 text-sm text-black/70">
-                  文件名：{item.fileName}
-                </div>
-                <div className="rounded-2xl border border-black/8 bg-white/70 p-4 text-sm text-black/70">
-                  冻结行：{item._count.lines}
-                </div>
-                <div className="rounded-2xl border border-black/8 bg-white/70 p-4 text-sm text-black/70">
-                  子单数：{item.subOrderCount}
-                </div>
-                <div className="rounded-2xl border border-black/8 bg-white/70 p-4 text-sm text-black/70">
-                  父单数：{item.tradeOrderCount}
-                </div>
-                <div className="rounded-2xl border border-black/8 bg-white/70 p-4 text-sm text-black/70">
-                  待物流：{item.stageSummary.pendingTrackingCount}
-                </div>
-                <div className="rounded-2xl border border-black/8 bg-white/70 p-4 text-sm text-black/70">
-                  已发货：{item.stageSummary.shippedCount}
-                </div>
-              </div>
-
-              <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-                <div className="rounded-2xl border border-black/8 bg-white/72 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-black/45">
-                    来源父单
-                  </p>
-                  {item.sourceTradeOrders.length > 0 ? (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {item.sourceTradeOrders.map((tradeOrder) => (
-                        <Link
-                          key={`${item.id}-${tradeOrder.id}`}
-                          href={buildFulfillmentTradeOrdersHref({ keyword: tradeOrder.tradeNo })}
-                          className="rounded-full border border-black/8 bg-[rgba(247,248,250,0.85)] px-3 py-1.5 text-xs text-black/62 transition hover:border-black/14 hover:bg-white"
-                        >
-                          {tradeOrder.tradeNo}
-                        </Link>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="mt-3 text-sm text-black/52">
-                      当前批次尚未回填 ShippingExportLine，暂时没有父单来源快照。
-                    </div>
-                  )}
-                </div>
-
-                <div className="rounded-2xl border border-black/8 bg-white/72 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-black/45">
-                    域内联动
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Link href={shippingHref} className="crm-button crm-button-secondary">
-                      回到发货执行
-                    </Link>
-                    {item.stageSummary.pendingTrackingCount > 0 ? (
-                      <Link
-                        href={buildFulfillmentShippingHref({
-                          supplierViewId: item.supplier.id,
-                          stageView: "PENDING_TRACKING",
-                          keyword:
-                            item.sourceTradeOrders.length === 1
-                              ? item.sourceTradeOrders[0]?.tradeNo
-                              : "",
-                        })}
-                        className="crm-button crm-button-secondary"
-                      >
-                        看待物流
-                      </Link>
-                    ) : null}
-                    {item.stageSummary.shippedCount > 0 ? (
-                      <Link
-                        href={buildFulfillmentShippingHref({
-                          supplierViewId: item.supplier.id,
-                          stageView: "SHIPPED",
-                          keyword:
-                            item.sourceTradeOrders.length === 1
-                              ? item.sourceTradeOrders[0]?.tradeNo
-                              : "",
-                        })}
-                        className="crm-button crm-button-secondary"
-                      >
-                        看已发货
-                      </Link>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/8 bg-white/72 px-4 py-3 text-sm text-black/65">
-                <div className="space-y-1">
-                  <div>
-                    文件：
-                    {item.canDownload && item.fileUrl ? (
-                      <a
-                        href={buildShippingExportBatchDownloadHref(item.id)}
-                        className="ml-1 crm-text-link"
-                      >
-                        下载
-                      </a>
-                    ) : item.fileState === "MISSING" ? (
-                      <span className="ml-1 text-[var(--color-danger)]">记录路径已失效</span>
-                    ) : (
-                      <span className="ml-1 text-black/45">尚未生成</span>
-                    )}
-                  </div>
-                  <div className="text-xs text-black/45">
-                    {item.fileState === "READY"
-                      ? "当前批次已冻结并完成文件生成。"
-                      : item.fileState === "MISSING"
-                        ? "当前批次已有冻结快照，但旧文件已丢失；请在这里重生成。"
-                        : item.fileState === "PENDING"
-                          ? "当前批次已有冻结快照，但文件尚未可用；请在这里生成。"
-                          : "当前批次属于历史兼容记录，后续 backfill 前不支持重生成。"}
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {canManageReporting && item.canRegenerate ? (
-                    <form action={regenerateFileAction}>
-                      <input type="hidden" name="exportBatchId" value={item.id} />
-                      <input
-                        type="hidden"
-                        name="redirectTo"
-                        value={buildPageHref(filters, { page: pagination.page }, basePath, baseSearchParams)}
-                      />
-                      <button type="submit" className="crm-button crm-button-secondary">
-                        {item.fileState === "READY" ? "重生成文件" : "生成文件"}
-                      </button>
-                    </form>
-                  ) : null}
-                </div>
-              </div>
-
-              {item.remark ? (
-                <div className="mt-4 text-sm leading-7 text-black/60">备注：{item.remark}</div>
-              ) : null}
+      {items.length > 0 ? (
+        <SectionCard
+          eyebrow="Frozen Batch Results"
+          title="批次结果列表"
+          description="以文件状态、来源父单和审计说明为主线回看冻结结果，下载与重生成保留为清楚但次级的动作层。"
+          density="compact"
+          actions={
+            <div className="flex flex-wrap gap-1.5">
+              <StatusBadge label={`当前页 ${items.length}`} variant="neutral" />
+              <StatusBadge
+                label={`文件就绪 ${readyCount}`}
+                variant={readyCount > 0 ? "success" : "neutral"}
+              />
+              <StatusBadge
+                label={`待补文件 ${pendingCount}`}
+                variant={pendingCount > 0 ? "warning" : "neutral"}
+              />
             </div>
-          );
-        })}
-      </div>
+          }
+          contentClassName="space-y-3.5"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-black/52">
+            <span>
+              当前显示 {pageStart} - {pageEnd} / 共 {pagination.totalCount} 个批次
+            </span>
+            <span>当前列表优先服务冻结快照回看、文件状态判断和审计联动。</span>
+          </div>
 
-      <PaginationControls
-        page={pagination.page}
-        totalPages={pagination.totalPages}
-        summary={`当前显示 ${pageStart} - ${pageEnd} / 共 ${pagination.totalCount} 个批次`}
-        buildHref={(pageNumber) =>
-          buildPageHref(filters, { page: pageNumber }, basePath, baseSearchParams)
-        }
-      />
+          <div className="space-y-3">
+            {items.map((item) => (
+              <BatchResultItem
+                key={item.id}
+                item={item}
+                canManageReporting={canManageReporting}
+                regenerateFileAction={regenerateFileAction}
+                redirectTo={currentPageHref}
+              />
+            ))}
+          </div>
+
+          <PaginationControls
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            summary={`当前显示 ${pageStart} - ${pageEnd} / 共 ${pagination.totalCount} 个批次`}
+            buildHref={(pageNumber) =>
+              buildPageHref(filters, { page: pageNumber }, basePath, baseSearchParams)
+            }
+          />
+        </SectionCard>
+      ) : (
+        <EmptyState
+          title="暂无报单批次"
+          description="当前筛选条件下没有批次记录。请先回到发货执行创建 supplier 批次，再来这里回看冻结结果。"
+          action={
+            <Link href={backHref} className="crm-button crm-button-primary">
+              {backLabel}
+            </Link>
+          }
+        />
+      )}
     </div>
   );
 }
