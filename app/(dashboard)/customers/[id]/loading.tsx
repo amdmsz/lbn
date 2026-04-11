@@ -1,75 +1,125 @@
+import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
+
 export default function CustomerDetailLoading() {
   return (
-    <div className="crm-page">
-      <div className="crm-card overflow-hidden">
-        <div className="space-y-4 bg-[linear-gradient(135deg,rgba(155,93,47,0.08),rgba(54,95,135,0.02))] px-6 py-6 md:px-7 md:py-7">
-          <div className="crm-loading-block h-4 w-32" />
-          <div className="crm-loading-block h-10 w-64" />
-          <div className="crm-loading-block h-5 w-full max-w-3xl" />
-        </div>
-        <div className="crm-summary-metrics">
+    <WorkbenchLayout
+      className="!gap-0"
+      layoutClassName="xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)]"
+      header={
+        <section className="overflow-hidden rounded-[1.2rem] border border-black/7 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(249,247,243,0.88))] px-4 py-3.5 shadow-[0_12px_26px_rgba(18,24,31,0.045)] md:px-5 md:py-4 xl:px-6 xl:py-5">
+          <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-start 2xl:justify-between">
+            <div className="min-w-0 flex-1 space-y-3">
+              <div className="space-y-2">
+                <div className="crm-loading-block h-4 w-28" />
+                <div className="crm-loading-block h-10 w-48" />
+                <div className="crm-loading-block h-4 w-full max-w-3xl" />
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div key={index} className="crm-loading-block h-7 w-24 rounded-full" />
+                ))}
+              </div>
+            </div>
+
+            <div className="grid w-full gap-2.5 2xl:max-w-[18rem] 2xl:min-w-[16.25rem]">
+              <div className="rounded-[0.95rem] border border-black/8 bg-[rgba(255,255,255,0.86)] px-4 py-3 shadow-[0_6px_16px_rgba(18,24,31,0.03)]">
+                <div className="crm-loading-block h-3 w-20" />
+                <div className="mt-2 crm-loading-block h-8 w-28" />
+                <div className="mt-2 crm-loading-block h-4 w-full" />
+              </div>
+              <div className="rounded-[1rem] border border-black/7 bg-[rgba(255,255,255,0.8)] px-4 py-3.5 shadow-[0_8px_18px_rgba(18,24,31,0.04)]">
+                <div className="crm-loading-block h-3 w-24" />
+                <div className="mt-2 crm-loading-block h-5 w-36" />
+                <div className="mt-2 crm-loading-block h-4 w-full" />
+                <div className="mt-3.5 flex flex-wrap gap-2">
+                  <div className="crm-loading-block h-9 w-28 rounded-[0.85rem]" />
+                  <div className="crm-loading-block h-9 w-24 rounded-[0.85rem]" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      }
+      summary={
+        <div className="grid gap-2.5 sm:grid-cols-2 2xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="crm-summary-metric space-y-3">
-              <div className="crm-loading-block h-4 w-20" />
-              <div className="crm-loading-block h-8 w-28" />
-              <div className="crm-loading-block h-4 w-full" />
+            <div
+              key={index}
+              className="rounded-[1rem] border border-black/8 bg-[rgba(255,255,255,0.92)] px-3.5 py-3 shadow-[0_6px_16px_rgba(18,24,31,0.025)] md:px-4 md:py-3.5"
+            >
+              <div className="crm-loading-block h-3 w-16" />
+              <div className="mt-2 crm-loading-block h-7 w-24" />
+              <div className="mt-2 crm-loading-block h-4 w-full" />
             </div>
           ))}
         </div>
-      </div>
-
-      <div className="crm-subtle-panel space-y-4">
-        <div className="crm-toolbar-cluster">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="crm-loading-block h-9 w-28" />
+      }
+      sidebarPosition="left"
+      sidebar={
+        <div className="space-y-4">
+          {Array.from({ length: 2 }).map((_, index) => (
+            <section
+              key={index}
+              className="rounded-[1rem] border border-black/7 bg-[rgba(255,255,255,0.84)] px-4 py-4 shadow-[0_8px_18px_rgba(18,24,31,0.04)]"
+            >
+              <div className="crm-loading-block h-3 w-16" />
+              <div className="mt-2 crm-loading-block h-5 w-28" />
+              <div className="mt-4 space-y-3">
+                {Array.from({ length: 4 }).map((__, rowIndex) => (
+                  <div key={rowIndex} className="crm-loading-block h-4 w-full" />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
-        <div className="space-y-2">
-          <div className="crm-loading-block h-4 w-36" />
-          <div className="crm-loading-block h-4 w-48" />
+      }
+    >
+      <section
+        id="customer-main"
+        className="rounded-[1.05rem] border border-black/7 bg-[rgba(255,255,255,0.86)] px-4 py-3.5 shadow-[0_8px_18px_rgba(18,24,31,0.04)] md:px-5 md:py-4"
+      >
+        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-1.5">
+            <div className="crm-loading-block h-3 w-16" />
+            <div className="crm-loading-block h-5 w-40" />
+            <div className="crm-loading-block h-4 w-full max-w-xl" />
+          </div>
+          <div className="space-y-1.5">
+            <div className="crm-loading-block h-4 w-40" />
+            <div className="crm-loading-block h-4 w-32" />
+          </div>
         </div>
-      </div>
 
-      <div className="crm-subtle-panel space-y-4">
-        <div className="space-y-2">
-          <div className="crm-loading-block h-4 w-24" />
-          <div className="crm-loading-block h-5 w-full max-w-xl" />
+        <div className="mt-3 space-y-2.5">
+          <div className="flex flex-wrap gap-2">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="crm-loading-block h-8 w-24 rounded-[0.75rem]" />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="crm-loading-block h-8 w-20 rounded-[0.75rem]" />
+            ))}
+          </div>
         </div>
-        <div className="crm-toolbar-cluster">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="crm-loading-block h-11 w-32" />
-          ))}
-        </div>
-      </div>
 
-      <div className="crm-card p-6">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, index) => (
-            <div key={index} className="space-y-2">
-              <div className="crm-loading-block h-4 w-20" />
-              <div className="crm-loading-block h-6 w-full" />
+        <div className="mt-5 space-y-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div
+              key={index}
+              className="rounded-[1rem] border border-black/8 bg-[linear-gradient(180deg,rgba(250,250,251,0.84),rgba(255,255,255,0.92))] px-4 py-3.5"
+            >
+              <div className="crm-loading-block h-4 w-28" />
+              <div className="mt-2 crm-loading-block h-4 w-full" />
+              <div className="mt-3 flex flex-wrap gap-3">
+                {Array.from({ length: 3 }).map((__, metaIndex) => (
+                  <div key={metaIndex} className="crm-loading-block h-3 w-24" />
+                ))}
+              </div>
             </div>
           ))}
         </div>
-
-        <div className="mt-6 space-y-2">
-          <div className="crm-loading-block h-4 w-16" />
-          <div className="crm-loading-block h-20 w-full" />
-        </div>
-      </div>
-
-      <div className="crm-card p-6">
-        <div className="crm-loading-block h-12 w-full rounded-[1rem]" />
-        <div className="mt-4 space-y-2">
-          <div className="crm-loading-block h-4 w-20" />
-          <div className="crm-loading-block h-5 w-full max-w-2xl" />
-        </div>
-        <div className="mt-6 space-y-3">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="crm-loading-block h-24 w-full" />
-          ))}
-        </div>
-      </div>
-    </div>
+      </section>
+    </WorkbenchLayout>
   );
 }

@@ -1,6 +1,6 @@
 # Staging Checklist
 
-更新时间：2026-04-08
+更新时间：2026-04-10
 
 本清单用于当前仓库进入 staging 时的最小验收。
 只覆盖已经进入真实基线的功能，不覆盖 PBX、新 schema 里程碑或额外的 schema 重构。
@@ -15,11 +15,16 @@
 - [ ] `DATABASE_URL` 已配置并指向 staging MySQL
 - [ ] `NEXTAUTH_URL` 已配置为 staging 对外地址
 - [ ] `NEXTAUTH_SECRET` 已配置为独立随机密钥
+- [ ] `REDIS_URL` 已配置并可被 Web 与 worker 访问
+- [ ] 若需要调优异步导入：
+  - [ ] `LEAD_IMPORT_CHUNK_SIZE` 已按需配置或留空走默认值
+  - [ ] `LEAD_IMPORT_WORKER_CONCURRENCY` 已按需配置或留空走默认值
+  - [ ] `LEAD_IMPORT_JOB_ATTEMPTS` 已按需配置或留空走默认值
 - [ ] 若需要远程物流轨迹：
   - [ ] `XXAPI_API_KEY` 已配置
   - [ ] `XXAPI_EXPRESS_ENDPOINT` 已按需配置或留空走默认值
 
-### Prisma 与构建
+### Prisma、构建与运行
 
 - [ ] 执行 `npx prisma validate`
 - [ ] 执行 `npx prisma generate`
@@ -28,6 +33,8 @@
 - [ ] 若当前 staging 是 rebaseline 之前创建的旧环境，先完成 migration metadata reconcile
 - [ ] 执行 `npm run build`
 - [ ] 执行 `npm run start`
+- [ ] 执行 `npm run worker:lead-imports`
+- [ ] 确认 Web 与 worker 是两个独立可运行进程
 
 ### 管理员初始化
 
@@ -64,6 +71,17 @@
 - [ ] 客户列表筛选正常
 - [ ] 客户卡片可进入详情
 - [ ] `/customers/[id]` 各 tab 正常切换
+
+### 异步导入主线
+
+- [ ] 从线索导入入口提交一批导入任务
+- [ ] 导入批次进入排队 / 处理中状态
+- [ ] worker 能正常消费该批次
+- [ ] 成功批次能正常完成
+- [ ] 失败批次能正确写入失败状态与失败信息
+- [ ] worker 日志里可看到 `ready / active / completed / failed`
+- [ ] 停掉 worker 时，能观察到批次不会被正常消费
+- [ ] 恢复 worker 后，批次处理链路恢复正常
 
 ### TradeOrder 主线
 
@@ -129,6 +147,7 @@
 - [ ] 可进入 `/products`
 - [ ] 可进入 `/customers/public-pool/settings`
 - [ ] 可进入 `/settings/users`
+- [ ] 可查看导入批次状态与失败信息（若该能力已开放到当前界面）
 
 ### SUPERVISOR
 
@@ -137,6 +156,7 @@
 - [ ] 可进入 `/products`
 - [ ] 可进入 `/customers/public-pool/settings`
 - [ ] 只能看到本团队相关公海规则与报表范围
+- [ ] 可发起或追踪本团队相关导入任务（若该能力已开放到当前界面）
 
 ### SALES
 
@@ -145,6 +165,7 @@
 - [ ] 可进入 `/payment-records` 与 `/collection-tasks`
 - [ ] 不应把 `/shipping` 当作主工作台
 - [ ] 只能认领公海客户，不能进入公海规则页
+- [ ] 不应误获得团队级导入处理权限
 
 ### SHIPPER
 
@@ -156,6 +177,7 @@
 - [ ] 创建直播场次后写入 `OperationLog`
 - [ ] 可进入并维护 `/products`
 - [ ] 不可进入 `/customers`
+- [ ] 不因 worker 或 Redis 运行依赖而误获得导入管理权限
 
 ### OPS
 
@@ -165,13 +187,17 @@
 - [ ] 不可误获得公海池管理权限
 - [ ] 不可误获得发货执行权限
 
-## D. 文件与导出
+## D. 文件、导出与后台进程
 
 - [ ] `public/exports/shipping` 目录可写
 - [ ] 批量生成批次后能写出文件
 - [ ] `fileUrl` 可通过 Web 访问
 - [ ] 重生成文件动作正常
 - [ ] 缺文件状态时页面提示正常
+- [ ] Redis 进程或实例可达
+- [ ] lead import worker 持续运行且日志正常
+- [ ] 重启 Web 不会导致 worker 配置漂移
+- [ ] 重启 worker 后可继续消费后续导入批次
 
 ## E. 备份与回滚前置检查
 
@@ -180,21 +206,25 @@
 - [ ] 已标记当前候选版本的 Git tag 或明确 release commit
 - [ ] 已保留上一个可启动版本
 - [ ] 如果本次需要执行 migration metadata reconcile 或新 migration，已安排维护窗口
+- [ ] 如果本次涉及异步导入链路调整，已确认 Redis 与 worker 的回滚方案
 
 ## F. Production 前复制检查
 
 - [ ] 已整理出一份 production 环境变量清单，变量名与 staging 完全一致
 - [ ] 已确认 production 使用独立 MySQL 库、环境文件和 systemd service
+- [ ] 已确认 production Redis 可用且 `REDIS_URL` 已替换为 production 值
 - [ ] 已记录 staging 验收通过时对应的 Git tag 或 release commit
 - [ ] 已确认 production 首发仍然按空库流程执行，而不是沿用本地 seed 数据
+- [ ] 已确认 production 同时部署 Web service 与 lead import worker service
 
 ## 验收结论
 
 ### 可以判定通过的条件
 
 - 上述 A、B、C、D、E 核心项没有阻塞性失败
-- 登录、TradeOrder、`/fulfillment`、公海池、商品中心均可完成最小 smoke
+- 登录、异步导入、TradeOrder、`/fulfillment`、公海池、商品中心均可完成最小 smoke
 - 角色权限没有明显误扩权
+- Web、Redis、worker 三段链路完整
 
 ### 出现以下情况时，不建议继续推进
 
@@ -203,3 +233,6 @@
 - schema 无法通过 `prisma validate / generate`
 - 构建失败
 - 登录保护与角色跳转失效
+- Redis 不可达
+- lead import worker 无法稳定启动
+- 导入批次无法被 worker 正常消费

@@ -7,8 +7,8 @@ import type {
 import type { StatusBadgeVariant } from "@/components/shared/status-badge";
 import { getLeadSourceLabel } from "@/lib/leads/metadata";
 
-export const CUSTOMERS_PAGE_SIZE = 10;
-export const customerPageSizeOptions = [10, 20, 30, 50, 100] as const;
+export const CUSTOMERS_PAGE_SIZE = 12;
+export const customerPageSizeOptions = [12, 20, 30, 50, 100] as const;
 
 export const customerStatusMeta: Record<
   CustomerStatus,

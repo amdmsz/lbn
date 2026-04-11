@@ -19,6 +19,7 @@ import { CustomerStatusBadge } from "@/components/customers/customer-status-badg
 import { CustomerTagsPanel } from "@/components/customers/customer-tags-panel";
 import { CustomerWechatRecordsSection } from "@/components/customers/customer-wechat-records-section";
 import { ActionBanner } from "@/components/shared/action-banner";
+import { MetricCard } from "@/components/shared/metric-card";
 import { PageContextLink } from "@/components/shared/page-context-link";
 import { SmartLink } from "@/components/shared/smart-link";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -128,9 +129,10 @@ type CustomerDetailTabDataMap = {
 type SummaryTone = "default" | "info" | "warning" | "danger" | "success";
 
 type SummaryCard = {
-  eyebrow: string;
+  label?: string;
+  eyebrow?: string;
   value: string;
-  description: string;
+  description?: string;
   note: string;
   href: string;
   tone?: SummaryTone;
@@ -164,7 +166,7 @@ function formatLeadSourceSummary(
 }
 
 function getCustomerTotalOrderCount(shell: CustomerDetailShellData) {
-  return shell._count.salesOrders;
+  return shell.tradeOrderSummary.approvedCount || shell._count.salesOrders;
 }
 
 function getActiveTabCount(tab: CustomerDetailTab, shell: CustomerDetailShellData) {
@@ -200,6 +202,27 @@ function getDaysSince(value: Date | null | undefined) {
 
   const diff = Date.now() - value.getTime();
   return Math.floor(diff / (24 * 60 * 60 * 1000));
+}
+
+function formatAgeSummary(
+  value: Date | null | undefined,
+  emptyLabel = "暂无",
+) {
+  const days = getDaysSince(value);
+
+  if (days === null) {
+    return emptyLabel;
+  }
+
+  if (days <= 0) {
+    return "今天";
+  }
+
+  if (days === 1) {
+    return "1 天前";
+  }
+
+  return `${days} 天前`;
 }
 
 function DetailFieldGrid({
@@ -375,23 +398,15 @@ function OverviewSummaryCard({
   card: SummaryCard;
 }>) {
   return (
-    <SmartLink
+    <MetricCard
+      label={card.label ?? card.eyebrow ?? "摘要"}
+      value={card.value}
+      note={card.description ? `${card.description} / ${card.note}` : card.note}
       href={card.href}
       scrollTargetId="customer-main"
-      className={cn(
-        "group block rounded-[1.15rem] border bg-[rgba(255,255,255,0.86)] px-4 py-4 shadow-[0_8px_20px_rgba(18,24,31,0.04)] transition-[border-color,background-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:bg-white hover:shadow-[0_12px_24px_rgba(18,24,31,0.05)] md:px-5 md:py-4.5",
-        summaryToneClassName[card.tone ?? "default"],
-      )}
-    >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/38">
-        {card.eyebrow}
-      </p>
-      <p className="mt-2 text-[1.12rem] font-semibold tracking-[-0.03em] text-black/86 md:text-[1.28rem]">
-        {card.value}
-      </p>
-      <p className="mt-2 text-[13px] leading-6 text-black/58">{card.description}</p>
-      <p className="mt-3 text-[12px] leading-5 text-black/46">{card.note}</p>
-    </SmartLink>
+      density="strip"
+      className={summaryToneClassName[card.tone ?? "default"]}
+    />
   );
 }
 
@@ -1109,6 +1124,7 @@ export function CustomerDetailWorkbench({
     canCreateWechat,
     canManageLiveInvitations,
   );
+  const totalPurchaseAmount = formatCurrency(shell.tradeOrderSummary.lifetimeAmount);
   const primaryAction = canCreateSalesOrders
     ? {
         label: tradeOrderComposer ? "继续编辑成交主单" : "创建成交主单",
@@ -1177,18 +1193,18 @@ export function CustomerDetailWorkbench({
       className="!gap-0"
       layoutClassName="xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)]"
       header={
-        <section className="overflow-hidden rounded-[1.3rem] border border-black/7 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(249,247,243,0.88))] px-4 py-4 shadow-[0_14px_30px_rgba(18,24,31,0.05)] md:px-5 md:py-5 xl:px-6 xl:py-6">
-          <div className="flex flex-col gap-5 2xl:flex-row 2xl:items-start 2xl:justify-between">
-            <div className="min-w-0 max-w-4xl space-y-4">
+        <section className="overflow-hidden rounded-[1.2rem] border border-black/7 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(249,247,243,0.88))] px-4 py-3.5 shadow-[0_12px_26px_rgba(18,24,31,0.045)] md:px-5 md:py-4 xl:px-6 xl:py-5">
+          <div className="flex flex-col gap-4 2xl:flex-row 2xl:items-start 2xl:justify-between">
+            <div className="min-w-0 max-w-4xl space-y-3">
               <PageContextLink
                 href={navigationContext.returnTo ?? "/customers"}
                 label={getCustomerDetailBackLabel(navigationContext)}
                 trail={[isPublicPoolContext ? "公海池" : "客户中心", "客户经营总览"]}
               />
 
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <div className="flex flex-wrap items-end gap-3">
-                  <h1 className="text-[1.8rem] font-semibold tracking-[-0.04em] text-black/88 md:text-[2.15rem]">
+                  <h1 className="text-[1.48rem] font-semibold tracking-[-0.035em] text-black/88 md:text-[1.72rem]">
                     {shell.name}
                   </h1>
                   <div className="flex flex-wrap items-center gap-2">
@@ -1231,8 +1247,28 @@ export function CustomerDetailWorkbench({
               </div>
             </div>
 
-            <div className="w-full 2xl:max-w-[19rem] 2xl:min-w-[17rem]">
-              <div className="rounded-[1.05rem] border border-black/7 bg-[rgba(255,255,255,0.8)] px-4 py-4 shadow-[0_8px_18px_rgba(18,24,31,0.04)]">
+            <div className="w-full 2xl:max-w-[18rem] 2xl:min-w-[16.25rem]">
+              <div className="mb-2.5 rounded-[0.95rem] border border-black/8 bg-[rgba(255,255,255,0.86)] px-4 py-3 shadow-[0_6px_16px_rgba(18,24,31,0.03)]">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-black/38">
+                  累计购买金额
+                </p>
+                <div className="mt-2 flex items-end justify-between gap-3">
+                  <p className="text-[1.2rem] font-semibold tracking-[-0.04em] text-black/86 md:text-[1.34rem]">
+                    {totalPurchaseAmount}
+                  </p>
+                  <StatusBadge
+                    label={`${shell.tradeOrderSummary.approvedCount} 笔成交`}
+                    variant={
+                      shell.tradeOrderSummary.approvedCount > 0 ? "success" : "neutral"
+                    }
+                  />
+                </div>
+                <p className="mt-2 text-[12px] leading-5 text-black/48">
+                  最近成交 {formatAgeSummary(shell.tradeOrderSummary.latestTradeAt)} /{" "}
+                  {formatDateTimeSummary(shell.tradeOrderSummary.latestTradeAt)}
+                </p>
+              </div>
+              <div className="rounded-[1rem] border border-black/7 bg-[rgba(255,255,255,0.8)] px-4 py-3.5 shadow-[0_8px_18px_rgba(18,24,31,0.04)]">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-black/38">
                   当前经营动作
                 </p>
@@ -1242,7 +1278,7 @@ export function CustomerDetailWorkbench({
                 <p className="mt-2 text-[13px] leading-6 text-black/56">
                   {primaryAction.description}
                 </p>
-                <div className="mt-4 flex flex-wrap items-center gap-3">
+                <div className="mt-3.5 flex flex-wrap items-center gap-3">
                   <Link
                     href={primaryAction.href}
                     className="crm-button crm-button-primary min-h-0 px-3.5 py-2 text-sm"
@@ -1263,9 +1299,9 @@ export function CustomerDetailWorkbench({
         </section>
       }
       summary={
-        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+        <div className="grid gap-2.5 sm:grid-cols-2 2xl:grid-cols-4">
           {summaryCards.map((card) => (
-            <OverviewSummaryCard key={card.eyebrow} card={card} />
+            <OverviewSummaryCard key={card.label ?? card.eyebrow ?? card.href} card={card} />
           ))}
         </div>
       }
@@ -1314,9 +1350,9 @@ export function CustomerDetailWorkbench({
 
       <section
         id="customer-main"
-        className="rounded-[1.1rem] border border-black/7 bg-[rgba(255,255,255,0.86)] px-4 py-4 shadow-[0_8px_20px_rgba(18,24,31,0.04)] md:px-5 md:py-5"
+        className="rounded-[1.05rem] border border-black/7 bg-[rgba(255,255,255,0.86)] px-4 py-3.5 shadow-[0_8px_18px_rgba(18,24,31,0.04)] md:px-5 md:py-4"
       >
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-1.5">
             <p className="crm-detail-label text-black/38">经营视角</p>
             <div className="flex flex-wrap items-center gap-2">
@@ -1346,7 +1382,7 @@ export function CustomerDetailWorkbench({
           </div>
         </div>
 
-        <div className="mt-4">
+        <div className="mt-3">
           <CustomerDetailTabs
             customerId={shell.id}
             activeTab={activeTab}

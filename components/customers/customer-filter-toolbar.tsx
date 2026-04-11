@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { FiltersPanel } from "@/components/shared/filters-panel";
 import {
   customerWorkStatusOptions,
   type CustomerWorkStatusKey,
@@ -125,17 +126,17 @@ function FilterButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex h-11 w-full min-w-0 items-center justify-between gap-2 rounded-[15px] border px-3 text-[13px] transition-[border-color,background-color,color,box-shadow] duration-150",
+        "flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-[14px] border px-3 text-[13px] transition-[border-color,background-color,color,box-shadow] duration-150",
         active || open
-          ? "border-[rgba(15,23,42,0.12)] bg-white text-black/84 shadow-[0_8px_18px_rgba(15,23,42,0.05)]"
-          : "border-[rgba(15,23,42,0.08)] bg-[rgba(248,250,252,0.8)] text-black/64 hover:border-[rgba(15,23,42,0.12)] hover:bg-white hover:text-black/82",
+          ? "border-black/12 bg-white text-black/84 shadow-[0_8px_18px_rgba(15,23,42,0.05)]"
+          : "border-black/8 bg-[rgba(248,250,252,0.84)] text-black/64 hover:border-black/12 hover:bg-white hover:text-black/82",
       )}
     >
       <span className="flex min-w-0 items-center gap-2 overflow-hidden">
         {icon}
         <span className="truncate font-medium">{label}</span>
         {value ? (
-          <span className="hidden truncate text-[12px] text-black/50 lg:inline">
+          <span className="hidden truncate text-[12px] text-black/48 lg:inline">
             {value}
           </span>
         ) : null}
@@ -199,8 +200,8 @@ function OptionRow({
       className={cn(
         "flex min-h-[42px] w-full items-center justify-between gap-3 rounded-[13px] border px-3 py-2.5 text-left text-[13px] transition-[border-color,background-color,box-shadow] duration-150",
         selected
-          ? "border-[var(--color-accent)]/18 bg-[var(--color-accent)]/6 shadow-[0_6px_14px_rgba(15,23,42,0.04)]"
-          : "border-transparent hover:border-black/8 hover:bg-[rgba(248,250,252,0.88)]",
+          ? "border-black/12 bg-[var(--color-accent)]/6 shadow-[0_6px_14px_rgba(15,23,42,0.04)]"
+          : "border-transparent hover:border-black/8 hover:bg-[rgba(248,250,252,0.9)]",
       )}
     >
       <div className="min-w-0">
@@ -428,383 +429,401 @@ export function CustomerFilterToolbar({
         }),
     },
     {
-      key: "migration_pending_follow_up",
-      label: "待接续",
-      active:
-        filters.statuses.length === 1 &&
-        filters.statuses[0] === "migration_pending_follow_up",
+      key: "pending_deal",
+      label: "待成交",
+      active: filters.statuses.length === 1 && filters.statuses[0] === "pending_deal",
       onClick: () =>
         applyFilters({
-          statuses: ["migration_pending_follow_up"],
-          queue: "migration_pending_follow_up",
+          statuses: ["pending_deal"],
+          queue: "pending_deal",
         }),
     },
   ] as const;
 
   return (
-    <section
-      ref={rootRef}
-      aria-busy={pending}
-      className={cn(
-        "rounded-[22px] border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,246,242,0.9))] px-3 py-3 shadow-[0_12px_24px_rgba(15,23,42,0.04)] sm:px-4 sm:py-3.5",
-        pending && "opacity-90",
-      )}
-    >
-      <div className="mb-3 flex flex-col gap-2 border-b border-black/6 px-1 pb-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-black/40">
-            客户筛选
-          </p>
-          <p className="mt-1 text-[12px] leading-5 text-black/54">{scopeHint}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex h-8 items-center rounded-full border border-black/7 bg-white/86 px-3 text-[12px] font-medium text-black/62">
-            命中 {matchedCount}
-          </span>
-          <span className="inline-flex h-8 items-center rounded-full border border-black/7 bg-white/86 px-3 text-[12px] font-medium text-black/62">
-            已选 {activeFilterCount}
-          </span>
-        </div>
-      </div>
-
-      <div className="grid gap-2.5 md:grid-cols-2 2xl:grid-cols-[minmax(320px,1.7fr)_repeat(4,minmax(0,1fr))]">
-        <div className="relative md:col-span-2 2xl:col-span-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/36" />
-          <input
-            value={searchDraft}
-            onChange={(event) => setSearchDraft(event.target.value)}
-            placeholder="搜索客户 / 手机号 / 产品 / 备注"
-            className="h-10.5 w-full rounded-[15px] border border-[rgba(15,23,42,0.08)] bg-white pl-10 pr-9 text-[13px] text-black/84 outline-none transition placeholder:text-black/34 focus:border-[rgba(15,23,42,0.14)] focus:ring-2 focus:ring-black/5 sm:text-sm"
-          />
-          {searchDraft ? (
-            <button
-              type="button"
-              onClick={() => {
-                setSearchDraft("");
-                applyFilters({ search: "" });
-              }}
-              className="absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-black/34 transition hover:bg-black/[0.05] hover:text-black/58"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          ) : null}
-        </div>
-
-        <div className="relative">
-          <FilterButton
-            label="时间"
-            icon={<CalendarRange className="h-3.5 w-3.5 shrink-0 text-black/44" />}
-            value={formatRangeLabel(filters.importedFrom, filters.importedTo)}
-            active={Boolean(filters.importedFrom || filters.importedTo)}
-            open={openPanel === "time"}
-            onClick={() => setOpenPanel((current) => (current === "time" ? null : "time"))}
-          />
-          <FilterPanel open={openPanel === "time"} widthClassName="w-[19rem]">
-            <div className="space-y-3">
-              <p className="text-[13px] font-semibold text-black/84">时间筛选</p>
-              <div className="flex flex-wrap gap-2">
-                {([
-                  ["today", "今天"],
-                  ["last7", "近 7 天"],
-                  ["last30", "近 30 天"],
-                  ["thisMonth", "本月"],
-                ] as Array<[TimePresetKey, string]>).map(([preset, label]) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => {
-                      const range = getPresetRange(preset);
-                      applyFilters({
-                        importedFrom: range.from,
-                        importedTo: range.to,
-                      });
-                    }}
-                    className="rounded-full border border-black/8 bg-[rgba(248,250,252,0.82)] px-3 py-1.5 text-[12px] text-black/62 transition hover:border-black/12 hover:bg-white hover:text-black/82"
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="grid gap-2">
-                <input
-                  type="date"
-                  value={filters.importedFrom}
-                  onChange={(event) =>
-                    applyFilters({
-                      importedFrom: event.target.value,
-                      importedTo: filters.importedTo,
-                    })
-                  }
-                  className="h-10 rounded-[12px] border border-black/8 bg-[rgba(248,250,252,0.82)] px-3 text-[13px] text-black/78 outline-none transition focus:border-black/14 focus:ring-2 focus:ring-black/5"
-                />
-                <input
-                  type="date"
-                  value={filters.importedTo}
-                  onChange={(event) =>
-                    applyFilters({
-                      importedFrom: filters.importedFrom,
-                      importedTo: event.target.value,
-                    })
-                  }
-                  className="h-10 rounded-[12px] border border-black/8 bg-[rgba(248,250,252,0.82)] px-3 text-[13px] text-black/78 outline-none transition focus:border-black/14 focus:ring-2 focus:ring-black/5"
-                />
-              </div>
-
-              <div className="flex items-center justify-between border-t border-black/6 pt-3">
-                <button
-                  type="button"
-                  onClick={() => applyFilters({ importedFrom: "", importedTo: "" })}
-                  className="text-xs text-black/46 transition hover:text-black/70"
-                >
-                  清空
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOpenPanel(null)}
-                  className="inline-flex h-8 items-center rounded-[10px] border border-black/8 bg-[rgba(248,250,252,0.9)] px-3 text-[12px] font-medium text-black/72 transition hover:border-black/12 hover:bg-white hover:text-black/84"
-                >
-                  完成
-                </button>
-              </div>
-            </div>
-          </FilterPanel>
-        </div>
-
-        <label className="space-y-1.5">
-          <span className="sr-only">״̬ɸѡ</span>
-          <select
-            value={filters.statuses[0] ?? ""}
-            onChange={(event) => {
-              const value = event.target.value as CustomerWorkStatusKey | "";
-              applyFilters(value ? { statuses: [value], queue: value } : { statuses: [], queue: "all" });
-            }}
-            className="h-10.5 w-full rounded-[15px] border border-[rgba(15,23,42,0.08)] bg-[rgba(248,250,252,0.84)] px-3 text-[13px] text-black/78 outline-none transition focus:border-[rgba(15,23,42,0.14)] focus:ring-2 focus:ring-black/5"
-          >
-            <option value="">全部状态</option>
-            {customerWorkStatusOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label} ({queueCounts[option.value]})
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <div className="relative">
-          <FilterButton
-            label="产品"
-            value={activeProductLabels.length > 0 ? activeProductLabels.join(" / ") : filters.productKeyword || ""}
-            active={Boolean(filters.productKeys.length || filters.productKeyword)}
-            open={openPanel === "product"}
-            onClick={() => setOpenPanel((current) => (current === "product" ? null : "product"))}
-          />
-          <FilterPanel open={openPanel === "product"} align="right" widthClassName="w-[21rem]">
-            <div className="space-y-3">
-              <p className="text-[13px] font-semibold text-black/84">产品筛选</p>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-black/34" />
-                <input
-                  value={productKeywordDraft}
-                  onChange={(event) => setProductKeywordDraft(event.target.value)}
-                  onBlur={() => applyFilters({ productKeyword: productKeywordDraft.trim() })}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      applyFilters({ productKeyword: productKeywordDraft.trim() });
-                    }
-                  }}
-                  placeholder="搜索产品"
-                  className="h-10 w-full rounded-[12px] border border-black/8 bg-[rgba(248,250,252,0.82)] pl-8 pr-3 text-[13px] text-black/78 outline-none transition placeholder:text-black/34 focus:border-black/14 focus:ring-2 focus:ring-black/5"
-                />
-              </div>
-
-              <div className="max-h-[20rem] space-y-1 overflow-y-auto pr-1">
-                {visibleProductOptions.length > 0 ? (
-                  visibleProductOptions.slice(0, 10).map((option) => (
-                    <OptionRow
-                      key={option.key}
-                      title={option.label}
-                      subtitle={option.source === "purchased" ? "已购商品" : "导入意向"}
-                      trailing={option.count}
-                      selected={filters.productKeys.includes(option.key)}
-                      onClick={() => {
-                        const nextKeys = filters.productKeys.includes(option.key)
-                          ? filters.productKeys.filter((item) => item !== option.key)
-                          : [...filters.productKeys, option.key];
-                        applyFilters({ productKeys: nextKeys });
-                      }}
-                    />
-                  ))
-                ) : (
-                  <p className="px-1 text-xs leading-5 text-black/40">暂无匹配项</p>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between border-t border-black/6 pt-3">
+    <div ref={rootRef} aria-busy={pending}>
+      <FiltersPanel
+        eyebrow="工作台筛选"
+        title="筛选与范围"
+        description="搜索优先，次级条件放进轻量弹层里；团队与销售范围保持在同一工具条内。"
+        className={cn(
+          "rounded-[1.1rem] border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,246,242,0.92))] shadow-[0_12px_24px_rgba(15,23,42,0.04)]",
+          pending && "opacity-90",
+        )}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex h-8 items-center rounded-full border border-black/8 bg-white/86 px-3 text-[12px] font-medium text-black/58">
+              范围 {scopeHint}
+            </span>
+            <span className="inline-flex h-8 items-center rounded-full border border-black/8 bg-white/86 px-3 text-[12px] font-medium text-black/58">
+              命中 {matchedCount}
+            </span>
+            <span className="inline-flex h-8 items-center rounded-full border border-black/8 bg-white/86 px-3 text-[12px] font-medium text-black/58">
+              已筛 {activeFilterCount}
+            </span>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <div className="grid gap-2.5 xl:grid-cols-[minmax(320px,1.6fr)_repeat(4,minmax(0,1fr))]">
+            <div className="relative xl:col-span-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/36" />
+              <input
+                value={searchDraft}
+                onChange={(event) => setSearchDraft(event.target.value)}
+                placeholder="搜索客户 / 手机号 / 商品 / 备注"
+                className="h-10 w-full rounded-[14px] border border-black/8 bg-white pl-10 pr-9 text-[13px] text-black/84 outline-none transition placeholder:text-black/34 focus:border-black/14 focus:ring-2 focus:ring-black/5 sm:text-sm"
+              />
+              {searchDraft ? (
                 <button
                   type="button"
                   onClick={() => {
-                    setProductKeywordDraft("");
-                    applyFilters({ productKeys: [], productKeyword: "" });
+                    setSearchDraft("");
+                    applyFilters({ search: "" });
                   }}
-                  className="text-xs text-black/46 transition hover:text-black/70"
+                  className="absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-black/34 transition hover:bg-black/[0.05] hover:text-black/58"
                 >
-                  清空
+                  <X className="h-3.5 w-3.5" />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setOpenPanel(null)}
-                  className="inline-flex h-8 items-center rounded-[10px] border border-black/8 bg-[rgba(248,250,252,0.9)] px-3 text-[12px] font-medium text-black/72 transition hover:border-black/12 hover:bg-white hover:text-black/84"
-                >
-                  完成
-                </button>
-              </div>
+              ) : null}
             </div>
-          </FilterPanel>
-        </div>
 
-        <div className="relative">
-          <FilterButton
-            label="标签"
-            value={activeTagLabels.length > 0 ? activeTagLabels.join(" / ") : ""}
-            active={filters.tagIds.length > 0}
-            open={openPanel === "tag"}
-            onClick={() => setOpenPanel((current) => (current === "tag" ? null : "tag"))}
-          />
-          <FilterPanel open={openPanel === "tag"} align="right" widthClassName="w-[21rem]">
-            <div className="space-y-3">
-              <p className="text-[13px] font-semibold text-black/84">标签筛选</p>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-black/34" />
-                <input
-                  value={tagSearchDraft}
-                  onChange={(event) => setTagSearchDraft(event.target.value)}
-                  placeholder="搜索标签"
-                  className="h-10 w-full rounded-[12px] border border-black/8 bg-[rgba(248,250,252,0.82)] pl-8 pr-3 text-[13px] text-black/78 outline-none transition placeholder:text-black/34 focus:border-black/14 focus:ring-2 focus:ring-black/5"
-                />
-              </div>
+            <div className="relative">
+              <FilterButton
+                label="时间"
+                icon={<CalendarRange className="h-3.5 w-3.5 shrink-0 text-black/44" />}
+                value={formatRangeLabel(filters.importedFrom, filters.importedTo)}
+                active={Boolean(filters.importedFrom || filters.importedTo)}
+                open={openPanel === "time"}
+                onClick={() => setOpenPanel((current) => (current === "time" ? null : "time"))}
+              />
+              <FilterPanel open={openPanel === "time"} widthClassName="w-[19rem]">
+                <div className="space-y-3">
+                  <p className="text-[13px] font-semibold text-black/84">导入时间</p>
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      ["today", "今天"],
+                      ["last7", "近 7 天"],
+                      ["last30", "近 30 天"],
+                      ["thisMonth", "本月"],
+                    ] as Array<[TimePresetKey, string]>).map(([preset, label]) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => {
+                          const range = getPresetRange(preset);
+                          applyFilters({
+                            importedFrom: range.from,
+                            importedTo: range.to,
+                          });
+                        }}
+                        className="rounded-full border border-black/8 bg-[rgba(248,250,252,0.82)] px-3 py-1.5 text-[12px] text-black/62 transition hover:border-black/12 hover:bg-white hover:text-black/82"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
 
-              <div className="max-h-[20rem] space-y-1 overflow-y-auto pr-1">
-                {visibleTagOptions.length > 0 ? (
-                  visibleTagOptions.slice(0, 10).map((tag) => (
-                    <OptionRow
-                      key={tag.id}
-                      title={tag.name}
-                      subtitle={tag.label}
-                      trailing={tag.count}
-                      selected={filters.tagIds.includes(tag.id)}
-                      onClick={() => {
-                        const nextTagIds = filters.tagIds.includes(tag.id)
-                          ? filters.tagIds.filter((item) => item !== tag.id)
-                          : [...filters.tagIds, tag.id];
-                        applyFilters({ tagIds: nextTagIds });
-                      }}
+                  <div className="grid gap-2">
+                    <input
+                      type="date"
+                      value={filters.importedFrom}
+                      onChange={(event) =>
+                        applyFilters({
+                          importedFrom: event.target.value,
+                          importedTo: filters.importedTo,
+                        })
+                      }
+                      className="h-10 rounded-[12px] border border-black/8 bg-[rgba(248,250,252,0.82)] px-3 text-[13px] text-black/78 outline-none transition focus:border-black/14 focus:ring-2 focus:ring-black/5"
                     />
-                  ))
-                ) : (
-                  <p className="px-1 text-xs leading-5 text-black/40">暂无匹配项</p>
-                )}
-              </div>
+                    <input
+                      type="date"
+                      value={filters.importedTo}
+                      onChange={(event) =>
+                        applyFilters({
+                          importedFrom: filters.importedFrom,
+                          importedTo: event.target.value,
+                        })
+                      }
+                      className="h-10 rounded-[12px] border border-black/8 bg-[rgba(248,250,252,0.82)] px-3 text-[13px] text-black/78 outline-none transition focus:border-black/14 focus:ring-2 focus:ring-black/5"
+                    />
+                  </div>
 
-              <div className="flex items-center justify-between border-t border-black/6 pt-3">
-                <button
-                  type="button"
-                  onClick={() => applyFilters({ tagIds: [] })}
-                  className="text-xs text-black/46 transition hover:text-black/70"
-                >
-                  清空
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOpenPanel(null)}
-                  className="inline-flex h-8 items-center rounded-[10px] border border-black/8 bg-[rgba(248,250,252,0.9)] px-3 text-[12px] font-medium text-black/72 transition hover:border-black/12 hover:bg-white hover:text-black/84"
-                >
-                  完成
-                </button>
-              </div>
+                  <div className="flex items-center justify-between border-t border-black/6 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => applyFilters({ importedFrom: "", importedTo: "" })}
+                      className="text-xs text-black/46 transition hover:text-black/70"
+                    >
+                      清空
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOpenPanel(null)}
+                      className="inline-flex h-8 items-center rounded-[10px] border border-black/8 bg-[rgba(248,250,252,0.9)] px-3 text-[12px] font-medium text-black/72 transition hover:border-black/12 hover:bg-white hover:text-black/84"
+                    >
+                      完成
+                    </button>
+                  </div>
+                </div>
+              </FilterPanel>
             </div>
-          </FilterPanel>
-        </div>
-      </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 px-1">
-        {quickFilters.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            onClick={item.onClick}
-            className={cn(
-              "inline-flex h-8 items-center rounded-full border px-3 text-[12px] font-medium transition-colors",
-              item.active
-                ? "border-[rgba(15,23,42,0.12)] bg-white text-black/84 shadow-[0_6px_14px_rgba(15,23,42,0.06)]"
-                : "border-black/7 bg-[rgba(255,255,255,0.74)] text-black/58 hover:border-black/10 hover:bg-white hover:text-black/82",
-            )}
-          >
-            {item.label}
-          </button>
-        ))}
-        {activeFilterCount > 0 ? (
-          <button
-            type="button"
-            onClick={() =>
-              applyFilters({
-                queue: "all",
-                statuses: [],
-                search: "",
-                productKeys: [],
-                productKeyword: "",
-                tagIds: [],
-                importedFrom: "",
-                importedTo: "",
-                teamId: "",
-                salesId: "",
-              })
-            }
-            className="inline-flex h-8 items-center rounded-full border border-black/7 bg-transparent px-3 text-[12px] text-black/48 transition hover:border-black/10 hover:bg-white hover:text-black/72"
-          >
-            清空筛选
-          </button>
-        ) : null}
-      </div>
+            <label className="space-y-1.5">
+              <span className="sr-only">状态筛选</span>
+              <select
+                value={filters.statuses[0] ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value as CustomerWorkStatusKey | "";
+                  applyFilters(
+                    value
+                      ? { statuses: [value], queue: value }
+                      : { statuses: [], queue: "all" },
+                  );
+                }}
+                className="h-10 w-full rounded-[14px] border border-black/8 bg-[rgba(248,250,252,0.84)] px-3 text-[13px] text-black/78 outline-none transition focus:border-black/14 focus:ring-2 focus:ring-black/5"
+              >
+                <option value="">全部状态</option>
+                {customerWorkStatusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label} ({queueCounts[option.value]})
+                  </option>
+                ))}
+              </select>
+            </label>
 
-      {(showTeamFilter || showSalesFilter) ? (
-        <div className="mt-3 flex flex-col gap-2.5 rounded-[16px] border border-black/6 bg-[rgba(255,255,255,0.66)] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black/38">
-            管理范围
-          </p>
+            <div className="relative">
+              <FilterButton
+                label="商品"
+                value={
+                  activeProductLabels.length > 0
+                    ? activeProductLabels.join(" / ")
+                    : filters.productKeyword || ""
+                }
+                active={Boolean(filters.productKeys.length || filters.productKeyword)}
+                open={openPanel === "product"}
+                onClick={() =>
+                  setOpenPanel((current) => (current === "product" ? null : "product"))
+                }
+              />
+              <FilterPanel
+                open={openPanel === "product"}
+                align="right"
+                widthClassName="w-[21rem]"
+              >
+                <div className="space-y-3">
+                  <p className="text-[13px] font-semibold text-black/84">商品筛选</p>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-black/34" />
+                    <input
+                      value={productKeywordDraft}
+                      onChange={(event) => setProductKeywordDraft(event.target.value)}
+                      onBlur={() => applyFilters({ productKeyword: productKeywordDraft.trim() })}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          applyFilters({ productKeyword: productKeywordDraft.trim() });
+                        }
+                      }}
+                      placeholder="搜索商品"
+                      className="h-10 w-full rounded-[12px] border border-black/8 bg-[rgba(248,250,252,0.82)] pl-8 pr-3 text-[13px] text-black/78 outline-none transition placeholder:text-black/34 focus:border-black/14 focus:ring-2 focus:ring-black/5"
+                    />
+                  </div>
+
+                  <div className="max-h-[20rem] space-y-1 overflow-y-auto pr-1">
+                    {visibleProductOptions.length > 0 ? (
+                      visibleProductOptions.slice(0, 10).map((option) => (
+                        <OptionRow
+                          key={option.key}
+                          title={option.label}
+                          subtitle={option.source === "purchased" ? "已购商品" : "导入意向"}
+                          trailing={option.count}
+                          selected={filters.productKeys.includes(option.key)}
+                          onClick={() => {
+                            const nextKeys = filters.productKeys.includes(option.key)
+                              ? filters.productKeys.filter((item) => item !== option.key)
+                              : [...filters.productKeys, option.key];
+                            applyFilters({ productKeys: nextKeys });
+                          }}
+                        />
+                      ))
+                    ) : (
+                      <p className="px-1 text-xs leading-5 text-black/40">暂无匹配项</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-black/6 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProductKeywordDraft("");
+                        applyFilters({ productKeys: [], productKeyword: "" });
+                      }}
+                      className="text-xs text-black/46 transition hover:text-black/70"
+                    >
+                      清空
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOpenPanel(null)}
+                      className="inline-flex h-8 items-center rounded-[10px] border border-black/8 bg-[rgba(248,250,252,0.9)] px-3 text-[12px] font-medium text-black/72 transition hover:border-black/12 hover:bg-white hover:text-black/84"
+                    >
+                      完成
+                    </button>
+                  </div>
+                </div>
+              </FilterPanel>
+            </div>
+
+            <div className="relative">
+              <FilterButton
+                label="标签"
+                value={activeTagLabels.length > 0 ? activeTagLabels.join(" / ") : ""}
+                active={filters.tagIds.length > 0}
+                open={openPanel === "tag"}
+                onClick={() => setOpenPanel((current) => (current === "tag" ? null : "tag"))}
+              />
+              <FilterPanel
+                open={openPanel === "tag"}
+                align="right"
+                widthClassName="w-[21rem]"
+              >
+                <div className="space-y-3">
+                  <p className="text-[13px] font-semibold text-black/84">标签筛选</p>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-black/34" />
+                    <input
+                      value={tagSearchDraft}
+                      onChange={(event) => setTagSearchDraft(event.target.value)}
+                      placeholder="搜索标签"
+                      className="h-10 w-full rounded-[12px] border border-black/8 bg-[rgba(248,250,252,0.82)] pl-8 pr-3 text-[13px] text-black/78 outline-none transition placeholder:text-black/34 focus:border-black/14 focus:ring-2 focus:ring-black/5"
+                    />
+                  </div>
+
+                  <div className="max-h-[20rem] space-y-1 overflow-y-auto pr-1">
+                    {visibleTagOptions.length > 0 ? (
+                      visibleTagOptions.slice(0, 10).map((tag) => (
+                        <OptionRow
+                          key={tag.id}
+                          title={tag.name}
+                          subtitle={tag.label}
+                          trailing={tag.count}
+                          selected={filters.tagIds.includes(tag.id)}
+                          onClick={() => {
+                            const nextTagIds = filters.tagIds.includes(tag.id)
+                              ? filters.tagIds.filter((item) => item !== tag.id)
+                              : [...filters.tagIds, tag.id];
+                            applyFilters({ tagIds: nextTagIds });
+                          }}
+                        />
+                      ))
+                    ) : (
+                      <p className="px-1 text-xs leading-5 text-black/40">暂无匹配项</p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-black/6 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => applyFilters({ tagIds: [] })}
+                      className="text-xs text-black/46 transition hover:text-black/70"
+                    >
+                      清空
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOpenPanel(null)}
+                      className="inline-flex h-8 items-center rounded-[10px] border border-black/8 bg-[rgba(248,250,252,0.9)] px-3 text-[12px] font-medium text-black/72 transition hover:border-black/12 hover:bg-white hover:text-black/84"
+                    >
+                      完成
+                    </button>
+                  </div>
+                </div>
+              </FilterPanel>
+            </div>
+          </div>
+
+          {(showTeamFilter || showSalesFilter) ? (
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black/38">
+                管理范围
+              </span>
+              {showTeamFilter ? (
+                <select
+                  value={filters.teamId}
+                  onChange={(event) =>
+                    applyFilters({ teamId: event.target.value, salesId: "" })
+                  }
+                  className="h-9 rounded-[12px] border border-black/8 bg-white/90 px-3 text-[13px] text-black/76 outline-none transition focus:border-black/14 focus:ring-2 focus:ring-black/5 sm:min-w-[10rem]"
+                >
+                  <option value="">全部团队</option>
+                  {teamOptions.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {team.name}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+
+              {showSalesFilter ? (
+                <select
+                  value={filters.salesId}
+                  onChange={(event) => applyFilters({ salesId: event.target.value })}
+                  className="h-9 rounded-[12px] border border-black/8 bg-white/90 px-3 text-[13px] text-black/76 outline-none transition focus:border-black/14 focus:ring-2 focus:ring-black/5 sm:min-w-[10rem]"
+                >
+                  <option value="">全部销售</option>
+                  {salesOptions.map((sales) => (
+                    <option key={sales.id} value={sales.id}>
+                      {sales.name}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap items-center gap-2">
-            {showTeamFilter ? (
-              <select
-                value={filters.teamId}
-                onChange={(event) => applyFilters({ teamId: event.target.value, salesId: "" })}
-                className="h-9 w-full rounded-[12px] border border-black/8 bg-white/90 px-3 text-[13px] text-black/76 outline-none transition focus:border-black/14 focus:ring-2 focus:ring-black/5 sm:w-auto sm:min-w-[10rem]"
+            {quickFilters.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={item.onClick}
+                className={cn(
+                  "inline-flex h-8 items-center rounded-full border px-3 text-[12px] font-medium transition-colors",
+                  item.active
+                    ? "border-black/12 bg-white text-black/84 shadow-[0_6px_14px_rgba(15,23,42,0.05)]"
+                    : "border-black/8 bg-[rgba(255,255,255,0.74)] text-black/56 hover:border-black/12 hover:bg-white hover:text-black/82",
+                )}
               >
-                <option value="">全部团队</option>
-                {teamOptions.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
-                  </option>
-                ))}
-              </select>
-            ) : null}
+                {item.label}
+              </button>
+            ))}
 
-            {showSalesFilter ? (
-              <select
-                value={filters.salesId}
-                onChange={(event) => applyFilters({ salesId: event.target.value })}
-                className="h-9 w-full rounded-[12px] border border-black/8 bg-white/90 px-3 text-[13px] text-black/76 outline-none transition focus:border-black/14 focus:ring-2 focus:ring-black/5 sm:w-auto sm:min-w-[10rem]"
+            {activeFilterCount > 0 ? (
+              <button
+                type="button"
+                onClick={() =>
+                  applyFilters({
+                    queue: "all",
+                    statuses: [],
+                    search: "",
+                    productKeys: [],
+                    productKeyword: "",
+                    tagIds: [],
+                    importedFrom: "",
+                    importedTo: "",
+                    teamId: "",
+                    salesId: "",
+                  })
+                }
+                className="inline-flex h-8 items-center rounded-full border border-black/8 bg-transparent px-3 text-[12px] text-black/48 transition hover:border-black/12 hover:bg-white hover:text-black/72"
               >
-                <option value="">全部销售</option>
-                {salesOptions.map((sales) => (
-                  <option key={sales.id} value={sales.id}>
-                    {sales.name}
-                  </option>
-                ))}
-              </select>
+                清空筛选
+              </button>
             ) : null}
           </div>
         </div>
-      ) : null}
-    </section>
+      </FiltersPanel>
+    </div>
   );
 }

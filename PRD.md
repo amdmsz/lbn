@@ -37,7 +37,16 @@
 - Sales 主要从 `/customers` 工作，而不是 `/leads`
 - `/leads` 主要服务 `ADMIN / SUPERVISOR` 做导入、审核、分配
 
-### 2.2 交易与执行主线
+### 2.2 线索导入执行基线
+
+- 线索导入当前已支持异步批次处理
+- 导入入口负责创建导入批次并提交后台任务
+- 后台 worker 负责消费导入任务并执行解析、校验、去重、归并与落库
+- Redis 是异步导入队列的运行依赖
+- 导入失败时必须保留失败状态、失败信息与可追踪记录
+- 异步执行方式不改变 `Lead` 与 `Customer` 的业务边界，只改变导入处理方式
+
+### 2.3 交易与执行主线
 
 - `TradeOrder` 是成交主单
 - `SalesOrder` 是供应商子单
@@ -47,7 +56,7 @@
 - `PaymentPlan / PaymentRecord / CollectionTask` 是 payment layer 真相
 - `CodCollectionRecord` 与 `LogisticsFollowUpTask` 分别承接 COD 与物流执行结果
 
-### 2.3 当前页面主视角与入口基线
+### 2.4 当前页面主视角与入口基线
 
 - `/customers` 仍是 Sales 主工作台
 - `/customers/[id]` 已切到 `TradeOrder` 新写路径
@@ -61,7 +70,7 @@
 - supplier 管理在 `/products?tab=suppliers`
 - `/customers/public-pool` 已切到 `Customer ownership lifecycle` 工作台，并继续分出规则页与报表页
 
-### 2.4 UI / IA 边界
+### 2.5 UI / IA 边界
 
 - `DESIGN.md` 负责视觉系统、页面层级、组件风格与 UI 重构约束
 - `UI_ENTRYPOINTS.md` 负责主入口、兼容路由、高风险 CTA 与切流检查点
@@ -177,6 +186,7 @@
 - 团队级业务 owner
 - 审核父单
 - 看团队客户、团队父单、团队子单、团队支付与催收
+- 可发起并追踪团队线索导入批次
 
 ### SALES
 
@@ -184,6 +194,7 @@
 - 创建和编辑自己客户的 `TradeOrder`
 - 提交支付记录
 - 跟进自己的催收与物流结果
+- 不默认获得团队级导入批次处理视图
 
 ### SHIPPER
 
@@ -210,6 +221,7 @@
 - 不扩展 legacy `ShippingTask.orderId`
 - 重要动作必须继续写 `OperationLog`
 - UI 重构不得漂移主入口、兼容路由与关键 CTA 指向
+- 异步导入只改变处理方式，不改变 `Lead` / `Customer` 业务边界
 
 ---
 
@@ -221,6 +233,7 @@
 - 补订单履约域与子单执行页的产品层体验
 - 继续完善 bundle / gift 在执行侧的可读性
 - 在不改业务真相的前提下，升级客户中心与客户详情的 UI / IA
+- 继续完善异步导入批次的可观测性与运行时部署基线
 - 仅在确有必要时再评估新的 schema 里程碑
 
 ---

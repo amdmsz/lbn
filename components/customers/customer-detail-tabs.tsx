@@ -51,9 +51,9 @@ export function CustomerDetailTabs({
   const activeGroup = getCustomerDetailTabGroupMeta(activeTab);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       <div className="overflow-x-auto pb-1">
-        <div className="flex min-w-max gap-2.5 md:min-w-0 md:flex-wrap">
+        <div className="inline-flex min-w-max gap-1 rounded-[15px] border border-black/7 bg-[rgba(247,248,250,0.86)] p-1">
           {customerDetailTabGroups.map((group) => {
             const isActive = group.tabs.some((tab) => tab === activeTab);
             const href = buildHref
@@ -72,10 +72,10 @@ export function CustomerDetailTabs({
                 href={href}
                 scrollTargetId={scrollTargetId}
                 className={cn(
-                  "inline-flex min-h-10 min-w-0 items-center gap-2 rounded-full border px-3.5 py-2 text-sm transition-[border-color,background-color,color,box-shadow] duration-150",
+                  "inline-flex min-h-8 min-w-0 items-center gap-2 rounded-[11px] px-3 py-1.5 text-[13px] font-medium transition-[border-color,background-color,color,box-shadow] duration-150",
                   isActive
-                    ? "border-black/10 bg-[rgba(255,255,255,0.96)] text-black/86 shadow-[0_8px_18px_rgba(18,24,31,0.05)]"
-                    : "border-transparent bg-[rgba(247,248,250,0.72)] text-black/58 hover:border-black/7 hover:bg-white hover:text-black/82",
+                    ? "border border-black/8 bg-white text-black/86 shadow-[0_8px_18px_rgba(18,24,31,0.05)]"
+                    : "border border-transparent text-black/56 hover:border-black/7 hover:bg-white/84 hover:text-black/82",
                 )}
               >
                 <span className="truncate">{group.label}</span>
@@ -99,7 +99,7 @@ export function CustomerDetailTabs({
 
       {activeGroup.tabs.length > 1 ? (
         <div className="overflow-x-auto pb-1">
-          <div className="flex min-w-max gap-2 md:min-w-0 md:flex-wrap">
+          <div className="inline-flex min-w-max gap-1 rounded-[13px] border border-black/7 bg-white/74 p-1">
             {customerDetailTabs
               .filter((tab) => activeGroup.tabs.some((item) => item === tab.value))
               .map((tab) => {
@@ -116,10 +116,10 @@ export function CustomerDetailTabs({
                     }
                     scrollTargetId={scrollTargetId}
                     className={cn(
-                      "inline-flex min-h-8 min-w-0 items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] transition-[border-color,background-color,color] duration-150",
+                      "inline-flex min-h-8 min-w-0 items-center gap-2 rounded-[10px] border px-3 py-1.5 text-[12px] transition-[border-color,background-color,color] duration-150",
                       isActive
                         ? "border-black/9 bg-[rgba(15,23,42,0.05)] text-black/82"
-                        : "border-black/6 bg-white/70 text-black/52 hover:border-black/10 hover:bg-white hover:text-black/76",
+                        : "border-transparent text-black/52 hover:border-black/8 hover:bg-white hover:text-black/78",
                     )}
                   >
                     <span className="truncate">{tab.label}</span>

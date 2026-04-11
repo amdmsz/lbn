@@ -2513,7 +2513,17 @@ export async function getCustomerDetailShell(
     return null;
   }
 
-  const [firstLead, latestLead, latestCall, latestWechat, latestLive, operationLogCount, logisticsFollowUpCount] =
+  const [
+    firstLead,
+    latestLead,
+    latestCall,
+    latestWechat,
+    latestLive,
+    operationLogCount,
+    logisticsFollowUpCount,
+    approvedTradeOrderSummary,
+    approvedTradeOrderCount,
+  ] =
     await Promise.all([
       prisma.lead.findFirst({
         where: withVisibleLeadWhere({ customerId: detail.customer.id }),
@@ -2548,6 +2558,24 @@ export async function getCustomerDetailShell(
           customerId: detail.customer.id,
         },
       }),
+      prisma.tradeOrder.aggregate({
+        where: {
+          customerId: detail.customer.id,
+          tradeStatus: TradeOrderStatus.APPROVED,
+        },
+        _sum: {
+          finalAmount: true,
+        },
+        _max: {
+          createdAt: true,
+        },
+      }),
+      prisma.tradeOrder.count({
+        where: {
+          customerId: detail.customer.id,
+          tradeStatus: TradeOrderStatus.APPROVED,
+        },
+      }),
     ]);
 
   return {
@@ -2567,6 +2595,11 @@ export async function getCustomerDetailShell(
     },
     operationLogCount,
     logisticsFollowUpCount,
+    tradeOrderSummary: {
+      approvedCount: approvedTradeOrderCount,
+      lifetimeAmount: approvedTradeOrderSummary._sum.finalAmount?.toString() ?? "0",
+      latestTradeAt: approvedTradeOrderSummary._max.createdAt ?? null,
+    },
   };
 }
 

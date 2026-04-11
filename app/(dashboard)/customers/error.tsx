@@ -10,7 +10,8 @@ export default function CustomersError({
   reset: () => void;
 }>) {
   return (
-    <ErrorState
+    <div className="crm-page">
+      <ErrorState
       eyebrow="客户中心异常"
       title="客户中心加载失败"
       description="页面在读取客户数据时发生错误。你可以先重试；如果问题持续存在，再检查数据库连接、权限配置和客户关联数据是否可用。"
@@ -20,6 +21,7 @@ export default function CustomersError({
           重新加载
         </button>
       }
-    />
+      />
+    </div>
   );
 }

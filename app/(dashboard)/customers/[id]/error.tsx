@@ -10,7 +10,8 @@ export default function CustomerDetailError({
   reset: () => void;
 }>) {
   return (
-    <ErrorState
+    <div className="crm-page">
+      <ErrorState
       eyebrow="客户详情异常"
       title="客户详情加载失败"
       description="页面在读取客户详情、跟进记录或关联履约数据时发生错误。请先重试；如果问题持续存在，再检查数据库连接、关联数据和当前角色权限。"
@@ -20,6 +21,7 @@ export default function CustomerDetailError({
           重新加载
         </button>
       }
-    />
+      />
+    </div>
   );
 }

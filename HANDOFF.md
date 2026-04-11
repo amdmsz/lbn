@@ -77,7 +77,50 @@
 
 ---
 
-## 3. 当前阶段已完成
+## 3. 当前运行时基线补充
+
+### 线索导入异步基线
+
+当前线索导入已经不是纯同步处理链路。
+
+当前运行方式：
+
+- Web 进程负责创建导入批次与入队
+- Redis 负责作为 lead import queue 连接依赖
+- 独立 worker 负责消费批次并后台处理导入任务
+
+当前仓库内的关键运行点包括：
+
+- `npm run worker:lead-imports`
+- `scripts/lead-import-worker.ts`
+- `lib/lead-imports/queue.ts`
+- `lib/lead-imports/worker.ts`
+
+### 运行依赖
+
+当前异步导入运行至少要求：
+
+- `REDIS_URL`
+- 一个正常运行的 Redis 服务
+- Web 进程
+- lead import worker 进程
+
+当前可选调优变量：
+
+- `LEAD_IMPORT_CHUNK_SIZE`
+- `LEAD_IMPORT_WORKER_CONCURRENCY`
+- `LEAD_IMPORT_JOB_ATTEMPTS`
+
+### 交接注意
+
+- 这是一条运行时链路，不是新的一级 UI 入口
+- 不要误以为 `npm run dev` 就能覆盖完整异步导入处理
+- staging / production 必须显式把 worker 进程纳入部署
+- 如果 Redis 没配或 worker 没起，导入链路会残缺
+
+---
+
+## 4. 当前阶段已完成
 
 ### 交易主链
 
@@ -85,6 +128,14 @@
 - Phase 2 backfill 已完成
 - `/customers/[id]` 已切 TradeOrder 建单路径
 - `/orders/[id]` 父单优先，子单 fallback
+
+### Lead Import Async Baseline
+
+- lead import queue 已接入 Redis
+- lead import worker 已落地为独立后台进程
+- 导入批次可异步消费
+- 失败批次与失败日志基线已接通
+- 该项不改变 `Lead / Customer` 业务边界
 
 ### GIFT / BUNDLE
 
@@ -118,7 +169,7 @@
 
 ---
 
-## 4. 当前页面定位
+## 5. 当前页面定位
 
 ### 交易单视图
 
@@ -178,7 +229,7 @@
 
 ---
 
-## 5. 当前不要回退的边界
+## 6. 当前不要回退的边界
 
 - 不要把系统回退成旧 `SalesOrder` 主单认知
 - 不要重开 schema 改造，除非有明确硬缺字段
@@ -188,10 +239,11 @@
 - 不要混 payment truth 和 fulfillment truth
 - 不要在 UI 重构时漂移主入口、兼容路由或 CTA 指向
 - 不要把工作台页面做成 marketplace / marketing 风格
+- 不要把异步导入运行链路重新退回成仅同步处理假设
 
 ---
 
-## 6. 当前 UI / 设计交接规则
+## 7. 当前 UI / 设计交接规则
 
 当前 UI 方向已经固定为：
 
@@ -210,7 +262,7 @@
 
 ---
 
-## 7. 当前推荐阅读顺序
+## 8. 当前推荐阅读顺序
 
 1. `README.md`
 2. `AGENTS.md`
@@ -218,27 +270,32 @@
 4. `PRD.md`
 5. `PLANS.md`
 6. `UI_ENTRYPOINTS.md`
-7. `STAGE_FREEZE_2026-04-03.md`
-8. `docs/deployment-baseline.md`
-9. `app/(dashboard)/fulfillment/page.tsx`
-10. `components/fulfillment/order-fulfillment-center.tsx`
-11. `app/(dashboard)/customers/public-pool/*`
-12. `components/customers/public-pool-*`
-13. `components/trade-orders/*`
-14. `components/shipping/*`
-15. `lib/trade-orders/*`
-16. `lib/shipping/*`
+7. `docs/deployment-baseline.md`
+8. `docs/staging-checklist.md`
+9. `scripts/lead-import-worker.ts`
+10. `lib/lead-imports/*`
+11. `STAGE_FREEZE_2026-04-03.md`
+12. `docs/deployment-baseline.md`
+13. `app/(dashboard)/fulfillment/page.tsx`
+14. `components/fulfillment/order-fulfillment-center.tsx`
+15. `app/(dashboard)/customers/public-pool/*`
+16. `components/customers/public-pool-*`
+17. `components/trade-orders/*`
+18. `components/shipping/*`
+19. `lib/trade-orders/*`
+20. `lib/shipping/*`
 
 ---
 
-## 8. 当前后续建议
+## 9. 当前后续建议
 
 当前后续建议优先级：
 
 1. 在现有模型上做 workflow enhancement
 2. 做客户中心与客户详情的 bounded UI / IA 升级
-3. 单独规划 finance / reconciliation
-4. 在新的 replayable migration 基线上继续维护 schema 变更
+3. 收口异步导入运行时文档、部署基线与可观测性说明
+4. 单独规划 finance / reconciliation
+5. 在新的 replayable migration 基线上继续维护 schema 变更
 
 不建议：
 
@@ -249,7 +306,7 @@
 
 ---
 
-## 9. 验证基线
+## 10. 验证基线
 
 当前阶段封板和文档同步后，验证命令保持：
 
@@ -258,9 +315,15 @@
 - `npm run lint`
 - `npm run build`
 
+如果联调异步导入，还要额外确认：
+
+- Redis 可连接
+- `npm run worker:lead-imports` 可正常启动
+- 导入批次可被 worker 消费
+
 ---
 
-## 10. 2026-04-03 Trade-Orders UX / Logistics Closeout
+## 11. 2026-04-03 Trade-Orders UX / Logistics Closeout
 
 当前 `trade-orders` 视图的扫描效率与物流交互已经完成 closeout：
 
@@ -277,18 +340,20 @@
 
 ---
 
-## 11. 当前部署基线补充
+## 12. 当前部署基线补充
 
 - 登录页 UI 已不再把 demo 账号与默认密码当作正式基线暴露
 - 正式环境不再依赖 `prisma/seed.mjs` 初始化账号
 - 首个管理员初始化应使用 `npm run admin:bootstrap`
+- lead import worker 已纳入当前正式运行基线
+- Redis 已成为异步导入链路的运行依赖
 - 当前 staging / production 部署基线以 `docs/deployment-baseline.md` 为准
 - 当前 Prisma migration rebaseline 已完成，空库正式环境可使用 `npx prisma migrate deploy`
 - rebaseline 之前创建的旧环境，如数据库结构已与 `schema.prisma` 一致，需要先做一次 migration metadata reconcile
 
 ---
 
-## 12. 当前 Staging 验收边界
+## 13. 当前 Staging 验收边界
 
 当前建议进入 staging 验收的范围：
 
@@ -296,6 +361,7 @@
 - 订单履约主线：`/fulfillment` 三视图与兼容跳转
 - 商品域主线：`/products` 与 supplier 内嵌管理
 - 公海池主线：ownership lifecycle、规则页、报表页、自动分配、自动回收
+- 线索导入异步链路：Web、Redis、worker、批次状态推进
 - 登录 / 部署基线：环境变量、Prisma 同步、首个管理员初始化、导出目录
 
 当前不应混入 staging 验收范围：

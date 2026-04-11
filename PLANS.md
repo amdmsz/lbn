@@ -16,7 +16,7 @@
 - `DESIGN.md`：视觉系统、页面层级、组件风格与 UI 重构约束
 - `PRD.md`：产品真相、角色边界、当前页面主视角
 - `PLANS.md`：真实里程碑状态与下一步计划
-- `HANDOFF.md`：历史切流、兼容信息、交接上下文
+- `HANDOFF.md`：历史切流、兼容信息、交接上下文与运行时基线
 - `UI_ENTRYPOINTS.md`：主入口、兼容路由、高风险 CTA 与切流检查点
 
 当前执行原则：
@@ -25,6 +25,7 @@
 - 页面主入口、兼容路由、hover / dropdown / empty-state 动作必须遵循 `UI_ENTRYPOINTS.md`
 - 不把页面美化误做成主入口漂移
 - 不把结构升级误做成 schema 或 truth layer 变更
+- 异步导入基线属于运行时与工作流增强，不属于新交易模型里程碑
 
 ---
 
@@ -44,6 +45,9 @@
 - `/payment-records`、`/collection-tasks` 仍保持子单执行主视角
 - `/products` 已是商品域唯一一级入口，supplier 管理收进 `/products?tab=suppliers`
 - `/customers/public-pool` 已落地为 `Customer ownership lifecycle` 工作台，并分出规则页与报表页
+- 线索导入已支持异步批次处理
+- Redis + lead import worker 已进入真实运行基线
+- `worker:lead-imports` 已作为仓库脚本提供
 
 ---
 
@@ -63,6 +67,17 @@
 - 线索导入、去重、分配
 - 客户中心与客户详情工作台
 - 基于 `Customer.ownerId` 的销售主线
+
+### M1A. Lead Import Async Baseline
+
+状态：已完成
+
+- 线索导入已支持异步批次处理
+- Web 进程负责创建导入批次并入队
+- Redis 已接入 lead import queue 作为运行依赖
+- `worker:lead-imports` 已落地为独立后台处理进程
+- 导入失败状态、失败日志与重试基线已接通
+- 该项不改变 `Lead / Customer` 业务边界与 truth layer
 
 ### M2. Payment / Fulfillment V2 基线
 
@@ -136,6 +151,7 @@
 - 不把 `GiftRecord` 与订单赠品混链
 - 不把 UI 重构扩成全站无边界重写
 - 不在未明确里程碑时顺手重做 truth layer
+- 不把异步导入扩写成新的 Lead / Customer 模型改造
 
 ---
 
@@ -190,6 +206,28 @@
 - 不改服务端权限逻辑
 - 不顺手做整站 UI 重写
 
+### M7B. Lead Import Runtime / Observability 收口
+
+状态：待开始
+
+目标：
+
+- 收口异步导入的运行时说明、部署基线、staging 验收与可观测性说明
+- 让 Web、Redis、worker 三段链路在 README / HANDOFF / deployment / staging 文档中保持一致
+
+范围：
+
+- README 本地启动说明
+- HANDOFF 运行时基线
+- deployment / staging 文档
+- 导入失败、重试与 worker 日志的交接说明
+
+明确不做：
+
+- 不改 Lead / Customer 业务边界
+- 不重开 schema
+- 不做新的导入页面主入口设计
+
 ### M8. 商品经营深化
 
 状态：待开始
@@ -238,8 +276,9 @@
 
 1. M7：执行工作台收口
 2. M7A：客户中心与客户详情 UI/IA 升级
-3. M8：商品经营深化
-4. M9：Finance / Reconciliation 首版
+3. M7B：Lead Import Runtime / Observability 收口
+4. M8：商品经营深化
+5. M9：Finance / Reconciliation 首版
 
 ---
 
@@ -252,6 +291,7 @@
 - 旧执行主链继续稳定
 - 重要动作继续留痕
 - UI 重构不得漂移主入口与兼容路由
+- 异步导入基线不得因部署遗漏而失效
 - `npm run lint` 和 `npm run build` 必须始终保持通过
 
 ---
