@@ -4,6 +4,9 @@ import { promisify } from "node:util";
 const scrypt = promisify(scryptCallback);
 const KEY_LENGTH = 64;
 const TEMP_PASSWORD_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+const TEMP_PASSWORD_CHARSET_LENGTH = TEMP_PASSWORD_CHARS.length;
+const TEMP_PASSWORD_MAX_UNBIASED_VALUE =
+  Math.floor(256 / TEMP_PASSWORD_CHARSET_LENGTH) * TEMP_PASSWORD_CHARSET_LENGTH;
 
 export async function hashPassword(password: string) {
   const salt = randomBytes(16).toString("hex");
@@ -30,11 +33,22 @@ export async function verifyPassword(password: string, storedHash: string) {
 }
 
 export function generateTemporaryPassword(length = 10) {
-  const bytes = randomBytes(length);
   let password = "";
 
-  for (let index = 0; index < length; index += 1) {
-    password += TEMP_PASSWORD_CHARS[bytes[index] % TEMP_PASSWORD_CHARS.length];
+  while (password.length < length) {
+    const bytes = randomBytes(length - password.length);
+
+    for (const byte of bytes) {
+      if (byte >= TEMP_PASSWORD_MAX_UNBIASED_VALUE) {
+        continue;
+      }
+
+      password += TEMP_PASSWORD_CHARS[byte % TEMP_PASSWORD_CHARSET_LENGTH];
+
+      if (password.length === length) {
+        break;
+      }
+    }
   }
 
   return password;
