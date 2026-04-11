@@ -1,11 +1,6 @@
 "use client";
 
-import type {
-  FocusEvent as ReactFocusEvent,
-  KeyboardEvent as ReactKeyboardEvent,
-  MouseEvent,
-  ReactNode,
-} from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { FilePlus2, FileText, MoreHorizontal, Phone, SquarePen } from "lucide-react";
@@ -28,12 +23,6 @@ import type { CustomerListItem } from "@/lib/customers/queries";
 import { formatCurrency } from "@/lib/fulfillment/metadata";
 import { cn } from "@/lib/utils";
 
-type DynamicInfoItem = {
-  key: string;
-  text: string;
-  title?: string;
-};
-
 function normalizeDate(value: Date | string | null | undefined) {
   if (!value) {
     return null;
@@ -42,55 +31,9 @@ function normalizeDate(value: Date | string | null | undefined) {
   return value instanceof Date ? value : new Date(value);
 }
 
-function getDynamicInfoItems(
-  item: CustomerListItem,
-  importedAt: Date,
-  latestFollowUpAt: Date | null,
-  latestTradeAt: Date | null,
-): DynamicInfoItem[] {
-  const items: DynamicInfoItem[] = [];
-  const purchasedProduct = item.latestPurchasedProduct?.trim();
+function getRecentInterest(item: CustomerListItem) {
   const interestedProduct = item.latestInterestedProduct?.trim();
-
-  if (purchasedProduct) {
-    items.push({
-      key: "purchased-product",
-      text: `最近成交商品 · ${purchasedProduct}`,
-      title: purchasedProduct,
-    });
-  }
-
-  if (latestTradeAt) {
-    items.push({
-      key: "trade-time",
-      text: `最近成交 ${formatRelativeDateTime(latestTradeAt)}`,
-      title: formatDateTime(latestTradeAt),
-    });
-  }
-
-  if (latestFollowUpAt) {
-    items.push({
-      key: "follow-up",
-      text: `最近跟进 ${formatRelativeDateTime(latestFollowUpAt)}`,
-      title: formatDateTime(latestFollowUpAt),
-    });
-  }
-
-  if (interestedProduct && interestedProduct !== purchasedProduct) {
-    items.push({
-      key: "interest-product",
-      text: `最近意向 · ${interestedProduct}`,
-      title: interestedProduct,
-    });
-  }
-
-  items.push({
-    key: "imported-at",
-    text: `导入 ${formatRelativeDateTime(importedAt)}`,
-    title: formatDateTime(importedAt),
-  });
-
-  return items;
+  return interestedProduct || "暂无最近意向";
 }
 
 function getCardAddress(item: CustomerListItem) {
@@ -107,27 +50,6 @@ function getOwnerLabel(item: CustomerListItem) {
 
 function getPrimaryWorkStatus(item: CustomerListItem): CustomerWorkStatusKey | null {
   return item.workingStatuses[0] ?? null;
-}
-
-function getNextAction(item: CustomerListItem) {
-  const primaryStatus = getPrimaryWorkStatus(item);
-
-  switch (primaryStatus) {
-    case "pending_first_call":
-      return "首呼待处理";
-    case "pending_follow_up":
-      return "回访到期";
-    case "pending_wechat":
-      return "补微信承接";
-    case "pending_invitation":
-      return "推进邀约";
-    case "pending_deal":
-      return "推进成交";
-    case "migration_pending_follow_up":
-      return "完成接续跟进";
-    default:
-      return item.latestTradeAt ? "维护复购节奏" : "进入详情继续经营";
-  }
 }
 
 function buildCustomerTradeOrderHref(customerId: string) {
@@ -258,47 +180,15 @@ export function CustomerListCard({
   const [callDialogOpen, setCallDialogOpen] = useState(false);
   const [callHistoryDialogOpen, setCallHistoryDialogOpen] = useState(false);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
-  const [dynamicIndex, setDynamicIndex] = useState(0);
-  const [tickerPaused, setTickerPaused] = useState(false);
 
   const detailHref = `/customers/${item.id}`;
-  const importedAt = normalizeDate(item.latestImportAt) ?? item.createdAt;
   const latestFollowUpAt = normalizeDate(item.latestFollowUpAt);
   const latestTradeAt = normalizeDate(item.latestTradeAt);
   const address = getCardAddress(item);
   const hasLifetimeTrade = Number(item.lifetimeTradeAmount) > 0.009;
   const primaryStatus = getPrimaryWorkStatus(item);
-  const dynamicInfoItems = getDynamicInfoItems(
-    item,
-    importedAt,
-    latestFollowUpAt,
-    latestTradeAt,
-  );
-  const safeDynamicIndex =
-    dynamicInfoItems.length > 0 ? dynamicIndex % dynamicInfoItems.length : 0;
-  const activeDynamicInfo = dynamicInfoItems[safeDynamicIndex] ?? dynamicInfoItems[0];
-  const nextAction = getNextAction(item);
-
-  useEffect(() => {
-    if (dynamicInfoItems.length <= 1 || tickerPaused) {
-      return undefined;
-    }
-
-    if (
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ) {
-      return undefined;
-    }
-
-    const intervalId = window.setInterval(() => {
-      setDynamicIndex((current) => (current + 1) % dynamicInfoItems.length);
-    }, 5400);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [dynamicInfoItems.length, tickerPaused]);
+  const recentInterest = getRecentInterest(item);
+  const phoneText = item.phone?.trim() || "暂无电话";
 
   useEffect(() => {
     if (!mobileActionsOpen) {
@@ -378,16 +268,6 @@ export function CustomerListCard({
     }
   }
 
-  function handleFocusCapture() {
-    setTickerPaused(true);
-  }
-
-  function handleBlurCapture(event: ReactFocusEvent<HTMLElement>) {
-    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-      setTickerPaused(false);
-    }
-  }
-
   return (
     <>
       <article
@@ -396,12 +276,8 @@ export function CustomerListCard({
         aria-label={`进入 ${item.name} 详情页`}
         onClick={() => navigateTo(detailHref)}
         onKeyDown={handleCardKeyDown}
-        onMouseEnter={() => setTickerPaused(true)}
-        onMouseLeave={() => setTickerPaused(false)}
-        onFocusCapture={handleFocusCapture}
-        onBlurCapture={handleBlurCapture}
         className={cn(
-          "group relative flex cursor-pointer flex-col overflow-hidden rounded-[18px] border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,247,244,0.92))] px-4 py-4 shadow-[0_6px_16px_rgba(15,23,42,0.03)] outline-none transition-[border-color,background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
+          "group relative flex cursor-pointer flex-col overflow-hidden rounded-[18px] border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,247,244,0.92))] px-4 py-3.5 shadow-[0_6px_16px_rgba(15,23,42,0.03)] outline-none transition-[border-color,background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
           "focus-visible:ring-2 focus-visible:ring-black/8 focus-visible:ring-offset-0",
           "min-[960px]:hover:-translate-y-px min-[960px]:hover:border-[rgba(15,23,42,0.12)] min-[960px]:hover:bg-white min-[960px]:hover:shadow-[0_12px_24px_rgba(15,23,42,0.05)]",
         )}
@@ -423,7 +299,17 @@ export function CustomerListCard({
                 }
               />
             </div>
-            <p className="mt-1 text-[13px] font-medium text-black/66">{item.phone}</p>
+
+            <p className="mt-1.5 text-[18px] font-semibold leading-none tracking-[0.02em] text-[#0f172a] tabular-nums">
+              {phoneText}
+            </p>
+
+            <div className="mt-2.5 flex items-start gap-2 text-[12px] leading-5 text-black/56">
+              <span className="shrink-0 font-medium text-black/38">最近意向</span>
+              <p title={recentInterest} className="min-w-0 truncate font-medium text-black/76">
+                {recentInterest}
+              </p>
+            </div>
           </div>
 
           <div ref={mobileMenuRef} className="relative z-20 flex shrink-0 items-start gap-2">
@@ -493,7 +379,7 @@ export function CustomerListCard({
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
           {item.workingStatuses.slice(primaryStatus ? 1 : 0, 2).map((status) => (
             <StatusBadge
               key={status}
@@ -504,14 +390,12 @@ export function CustomerListCard({
           <StatusBadge label={getOwnerLabel(item)} variant="neutral" />
         </div>
 
-        <div className="mt-3 space-y-2 text-[12px] leading-5 text-black/52">
+        <div className="mt-2.5 space-y-1.5 text-[12px] leading-5 text-black/52">
           <p className="truncate" title={address}>
             {address}
           </p>
           <div className="flex flex-wrap gap-x-3 gap-y-1">
-            <span
-              title={latestFollowUpAt ? formatDateTime(latestFollowUpAt) : "暂无跟进记录"}
-            >
+            <span title={latestFollowUpAt ? formatDateTime(latestFollowUpAt) : "暂无跟进记录"}>
               {latestFollowUpAt
                 ? `最近跟进 ${formatRelativeDateTime(latestFollowUpAt)}`
                 : "最近跟进 暂无"}
@@ -524,26 +408,11 @@ export function CustomerListCard({
           </div>
         </div>
 
-        <div className="mt-3 rounded-[14px] border border-black/7 bg-[rgba(255,255,255,0.7)] px-3.5 py-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/38">
-              最近信号
-            </p>
-            <p className="text-[11px] font-medium text-black/54">下一步：{nextAction}</p>
-          </div>
-          <p
-            title={activeDynamicInfo?.title}
-            className="mt-2 truncate text-[13px] font-medium text-black/78"
-          >
-            {activeDynamicInfo?.text}
-          </p>
-        </div>
-
         <div className="pointer-events-none absolute inset-x-4 bottom-3 hidden justify-end min-[960px]:flex">
           <div className="flex items-center gap-1 rounded-[11px] border border-white/75 bg-[rgba(255,255,255,0.82)] p-1 shadow-[0_10px_18px_rgba(15,23,42,0.08)] opacity-0 backdrop-blur-[8px] transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:pointer-events-auto group-hover:-translate-y-0.5 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:-translate-y-0.5 group-focus-within:opacity-100">
             <CustomerActionButton
               icon={SquarePen}
-              label="通话"
+              label="记录通话"
               onClick={openCallDialog}
               disabled={!canCreateCallRecord}
             />
@@ -570,7 +439,7 @@ export function CustomerListCard({
         description={`为 ${item.name} 补充本次通话结果、备注和下一次跟进时间。`}
         onClose={() => setCallDialogOpen(false)}
       >
-        <CustomerIdentity name={item.name} phone={item.phone} />
+        <CustomerIdentity name={item.name} phone={phoneText} />
         <CustomerCallRecordForm
           customerId={item.id}
           resultOptions={callResultOptions}
@@ -584,7 +453,7 @@ export function CustomerListCard({
         description={`查看 ${item.name} 最近的通话结果与跟进节奏。`}
         onClose={() => setCallHistoryDialogOpen(false)}
       >
-        <CustomerIdentity name={item.name} phone={item.phone} />
+        <CustomerIdentity name={item.name} phone={phoneText} />
         <CustomerCallRecordHistory records={item.callRecords} />
       </CustomerModal>
     </>

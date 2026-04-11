@@ -248,9 +248,12 @@ export function CustomerFilterToolbar({
   const pathname = usePathname() || "/customers";
   const router = useRouter();
   const rootRef = useRef<HTMLDivElement>(null);
+  const queuedSearchRef = useRef<string | null>(null);
+  const latestSearchIntentRef = useRef(filters.search);
   const [pending, startTransition] = useTransition();
   const [openPanel, setOpenPanel] = useState<FilterPanelKey>(null);
   const [searchDraft, setSearchDraft] = useState(filters.search);
+  const [searchComposing, setSearchComposing] = useState(false);
   const [productKeywordDraft, setProductKeywordDraft] = useState(filters.productKeyword);
   const [tagSearchDraft, setTagSearchDraft] = useState("");
 
@@ -270,17 +273,82 @@ export function CustomerFilterToolbar({
   );
 
   useEffect(() => {
-    const nextSearch = searchDraft.trim();
-    if (nextSearch === filters.search) {
+    const serverSearch = filters.search;
+    const hasQueuedSearch =
+      queuedSearchRef.current !== null && queuedSearchRef.current !== serverSearch;
+    const hasNewerSearchIntent = latestSearchIntentRef.current !== serverSearch;
+
+    if (searchComposing || hasQueuedSearch || (pending && hasNewerSearchIntent)) {
       return;
     }
 
-    const timer = window.setTimeout(() => {
+    latestSearchIntentRef.current = serverSearch;
+
+    const syncTimer = window.setTimeout(() => {
+      setSearchDraft(serverSearch);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(syncTimer);
+    };
+  }, [filters.search, pending, searchComposing]);
+
+  const submitSearch = useCallback(
+    (rawValue: string) => {
+      const nextSearch = rawValue.trim();
+      latestSearchIntentRef.current = nextSearch;
+
+      if (pending) {
+        queuedSearchRef.current = nextSearch;
+        return;
+      }
+
+      queuedSearchRef.current = null;
+
+      if (nextSearch === filters.search) {
+        return;
+      }
+
       applyFilters({ search: nextSearch });
-    }, 320);
+    },
+    [applyFilters, filters.search, pending],
+  );
+
+  useEffect(() => {
+    if (searchComposing) {
+      return undefined;
+    }
+
+    const nextSearch = searchDraft.trim();
+    if (nextSearch === latestSearchIntentRef.current) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      submitSearch(searchDraft);
+    }, 350);
 
     return () => window.clearTimeout(timer);
-  }, [applyFilters, filters.search, searchDraft]);
+  }, [searchComposing, searchDraft, submitSearch]);
+
+  useEffect(() => {
+    if (pending) {
+      return;
+    }
+
+    const queuedSearch = queuedSearchRef.current;
+    if (queuedSearch === null) {
+      return;
+    }
+
+    queuedSearchRef.current = null;
+
+    if (queuedSearch === filters.search) {
+      return;
+    }
+
+    applyFilters({ search: queuedSearch });
+  }, [applyFilters, filters.search, pending]);
 
   useEffect(() => {
     if (!openPanel) {
@@ -380,6 +448,8 @@ export function CustomerFilterToolbar({
     [filters.productKeys, productOptions],
   );
 
+  const searchPending = pending && searchDraft.trim() !== filters.search;
+
   const todayRange = useMemo(() => getTodayRange(), []);
   const quickFilters = [
     {
@@ -466,26 +536,73 @@ export function CustomerFilterToolbar({
       >
         <div className="space-y-3">
           <div className="grid gap-2.5 xl:grid-cols-[minmax(320px,1.6fr)_repeat(4,minmax(0,1fr))]">
-            <div className="relative xl:col-span-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-black/36" />
-              <input
-                value={searchDraft}
-                onChange={(event) => setSearchDraft(event.target.value)}
-                placeholder="搜索客户 / 手机号 / 商品 / 备注"
-                className="h-10 w-full rounded-[14px] border border-black/8 bg-white pl-10 pr-9 text-[13px] text-black/84 outline-none transition placeholder:text-black/34 focus:border-black/14 focus:ring-2 focus:ring-black/5 sm:text-sm"
-              />
-              {searchDraft ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchDraft("");
-                    applyFilters({ search: "" });
-                  }}
-                  className="absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-black/34 transition hover:bg-black/[0.05] hover:text-black/58"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              ) : null}
+            <div className="xl:col-span-1">
+              <form
+                role="search"
+                aria-busy={searchPending}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  submitSearch(searchDraft);
+                }}
+                className={cn(
+                  "flex min-h-10 items-center gap-2 rounded-[16px] border border-black/8 bg-white px-2.5 shadow-[0_8px_18px_rgba(15,23,42,0.04)] transition-[border-color,box-shadow] duration-150",
+                  searchPending && "border-black/12 shadow-[0_12px_24px_rgba(15,23,42,0.06)]",
+                )}
+              >
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute left-1 top-1/2 h-4 w-4 -translate-y-1/2 text-black/36" />
+                  <input
+                    value={searchDraft}
+                    onChange={(event) => setSearchDraft(event.target.value)}
+                    onCompositionStart={() => setSearchComposing(true)}
+                    onCompositionEnd={(event) => {
+                      const nextValue = event.currentTarget.value;
+                      setSearchComposing(false);
+                      setSearchDraft(nextValue);
+                      submitSearch(nextValue);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        submitSearch(searchDraft);
+                      }
+                    }}
+                    placeholder="搜索客户 / 手机号 / 商品 / 备注"
+                    className="h-10 w-full border-0 bg-transparent pl-8 pr-7 text-[13px] text-black/84 outline-none transition placeholder:text-black/34 focus:ring-0 sm:text-sm"
+                  />
+                  {searchDraft ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchDraft("");
+                        submitSearch("");
+                      }}
+                      className="absolute right-0 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-black/34 transition hover:bg-black/[0.05] hover:text-black/58"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="flex shrink-0 items-center gap-2">
+                  {searchPending ? (
+                    <span className="hidden text-[11px] font-medium text-black/48 sm:inline">
+                      搜索中
+                    </span>
+                  ) : null}
+                  <button
+                    type="submit"
+                    className={cn(
+                      "inline-flex h-8 items-center rounded-[11px] border px-3 text-[12px] font-medium transition-[border-color,background-color,color] duration-150",
+                      searchPending
+                        ? "border-black/10 bg-[rgba(248,250,252,0.92)] text-black/56"
+                        : "border-black/12 bg-[rgba(15,23,42,0.04)] text-black/74 hover:border-black/16 hover:bg-white hover:text-black/86",
+                    )}
+                  >
+                    搜索
+                  </button>
+                </div>
+              </form>
             </div>
 
             <div className="relative">
