@@ -1,6 +1,8 @@
 "use client";
 
 import { type FormEvent, useState, useTransition } from "react";
+import { X } from "lucide-react";
+import { ActionBanner } from "@/components/shared/action-banner";
 
 export type SupplierOption = {
   id: string;
@@ -89,6 +91,10 @@ export function ProductSupplierField({
       ? [selectedSupplier, ...filteredSuppliers]
       : filteredSuppliers;
 
+  const dialogFooterHint = pending
+    ? "正在创建供应商，请保持当前补充面板打开。"
+    : "创建成功后会自动回填并选中，同时保留当前商品表单已输入的内容。";
+
   function resetQuickSupplierForm() {
     setQuickCode("");
     setQuickName("");
@@ -147,158 +153,213 @@ export function ProductSupplierField({
   return (
     <>
       <div className="space-y-3 xl:col-span-2">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <label className="min-w-0 flex-1 space-y-2">
-            <span className="crm-label">搜索供货商</span>
-            <input
-              value={supplierSearch}
-              onChange={(event) => setSupplierSearch(event.target.value)}
-              placeholder="按供货商名称或编码搜索"
-              className="crm-input"
+        <div className="rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.9)] p-3.5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <label className="min-w-0 flex-1 space-y-2">
+              <span className="crm-label">搜索供应商</span>
+              <input
+                value={supplierSearch}
+                onChange={(event) => setSupplierSearch(event.target.value)}
+                placeholder="按供应商名称或编码搜索"
+                className="crm-input"
+                disabled={disabled}
+              />
+            </label>
+
+            {canQuickCreateSupplier && !disabled ? (
+              <button
+                type="button"
+                className="crm-button crm-button-secondary w-full shrink-0 sm:w-auto"
+                onClick={() => setDialogOpen(true)}
+              >
+                新增供应商
+              </button>
+            ) : null}
+          </div>
+
+          <label className="mt-3 block space-y-2">
+            <span className="crm-label">供应商</span>
+            <select
+              name="supplierId"
+              required
+              className="crm-select"
+              value={selectedSupplierId}
+              onChange={(event) => {
+                const nextSupplierId = event.target.value;
+                const nextSupplier =
+                  supplierOptions.find((supplier) => supplier.id === nextSupplierId) ?? null;
+                setSelectedSupplierId(nextSupplierId);
+                setSupplierSearch(nextSupplier?.name ?? supplierSearch);
+              }}
               disabled={disabled}
-            />
+            >
+              <option value="" disabled>
+                请选择供应商
+              </option>
+              {visibleSuppliers.map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.name} ({supplier.code}){supplier.enabled ? "" : " - 已停用"}
+                </option>
+              ))}
+            </select>
           </label>
 
-          {canQuickCreateSupplier && !disabled ? (
-            <button
-              type="button"
-              className="crm-button crm-button-secondary"
-              onClick={() => setDialogOpen(true)}
-            >
-              新增供货商
-            </button>
+          {visibleSuppliers.length === 0 ? (
+            <div className="mt-3 rounded-[0.9rem] border border-dashed border-black/10 bg-black/[0.02] px-3.5 py-3 text-[13px] leading-5 text-black/56">
+              当前关键字下没有匹配的供应商。可以直接内联新增，并保留当前商品表单已填写的内容。
+            </div>
+          ) : null}
+
+          {inlineNotice ? (
+            <ActionBanner tone="success" density="compact" className="mt-3">
+              {inlineNotice}
+            </ActionBanner>
           ) : null}
         </div>
-
-        <label className="space-y-2">
-          <span className="crm-label">供货商</span>
-          <select
-            name="supplierId"
-            required
-            className="crm-select"
-            value={selectedSupplierId}
-            onChange={(event) => {
-              const nextSupplierId = event.target.value;
-              const nextSupplier =
-                supplierOptions.find((supplier) => supplier.id === nextSupplierId) ?? null;
-              setSelectedSupplierId(nextSupplierId);
-              setSupplierSearch(nextSupplier?.name ?? supplierSearch);
-            }}
-            disabled={disabled}
-          >
-            <option value="" disabled>
-              请选择供货商
-            </option>
-            {visibleSuppliers.map((supplier) => (
-              <option key={supplier.id} value={supplier.id}>
-                {supplier.name} ({supplier.code}){supplier.enabled ? "" : " - 已停用"}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {visibleSuppliers.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] px-4 py-3 text-sm text-black/55">
-            当前关键词下没有匹配的供货商。可原地新增，并保留当前商品表单已填写内容。
-          </div>
-        ) : null}
-
-        {inlineNotice ? (
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">
-            {inlineNotice}
-          </div>
-        ) : null}
       </div>
 
       {dialogOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/28 px-4 py-8 lg:pl-[var(--dashboard-sidebar-width,0px)]"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(15,23,42,0.18)] backdrop-blur-[1.5px] px-4 py-8 lg:pl-[var(--dashboard-sidebar-width,0px)]"
           onClick={closeDialog}
         >
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="新增供货商"
-            className="crm-card flex max-h-[calc(100vh-4rem)] w-full max-w-2xl flex-col overflow-hidden"
+            aria-label="内联新增供应商"
+            className="flex max-h-[calc(100vh-4rem)] w-full max-w-[40rem] flex-col overflow-hidden rounded-[1.1rem] border border-black/8 bg-[rgba(255,255,255,0.985)] shadow-[0_24px_70px_rgba(15,23,42,0.18)]"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="border-b border-black/6 px-5 py-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1.5">
-                  <h3 className="text-lg font-semibold text-black/84">新增供货商</h3>
-                  <p className="text-sm leading-6 text-black/58">
-                    无需离开商品表单即可新增供货商。创建成功后会自动回填并选中。
+            <div className="flex items-start justify-between gap-4 border-b border-black/6 px-5 py-4 sm:px-6">
+              <div className="min-w-0 space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/38">
+                    Supplier
                   </p>
+                  <span className="rounded-full border border-black/8 bg-black/[0.03] px-2.5 py-1 text-[11px] font-medium text-black/52">
+                    创建
+                  </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={closeDialog}
-                  className="crm-button crm-button-ghost min-h-0 px-3 py-2 text-sm"
-                >
-                  关闭
-                </button>
+                <h3 className="text-[1.02rem] font-semibold text-black/84">内联新增供应商</h3>
+                <p className="max-w-[28rem] text-[13px] leading-5 text-black/56">
+                  无需离开当前商品表单即可补充供应商。创建成功后会自动回填并选中，不打断当前编辑。
+                </p>
               </div>
+
+              <button
+                type="button"
+                onClick={closeDialog}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-black/8 bg-white/92 text-black/50 transition-colors hover:bg-black/[0.03] hover:text-black/72"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
 
-            <div className="overflow-y-auto px-5 py-4">
-              <form onSubmit={handleQuickCreateSubmit} className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <label className="space-y-2">
-                    <span className="crm-label">供货商编码</span>
-                    <input
-                      value={quickCode}
-                      onChange={(event) => setQuickCode(event.target.value)}
-                      required
-                      className="crm-input"
-                    />
-                  </label>
+            <form
+              onSubmit={handleQuickCreateSubmit}
+              aria-busy={pending}
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              <div className="flex-1 overflow-y-auto px-5 py-4 sm:px-6">
+                <fieldset
+                  disabled={pending}
+                  className={`space-y-4 ${pending ? "opacity-80" : ""}`}
+                >
+                  <section className="rounded-[1rem] border border-black/8 bg-[linear-gradient(180deg,rgba(248,249,251,0.88),rgba(255,255,255,0.94))] p-4">
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/42">
+                        主体身份
+                      </p>
+                      <p className="text-[13px] leading-5 text-black/56">
+                        先确认供应商编码和名称，保证商品与供应商的引用关系稳定清晰。
+                      </p>
+                    </div>
 
-                  <label className="space-y-2">
-                    <span className="crm-label">供货商名称</span>
-                    <input
-                      value={quickName}
-                      onChange={(event) => setQuickName(event.target.value)}
-                      required
-                      className="crm-input"
-                    />
-                  </label>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <label className="space-y-2">
+                        <span className="crm-label">供应商编码</span>
+                        <input
+                          value={quickCode}
+                          onChange={(event) => setQuickCode(event.target.value)}
+                          required
+                          className="crm-input"
+                        />
+                      </label>
 
-                  <label className="space-y-2">
-                    <span className="crm-label">联系人</span>
-                    <input
-                      value={quickContactName}
-                      onChange={(event) => setQuickContactName(event.target.value)}
-                      className="crm-input"
-                    />
-                  </label>
+                      <label className="space-y-2">
+                        <span className="crm-label">供应商名称</span>
+                        <input
+                          value={quickName}
+                          onChange={(event) => setQuickName(event.target.value)}
+                          required
+                          className="crm-input"
+                        />
+                      </label>
+                    </div>
+                  </section>
 
-                  <label className="space-y-2">
-                    <span className="crm-label">联系电话</span>
-                    <input
-                      value={quickContactPhone}
-                      onChange={(event) => setQuickContactPhone(event.target.value)}
-                      className="crm-input"
-                    />
-                  </label>
+                  <section className="rounded-[1rem] border border-black/7 bg-[rgba(252,252,253,0.92)] p-4">
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/42">
+                        联系与备注
+                      </p>
+                      <p className="text-[13px] leading-5 text-black/56">
+                        联系人、电话和备注属于次级补充信息，默认保持轻量，不让补充面板压过主商品抽屉。
+                      </p>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <label className="space-y-2">
+                        <span className="crm-label">联系人</span>
+                        <input
+                          value={quickContactName}
+                          onChange={(event) => setQuickContactName(event.target.value)}
+                          className="crm-input"
+                        />
+                      </label>
+
+                      <label className="space-y-2">
+                        <span className="crm-label">联系电话</span>
+                        <input
+                          value={quickContactPhone}
+                          onChange={(event) => setQuickContactPhone(event.target.value)}
+                          className="crm-input"
+                        />
+                      </label>
+                    </div>
+
+                    <label className="mt-4 block space-y-2">
+                      <span className="crm-label">备注</span>
+                      <textarea
+                        value={quickRemark}
+                        onChange={(event) => setQuickRemark(event.target.value)}
+                        rows={3}
+                        className="crm-textarea min-h-[6.5rem]"
+                      />
+                    </label>
+                  </section>
+                </fieldset>
+              </div>
+
+              <div className="flex flex-col gap-3 border-t border-black/6 bg-[rgba(250,250,252,0.92)] px-5 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0 flex-1">
+                  {dialogError ? (
+                    <ActionBanner tone="danger" density="compact" className="max-w-[28rem]">
+                      {dialogError}
+                    </ActionBanner>
+                  ) : (
+                    <div className="flex items-start gap-2 text-[13px] leading-5 text-black/56">
+                      <span
+                        className={`mt-[0.42rem] h-1.5 w-1.5 shrink-0 rounded-full ${
+                          pending ? "animate-pulse bg-[var(--color-accent)]" : "bg-black/20"
+                        }`}
+                      />
+                      <span>{dialogFooterHint}</span>
+                    </div>
+                  )}
                 </div>
 
-                <label className="block space-y-2">
-                  <span className="crm-label">备注</span>
-                  <textarea
-                    value={quickRemark}
-                    onChange={(event) => setQuickRemark(event.target.value)}
-                    rows={3}
-                    className="crm-textarea"
-                  />
-                </label>
-
-                {dialogError ? (
-                  <div className="rounded-2xl border border-rose-200 bg-rose-50/80 px-4 py-3 text-sm text-rose-700">
-                    {dialogError}
-                  </div>
-                ) : null}
-
-                <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-end">
                   <button
                     type="button"
                     className="crm-button crm-button-secondary w-full sm:w-auto"
@@ -309,12 +370,16 @@ export function ProductSupplierField({
                   >
                     取消
                   </button>
-                  <button type="submit" className="crm-button crm-button-primary w-full sm:w-auto" disabled={pending}>
-                    {pending ? "保存中..." : "新增供货商"}
+                  <button
+                    type="submit"
+                    className="crm-button crm-button-primary w-full sm:w-auto"
+                    disabled={pending}
+                  >
+                    {pending ? "保存中..." : "创建供应商"}
                   </button>
                 </div>
-              </form>
-            </div>
+              </div>
+            </form>
           </div>
         </div>
       ) : null}
