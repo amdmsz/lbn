@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { EmptyState } from "@/components/shared/empty-state";
+import { MetricCard } from "@/components/shared/metric-card";
 import { PaginationControls } from "@/components/shared/pagination-controls";
 import { RecordTabs } from "@/components/shared/record-tabs";
+import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/shared/status-badge";
 import { LogisticsTracePanel } from "@/components/shipping/logistics-trace-panel";
 import { ShippingQuickFillDrawer } from "@/components/shipping/shipping-quick-fill-drawer";
@@ -70,6 +72,18 @@ const PRIMARY_STAGE_ITEMS: StageItem[] = [
     description: "收口发货后的签收、COD 与回款关注。",
   },
 ];
+
+const workspaceSectionClassName =
+  "space-y-5 rounded-[1rem] border border-black/7 bg-[rgba(255,255,255,0.88)] p-4 shadow-[0_10px_22px_rgba(18,24,31,0.04)] md:p-5";
+
+const workspacePanelClassName =
+  "rounded-[0.95rem] border border-black/7 bg-[rgba(247,248,250,0.76)] p-4";
+
+const workspaceTableShellClassName =
+  "overflow-x-auto rounded-[0.95rem] border border-black/7 bg-[rgba(255,255,255,0.9)]";
+
+const workspaceHintClassName =
+  "rounded-[0.95rem] border border-black/7 bg-[rgba(247,248,250,0.74)] px-4 py-3 text-sm text-black/58";
 
 function getStageCount(summary: SummaryData, stageView: ShippingStageView) {
   switch (stageView) {
@@ -266,12 +280,14 @@ function StageWorkspaceHeader({
   actions?: ReactNode;
 }>) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">{badges}</div>
+        <div className="flex flex-wrap items-center gap-1.5">{badges}</div>
         <div>
-          <h3 className="text-xl font-semibold text-black/84">{title}</h3>
-          <p className="mt-1 text-sm leading-7 text-black/58">{description}</p>
+          <h3 className="text-[1.02rem] font-semibold tracking-tight text-black/84 md:text-[1.1rem]">
+            {title}
+          </h3>
+          <p className="mt-1 text-sm leading-6 text-black/58">{description}</p>
         </div>
       </div>
       {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
@@ -324,7 +340,7 @@ function CurrentReportWorkspace({
   const pageEnd = Math.min(pagination.page * pagination.pageSize, pagination.totalCount);
 
   return (
-    <section className="crm-section-card space-y-5">
+    <section className={workspaceSectionClassName}>
       <StageWorkspaceHeader
         title={`${activeSupplier.supplier.name} · 当前报单`}
         description="这里是当前可导出的真实待处理池。先勾选当前 supplier 下的订单，再执行本次导出。"
@@ -360,7 +376,7 @@ function CurrentReportWorkspace({
       />
 
       <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.45fr)_minmax(0,0.95fr)]">
-        <div className="rounded-2xl border border-black/8 bg-white/74 p-4">
+        <div className={workspacePanelClassName}>
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-black/45">
             当前 supplier 摘要
           </p>
@@ -371,7 +387,7 @@ function CurrentReportWorkspace({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-black/8 bg-white/74 p-4">
+        <div className={workspacePanelClassName}>
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-black/45">
             最近导出批次
           </p>
@@ -414,7 +430,7 @@ function CurrentReportWorkspace({
               summary={`当前 supplier 本页 ${pageStart} - ${pageEnd} / 共 ${pagination.totalCount} 单，默认已勾选当前页。`}
             />
 
-            <div className="overflow-x-auto rounded-2xl border border-black/8 bg-white/80">
+            <div className={workspaceTableShellClassName}>
               <table className="min-w-full divide-y divide-black/6 text-sm">
                 <thead className="bg-[rgba(247,248,250,0.92)] text-left text-xs font-semibold uppercase tracking-[0.12em] text-black/45">
                   <tr>
@@ -561,7 +577,7 @@ function PendingLogisticsWorkspace({
   const pageEnd = Math.min(pagination.page * pagination.pageSize, pagination.totalCount);
 
   return (
-    <section className="crm-section-card space-y-5">
+    <section className={workspaceSectionClassName}>
       <StageWorkspaceHeader
         title={`${activeSupplier.supplier.name} · 待填物流`}
         description="这里承接已导出但尚未填写物流的订单。可以按批次切换、逐单回填，也可以对当前批次再次导出。"
@@ -622,13 +638,13 @@ function PendingLogisticsWorkspace({
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl border border-black/8 bg-white/74 px-4 py-3 text-sm text-black/58">
+        <div className={workspaceHintClassName}>
           当前 supplier 暂无可切换的待填物流批次。若有遗留待填物流订单但未挂到批次，请在异常队列核对。
         </div>
       )}
 
       <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.45fr)_minmax(0,0.95fr)]">
-        <div className="rounded-2xl border border-black/8 bg-white/74 p-4">
+        <div className={workspacePanelClassName}>
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-black/45">
             当前批次摘要
           </p>
@@ -645,7 +661,7 @@ function PendingLogisticsWorkspace({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-black/8 bg-white/74 p-4">
+        <div className={workspacePanelClassName}>
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-black/45">
             当前批次动作
           </p>
@@ -712,7 +728,7 @@ function PendingLogisticsWorkspace({
               summary={`当前批次本页 ${pageStart} - ${pageEnd} / 共 ${pagination.totalCount} 单，默认已勾选当前页。`}
             />
 
-            <div className="overflow-x-auto rounded-2xl border border-black/8 bg-white/80">
+            <div className={workspaceTableShellClassName}>
               <table className="min-w-full divide-y divide-black/6 text-sm">
                 <thead className="bg-[rgba(247,248,250,0.92)] text-left text-xs font-semibold uppercase tracking-[0.12em] text-black/45">
                   <tr>
@@ -861,7 +877,7 @@ function ShippedAndExceptionWorkspace({
   const pageEnd = Math.min(pagination.page * pagination.pageSize, pagination.totalCount);
 
   return (
-    <section className="crm-section-card space-y-5">
+    <section className={workspaceSectionClassName}>
       <StageWorkspaceHeader
         title={
           isExceptionStage
@@ -961,7 +977,7 @@ function ShippedAndExceptionWorkspace({
                       </Link>
                     </div>
 
-                    <details className="rounded-2xl border border-black/8 bg-[rgba(247,248,250,0.82)] p-4">
+                    <details className={workspacePanelClassName}>
                       <summary className="cursor-pointer text-sm font-medium text-black/74">
                         更多更新
                       </summary>
@@ -1126,6 +1142,164 @@ export function ShippingOperationsSection({
         ))}
       </datalist>
 
+      <SectionCard
+        eyebrow="Stage Workspace"
+        title="发货执行工作面"
+        description="把当前报单、待填物流、已发货与异常关注放在同一条 supplier 执行主线里，历史批次只保留为结果回看。"
+        density="compact"
+        actions={
+          <div className="flex flex-wrap gap-1.5">
+            <StatusBadge
+              label={filters.stageView === "EXCEPTION" ? "当前在异常视图" : `当前阶段 ${currentStageCount} 单`}
+              variant={filters.stageView === "EXCEPTION" ? "warning" : "success"}
+            />
+            {activeSupplier ? (
+              <StatusBadge label={`supplier ${activeSupplier.supplier.name}`} variant="neutral" />
+            ) : (
+              <StatusBadge label="待选择 supplier" variant="warning" />
+            )}
+            <Link
+              href={exportBatchesHref}
+              className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+            >
+              历史批次记录
+            </Link>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard
+              label="当前阶段"
+              value={String(currentStageCount)}
+              note="当前 stage 下待继续处理的执行记录"
+              density="strip"
+            />
+            <MetricCard
+              label="supplier 池"
+              value={String(summary.supplierCount)}
+              note="当前筛选范围内可见 supplier 数量"
+              density="strip"
+            />
+            <MetricCard
+              label="待填物流"
+              value={String(summary.pendingTrackingCount)}
+              note="已导出但尚未回填物流单号"
+              density="strip"
+            />
+            <MetricCard
+              label="履约异常"
+              value={String(summary.exceptionCount)}
+              note="优先处理取消、文件异常和状态冲突"
+              density="strip"
+            />
+          </div>
+
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <RecordTabs
+              activeValue={stageTabsValue}
+              items={PRIMARY_STAGE_ITEMS.map((item) => ({
+                value: item.value,
+                label: item.label,
+                href: buildPageHref(
+                  filters,
+                  {
+                    stageView: item.value,
+                    batchViewId: "",
+                    page: 1,
+                  },
+                  basePath,
+                  baseSearchParams,
+                ),
+                count: getStageCount(summary, item.value),
+              }))}
+            />
+
+            <Link
+              href={buildPageHref(
+                filters,
+                {
+                  stageView: "EXCEPTION",
+                  batchViewId: "",
+                  page: 1,
+                },
+                basePath,
+                baseSearchParams,
+              )}
+              className={cn(
+                "inline-flex min-h-0 items-center rounded-full border border-black/8 bg-white/80 px-3 py-2 text-sm font-medium text-black/62 transition hover:border-black/14 hover:bg-white",
+                filters.stageView === "EXCEPTION" &&
+                  "border-[rgba(177,63,45,0.2)] bg-[rgba(255,245,244,0.95)] text-[var(--color-danger)]",
+              )}
+            >
+              履约异常 {summary.exceptionCount}
+            </Link>
+          </div>
+
+          <form
+            method="get"
+            className="grid gap-3 md:grid-cols-2 2xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.45fr)_auto]"
+          >
+            {Object.entries(baseSearchParams ?? {}).map(([key, value]) => (
+              <input key={key} type="hidden" name={key} value={value} />
+            ))}
+            <input type="hidden" name="stageView" value={filters.stageView} />
+            <input type="hidden" name="supplierViewId" value={filters.supplierViewId} />
+            {filters.stageView === "PENDING_TRACKING" && filters.batchViewId ? (
+              <input type="hidden" name="batchViewId" value={filters.batchViewId} />
+            ) : null}
+            {filters.isCod ? <input type="hidden" name="isCod" value={filters.isCod} /> : null}
+
+            <label className="space-y-1.5">
+              <span className="crm-label">supplier 筛选</span>
+              <input
+                name="supplierKeyword"
+                defaultValue={filters.supplierKeyword}
+                className="crm-input"
+                placeholder="输入 supplier 名称"
+              />
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="crm-label">订单搜索</span>
+              <input
+                name="keyword"
+                defaultValue={filters.keyword}
+                className="crm-input"
+                placeholder="tradeNo / subOrderNo / 收件人 / 电话 / 物流单号"
+              />
+            </label>
+
+            <div className="crm-filter-actions md:col-span-2 2xl:col-span-1">
+              <button type="submit" className="crm-button crm-button-primary">
+                应用筛选
+              </button>
+              <Link
+                href={buildPageHref(
+                  {
+                    ...filters,
+                    keyword: "",
+                    supplierKeyword: "",
+                    page: 1,
+                  },
+                  {
+                    keyword: "",
+                    supplierKeyword: "",
+                    page: 1,
+                  },
+                  basePath,
+                  baseSearchParams,
+                )}
+                className="crm-button crm-button-secondary"
+              >
+                重置
+              </Link>
+            </div>
+          </form>
+        </div>
+      </SectionCard>
+
+      {false ? (
       <section className="crm-filter-panel space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
@@ -1269,6 +1443,7 @@ export function ShippingOperationsSection({
           </div>
         </form>
       </section>
+      ) : null}
 
       {supplierSummaries.length === 0 ? (
         <EmptyState
@@ -1282,6 +1457,90 @@ export function ShippingOperationsSection({
         />
       ) : (
         <>
+          <SectionCard
+            eyebrow="Supplier Pool"
+            title="当前阶段 supplier 池"
+            description="supplier 是当前工作池的组织轴。先选 supplier，再进入对应阶段动作。"
+            density="compact"
+            actions={
+              <StatusBadge
+                label={`当前阶段可见 ${supplierSummaries.length} 个 supplier`}
+                variant="neutral"
+              />
+            }
+          >
+            <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-4">
+              {supplierSummaries.map((supplierSummary) => {
+                const isActive = supplierSummary.supplier.id === activeSupplier?.supplier.id;
+                const currentBatchMeta = getBatchStatusMeta(supplierSummary.currentBatch);
+
+                return (
+                  <Link
+                    key={supplierSummary.supplier.id}
+                    href={buildPageHref(
+                      filters,
+                      {
+                        supplierViewId: supplierSummary.supplier.id,
+                        batchViewId: "",
+                        page: 1,
+                      },
+                      basePath,
+                      baseSearchParams,
+                    )}
+                    className={cn(
+                      "rounded-[0.95rem] border border-black/7 bg-[rgba(255,255,255,0.9)] p-4 transition hover:border-black/14 hover:bg-white hover:shadow-[0_10px_20px_rgba(18,24,31,0.04)]",
+                      isActive &&
+                        "border-[rgba(20,118,92,0.28)] bg-[linear-gradient(180deg,rgba(240,251,247,0.96),rgba(255,255,255,0.96))]",
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate font-medium text-black/82">
+                          {supplierSummary.supplier.name}
+                        </div>
+                        <div className="mt-1 text-xs text-black/46">
+                          当前阶段 {supplierSummary.stageTaskCount} 单
+                        </div>
+                      </div>
+                      {isActive ? <StatusBadge label="当前 supplier" variant="success" /> : null}
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {supplierSummary.pendingTrackingCount > 0 ? (
+                        <StatusBadge
+                          label={`待填物流 ${supplierSummary.pendingTrackingCount}`}
+                          variant="warning"
+                        />
+                      ) : null}
+                      {supplierSummary.exceptionCount > 0 ? (
+                        <StatusBadge
+                          label={`异常 ${supplierSummary.exceptionCount}`}
+                          variant="danger"
+                        />
+                      ) : null}
+                      {currentBatchMeta && supplierSummary.currentBatch ? (
+                        <StatusBadge
+                          label={`当前批次 ${supplierSummary.currentBatch.exportNo}`}
+                          variant={currentBatchMeta.variant}
+                        />
+                      ) : null}
+                    </div>
+
+                    <div className="mt-3 text-xs text-black/46">
+                      最近历史批次：
+                      {supplierSummary.latestHistoryBatch
+                        ? `${supplierSummary.latestHistoryBatch.exportNo} · ${formatDateTime(
+                            supplierSummary.latestHistoryBatch.exportedAt,
+                          )}`
+                        : "暂无"}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </SectionCard>
+
+          {false ? (
           <section className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -1360,6 +1619,7 @@ export function ShippingOperationsSection({
               })}
             </div>
           </section>
+          ) : null}
 
           {filters.stageView === "PENDING_REPORT" ? (
             <CurrentReportWorkspace
