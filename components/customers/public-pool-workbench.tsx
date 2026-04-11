@@ -22,8 +22,10 @@ import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EntityTable } from "@/components/shared/entity-table";
+import { MetricCard } from "@/components/shared/metric-card";
 import { PaginationControls } from "@/components/shared/pagination-controls";
 import { RecordTabs } from "@/components/shared/record-tabs";
+import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { StickyActionBar } from "@/components/shared/sticky-action-bar";
 import {
@@ -54,13 +56,6 @@ import type {
 import { cn } from "@/lib/utils";
 
 const sectionShellClassName = "crm-workspace-shell";
-
-const summaryToneClassName = {
-  default: "border-black/6",
-  info: "border-[rgba(58,105,143,0.12)]",
-  success: "border-[rgba(47,107,71,0.14)]",
-  warning: "border-[rgba(160,106,29,0.14)]",
-} as const;
 
 function formatDateTimeValue(value: Date | null) {
   return value ? formatDateTime(value) : "未记录";
@@ -116,6 +111,7 @@ function getSummaryCards(data: CustomerPublicPoolData) {
         page: 1,
       }),
       emphasis: "success" as const,
+      active: filters.view === "pool" && filters.segment === "claimable",
     },
     {
       label: "锁定中",
@@ -127,6 +123,7 @@ function getSummaryCards(data: CustomerPublicPoolData) {
         page: 1,
       }),
       emphasis: "warning" as const,
+      active: filters.view === "pool" && filters.segment === "locked",
     },
     {
       label: "今日新入池",
@@ -138,6 +135,7 @@ function getSummaryCards(data: CustomerPublicPoolData) {
         page: 1,
       }),
       emphasis: "info" as const,
+      active: filters.view === "pool" && filters.segment === "today_new",
     },
     {
       label: "即将到期",
@@ -149,6 +147,7 @@ function getSummaryCards(data: CustomerPublicPoolData) {
         page: 1,
       }),
       emphasis: "default" as const,
+      active: filters.view === "pool" && filters.segment === "expiring_soon",
     },
     ...(data.actor.role === "SALES"
       ? [
@@ -162,41 +161,11 @@ function getSummaryCards(data: CustomerPublicPoolData) {
               page: 1,
             }),
             emphasis: "default" as const,
+            active: filters.view === "records" && filters.reason === "SALES_CLAIM",
           },
         ]
       : []),
   ];
-}
-
-function SummaryMetricCard({
-  item,
-}: Readonly<{
-  item: {
-    label: string;
-    value: string;
-    note: string;
-    href: string;
-    emphasis: keyof typeof summaryToneClassName;
-  };
-}>) {
-  return (
-    <Link
-      href={item.href}
-      scroll={false}
-      className={cn(
-        "group flex min-h-[88px] flex-col rounded-[16px] border bg-[rgba(255,255,255,0.88)] px-4 pb-3 pt-[14px] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[border-color,background-color,box-shadow] hover:bg-[rgba(255,255,255,0.96)] md:min-h-[92px] md:rounded-[18px] xl:min-h-[96px]",
-        summaryToneClassName[item.emphasis],
-      )}
-    >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/38">
-        {item.label}
-      </p>
-      <div className="mt-2 text-[1.18rem] font-semibold tracking-tight text-black/86 md:text-[1.3rem]">
-        {item.value}
-      </div>
-      <p className="mt-auto truncate pt-1 text-[12px] leading-5 text-black/48">{item.note}</p>
-    </Link>
-  );
 }
 
 function getViewTabs(data: CustomerPublicPoolData) {
@@ -426,7 +395,7 @@ function RecycleAutomationCard({
   onApply: () => void;
 }>) {
   return (
-    <div className="rounded-[18px] border border-black/6 bg-[rgba(255,255,255,0.82)] px-4 py-4">
+    <div className="rounded-[1.05rem] border border-black/8 bg-[rgba(255,255,255,0.88)] px-4 py-4 shadow-[0_10px_24px_rgba(18,24,31,0.04)]">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/38">
@@ -635,7 +604,7 @@ function AutoAssignAutomationCard({
   const blockingIssue = preview?.blockingIssue ?? applyResult?.blockingIssue ?? null;
 
   return (
-    <div className="rounded-[18px] border border-black/6 bg-[rgba(255,255,255,0.82)] px-4 py-4">
+    <div className="rounded-[1.05rem] border border-black/8 bg-[rgba(255,255,255,0.88)] px-4 py-4 shadow-[0_10px_24px_rgba(18,24,31,0.04)]">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/38">
@@ -998,17 +967,17 @@ export function CustomerPublicPoolWorkbench({
     <WorkbenchLayout
       className="!gap-0"
       header={
-        <div className={cn(sectionShellClassName, "mb-[14px]")}>
-          <header className="min-h-[92px] rounded-[18px] border border-black/6 bg-[rgba(255,255,255,0.92)] px-4 pb-[14px] pt-4 md:px-5 md:pb-4 md:pt-5 xl:min-h-[104px] xl:px-5 xl:pb-4 xl:pt-5">
+        <div className={cn(sectionShellClassName, "mb-4")}>
+          <header className="rounded-[1rem] border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(248,246,242,0.9))] px-4 py-3.5 shadow-[0_14px_30px_rgba(15,23,42,0.04)] md:px-5 md:py-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-black/38">
                   Customer Ownership Lifecycle
                 </p>
-                <h1 className="mt-1.5 text-[1.32rem] font-semibold tracking-tight text-black/88 md:text-[1.5rem]">
+                <h1 className="mt-1.5 text-[1.28rem] font-semibold tracking-tight text-black/88 md:text-[1.46rem]">
                   公海池
                 </h1>
-                <p className="mt-2 max-w-3xl text-[13px] leading-5 text-black/54">
+                <p className="mt-2 max-w-3xl text-[12.5px] leading-5 text-black/54 md:text-[13px]">
                   公海池属于 Customer 域，不是独立对象。这里承接认领、指派、回收和
                   ownership 审计，保持客户主工作流仍然收口在 `/customers`。
                 </p>
@@ -1026,7 +995,7 @@ export function CustomerPublicPoolWorkbench({
                       href={buildCustomerPublicPoolSettingsHref(
                         data.filters.teamId || data.actor.teamId || "",
                       )}
-                      className="inline-flex h-9 items-center rounded-[0.78rem] border border-black/8 bg-[rgba(247,248,250,0.84)] px-3.5 text-sm text-black/72 transition hover:border-black/12 hover:bg-white hover:text-black/84"
+                      className="inline-flex h-9 items-center rounded-[0.85rem] border border-black/8 bg-[rgba(247,248,250,0.84)] px-3.5 text-sm text-black/66 transition-colors hover:border-black/12 hover:bg-white hover:text-black/84"
                     >
                       团队规则
                     </Link>
@@ -1034,7 +1003,7 @@ export function CustomerPublicPoolWorkbench({
                       href={buildCustomerPublicPoolReportsHref({
                         teamId: data.filters.teamId || data.actor.teamId || "",
                       })}
-                      className="inline-flex h-9 items-center rounded-[0.78rem] border border-black/8 bg-[rgba(247,248,250,0.84)] px-3.5 text-sm text-black/72 transition hover:border-black/12 hover:bg-white hover:text-black/84"
+                      className="inline-flex h-9 items-center rounded-[0.85rem] border border-black/8 bg-[rgba(247,248,250,0.84)] px-3.5 text-sm text-black/66 transition-colors hover:border-black/12 hover:bg-white hover:text-black/84"
                     >
                       运营报表
                     </Link>
@@ -1042,7 +1011,7 @@ export function CustomerPublicPoolWorkbench({
                 ) : null}
                 <Link
                   href="/customers"
-                  className="inline-flex h-9 items-center rounded-[0.78rem] border border-black/8 bg-[rgba(247,248,250,0.84)] px-3.5 text-sm text-black/72 transition hover:border-black/12 hover:bg-white hover:text-black/84"
+                  className="inline-flex h-9 items-center rounded-[0.85rem] border border-black/8 bg-[rgba(247,248,250,0.84)] px-3.5 text-sm text-black/66 transition-colors hover:border-black/12 hover:bg-white hover:text-black/84"
                 >
                   返回客户中心
                 </Link>
@@ -1052,40 +1021,62 @@ export function CustomerPublicPoolWorkbench({
         </div>
       }
       summary={
-        <div className={cn(sectionShellClassName, "mb-4")}>
+        <div className={cn(sectionShellClassName, "mb-5")}>
           <div
             className={cn(
-              "grid gap-[14px] grid-cols-1 sm:grid-cols-2 xl:grid-cols-3",
+              "grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3",
               summaryCards.length >= 5 ? "2xl:grid-cols-5" : "2xl:grid-cols-4",
             )}
           >
             {summaryCards.map((item) => (
-              <SummaryMetricCard key={item.label} item={item} />
+              <MetricCard
+                key={item.label}
+                label={item.label}
+                value={item.value}
+                note={item.note}
+                href={item.href}
+                density="strip"
+                className={
+                  item.active
+                    ? "border-[rgba(15,23,42,0.14)] bg-white shadow-[0_10px_20px_rgba(18,24,31,0.045)]"
+                    : undefined
+                }
+              />
             ))}
           </div>
         </div>
       }
       toolbar={
-        <div className={cn(sectionShellClassName, "mb-[14px] space-y-3")}>
-          <RecordTabs items={getViewTabs(data)} activeValue={data.filters.view} />
-          {data.filters.view === "pool" ? (
-            <RecordTabs items={getSegmentTabs(data)} activeValue={data.filters.segment} />
-          ) : null}
+        <div className={cn(sectionShellClassName, "mb-5 space-y-3")}>
+          <SectionCard
+            eyebrow={viewMeta.eyebrow}
+            title={viewMeta.title}
+            description={viewMeta.description}
+            density="compact"
+            className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+            actions={
+              <div className="flex flex-wrap gap-1.5">
+                {data.filters.view !== "records" ? (
+                  <StatusBadge label={`可处理 ${actionableCount}`} variant="neutral" />
+                ) : null}
+                <StatusBadge label={`匹配 ${data.pagination.totalCount}`} variant="neutral" />
+                {selectedCount > 0 ? (
+                  <StatusBadge label={`已选择 ${selectedCount}`} variant="info" />
+                ) : null}
+                {data.filters.view === "pool" ? (
+                  <StatusBadge label={`锁定 ${data.summary.lockedCount}`} variant="warning" />
+                ) : null}
+              </div>
+            }
+          >
+            <div className="space-y-3">
+              <RecordTabs items={getViewTabs(data)} activeValue={data.filters.view} />
+              {data.filters.view === "pool" ? (
+                <RecordTabs items={getSegmentTabs(data)} activeValue={data.filters.segment} />
+              ) : null}
 
-          <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_340px]">
-            <div className="rounded-[18px] border border-black/6 bg-[rgba(255,255,255,0.82)] px-4 py-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/38">
-                {viewMeta.eyebrow}
-              </p>
-              <h2 className="mt-1.5 text-[1.02rem] font-semibold tracking-tight text-black/84">
-                {viewMeta.title}
-              </h2>
-              <p className="mt-2 max-w-3xl text-[13px] leading-6 text-black/56">
-                {viewMeta.description}
-              </p>
-            </div>
-
-            <div className="rounded-[18px] border border-black/6 bg-[rgba(255,255,255,0.82)] px-4 py-4">
+              <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_340px]">
+                <div className="rounded-[1rem] border border-black/8 bg-[rgba(247,248,250,0.72)] px-4 py-3.5 shadow-[0_6px_16px_rgba(18,24,31,0.03)]">
               <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/38">
                 当前动作提示
               </p>
@@ -1103,12 +1094,14 @@ export function CustomerPublicPoolWorkbench({
                 ) : null}
               </div>
             </div>
-          </div>
+              </div>
+            </div>
+          </SectionCard>
 
           <form
             action="/customers/public-pool"
             method="get"
-            className="crm-subtle-panel grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6"
+            className="grid gap-3 rounded-[1.05rem] border border-black/8 bg-[rgba(255,255,255,0.88)] px-4 py-4 shadow-[0_10px_24px_rgba(18,24,31,0.04)] md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6"
           >
             <input type="hidden" name="view" value={data.filters.view} />
             {data.filters.view === "pool" ? (

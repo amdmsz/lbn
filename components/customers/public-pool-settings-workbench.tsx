@@ -1,22 +1,43 @@
 import Link from "next/link";
 import { saveCustomerPublicPoolSettingsAction } from "@/app/(dashboard)/customers/public-pool/settings/actions";
+import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { ActionBanner } from "@/components/shared/action-banner";
-import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
+import { MetricCard } from "@/components/shared/metric-card";
 import { PageContextLink } from "@/components/shared/page-context-link";
+import { PageHeader } from "@/components/shared/page-header";
 import { RecordTabs } from "@/components/shared/record-tabs";
+import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { SummaryHeader } from "@/components/shared/summary-header";
 import {
   buildCustomerPublicPoolHref,
   buildCustomerPublicPoolReportsHref,
   buildCustomerPublicPoolSettingsHref,
 } from "@/lib/customers/public-pool-filter-url";
 import {
-  publicPoolAutoAssignStrategyOptions,
   publicPoolAutoAssignStrategyLabels,
+  publicPoolAutoAssignStrategyOptions,
 } from "@/lib/customers/public-pool-metadata";
 import type { CustomerPublicPoolSettingsPageData } from "@/lib/customers/public-pool-settings";
+
+const workspaceShellClassName = "crm-workspace-shell";
+
+function HeaderActionLink({
+  href,
+  label,
+}: Readonly<{
+  href: string;
+  label: string;
+}>) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex h-9 items-center rounded-[0.85rem] border border-black/8 bg-[rgba(247,248,250,0.84)] px-3.5 text-sm text-black/66 transition-colors hover:border-black/12 hover:bg-white hover:text-black/84"
+    >
+      {label}
+    </Link>
+  );
+}
 
 function SettingToggle({
   name,
@@ -30,12 +51,12 @@ function SettingToggle({
   defaultChecked: boolean;
 }>) {
   return (
-    <label className="rounded-[16px] border border-black/8 bg-white/72 p-4">
+    <label className="rounded-[1rem] border border-black/8 bg-[rgba(247,248,250,0.7)] p-3.5 transition-colors hover:border-black/12 hover:bg-white/84">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-medium text-black/82">{label}</p>
           {description ? (
-            <p className="mt-1 text-sm leading-6 text-black/56">{description}</p>
+            <p className="mt-1 text-[13px] leading-6 text-black/56">{description}</p>
           ) : null}
         </div>
         <input
@@ -67,7 +88,7 @@ function SettingNumberInput({
   placeholder?: string;
 }>) {
   return (
-    <label className="space-y-2 rounded-[16px] border border-black/8 bg-white/72 p-4">
+    <label className="space-y-2 rounded-[1rem] border border-black/8 bg-[rgba(247,248,250,0.7)] p-3.5 transition-colors hover:border-black/12 hover:bg-white/84">
       <span className="text-sm font-medium text-black/82">{label}</span>
       <input
         type="number"
@@ -79,7 +100,7 @@ function SettingNumberInput({
         className="crm-input"
       />
       {description ? (
-        <p className="text-sm leading-6 text-black/56">{description}</p>
+        <p className="text-[13px] leading-6 text-black/56">{description}</p>
       ) : null}
     </label>
   );
@@ -102,7 +123,7 @@ function SettingSelect({
   }>;
 }>) {
   return (
-    <label className="space-y-2 rounded-[16px] border border-black/8 bg-white/72 p-4">
+    <label className="space-y-2 rounded-[1rem] border border-black/8 bg-[rgba(247,248,250,0.7)] p-3.5 transition-colors hover:border-black/12 hover:bg-white/84">
       <span className="text-sm font-medium text-black/82">{label}</span>
       <select name={name} defaultValue={defaultValue} className="crm-select">
         {options.map((option) => (
@@ -112,7 +133,7 @@ function SettingSelect({
         ))}
       </select>
       {description ? (
-        <p className="text-sm leading-6 text-black/56">{description}</p>
+        <p className="text-[13px] leading-6 text-black/56">{description}</p>
       ) : null}
     </label>
   );
@@ -126,7 +147,7 @@ export function CustomerPublicPoolSettingsWorkbench({
   const moduleTabs = [
     {
       value: "workbench",
-      label: "公海池工作台",
+      label: "鍏捣姹犲伐浣滃彴",
       href: buildCustomerPublicPoolHref({
         view: "pool",
         segment: "all",
@@ -140,12 +161,12 @@ export function CustomerPublicPoolSettingsWorkbench({
     },
     {
       value: "settings",
-      label: "团队规则",
+      label: "鍥㈤槦瑙勫垯",
       href: buildCustomerPublicPoolSettingsHref(data.selectedTeam?.id ?? ""),
     },
     {
       value: "reports",
-      label: "运营报表",
+      label: "杩愯惀鎶ヨ〃",
       href: buildCustomerPublicPoolReportsHref({
         teamId: data.selectedTeam?.id ?? "",
       }),
@@ -153,193 +174,227 @@ export function CustomerPublicPoolSettingsWorkbench({
   ];
 
   return (
-    <div className="crm-page">
-      <SummaryHeader
-        context={
-          <PageContextLink
-            href="/customers/public-pool"
-            label="返回公海池"
-            trail={["客户中心", "公海池", "团队规则"]}
+    <WorkbenchLayout
+      className="!gap-0"
+      header={
+        <div className={workspaceShellClassName}>
+          <PageHeader
+            context={
+              <PageContextLink
+                href="/customers/public-pool"
+                label="杩斿洖鍏捣姹?"
+                trail={["瀹㈡埛涓績", "鍏捣姹?", "鍥㈤槦瑙勫垯"]}
+              />
+            }
+            eyebrow="Customer Ownership Lifecycle"
+            title="鍥㈤槦鍏捣瑙勫垯"
+            description="鎸夊洟闃熸敹鍙ｅ洖鏀躲€佷繚鎶ゆ湡涓庤嚜鍔ㄥ垎閰嶏紝淇濇寔瀹㈡埛 ownership lifecycle 鍦ㄥ悓涓€濂楀伐浣滃彴璇█鍐呰〃杈俱€?"
+            className="border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(248,246,242,0.9))] shadow-[0_14px_30px_rgba(15,23,42,0.04)]"
+            meta={
+              <>
+                <StatusBadge
+                  label={data.canManageAcrossTeams ? "ADMIN 鍙法鍥㈤槦璋冩暣" : "涓荤浠呯鐞嗘湰鍥㈤槦"}
+                  variant={data.canManageAcrossTeams ? "info" : "warning"}
+                />
+                <StatusBadge
+                  label={data.setting.source === "custom" ? "褰撳墠浣跨敤鍥㈤槦瑕嗙洊" : "褰撳墠浣跨敤榛樿瑙勫垯"}
+                  variant={data.setting.source === "custom" ? "success" : "neutral"}
+                />
+                <StatusBadge
+                  label={
+                    data.setting.autoAssignEnabled
+                      ? publicPoolAutoAssignStrategyLabels[data.setting.autoAssignStrategy]
+                      : "鑷姩鍒嗛厤鏈惎鐢?"
+                  }
+                  variant={data.setting.autoAssignEnabled ? "info" : "neutral"}
+                />
+              </>
+            }
+            actions={
+              <div className="flex flex-wrap gap-2 lg:justify-end">
+                <HeaderActionLink href="/customers/public-pool" label="杩斿洖鍏捣姹?" />
+                <HeaderActionLink
+                  href={buildCustomerPublicPoolReportsHref({
+                    teamId: data.selectedTeam?.id ?? "",
+                  })}
+                  label="鏌ョ湅杩愯惀鎶ヨ〃"
+                />
+              </div>
+            }
           />
-        }
-        eyebrow="Team Public Pool Rules"
-        title="团队公海规则"
-        description="按团队维护回收、保护期与自动分配。"
-        badges={
-          <>
-            <StatusBadge
-              label={data.canManageAcrossTeams ? "ADMIN 可跨团队调整" : "主管仅管理本团队"}
-              variant={data.canManageAcrossTeams ? "info" : "warning"}
-            />
-            <StatusBadge
-              label={data.setting.source === "custom" ? "当前使用团队覆盖" : "当前使用默认规则"}
-              variant={data.setting.source === "custom" ? "success" : "neutral"}
-            />
-            <StatusBadge
-              label={
-                data.setting.autoAssignEnabled
-                  ? publicPoolAutoAssignStrategyLabels[data.setting.autoAssignStrategy]
-                  : "自动分配未启用"
-              }
-              variant={data.setting.autoAssignEnabled ? "info" : "neutral"}
-            />
-          </>
-        }
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Link href="/customers/public-pool" className="crm-button crm-button-secondary">
-              返回公海池
-            </Link>
-            <Link
-              href={buildCustomerPublicPoolReportsHref({
-                teamId: data.selectedTeam?.id ?? "",
-              })}
-              className="crm-button crm-button-secondary"
-            >
-              查看运营报表
-            </Link>
+        </div>
+      }
+      summary={
+        <div className={workspaceShellClassName}>
+          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+            {data.policySummary.map((item) => (
+              <MetricCard
+                key={item.label}
+                label={item.label}
+                value={item.value}
+                note={item.hint}
+                density="strip"
+              />
+            ))}
           </div>
-        }
-        metrics={data.policySummary}
-      />
+        </div>
+      }
+      toolbar={
+        <div className={workspaceShellClassName}>
+          <SectionCard
+            eyebrow="Rules Scope"
+            title="鍥㈤槦涓庢ā鍧楄瑙?"
+            description="鍏堝垏鎹㈠洟闃熷拰妯″潡锛屽啀鍦ㄥ悓涓€涓伐浣滃彴鍐呯淮鎶よ鍒欍€?"
+            density="compact"
+            className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+            actions={
+              <div className="flex flex-wrap gap-1.5">
+                <StatusBadge label={`鍙鍥㈤槦 ${data.teamOptions.length}`} variant="neutral" />
+                {data.selectedTeam ? (
+                  <StatusBadge label={`褰撳墠鍥㈤槦 ${data.selectedTeam.name}`} variant="info" />
+                ) : (
+                  <StatusBadge label="璇峰厛閫夋嫨鍥㈤槦" variant="warning" />
+                )}
+              </div>
+            }
+          >
+            <div className="space-y-4">
+              <RecordTabs items={moduleTabs} activeValue="settings" />
 
+              <form
+                action="/customers/public-pool/settings"
+                method="get"
+                className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]"
+              >
+                <label className="space-y-2">
+                  <span className="crm-label">鏌ョ湅鍥㈤槦</span>
+                  <select
+                    name="teamId"
+                    defaultValue={data.selectedTeam?.id ?? ""}
+                    className="crm-select"
+                  >
+                    {data.canManageAcrossTeams ? <option value="">璇烽€夋嫨鍥㈤槦</option> : null}
+                    {data.teamOptions.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex items-end">
+                  <button type="submit" className="crm-button crm-button-secondary">
+                    鍒囨崲鍥㈤槦
+                  </button>
+                </div>
+              </form>
+            </div>
+          </SectionCard>
+        </div>
+      }
+    >
       {data.notice ? <ActionBanner tone={data.notice.tone}>{data.notice.message}</ActionBanner> : null}
 
-      <div className="crm-subtle-panel">
-        <RecordTabs items={moduleTabs} activeValue="settings" />
-      </div>
-
-      <DataTableWrapper
-        className="mt-5"
-        title="规则作用范围"
-        description="按团队生效。"
-        toolbar={
-          <div className="flex flex-wrap gap-2">
-            <StatusBadge label={`可见团队 ${data.teamOptions.length}`} variant="neutral" />
-            {data.selectedTeam ? (
-              <StatusBadge label={`当前团队 ${data.selectedTeam.name}`} variant="info" />
-            ) : (
-              <StatusBadge label="请先选择团队" variant="warning" />
-            )}
-          </div>
-        }
-      >
-        <form
-          action="/customers/public-pool/settings"
-          method="get"
-          className="grid gap-3 md:grid-cols-2"
-        >
-          <label className="space-y-2">
-            <span className="crm-label">查看团队</span>
-            <select name="teamId" defaultValue={data.selectedTeam?.id ?? ""} className="crm-select">
-              {data.canManageAcrossTeams ? <option value="">请选择团队</option> : null}
-              {data.teamOptions.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="flex items-end">
-            <button type="submit" className="crm-button crm-button-secondary">
-              切换团队
-            </button>
-          </div>
-        </form>
-      </DataTableWrapper>
-
       {data.selectedTeam ? (
-        <form action={saveCustomerPublicPoolSettingsAction} className="mt-5 space-y-5">
+        <form action={saveCustomerPublicPoolSettingsAction} className="space-y-4">
           <input type="hidden" name="teamId" value={data.selectedTeam.id} />
 
-          <DataTableWrapper
-            title="基础回收规则"
-            description="回收开关与阈值。"
+          <SectionCard
+            eyebrow="Recycle Rules"
+            title="鍩虹鍥炴敹瑙勫垯"
+            description="鍥炴敹寮€鍏充笌鍩虹闃堝€硷紝鍏堟敹鍙ｅ綋鍓嶇湡姝ｅ奖鍝?ownership lifecycle 鐨勬潯浠躲€?"
+            density="compact"
+            className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
           >
             <div className="grid gap-3 md:grid-cols-2">
               <SettingToggle
                 name="autoRecycleEnabled"
-                label="启用自动回收"
-                description="超时后自动回收。"
+                label="鍚敤鑷姩鍥炴敹"
+                description="瓒呮椂鍚庤嚜鍔ㄥ洖鏀躲€?"
                 defaultChecked={data.setting.autoRecycleEnabled}
               />
               <SettingToggle
                 name="ownerExitRecycleEnabled"
-                label="启用离职回收"
-                description="离职后自动回收。"
+                label="鍚敤绂昏亴鍥炴敹"
+                description="绂昏亴鍚庤嚜鍔ㄥ洖鏀躲€?"
                 defaultChecked={data.setting.ownerExitRecycleEnabled}
               />
               <SettingNumberInput
                 name="defaultInactiveDays"
-                label="默认 inactivity days"
-                description="超时天数。"
+                label="榛樿 inactivity days"
+                description="瓒呮椂澶╂暟銆?"
                 defaultValue={data.setting.defaultInactiveDays}
                 min={1}
                 max={180}
               />
               <SettingToggle
                 name="respectClaimLock"
-                label="自动回收尊重 claim lock"
-                description="保护期内不提前回收。"
+                label="鑷姩鍥炴敹灏婇噸 claim lock"
+                description="淇濇姢鏈熷唴涓嶆彁鍓嶅洖鏀躲€?"
                 defaultChecked={data.setting.respectClaimLock}
               />
             </div>
-          </DataTableWrapper>
+          </SectionCard>
 
-          <DataTableWrapper
-            title="有效跟进与保护期"
-            description="有效动作与保护期。"
+          <SectionCard
+            eyebrow="Effective Follow-up"
+            title="鏈夋晥璺熻繘涓庝繚鎶ゆ湡"
+            description="淇濇寔寮哄姩浣滃拰寮卞姩浣滅殑闃堝€间笌淇濇姢鏈熻〃杈惧湪鍚屼竴灞傘€?"
+            density="compact"
+            className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
           >
             <div className="grid gap-3 md:grid-cols-2">
               <SettingNumberInput
                 name="strongEffectProtectionDays"
-                label="STRONG 保护期天数"
-                description="强动作保护期。"
+                label="STRONG 淇濇姢鏈熷ぉ鏁?"
+                description="寮哄姩浣滀繚鎶ゆ湡銆?"
                 defaultValue={data.setting.strongEffectProtectionDays}
                 min={0}
                 max={60}
               />
               <SettingNumberInput
                 name="mediumEffectProtectionDays"
-                label="MEDIUM 保护期天数"
-                description="中动作保护期。"
+                label="MEDIUM 淇濇姢鏈熷ぉ鏁?"
+                description="涓姩浣滀繚鎶ゆ湡銆?"
                 defaultValue={data.setting.mediumEffectProtectionDays}
                 min={0}
                 max={60}
               />
               <SettingToggle
                 name="weakEffectResetsClock"
-                label="WEAK 也重置回收时钟"
-                description="弱动作仅重置时钟。"
+                label="WEAK 涔熼噸缃洖鏀舵椂閽?"
+                description="寮卞姩浣滀粎閲嶇疆鏃堕挓銆?"
                 defaultChecked={data.setting.weakEffectResetsClock}
               />
               <SettingToggle
                 name="negativeRequiresSupervisorReview"
-                label="NEGATIVE 需要主管关注"
-                description="负向动作保留关注标识。"
+                label="NEGATIVE 闇€瑕佷富绠″叧娉?"
+                description="璐熷悜鍔ㄤ綔淇濈暀鍏虫敞鏍囪瘑銆?"
                 defaultChecked={data.setting.negativeRequiresSupervisorReview}
               />
             </div>
-          </DataTableWrapper>
+          </SectionCard>
 
-          <DataTableWrapper
-            title="自动分配引擎"
-            description="自动分配规则。"
-            toolbar={
-              <div className="flex flex-wrap gap-2">
+          <SectionCard
+            eyebrow="Auto Assign"
+            title="鑷姩鍒嗛厤寮曟搸"
+            description="鑷姩鍒嗛厤渚濈劧鏄?public-pool 鍐呴儴鐨?ownership 鎵胯鍔ㄤ綔锛屼笉鍙︾珛鏂颁笟鍔″叆鍙ｃ€?"
+            density="compact"
+            className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+            actions={
+              <div className="flex flex-wrap gap-1.5">
                 <StatusBadge
                   label={
                     data.setting.autoAssignEnabled
                       ? publicPoolAutoAssignStrategyLabels[data.setting.autoAssignStrategy]
-                      : "当前未启用"
+                      : "褰撳墠鏈惎鐢?"
                   }
                   variant={data.setting.autoAssignEnabled ? "info" : "neutral"}
                 />
                 <StatusBadge
                   label={
                     data.roundRobinCursorUser
-                      ? `当前游标 ${data.roundRobinCursorUser.name}`
-                      : "当前游标未记录"
+                      ? `褰撳墠娓告爣 ${data.roundRobinCursorUser.name}`
+                      : "褰撳墠娓告爣鏈褰?"
                   }
                   variant={
                     data.setting.autoAssignStrategy === "ROUND_ROBIN" ? "success" : "neutral"
@@ -351,107 +406,116 @@ export function CustomerPublicPoolSettingsWorkbench({
             <div className="grid gap-3 md:grid-cols-2">
               <SettingToggle
                 name="autoAssignEnabled"
-                label="启用自动分配"
-                description="允许预览与执行。"
+                label="鍚敤鑷姩鍒嗛厤"
+                description="鍏佽棰勮涓庢墽琛屻€?"
                 defaultChecked={data.setting.autoAssignEnabled}
               />
               <SettingSelect
                 name="autoAssignStrategy"
-                label="自动分配策略"
-                description="轮转或低负载优先。"
+                label="鑷姩鍒嗛厤绛栫暐"
+                description="杞浆鎴栦綆璐熻浇浼樺厛銆?"
                 defaultValue={data.setting.autoAssignStrategy}
                 options={publicPoolAutoAssignStrategyOptions}
               />
               <SettingNumberInput
                 name="autoAssignBatchSize"
-                label="自动分配 batch size"
-                description="单次处理上限。"
+                label="鑷姩鍒嗛厤 batch size"
+                description="鍗曟澶勭悊涓婇檺銆?"
                 defaultValue={data.setting.autoAssignBatchSize}
                 min={1}
                 max={200}
               />
               <SettingNumberInput
                 name="maxActiveCustomersPerSales"
-                label="单人最大承接客户"
-                description="达到上限时跳过。"
+                label="鍗曚汉鏈€澶ф壙鎺ュ鎴?"
+                description="杈惧埌涓婇檺鏃惰烦杩囥€?"
                 defaultValue={data.setting.maxActiveCustomersPerSales}
                 min={1}
                 max={500}
-                placeholder="不设上限"
+                placeholder="涓嶈涓婇檺"
               />
             </div>
-            <div className="mt-4 rounded-[16px] border border-black/8 bg-[rgba(247,248,250,0.7)] px-4 py-3 text-sm leading-6 text-black/56">
-              <p className="font-medium text-black/72">游标说明</p>
-              <p className="mt-1">系统会自动续位。</p>
+            <div className="mt-4 rounded-[1rem] border border-black/8 bg-[rgba(247,248,250,0.64)] px-4 py-3 text-[13px] leading-6 text-black/56">
+              <p className="font-medium text-black/72">娓告爣璇存槑</p>
+              <p className="mt-1">绯荤粺浼氳嚜鍔ㄧ画浣嶏紝杞浆鍒嗛厤鍜屼綆璐熻浇鍒嗛厤閮藉湪鍚屼竴濂楀洟闃熻鍒欎笅鐢熸晥銆?</p>
             </div>
-          </DataTableWrapper>
+          </SectionCard>
 
-          <DataTableWrapper
-            title="公海操作边界"
-            description="操作权限。"
+          <SectionCard
+            eyebrow="Action Boundary"
+            title="鍏捣鎿嶄綔杈圭晫"
+            description="淇濇寔璁ら銆佹寚娲俱€佸洖鏀剁殑鏉冮檺鍔熻兘鏀跺彛鍦?ownership lifecycle 涓紝涓嶆墿鎴愮涓夊椾紪鎺掋€?"
+            density="compact"
+            className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
           >
             <div className="grid gap-3 md:grid-cols-2">
               <SettingToggle
                 name="salesCanClaim"
-                label="SALES 可认领团队公海"
-                description="关闭后不可主动认领。"
+                label="SALES 鍙棰嗗洟闃熷叕娴?"
+                description="鍏抽棴鍚庝笉鍙富鍔ㄨ棰嗐€?"
                 defaultChecked={data.setting.salesCanClaim}
               />
               <SettingToggle
                 name="salesCanRelease"
-                label="SALES 可主动释放客户"
-                description="当前仍无销售释放入口。"
+                label="SALES 鍙富鍔ㄩ噴鏀惧鎴?"
+                description="褰撳墠浠嶆棤閿€鍞噴鏀惧叆鍙ｃ€?"
                 defaultChecked={data.setting.salesCanRelease}
               />
               <SettingToggle
                 name="batchRecycleEnabled"
-                label="允许批量回收"
-                description="关闭后仅可单个回收。"
+                label="鍏佽鎵归噺鍥炴敹"
+                description="鍏抽棴鍚庝粎鍙崟涓洖鏀躲€?"
                 defaultChecked={data.setting.batchRecycleEnabled}
               />
               <SettingToggle
                 name="batchAssignEnabled"
-                label="允许批量指派"
-                description="关闭后仅可单个指派。"
+                label="鍏佽鎵归噺鎸囨淳"
+                description="鍏抽棴鍚庝粎鍙崟涓寚娲俱€?"
                 defaultChecked={data.setting.batchAssignEnabled}
               />
             </div>
-          </DataTableWrapper>
+          </SectionCard>
 
           <div className="flex justify-end">
             <button type="submit" className="crm-button crm-button-primary">
-              保存团队规则
+              淇濆瓨鍥㈤槦瑙勫垯
             </button>
           </div>
         </form>
       ) : (
-        <div className="mt-5">
-          <EmptyState
-            title="先选择团队"
-            description="请先选择团队。"
-          />
-        </div>
+        <SectionCard
+          eyebrow="Team Scope"
+          title="鍏堥€夋嫨鍥㈤槦"
+          description="璇峰厛閫夋嫨鍥㈤槦锛屽啀鍦ㄥ綋鍓嶅伐浣滃彴鍐呯淮鎶ゅ洟闃熻鍒欍€?"
+          density="compact"
+          className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+        >
+          <EmptyState title="鍏堥€夋嫨鍥㈤槦" description="璇峰厛閫夋嫨鍥㈤槦銆?" />
+        </SectionCard>
       )}
 
-      <DataTableWrapper
-        className="mt-5"
-        title="后续深化"
-        description="暂不开放。"
+      <SectionCard
+        eyebrow="Reserved"
+        title="鍚庣画娣卞寲"
+        description="杩欎簺鑳藉姏鏆備笉寮€鏀撅紝淇濇寔鍦ㄥ綋鍓嶈鍒欏伐浣滃彴鍐呰娓呮櫚鍦版彁绀恒€?"
+        density="compact"
+        className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
       >
         <div className="grid gap-3 md:grid-cols-2">
           {data.reservedRules.map((item) => (
             <div
               key={item.label}
-              className="rounded-[16px] border border-dashed border-black/12 bg-[rgba(247,248,250,0.7)] p-4"
+              className="rounded-[1rem] border border-dashed border-black/12 bg-[rgba(247,248,250,0.68)] p-4"
             >
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-medium text-black/78">{item.label}</p>
-                <StatusBadge label="后续开放" variant="neutral" />
+                <StatusBadge label="鍚庣画寮€鏀?" variant="neutral" />
               </div>
+              <p className="mt-2 text-[13px] leading-6 text-black/56">{item.description}</p>
             </div>
           ))}
         </div>
-      </DataTableWrapper>
-    </div>
+      </SectionCard>
+    </WorkbenchLayout>
   );
 }
