@@ -387,6 +387,7 @@ export async function batchAssignLeadsAction(
           customerId: customer.id,
           reason: CustomerOwnershipEventReason.SUPERVISOR_ASSIGN,
           note: `Lead assignment sync from ${lead.name?.trim() || lead.phone}`,
+          fallbackPublicPoolTeamId: targetSales.teamId ?? ownershipActor.teamId,
         });
 
         await tx.operationLog.create({

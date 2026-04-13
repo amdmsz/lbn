@@ -6,8 +6,8 @@ import type { RoleCode } from "@prisma/client";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import type { NavigationGroup } from "@/lib/navigation";
 
-const DESKTOP_SIDEBAR_WIDTH = "256px";
-const DESKTOP_SIDEBAR_RAIL_WIDTH = "72px";
+const DESKTOP_SIDEBAR_WIDTH = "280px";
+const DESKTOP_SIDEBAR_RAIL_WIDTH = "80px";
 
 export function DashboardShell({
   navigationGroups,
@@ -21,6 +21,7 @@ export function DashboardShell({
     avatarPath: string | null;
     role: RoleCode;
     roleName: string;
+    teamName: string | null;
     homePath: string;
   };
   children: ReactNode;
@@ -29,7 +30,7 @@ export function DashboardShell({
 
   return (
     <div
-      className="min-h-screen bg-transparent"
+      className="relative min-h-screen bg-transparent"
       style={
         {
           "--dashboard-sidebar-width": desktopSidebarCollapsed
@@ -47,7 +48,7 @@ export function DashboardShell({
       />
 
       <main className="min-w-0 transition-[padding-left] duration-200 md:pl-[var(--dashboard-sidebar-width)]">
-        <div className="mx-auto flex min-h-screen w-full max-w-[var(--crm-shell-max-width)] flex-col px-3 py-3 md:px-4 md:py-4 xl:px-6 xl:py-5">
+        <div className="mx-auto flex min-h-screen w-full max-w-[var(--crm-shell-max-width)] flex-col px-4 py-4 md:px-5 md:py-5 xl:px-7 xl:py-6">
           {children}
         </div>
       </main>

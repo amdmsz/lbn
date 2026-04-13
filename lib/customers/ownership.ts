@@ -183,6 +183,35 @@ function getResolvedPoolTeamId(customer: OwnershipCustomerRecord) {
   return customer.publicPoolTeamId ?? customer.owner?.teamId ?? customer.lastOwner?.teamId ?? null;
 }
 
+async function getResolvedPoolTeamIdForAssignmentTx(
+  tx: TransactionClient,
+  customer: OwnershipCustomerRecord,
+  fallbackTeamId: string | null = null,
+) {
+  const directTeamId = getResolvedPoolTeamId(customer);
+
+  if (directTeamId) {
+    return directTeamId;
+  }
+
+  const latestScopedEvent = await tx.customerOwnershipEvent.findFirst({
+    where: {
+      customerId: customer.id,
+      teamId: {
+        not: null,
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    select: {
+      teamId: true,
+    },
+  });
+
+  return latestScopedEvent?.teamId ?? fallbackTeamId;
+}
+
 function getResolvedCustomerTeamId(input: {
   publicPoolTeamId?: string | null;
   owner?: { teamId: string | null } | null;
@@ -363,12 +392,13 @@ async function getOwnershipCustomerTx(tx: TransactionClient, customerId: string)
 function assertActorCanAccessPoolCustomer(
   actor: OwnershipTransitionActorContext,
   customer: OwnershipCustomerRecord,
+  resolvedPoolTeamId: string | null = getResolvedPoolTeamId(customer),
 ) {
   if (actor.role === "ADMIN") {
     return;
   }
 
-  const poolTeamId = getResolvedPoolTeamId(customer);
+  const poolTeamId = resolvedPoolTeamId;
 
   if (actor.role === "SYSTEM") {
     if (!actor.teamId || !poolTeamId || poolTeamId !== actor.teamId) {
@@ -537,6 +567,7 @@ export async function assignCustomerToSalesTx(
     isBatch?: boolean;
     requireCurrentPublicPool?: boolean;
     claimLockedUntilOverride?: Date | null;
+    fallbackPublicPoolTeamId?: string | null;
     operationAction?: string;
     operationDescription?: string;
     operationMetadata?: Record<string, unknown> | null;
@@ -544,13 +575,18 @@ export async function assignCustomerToSalesTx(
 ) {
   const customer = await getOwnershipCustomerTx(tx, input.customerId);
   const now = new Date();
-  const teamSetting = await getResolvedTeamPublicPoolSetting(
-    getResolvedPoolTeamId(customer),
-    tx,
-  );
+  const currentIsPublicPoolCustomer = isPublicPoolCustomer(customer);
+  const resolvedPoolTeamId = currentIsPublicPoolCustomer
+    ? await getResolvedPoolTeamIdForAssignmentTx(
+        tx,
+        customer,
+        input.fallbackPublicPoolTeamId ?? null,
+      )
+    : getResolvedPoolTeamId(customer);
+  const teamSetting = await getResolvedTeamPublicPoolSetting(resolvedPoolTeamId, tx);
 
-  if (isPublicPoolCustomer(customer)) {
-    assertActorCanAccessPoolCustomer(input.actor, customer);
+  if (currentIsPublicPoolCustomer) {
+    assertActorCanAccessPoolCustomer(input.actor, customer, resolvedPoolTeamId);
   } else {
     if (input.requireCurrentPublicPool) {
       return null;
@@ -567,18 +603,18 @@ export async function assignCustomerToSalesTx(
     throw new Error("Batch assign is disabled by the current team public-pool rule.");
   }
 
-  if (customer.ownerId === input.targetSales.id && !isPublicPoolCustomer(customer)) {
+  if (customer.ownerId === input.targetSales.id && !currentIsPublicPoolCustomer) {
     return null;
   }
 
   const operationAction =
     input.operationAction ??
-    (isPublicPoolCustomer(customer)
+    (currentIsPublicPoolCustomer
       ? "customer.public_pool.assigned"
       : "customer.owner.reassigned");
   const operationDescription =
     input.operationDescription ??
-    (isPublicPoolCustomer(customer)
+    (currentIsPublicPoolCustomer
       ? `Assigned ${customer.name} to ${input.targetSales.name} from the public pool.`
       : `Transferred ${customer.name} to ${input.targetSales.name}.`);
 
@@ -594,7 +630,8 @@ export async function assignCustomerToSalesTx(
       input.claimLockedUntilOverride === undefined
         ? getDefaultClaimLockedUntil(now)
         : input.claimLockedUntilOverride,
-    nextPublicPoolTeamId: input.targetSales.teamId ?? input.actor.teamId,
+    nextPublicPoolTeamId:
+      input.targetSales.teamId ?? resolvedPoolTeamId ?? input.actor.teamId,
     eventReason: input.reason,
     note: input.note,
     operationAction,

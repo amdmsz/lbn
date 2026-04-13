@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { getDefaultRouteForRole } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
+import { prisma } from "@/lib/db/prisma";
 import { getNavigationGroupsForRole } from "@/lib/navigation";
 
 export default async function DashboardLayout({
@@ -16,6 +17,17 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
+  const shellProfile = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      team: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  });
+
   return (
     <DashboardShell
       navigationGroups={getNavigationGroupsForRole(
@@ -28,6 +40,7 @@ export default async function DashboardLayout({
         avatarPath: session.user.avatarPath,
         role: session.user.role,
         roleName: session.user.roleName,
+        teamName: shellProfile?.team?.name ?? null,
         homePath: getDefaultRouteForRole(session.user.role),
       }}
     >
