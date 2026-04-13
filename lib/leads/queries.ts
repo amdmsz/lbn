@@ -46,6 +46,13 @@ export type LeadSalesOption = {
   label: string;
 };
 
+export type LeadAssignedOwnerSummary = {
+  ownerId: string;
+  ownerName: string;
+  ownerUsername: string;
+  count: number;
+};
+
 const filtersSchema = z.object({
   name: z.string().trim().default(""),
   phone: z.string().trim().default(""),
@@ -251,12 +258,13 @@ export function parseLeadListFilters(
   searchParams: Record<string, SearchParamsValue> | undefined,
 ) {
   const legacyOwnerId = getParamValue(searchParams?.ownerId);
+  const rawView = getParamValue(searchParams?.view).trim();
   const parsed = filtersSchema.parse({
     name: getParamValue(searchParams?.name),
     phone: getParamValue(searchParams?.phone),
     status: getParamValue(searchParams?.status),
     tagId: getParamValue(searchParams?.tagId),
-    view: getParamValue(searchParams?.view),
+    view: rawView || undefined,
     quick: getParamValue(searchParams?.quick),
     importBatchId: getParamValue(searchParams?.importBatchId),
     assignedOwnerId: getParamValue(searchParams?.assignedOwnerId),
@@ -268,10 +276,7 @@ export function parseLeadListFilters(
 
   return {
     ...parsed,
-    view:
-      !getParamValue(searchParams?.view) && legacyOwnerId === UNASSIGNED_OWNER_VALUE
-        ? "unassigned"
-        : parsed.view,
+    view: !rawView && legacyOwnerId === UNASSIGNED_OWNER_VALUE ? "unassigned" : parsed.view,
     assignedOwnerId:
       parsed.assignedOwnerId ||
       (legacyOwnerId && legacyOwnerId !== UNASSIGNED_OWNER_VALUE ? legacyOwnerId : ""),
@@ -323,7 +328,8 @@ export async function getLeadListData(
   const totalPages = Math.max(1, Math.ceil(unassignedTotalCount / filters.pageSize));
   const currentPage = Math.min(filters.page, totalPages);
 
-  const [unassignedItems, assignedItems, salesOptions, tagOptions] = await Promise.all([
+  const [unassignedItems, assignedItems, assignedOwnerGroups, salesOptions, tagOptions] =
+    await Promise.all([
     prisma.lead.findMany({
       where: unassignedWhere,
       orderBy: { createdAt: "desc" },
@@ -413,6 +419,13 @@ export async function getLeadListData(
         },
       },
     }),
+    prisma.lead.groupBy({
+      by: ["ownerId"],
+      where: assignedWhere,
+      _count: {
+        _all: true,
+      },
+    }),
     canManageLeadAssignments(viewer.role)
       ? prisma.user.findMany({
           where: {
@@ -431,6 +444,51 @@ export async function getLeadListData(
       : Promise.resolve([]),
     getActiveTagOptions(),
   ]);
+
+  const assignedOwnerIds = assignedOwnerGroups
+    .map((group) => group.ownerId)
+    .filter((ownerId): ownerId is string => Boolean(ownerId));
+  const assignedOwnerRecords =
+    assignedOwnerIds.length > 0
+      ? await prisma.user.findMany({
+          where: {
+            id: {
+              in: assignedOwnerIds,
+            },
+          },
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        })
+      : [];
+  const assignedOwnerMap = new Map(
+    assignedOwnerRecords.map((user) => [user.id, user] as const),
+  );
+  const assignedByOwner = assignedOwnerGroups
+    .filter(
+      (
+        group,
+      ): group is {
+        ownerId: string;
+        _count: {
+          _all: number;
+        };
+      } => Boolean(group.ownerId),
+    )
+    .map((group) => {
+      const owner = assignedOwnerMap.get(group.ownerId);
+
+      return {
+        ownerId: group.ownerId,
+        ownerName: owner?.name ?? "未知负责人",
+        ownerUsername: owner?.username ?? group.ownerId.slice(0, 8),
+        count: group._count._all,
+      } satisfies LeadAssignedOwnerSummary;
+    })
+    .sort((left, right) => right.count - left.count)
+    .slice(0, 5);
 
   return {
     filters: {
@@ -451,6 +509,7 @@ export async function getLeadListData(
     assigned: {
       items: assignedItems,
       totalCount: assignedTotalCount,
+      byOwner: assignedByOwner,
     },
     salesOptions: salesOptions.map((user) => ({
       id: user.id,

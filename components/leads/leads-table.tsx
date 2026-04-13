@@ -2,7 +2,7 @@
 
 import type { LeadSource, LeadStatus } from "@prisma/client";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, useTransition } from "react";
 import { batchAssignLeadsAction } from "@/app/(dashboard)/leads/actions";
 import {
@@ -13,7 +13,6 @@ import { LeadStatusBadge } from "@/components/leads/lead-status-badge";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PaginationControls } from "@/components/shared/pagination-controls";
-import { RecordTabs } from "@/components/shared/record-tabs";
 import { SectionCard } from "@/components/shared/section-card";
 import { TagPill } from "@/components/shared/tag-pill";
 import {
@@ -23,9 +22,12 @@ import {
   formatDateTime,
   getLeadSourceLabel,
 } from "@/lib/leads/metadata";
-import type { LeadListFilters, LeadSalesOption } from "@/lib/leads/queries";
+import type {
+  LeadAssignedOwnerSummary,
+  LeadListFilters,
+  LeadSalesOption,
+} from "@/lib/leads/queries";
 import { scheduleSmartScroll } from "@/lib/smart-scroll";
-import { cn } from "@/lib/utils";
 
 type LeadListItem = {
   id: string;
@@ -67,10 +69,16 @@ type PaginationData = {
   totalPages: number;
 };
 
-type WorkspaceData = {
+type UnassignedWorkspaceData = {
   items: LeadListItem[];
   totalCount: number;
   pagination?: PaginationData;
+};
+
+type AssignedWorkspaceData = {
+  items: LeadListItem[];
+  totalCount: number;
+  byOwner: LeadAssignedOwnerSummary[];
 };
 
 type SelectionMode = "manual" | "filtered";
@@ -209,87 +217,192 @@ function FilterHiddenInputs({
   );
 }
 
-function AssignedLeadRow({
-  item,
+function AssignmentSummaryStrip({
+  unassignedCount,
+  assignedCount,
+  assignedByOwner,
+  feedbackMessage,
+  hasFeedbackError,
+  assignedViewHref,
+  importBatchId,
+}: Readonly<{
+  unassignedCount: number;
+  assignedCount: number;
+  assignedByOwner: LeadAssignedOwnerSummary[];
+  feedbackMessage: string;
+  hasFeedbackError: boolean;
+  assignedViewHref: string;
+  importBatchId: string;
+}>) {
+  const countLabelPrefix = importBatchId ? "本批" : "当前";
+
+  return (
+    <SectionCard
+      title="分配结果摘要"
+      eyebrow="Result Snapshot"
+      density="compact"
+      description="这里保留本批或当前上下文的分配结果摘要，不再默认常驻整列已分配明细。"
+      actions={
+        <Link
+          href={assignedViewHref}
+          scroll={false}
+          className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+        >
+          查看已分配结果
+        </Link>
+      }
+    >
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,180px)_minmax(0,180px)_minmax(0,1fr)_minmax(0,1.1fr)]">
+        <div className="rounded-[0.95rem] border border-black/7 bg-[rgba(255,255,255,0.9)] px-3.5 py-3 shadow-[0_6px_16px_rgba(18,24,31,0.03)]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">
+            {countLabelPrefix}未分配
+          </p>
+          <p className="mt-2 text-[1.25rem] font-semibold tracking-tight text-black/86">
+            {unassignedCount}
+          </p>
+          <p className="mt-1 text-[12px] text-black/50">待处理主工作区剩余数量</p>
+        </div>
+
+        <div className="rounded-[0.95rem] border border-black/7 bg-[rgba(255,255,255,0.9)] px-3.5 py-3 shadow-[0_6px_16px_rgba(18,24,31,0.03)]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">
+            {countLabelPrefix}已分配
+          </p>
+          <p className="mt-2 text-[1.25rem] font-semibold tracking-tight text-black/86">
+            {assignedCount}
+          </p>
+          <p className="mt-1 text-[12px] text-black/50">结果回看与轻量修正入口</p>
+        </div>
+
+        <div className="rounded-[0.95rem] border border-black/7 bg-[rgba(255,255,255,0.9)] px-3.5 py-3 shadow-[0_6px_16px_rgba(18,24,31,0.03)]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">
+            分配到各员工
+          </p>
+          {assignedByOwner.length > 0 ? (
+            <div className="mt-2 space-y-1.5">
+              {assignedByOwner.map((item) => (
+                <div
+                  key={item.ownerId}
+                  className="flex items-center justify-between gap-3 text-[13px] text-black/68"
+                >
+                  <span className="truncate">
+                    {item.ownerName}
+                    <span className="ml-1 text-black/44">@{item.ownerUsername}</span>
+                  </span>
+                  <span className="shrink-0 font-semibold text-[var(--color-accent)]">
+                    +{item.count}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-[13px] leading-5 text-black/52">
+              当前上下文下还没有已分配结果。
+            </p>
+          )}
+        </div>
+
+        <div className="rounded-[0.95rem] border border-black/7 bg-[rgba(255,255,255,0.9)] px-3.5 py-3 shadow-[0_6px_16px_rgba(18,24,31,0.03)]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">
+            最近一次分配反馈
+          </p>
+          {feedbackMessage ? (
+            <ActionBanner
+              tone={hasFeedbackError ? "danger" : "success"}
+              className="mt-2"
+              density="compact"
+            >
+              {feedbackMessage}
+            </ActionBanner>
+          ) : (
+            <p className="mt-2 text-[13px] leading-5 text-black/52">
+              完成一次分配后，这里会立即反馈最新结果摘要。
+            </p>
+          )}
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
+function AssignedReviewTable({
+  items,
   canAssign,
   onReassign,
 }: Readonly<{
-  item: LeadListItem;
+  items: LeadListItem[];
   canAssign: boolean;
   onReassign: (leadId: string) => void;
 }>) {
-  const latestAssignment = item.assignments?.[0];
-  const assignedAt = latestAssignment?.createdAt ?? item.updatedAt;
-
   return (
-    <div className="rounded-[0.95rem] border border-black/7 bg-white/80 px-3.5 py-3 shadow-[0_6px_16px_rgba(18,24,31,0.03)]">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold text-black/86">
-              {item.name?.trim() || "未填写姓名"}
-            </p>
-            <LeadStatusBadge status={item.status} />
-          </div>
-          <p className="text-sm font-medium tabular-nums text-black/74">{item.phone}</p>
-        </div>
+    <div className="crm-table-shell">
+      <table className="crm-table">
+        <thead>
+          <tr>
+            <th>线索</th>
+            <th>负责人</th>
+            <th>最近意向</th>
+            <th>状态</th>
+            <th>最近分配</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => {
+            const latestAssignment = item.assignments?.[0];
+            const assignedAt = latestAssignment?.createdAt ?? item.updatedAt;
 
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/leads/${item.id}`}
-            scroll={false}
-            className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-          >
-            查看详情
-          </Link>
-          {canAssign ? (
-            <button
-              type="button"
-              onClick={() => onReassign(item.id)}
-              className="crm-button crm-button-ghost min-h-0 px-3 py-2 text-sm"
-            >
-              改分配
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="mt-3 grid gap-2 text-[12.5px] text-black/56">
-        <div className="flex items-center justify-between gap-3">
-          <span>负责人</span>
-          <span className="font-medium text-black/72">
-            {item.owner ? `${item.owner.name} (@${item.owner.username})` : "未分配"}
-          </span>
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <span>最近意向</span>
-          <span className="truncate text-right font-medium text-black/72">
-            {item.interestedProduct?.trim() || "暂无"}
-          </span>
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <span>最近分配</span>
-          <span className="font-medium text-black/72">
-            {formatDateTime(normalizeDate(assignedAt))}
-          </span>
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <span>来源</span>
-          <span className="font-medium text-black/72">{getLeadSourceLabel(item.source)}</span>
-        </div>
-      </div>
-
-      {item.leadTags.length > 0 ? (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {item.leadTags.map((record) => (
-            <TagPill
-              key={record.id}
-              label={record.tag.name}
-              color={record.tag.color}
-            />
-          ))}
-        </div>
-      ) : null}
+            return (
+              <tr key={item.id}>
+                <td>
+                  <div className="space-y-0.5">
+                    <div className="font-medium text-black/82">
+                      {item.name?.trim() || "未填写姓名"}
+                    </div>
+                    <div className="text-xs tabular-nums text-black/48">{item.phone}</div>
+                  </div>
+                </td>
+                <td>
+                  {item.owner ? (
+                    <div>
+                      <div>{item.owner.name}</div>
+                      <div className="text-xs text-black/45">@{item.owner.username}</div>
+                    </div>
+                  ) : (
+                    "未分配"
+                  )}
+                </td>
+                <td>{item.interestedProduct?.trim() || "暂无最近意向"}</td>
+                <td>
+                  <LeadStatusBadge status={item.status} />
+                </td>
+                <td className="whitespace-nowrap text-sm text-black/58">
+                  {formatDateTime(normalizeDate(assignedAt))}
+                </td>
+                <td>
+                  <div className="flex items-center gap-3">
+                    <Link
+                      href={`/leads/${item.id}`}
+                      scroll={false}
+                      className="crm-text-link"
+                    >
+                      查看详情
+                    </Link>
+                    {canAssign ? (
+                      <button
+                        type="button"
+                        onClick={() => onReassign(item.id)}
+                        className="crm-text-link"
+                      >
+                        改分配
+                      </button>
+                    ) : null}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -302,8 +415,8 @@ export function LeadsTable({
   salesOptions,
   scrollTargetId,
 }: Readonly<{
-  unassigned: WorkspaceData;
-  assigned: WorkspaceData;
+  unassigned: UnassignedWorkspaceData;
+  assigned: AssignedWorkspaceData;
   filters: LeadListFilters;
   canAssign: boolean;
   salesOptions: LeadSalesOption[];
@@ -317,7 +430,6 @@ export function LeadsTable({
   );
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
-  const pathname = usePathname();
   const router = useRouter();
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
@@ -333,7 +445,7 @@ export function LeadsTable({
     unassigned.totalCount <= MAX_BATCH_ASSIGNMENT_SIZE;
   const filteredSelectionExceedsLimit =
     canAssign && unassigned.totalCount > MAX_BATCH_ASSIGNMENT_SIZE;
-  const activeMobileView = filters.view;
+  const isAssignedView = filters.view === "assigned";
 
   function resetSelection() {
     setSelectedIds([]);
@@ -369,6 +481,10 @@ export function LeadsTable({
 
       return unassigned.items.map((item) => item.id);
     });
+  }
+
+  function openAssignDialog() {
+    setDialogOpen(true);
   }
 
   function openReassignDialog(leadId: string) {
@@ -416,12 +532,7 @@ export function LeadsTable({
             page: 1,
           });
 
-          router.replace(
-            nextHref.startsWith("/leads")
-              ? `${pathname}${nextHref.slice("/leads".length)}`
-              : nextHref,
-            { scroll: false },
-          );
+          router.replace(nextHref, { scroll: false });
 
           if (scrollTargetId) {
             scheduleSmartScroll(scrollTargetId);
@@ -437,279 +548,261 @@ export function LeadsTable({
     </form>
   );
 
-  const mobileTabs = (
-    <RecordTabs
-      activeValue={activeMobileView}
-      scrollTargetId={scrollTargetId}
-      items={[
-        {
-          value: "unassigned",
-          label: "未分配",
-          count: unassigned.totalCount,
-          href: buildLeadHref(filters, {
-            view: "unassigned",
-            page: 1,
-          }),
-        },
-        {
-          value: "assigned",
-          label: "已分配",
-          count: assigned.totalCount,
-          href: buildLeadHref(filters, {
-            view: "assigned",
-            page: 1,
-          }),
-        },
-      ]}
-      className="xl:hidden"
-    />
-  );
-
-  const unassignedWorkspace = (
-    <SectionCard
-      title="未分配"
-      eyebrow="主工作区"
-      density="compact"
-      anchorId={scrollTargetId}
-      className={cn(
-        "border-[var(--color-accent)]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(246,249,255,0.9))]",
-        filters.view === "unassigned"
-          ? "shadow-[0_14px_30px_rgba(77,143,230,0.08)]"
-          : "shadow-[0_10px_22px_rgba(18,24,31,0.04)]",
-      )}
-      description="这里处理本次导入、今日导入或全部未分配线索的批量分配。"
-      actions={
-        <div className="flex flex-wrap items-center gap-2 text-sm text-black/55">
-          <span>共 {unassigned.totalCount} 条</span>
-          {canAssign ? (
-            <button
-              type="button"
-              disabled={selectedCount === 0 || salesOptions.length === 0}
-              onClick={() => setDialogOpen(true)}
-              className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
-            >
-              批量分配
-            </button>
-          ) : null}
-        </div>
-      }
-    >
-      <div className="space-y-4">
-        {selectionMode === "filtered" ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-[var(--color-accent)]/16 bg-[var(--color-accent)]/5 px-3.5 py-3 text-sm text-black/72">
-            <span>
-              已选择当前筛选结果全部 {unassigned.totalCount} 条未分配线索，可直接执行跨页批量分配。
-            </span>
-            <button
-              type="button"
-              onClick={resetSelection}
-              className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-            >
-              取消跨页选择
-            </button>
-          </div>
-        ) : null}
-
-        {selectionMode === "manual" &&
-        allChecked &&
-        canAssign &&
-        unassigned.totalCount > unassigned.items.length ? (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-black/8 bg-black/[0.025] px-3.5 py-3 text-sm text-black/68">
-            <span>已选择当前页全部 {unassigned.items.length} 条未分配线索。</span>
-            {canSelectFiltered ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectionMode("filtered");
-                  setSelectedIds([]);
-                }}
-                className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-              >
-                选择当前筛选结果全部 {unassigned.totalCount} 条
-              </button>
-            ) : filteredSelectionExceedsLimit ? (
-              <span>
-                当前筛选结果共 {unassigned.totalCount} 条，超过 {MAX_BATCH_ASSIGNMENT_SIZE} 条上限，请先缩小范围。
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-
-        {unassigned.items.length === 0 ? (
-          <EmptyState
-            density="compact"
-            title="当前没有待分配线索"
-            description="当前筛选上下文下已经没有未分配线索，可切到已分配回看区查看结果，或清空条件重新查看。"
-            action={
-              <Link
-                href={buildLeadHref(filters, {
-                  view: "assigned",
-                  page: 1,
-                })}
-                scroll={false}
-                className="crm-button crm-button-secondary"
-              >
-                查看已分配回看
-              </Link>
-            }
-          />
-        ) : (
-          <>
-            <div className="crm-table-shell">
-              <table className="crm-table">
-                <thead>
-                  <tr>
-                    {canAssign ? (
-                      <th className="w-14">
-                        <input
-                          type="checkbox"
-                          checked={allChecked}
-                          onChange={toggleAll}
-                          aria-label="选择当前页全部未分配线索"
-                          className="crm-checkbox h-4 w-4"
-                        />
-                      </th>
-                    ) : null}
-                    <th>线索</th>
-                    <th>来源</th>
-                    <th>最近意向</th>
-                    <th>状态</th>
-                    <th>标签</th>
-                    <th>创建时间</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {unassigned.items.map((item) => (
-                    <tr key={item.id}>
-                      {canAssign ? (
-                        <td>
-                          <input
-                            type="checkbox"
-                            checked={
-                              selectionMode === "filtered" || selectedIdSet.has(item.id)
-                            }
-                            onChange={() => toggleLead(item.id)}
-                            aria-label={`选择线索 ${item.name ?? item.phone}`}
-                            className="crm-checkbox mt-1 h-4 w-4"
-                          />
-                        </td>
-                      ) : null}
-                      <td>
-                        <div className="space-y-0.5">
-                          <div className="font-medium text-black/82">
-                            {item.name?.trim() || "未填写姓名"}
-                          </div>
-                          <div className="text-xs tabular-nums text-black/48">{item.phone}</div>
-                        </div>
-                      </td>
-                      <td>{getLeadSourceLabel(item.source)}</td>
-                      <td>{item.interestedProduct?.trim() || "暂无最近意向"}</td>
-                      <td>
-                        <LeadStatusBadge status={item.status} />
-                      </td>
-                      <td>
-                        {item.leadTags.length > 0 ? (
-                          <div className="flex flex-wrap gap-1.5">
-                            {item.leadTags.map((record) => (
-                              <TagPill
-                                key={record.id}
-                                label={record.tag.name}
-                                color={record.tag.color}
-                              />
-                            ))}
-                          </div>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap text-sm text-black/58">
-                        {formatDateTime(normalizeDate(item.createdAt))}
-                      </td>
-                      <td>
-                        <Link
-                          href={`/leads/${item.id}`}
-                          scroll={false}
-                          className="crm-text-link"
-                        >
-                          查看详情
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {unassigned.pagination ? (
-              <PaginationControls
-                page={unassigned.pagination.page}
-                totalPages={unassigned.pagination.totalPages}
-                summary={`${buildRangeLabel(unassigned.pagination)}，共 ${unassigned.pagination.totalCount} 条未分配线索`}
-                buildHref={(pageNumber) => buildLeadHref(filters, { page: pageNumber })}
-                leftSlot={pageSizeControl}
-                scrollTargetId={scrollTargetId}
-              />
-            ) : null}
-          </>
-        )}
-      </div>
-    </SectionCard>
-  );
-
-  const assignedWorkspace = (
-    <SectionCard
-      title="已分配"
-      eyebrow="结果回看区"
-      density="compact"
-      description="用于回看刚完成的分配结果，按负责人快速检查和做轻量修正。"
-      className={cn(
-        "bg-[rgba(255,255,255,0.78)]",
-        filters.view === "assigned"
-          ? "border-[var(--color-accent)]/10 shadow-[0_12px_26px_rgba(77,143,230,0.07)]"
-          : "shadow-[0_10px_22px_rgba(18,24,31,0.04)]",
-      )}
-      actions={<span className="text-sm text-black/55">共 {assigned.totalCount} 条</span>}
-    >
-      {assigned.items.length === 0 ? (
-        <EmptyState
-          density="compact"
-          title="还没有已分配结果"
-          description="完成一次分配后，这里会立即回看本次结果。若当前带了批次或负责人上下文，也会沿用它们。"
-        />
-      ) : (
-        <div className="space-y-3">
-          {assigned.items.map((item) => (
-            <AssignedLeadRow
-              key={item.id}
-              item={item}
-              canAssign={canAssign}
-              onReassign={openReassignDialog}
-            />
-          ))}
-        </div>
-      )}
-    </SectionCard>
-  );
+  const assignedViewHref = buildLeadHref(filters, {
+    view: "assigned",
+    page: 1,
+  });
+  const unassignedViewHref = buildLeadHref(filters, {
+    view: "unassigned",
+    page: 1,
+  });
 
   return (
     <div className="space-y-4">
-      {state.message ? (
-        <ActionBanner tone={state.status === "success" ? "success" : "danger"}>
-          {state.message}
-        </ActionBanner>
-      ) : null}
+      <AssignmentSummaryStrip
+        unassignedCount={unassigned.totalCount}
+        assignedCount={assigned.totalCount}
+        assignedByOwner={assigned.byOwner}
+        feedbackMessage={state.message}
+        hasFeedbackError={state.status === "error"}
+        assignedViewHref={assignedViewHref}
+        importBatchId={filters.importBatchId}
+      />
 
-      {mobileTabs}
+      {isAssignedView ? (
+        <SectionCard
+          title="已分配结果"
+          eyebrow="Review Workspace"
+          density="compact"
+          anchorId={scrollTargetId}
+          description="已分配结果只在需要时进入回看，不再默认占据主工作台宽度。"
+          actions={
+            <div className="flex flex-wrap items-center gap-2 text-sm text-black/56">
+              <span>共 {assigned.totalCount} 条</span>
+              <Link
+                href={unassignedViewHref}
+                scroll={false}
+                className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+              >
+                返回未分配
+              </Link>
+            </div>
+          }
+        >
+          {assigned.items.length === 0 ? (
+            <EmptyState
+              density="compact"
+              title="当前没有已分配结果"
+              description="当前上下文下还没有已分配线索，可返回未分配工作区继续处理。"
+              action={
+                <Link
+                  href={unassignedViewHref}
+                  scroll={false}
+                  className="crm-button crm-button-secondary"
+                >
+                  返回未分配
+                </Link>
+              }
+            />
+          ) : (
+            <AssignedReviewTable
+              items={assigned.items}
+              canAssign={canAssign}
+              onReassign={openReassignDialog}
+            />
+          )}
+        </SectionCard>
+      ) : (
+        <SectionCard
+          title="未分配"
+          eyebrow="Primary Workspace"
+          density="compact"
+          anchorId={scrollTargetId}
+          className="border-[var(--color-accent)]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(246,249,255,0.9))] shadow-[0_14px_30px_rgba(77,143,230,0.08)]"
+          description="这里是待分配线索处理主工作台，优先承接本次导入、今日导入和全部未分配线索。"
+          actions={
+            <div className="flex flex-wrap items-center gap-2 text-sm text-black/55">
+              <span>共 {unassigned.totalCount} 条</span>
+              {canAssign ? (
+                <button
+                  type="button"
+                  disabled={selectedCount === 0 || salesOptions.length === 0}
+                  onClick={openAssignDialog}
+                  className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
+                >
+                  批量分配
+                </button>
+              ) : null}
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            {state.message ? (
+              <ActionBanner tone={state.status === "success" ? "success" : "danger"}>
+                {state.message}
+              </ActionBanner>
+            ) : null}
 
-      <div className="space-y-4 xl:grid xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.95fr)] xl:items-start xl:gap-4 xl:space-y-0">
-        <div className={cn(activeMobileView === "assigned" ? "hidden xl:block" : "block")}>
-          {unassignedWorkspace}
-        </div>
-        <div className={cn(activeMobileView === "unassigned" ? "hidden xl:block" : "block")}>
-          {assignedWorkspace}
-        </div>
-      </div>
+            {selectionMode === "filtered" ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-[var(--color-accent)]/16 bg-[var(--color-accent)]/5 px-3.5 py-3 text-sm text-black/72">
+                <span>
+                  已选择当前筛选结果全部 {unassigned.totalCount} 条未分配线索，可直接执行跨页批量分配。
+                </span>
+                <button
+                  type="button"
+                  onClick={resetSelection}
+                  className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                >
+                  取消跨页选择
+                </button>
+              </div>
+            ) : null}
+
+            {selectionMode === "manual" &&
+            allChecked &&
+            canAssign &&
+            unassigned.totalCount > unassigned.items.length ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-black/8 bg-black/[0.025] px-3.5 py-3 text-sm text-black/68">
+                <span>已选择当前页全部 {unassigned.items.length} 条未分配线索。</span>
+                {canSelectFiltered ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectionMode("filtered");
+                      setSelectedIds([]);
+                    }}
+                    className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                  >
+                    选择当前筛选结果全部 {unassigned.totalCount} 条
+                  </button>
+                ) : filteredSelectionExceedsLimit ? (
+                  <span>
+                    当前筛选结果共 {unassigned.totalCount} 条，超过 {MAX_BATCH_ASSIGNMENT_SIZE} 条上限，请先缩小范围。
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+
+            {unassigned.items.length === 0 ? (
+              <EmptyState
+                density="compact"
+                title="当前没有待分配线索"
+                description="当前筛选上下文下已经没有未分配线索，可进入已分配结果回看，或清空条件重新查看。"
+                action={
+                  <Link
+                    href={assignedViewHref}
+                    scroll={false}
+                    className="crm-button crm-button-secondary"
+                  >
+                    查看已分配结果
+                  </Link>
+                }
+              />
+            ) : (
+              <>
+                <div className="crm-table-shell">
+                  <table className="crm-table">
+                    <thead>
+                      <tr>
+                        {canAssign ? (
+                          <th className="w-14">
+                            <input
+                              type="checkbox"
+                              checked={allChecked}
+                              onChange={toggleAll}
+                              aria-label="选择当前页全部未分配线索"
+                              className="crm-checkbox h-4 w-4"
+                            />
+                          </th>
+                        ) : null}
+                        <th>线索</th>
+                        <th>来源</th>
+                        <th>最近意向</th>
+                        <th>状态</th>
+                        <th>标签</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {unassigned.items.map((item) => (
+                        <tr key={item.id}>
+                          {canAssign ? (
+                            <td>
+                              <input
+                                type="checkbox"
+                                checked={
+                                  selectionMode === "filtered" || selectedIdSet.has(item.id)
+                                }
+                                onChange={() => toggleLead(item.id)}
+                                aria-label={`选择线索 ${item.name ?? item.phone}`}
+                                className="crm-checkbox mt-1 h-4 w-4"
+                              />
+                            </td>
+                          ) : null}
+                          <td>
+                            <div className="space-y-0.5">
+                              <div className="font-medium text-black/82">
+                                {item.name?.trim() || "未填写姓名"}
+                              </div>
+                              <div className="text-xs tabular-nums text-black/48">
+                                {item.phone}
+                              </div>
+                            </div>
+                          </td>
+                          <td>{getLeadSourceLabel(item.source)}</td>
+                          <td>{item.interestedProduct?.trim() || "暂无最近意向"}</td>
+                          <td>
+                            <LeadStatusBadge status={item.status} />
+                          </td>
+                          <td>
+                            {item.leadTags.length > 0 ? (
+                              <div className="flex flex-wrap gap-1.5">
+                                {item.leadTags.map((record) => (
+                                  <TagPill
+                                    key={record.id}
+                                    label={record.tag.name}
+                                    color={record.tag.color}
+                                  />
+                                ))}
+                              </div>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap text-sm text-black/58">
+                            {formatDateTime(normalizeDate(item.createdAt))}
+                          </td>
+                          <td>
+                            <Link
+                              href={`/leads/${item.id}`}
+                              scroll={false}
+                              className="crm-text-link"
+                            >
+                              查看详情
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {unassigned.pagination ? (
+                  <PaginationControls
+                    page={unassigned.pagination.page}
+                    totalPages={unassigned.pagination.totalPages}
+                    summary={`${buildRangeLabel(unassigned.pagination)}，共 ${unassigned.pagination.totalCount} 条未分配线索`}
+                    buildHref={(pageNumber) => buildLeadHref(filters, { page: pageNumber })}
+                    leftSlot={pageSizeControl}
+                    scrollTargetId={scrollTargetId}
+                  />
+                ) : null}
+              </>
+            )}
+          </div>
+        </SectionCard>
+      )}
 
       {dialogOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8">
@@ -736,16 +829,14 @@ export function LeadsTable({
               <input type="hidden" name="selectionMode" value={selectionMode} />
 
               {selectionMode === "filtered" ? (
-                <>
-                  <FilterHiddenInputs
-                    filters={filters}
-                    includePage
-                    overrides={{
-                      view: "unassigned",
-                      assignedOwnerId: "",
-                    }}
-                  />
-                </>
+                <FilterHiddenInputs
+                  filters={filters}
+                  includePage
+                  overrides={{
+                    view: "unassigned",
+                    assignedOwnerId: "",
+                  }}
+                />
               ) : (
                 selectedIds.map((leadId) => (
                   <input key={leadId} type="hidden" name="leadIds" value={leadId} />
