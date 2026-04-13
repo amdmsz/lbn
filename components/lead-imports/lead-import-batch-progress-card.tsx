@@ -20,6 +20,16 @@ type LeadImportBatchProgressCardProps = {
   pollWhenIdle?: boolean;
 };
 
+function buildLeadAssignmentHref(batchId: string) {
+  const params = new URLSearchParams({
+    view: "unassigned",
+    quick: "import_batch",
+    importBatchId: batchId,
+  });
+
+  return `/leads?${params.toString()}`;
+}
+
 export function LeadImportBatchProgressCard({
   batchId,
   mode,
@@ -111,6 +121,14 @@ export function LeadImportBatchProgressCard({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {mode === "lead" && progress.isTerminal ? (
+            <Link
+              href={buildLeadAssignmentHref(batchId)}
+              className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
+            >
+              去分配本批未分配线索
+            </Link>
+          ) : null}
           <Link
             href={detailHref}
             className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"

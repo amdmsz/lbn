@@ -139,6 +139,18 @@
 - 自动回收、离职回收、团队规则页、报表页已完成
 - 团队级 auto-assign 已支持 `ROUND_ROBIN / LOAD_BALANCING`
 
+### M6C. Enterprise Workbench UI / IA 收口
+
+状态：已完成
+
+- `/customers` 与 `/customers/[id]` 已完成一轮企业级 workbench 收口
+- `/customers/public-pool`、`/customers/public-pool/settings`、`/customers/public-pool/reports` 已完成 customer lifecycle 闭环统一收口
+- `/fulfillment` 的 `trade-orders / shipping / batches` 三视图已完成有边界 UI / IA 收口
+- `/products`、`/products/[id]` 与 `/products?tab=suppliers` 已完成产品域统一收口
+- `product-form-drawer`、`product-sku-drawer`、`supplier-form-drawer` 与 `product-supplier-field` 内联新增供应商面板已统一到同一套轻量抽屉语言
+- 全局 app shell、左侧导航、导航分组与左下角账户面板已完成一轮统一壳层收口
+- 该里程碑不改变 schema、truth layer、RBAC、主入口语义与 compatibility routes
+
 ---
 
 ## 3. 当前不在进行中的事项
@@ -179,32 +191,6 @@
 - 不改 schema
 - 不改 payment / fulfillment truth layer
 - 不父单化 execution 列表
-
-### M7A. 客户中心与客户详情 UI/IA 升级
-
-状态：待开始
-
-目标：
-
-- 在不改变业务主线、路由主入口、兼容路由、RBAC、server actions、schema 的前提下，升级 `/customers` 与 `/customers/[id]` 的 UI / 信息架构 / 页面层级
-- 收口共享 `page shell / filter bar / KPI row / card / detail section / table` 基元
-- 让客户中心更接近企业级 SaaS 工作台，而不是平铺后台模板
-
-范围：
-
-- `/customers`
-- `/customers/[id]`
-- 相关共享组件与样式基元
-- loading / empty / error 状态的一致性收口
-
-明确不做：
-
-- 不改交易模型
-- 不改路由主链
-- 不改兼容跳转
-- 不改 schema
-- 不改服务端权限逻辑
-- 不顺手做整站 UI 重写
 
 ### M7B. Lead Import Runtime / Observability 收口
 
@@ -275,10 +261,9 @@
 ## 5. 当前建议执行顺序
 
 1. M7：执行工作台收口
-2. M7A：客户中心与客户详情 UI/IA 升级
-3. M7B：Lead Import Runtime / Observability 收口
-4. M8：商品经营深化
-5. M9：Finance / Reconciliation 首版
+2. M7B：Lead Import Runtime / Observability 收口
+3. M8：商品经营深化
+4. M9：Finance / Reconciliation 首版
 
 ---
 

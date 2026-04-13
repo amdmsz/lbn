@@ -17,7 +17,11 @@ import {
 } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
 import { MAX_BATCH_ASSIGNMENT_SIZE } from "@/lib/leads/metadata";
-import { buildLeadWhereInput, parseLeadListFilters } from "@/lib/leads/queries";
+import {
+  buildLeadWhereInput,
+  getLeadImportBatchLeadIds,
+  parseLeadListFilters,
+} from "@/lib/leads/queries";
 
 const assignLeadsSchema = z.object({
   selectionMode: z.enum(["manual", "filtered"]).default("manual"),
@@ -32,6 +36,10 @@ function getFilterParamsFromFormData(formData: FormData) {
     phone: String(formData.get("phone") ?? ""),
     status: String(formData.get("status") ?? ""),
     tagId: String(formData.get("tagId") ?? ""),
+    view: String(formData.get("view") ?? ""),
+    quick: String(formData.get("quick") ?? ""),
+    importBatchId: String(formData.get("importBatchId") ?? ""),
+    assignedOwnerId: String(formData.get("assignedOwnerId") ?? ""),
     ownerId: String(formData.get("ownerId") ?? ""),
     createdFrom: String(formData.get("createdFrom") ?? ""),
     createdTo: String(formData.get("createdTo") ?? ""),
@@ -106,12 +114,16 @@ export async function batchAssignLeadsAction(
 
   if (parsed.data.selectionMode === "filtered") {
     const filters = parseLeadListFilters(getFilterParamsFromFormData(formData));
+    const importedLeadIds = filters.importBatchId
+      ? await getLeadImportBatchLeadIds(filters.importBatchId)
+      : [];
     const where = buildLeadWhereInput(
       {
         id: session.user.id,
         role: session.user.role,
       },
       filters,
+      importedLeadIds,
     );
 
     const matchedLeadIds = await prisma.lead.findMany({

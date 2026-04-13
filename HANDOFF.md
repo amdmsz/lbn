@@ -5,6 +5,9 @@
 
 当前仓库已经从“模型切换期”进入“正确模型上的工作流增强期”。
 
+客户域、履约域、产品域、抽屉体系和全局导航壳层，已经完成一轮统一的 enterprise workbench UI / IA 收口。
+当前后续重点不再是“要不要重做壳层”，而是只在明确 scope 下做小尾项抛光或新的业务里程碑。
+
 不要再把重点放回：
 
 - 旧 `SalesOrder` 主单认知
@@ -153,6 +156,16 @@
 
 - 商品中心合并 supplier 管理已完成
 - 商品新建与详情编辑的 supplier 交互已统一
+
+### Enterprise Workbench UI / IA 收口
+
+- 客户域已完成：`/customers` 与 `/customers/[id]` 已收口到同一套企业级工作台语言
+- customer lifecycle 闭环已完成：`/customers/public-pool`、规则页、报表页已与客户中心统一
+- 履约域已完成：`/fulfillment` 的 `trade-orders / shipping / batches` 三视图已完成有边界收口
+- 产品域已完成：`/products`、`/products/[id]`、`/products?tab=suppliers` 已完成统一收口
+- 抽屉体系已完成：`product-form-drawer`、`product-sku-drawer`、`supplier-form-drawer` 与 `product-supplier-field` 内联新增供应商面板已统一语言
+- 全局导航壳层已完成：app shell、左侧导航、导航分组层级、激活态与左下角账户面板已完成一轮统一收口
+- 当前这部分交接结论只代表呈现层与信息架构收口，不代表 schema、truth layer、RBAC 或主入口语义发生变化
 
 ### 公海池 ownership lifecycle
 

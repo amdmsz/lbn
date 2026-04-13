@@ -6,7 +6,6 @@ import {
 } from "@prisma/client";
 import { z } from "zod";
 import {
-  canAccessAllData,
   canAccessLeadModule,
   canManageLeadAssignments,
   getLeadScope,
@@ -32,16 +31,14 @@ export type LeadListFilters = {
   phone: string;
   status: LeadStatus | "";
   tagId: string;
-  ownerId: string;
+  view: "unassigned" | "assigned";
+  quick: "" | "import_batch" | "today" | "all_unassigned";
+  importBatchId: string;
+  assignedOwnerId: string;
   createdFrom: string;
   createdTo: string;
   page: number;
   pageSize: number;
-};
-
-export type LeadOwnerOption = {
-  id: string;
-  label: string;
 };
 
 export type LeadSalesOption = {
@@ -54,7 +51,10 @@ const filtersSchema = z.object({
   phone: z.string().trim().default(""),
   status: z.union([z.nativeEnum(LeadStatus), z.literal("")]).default(""),
   tagId: z.string().trim().default(""),
-  ownerId: z.string().trim().default(""),
+  view: z.enum(["unassigned", "assigned"]).default("unassigned"),
+  quick: z.enum(["", "import_batch", "today", "all_unassigned"]).default(""),
+  importBatchId: z.string().trim().default(""),
+  assignedOwnerId: z.string().trim().default(""),
   createdFrom: z.string().trim().default(""),
   createdTo: z.string().trim().default(""),
   page: z.coerce.number().int().min(1).default(1),
@@ -97,7 +97,66 @@ function parseDateBoundary(value: string, endOfDay: boolean) {
   return date;
 }
 
-export function buildLeadWhereInput(viewer: LeadViewer, filters: LeadListFilters) {
+function buildTodayBoundary(endOfDay: boolean) {
+  const date = new Date();
+  date.setHours(
+    endOfDay ? 23 : 0,
+    endOfDay ? 59 : 0,
+    endOfDay ? 59 : 0,
+    endOfDay ? 999 : 0,
+  );
+  return date;
+}
+
+function combineLeadWhere(
+  ...clauses: Array<Prisma.LeadWhereInput | null | undefined>
+): Prisma.LeadWhereInput {
+  const visibleClauses = clauses.filter(
+    (clause): clause is Prisma.LeadWhereInput =>
+      clause != null && Object.keys(clause).length > 0,
+  );
+
+  if (visibleClauses.length === 0) {
+    return {};
+  }
+
+  if (visibleClauses.length === 1) {
+    return visibleClauses[0];
+  }
+
+  return {
+    AND: visibleClauses,
+  };
+}
+
+export async function getLeadImportBatchLeadIds(importBatchId: string) {
+  if (!importBatchId.trim()) {
+    return [];
+  }
+
+  const rows = await prisma.leadImportRow.findMany({
+    where: {
+      batchId: importBatchId,
+      importedLeadId: {
+        not: null,
+      },
+    },
+    select: {
+      importedLeadId: true,
+    },
+    distinct: ["importedLeadId"],
+  });
+
+  return rows
+    .map((row) => row.importedLeadId)
+    .filter((leadId): leadId is string => Boolean(leadId));
+}
+
+export function buildLeadBaseWhereInput(
+  viewer: LeadViewer,
+  filters: LeadListFilters,
+  importedLeadIds: string[] = [],
+) {
   const scope = getLeadScope(viewer.role, viewer.id);
 
   if (!scope) {
@@ -140,16 +199,20 @@ export function buildLeadWhereInput(viewer: LeadViewer, filters: LeadListFilters
     });
   }
 
-  if (canAccessAllData(viewer.role) && filters.ownerId) {
-    if (filters.ownerId === UNASSIGNED_OWNER_VALUE) {
-      andClauses.push({ ownerId: null });
-    } else {
-      andClauses.push({ ownerId: filters.ownerId });
-    }
+  if (filters.importBatchId) {
+    andClauses.push({
+      id: {
+        in: importedLeadIds.length > 0 ? importedLeadIds : ["__NO_VISIBLE_IMPORTED_LEADS__"],
+      },
+    });
   }
 
-  const createdFrom = parseDateBoundary(filters.createdFrom, false);
-  const createdTo = parseDateBoundary(filters.createdTo, true);
+  const createdFrom =
+    parseDateBoundary(filters.createdFrom, false) ??
+    (filters.quick === "today" ? buildTodayBoundary(false) : null);
+  const createdTo =
+    parseDateBoundary(filters.createdTo, true) ??
+    (filters.quick === "today" ? buildTodayBoundary(true) : null);
 
   if (createdFrom || createdTo) {
     andClauses.push({
@@ -160,29 +223,59 @@ export function buildLeadWhereInput(viewer: LeadViewer, filters: LeadListFilters
     });
   }
 
-  return withVisibleLeadWhere(
-    andClauses.length === 0
-      ? {}
-      : ({
-          AND: andClauses,
-        } satisfies Prisma.LeadWhereInput),
-  );
+  return andClauses.length === 0
+    ? {}
+    : ({
+        AND: andClauses,
+      } satisfies Prisma.LeadWhereInput);
+}
+
+export function buildLeadWhereInput(
+  viewer: LeadViewer,
+  filters: LeadListFilters,
+  importedLeadIds: string[] = [],
+) {
+  const baseWhere = buildLeadBaseWhereInput(viewer, filters, importedLeadIds);
+  const workspaceWhere =
+    filters.view === "assigned"
+      ? combineLeadWhere(
+          { ownerId: { not: null } },
+          filters.assignedOwnerId ? { ownerId: filters.assignedOwnerId } : null,
+        )
+      : { ownerId: null };
+
+  return withVisibleLeadWhere(combineLeadWhere(baseWhere, workspaceWhere));
 }
 
 export function parseLeadListFilters(
   searchParams: Record<string, SearchParamsValue> | undefined,
 ) {
-  return filtersSchema.parse({
+  const legacyOwnerId = getParamValue(searchParams?.ownerId);
+  const parsed = filtersSchema.parse({
     name: getParamValue(searchParams?.name),
     phone: getParamValue(searchParams?.phone),
     status: getParamValue(searchParams?.status),
     tagId: getParamValue(searchParams?.tagId),
-    ownerId: getParamValue(searchParams?.ownerId),
+    view: getParamValue(searchParams?.view),
+    quick: getParamValue(searchParams?.quick),
+    importBatchId: getParamValue(searchParams?.importBatchId),
+    assignedOwnerId: getParamValue(searchParams?.assignedOwnerId),
     createdFrom: getParamValue(searchParams?.createdFrom),
     createdTo: getParamValue(searchParams?.createdTo),
     page: getParamValue(searchParams?.page) || "1",
     pageSize: getParamValue(searchParams?.pageSize) || String(LEADS_PAGE_SIZE),
   });
+
+  return {
+    ...parsed,
+    view:
+      !getParamValue(searchParams?.view) && legacyOwnerId === UNASSIGNED_OWNER_VALUE
+        ? "unassigned"
+        : parsed.view,
+    assignedOwnerId:
+      parsed.assignedOwnerId ||
+      (legacyOwnerId && legacyOwnerId !== UNASSIGNED_OWNER_VALUE ? legacyOwnerId : ""),
+  } satisfies LeadListFilters;
 }
 
 export async function getLeadListData(
@@ -194,14 +287,45 @@ export async function getLeadListData(
   }
 
   const filters = parseLeadListFilters(rawSearchParams);
-  const where = buildLeadWhereInput(viewer, filters);
-  const totalCount = await prisma.lead.count({ where });
-  const totalPages = Math.max(1, Math.ceil(totalCount / filters.pageSize));
+  const [importBatch, importedLeadIds] = await Promise.all([
+    filters.importBatchId
+      ? prisma.leadImportBatch.findUnique({
+          where: { id: filters.importBatchId },
+          select: {
+            id: true,
+            fileName: true,
+            status: true,
+            importedAt: true,
+            createdAt: true,
+          },
+        })
+      : Promise.resolve(null),
+    filters.importBatchId
+      ? getLeadImportBatchLeadIds(filters.importBatchId)
+      : Promise.resolve([] as string[]),
+  ]);
+  const baseWhere = buildLeadBaseWhereInput(viewer, filters, importedLeadIds);
+  const unassignedWhere = withVisibleLeadWhere(
+    combineLeadWhere(baseWhere, { ownerId: null }),
+  );
+  const assignedWhere = withVisibleLeadWhere(
+    combineLeadWhere(
+      baseWhere,
+      { ownerId: { not: null } },
+      filters.assignedOwnerId ? { ownerId: filters.assignedOwnerId } : null,
+    ),
+  );
+
+  const [unassignedTotalCount, assignedTotalCount] = await Promise.all([
+    prisma.lead.count({ where: unassignedWhere }),
+    prisma.lead.count({ where: assignedWhere }),
+  ]);
+  const totalPages = Math.max(1, Math.ceil(unassignedTotalCount / filters.pageSize));
   const currentPage = Math.min(filters.page, totalPages);
 
-  const [items, ownerOptions, salesOptions, tagOptions] = await Promise.all([
+  const [unassignedItems, assignedItems, salesOptions, tagOptions] = await Promise.all([
     prisma.lead.findMany({
-      where,
+      where: unassignedWhere,
       orderBy: { createdAt: "desc" },
       skip: (currentPage - 1) * filters.pageSize,
       take: filters.pageSize,
@@ -213,6 +337,7 @@ export async function getLeadListData(
         interestedProduct: true,
         status: true,
         createdAt: true,
+        updatedAt: true,
         owner: {
           select: {
             id: true,
@@ -237,24 +362,57 @@ export async function getLeadListData(
         },
       },
     }),
-    canAccessAllData(viewer.role)
-      ? prisma.user.findMany({
-          where: {
-            userStatus: UserStatus.ACTIVE,
-            role: {
-              code: {
-                in: ["ADMIN", "SUPERVISOR", "SALES"],
-              },
-            },
-          },
-          orderBy: [{ role: { code: "asc" } }, { name: "asc" }],
+    prisma.lead.findMany({
+      where: assignedWhere,
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      take: Math.min(filters.pageSize, 12),
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        source: true,
+        interestedProduct: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        owner: {
           select: {
             id: true,
             name: true,
             username: true,
           },
-        })
-      : Promise.resolve([]),
+        },
+        leadTags: {
+          orderBy: [{ tag: { sortOrder: "asc" } }, { createdAt: "asc" }],
+          take: 3,
+          select: {
+            id: true,
+            tagId: true,
+            tag: {
+              select: {
+                id: true,
+                name: true,
+                color: true,
+              },
+            },
+          },
+        },
+        assignments: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: {
+            id: true,
+            createdAt: true,
+            assignedBy: {
+              select: {
+                name: true,
+                username: true,
+              },
+            },
+          },
+        },
+      },
+    }),
     canManageLeadAssignments(viewer.role)
       ? prisma.user.findMany({
           where: {
@@ -279,21 +437,28 @@ export async function getLeadListData(
       ...filters,
       page: currentPage,
     },
-    items,
-    ownerOptions: ownerOptions.map((user) => ({
-      id: user.id,
-      label: `${user.name} (@${user.username})`,
-    })) satisfies LeadOwnerOption[],
+    importBatch,
+    unassigned: {
+      items: unassignedItems,
+      totalCount: unassignedTotalCount,
+      pagination: {
+        page: currentPage,
+        pageSize: filters.pageSize,
+        totalCount: unassignedTotalCount,
+        totalPages,
+      },
+    },
+    assigned: {
+      items: assignedItems,
+      totalCount: assignedTotalCount,
+    },
     salesOptions: salesOptions.map((user) => ({
       id: user.id,
       label: `${user.name} (@${user.username})`,
     })) satisfies LeadSalesOption[],
     tagOptions,
-    pagination: {
-      page: currentPage,
-      pageSize: filters.pageSize,
-      totalCount,
-      totalPages,
+    summary: {
+      totalVisibleCount: unassignedTotalCount + assignedTotalCount,
     },
   };
 }

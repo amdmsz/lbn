@@ -1,11 +1,11 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LeadsFilters } from "@/components/leads/leads-filters";
 import { LeadsTable } from "@/components/leads/leads-table";
-import { FiltersPanel } from "@/components/shared/filters-panel";
-import { SectionCard } from "@/components/shared/section-card";
+import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
+import { MetricCard } from "@/components/shared/metric-card";
+import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { SummaryHeader } from "@/components/shared/summary-header";
-import { WorkspaceGuide } from "@/components/shared/workspace-guide";
 import {
   canAccessLeadModule,
   canManageLeadAssignments,
@@ -13,6 +13,22 @@ import {
 } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
 import { getLeadListData } from "@/lib/leads/queries";
+
+function getLeadContextLabel(data: Awaited<ReturnType<typeof getLeadListData>>) {
+  if (data.filters.importBatchId && data.importBatch) {
+    return `本批导入：${data.importBatch.fileName}`;
+  }
+
+  if (data.filters.quick === "today") {
+    return "今日导入";
+  }
+
+  if (data.filters.view === "assigned") {
+    return "已分配回看";
+  }
+
+  return "全部未分配";
+}
 
 export default async function LeadsPage({
   searchParams,
@@ -38,84 +54,108 @@ export default async function LeadsPage({
     resolvedSearchParams,
   );
   const canAssign = canManageLeadAssignments(session.user.role);
+  const contextLabel = getLeadContextLabel(data);
 
   return (
-    <div className="crm-page">
-      <SummaryHeader
-        eyebrow="客户运营 / 线索中心"
-        title="线索中心"
-        description="这里承接导入后的原始线索复核、归并结果查看、分配与审计，不再作为销售日常主工作台。"
-        badges={
-          <>
-            <StatusBadge label="ADMIN / SUPERVISOR" variant="info" />
-            <StatusBadge
-              label={canAssign ? "支持批量分配" : "只读审计"}
-              variant={canAssign ? "success" : "warning"}
-            />
-          </>
-        }
-      />
-
-      <WorkspaceGuide
-        title="线索中心承接方式"
-        description="线索中心只服务导入复核、分配和审计。客户经营一旦落到 Customer.ownerId，就回到客户中心继续推进。"
-        items={[
-          {
-            title: "导入复核",
-            description: "先回看导入中心批次、失败行和重复行，再决定如何处理原始线索。",
-            href: "/lead-imports",
-            hrefLabel: "进入导入中心",
-            badgeLabel: "上游入口",
-            badgeVariant: "info",
-          },
-          {
-            title: "分配执行",
-            description: "主管和管理员在这里完成批量分配、回收和重分配，不把动作散落到客户页。",
-            badgeLabel: "分配台",
-            badgeVariant: "success",
-          },
-          {
-            title: "审计回看",
-            description: "保留原始来源、归并结果和状态追踪，便于回看导入质量和分配路径。",
-            badgeLabel: "审计视角",
-            badgeVariant: "warning",
-          },
-        ]}
-      />
-
-      <FiltersPanel
-        title="线索筛选"
-        description="按姓名、手机号、状态、标签和创建时间回看导入落地后的线索质量与当前分配状态。"
-      >
+    <WorkbenchLayout
+      header={
+        <PageHeader
+          eyebrow="Customer Operations / Lead Center"
+          title="线索分配中心"
+          description="这里只承接导入后的复核、分配和审计。未分配作为主工作区，已分配用于结果回看和轻量修正。"
+          context={
+            data.importBatch ? (
+              <div className="crm-toolbar-cluster gap-1.5">
+                <StatusBadge label="当前导入上下文" variant="info" />
+                <StatusBadge label={data.importBatch.status} variant="neutral" />
+              </div>
+            ) : null
+          }
+          meta={
+            <>
+              <StatusBadge label="ADMIN / SUPERVISOR" variant="info" />
+              <StatusBadge
+                label={canAssign ? "支持批量分配" : "只读回看"}
+                variant={canAssign ? "success" : "warning"}
+              />
+              {data.importBatch ? (
+                <StatusBadge label={data.importBatch.fileName} variant="neutral" />
+              ) : null}
+            </>
+          }
+          actions={
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Link
+                href="/lead-imports"
+                scroll={false}
+                className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+              >
+                返回导入中心
+              </Link>
+              {data.importBatch ? (
+                <Link
+                  href={`/lead-imports/${data.importBatch.id}`}
+                  scroll={false}
+                  className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
+                >
+                  查看当前批次
+                </Link>
+              ) : null}
+            </div>
+          }
+        />
+      }
+      summary={
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            density="strip"
+            label="未分配"
+            value={`${data.unassigned.totalCount}`}
+            note="当前主工作区待分配线索数量"
+          />
+          <MetricCard
+            density="strip"
+            label="已分配"
+            value={`${data.assigned.totalCount}`}
+            note="结果回看区内已分配线索数量"
+          />
+          <MetricCard
+            density="strip"
+            label="当前焦点"
+            value={contextLabel}
+            note={
+              data.filters.importBatchId
+                ? "承接本次导入完成后的分配动作"
+                : "支持今日导入、全部未分配与已分配回看"
+            }
+          />
+          <MetricCard
+            density="strip"
+            label="当前可见"
+            value={`${data.summary.totalVisibleCount}`}
+            note="当前上下文内未分配与已分配线索总量"
+          />
+        </div>
+      }
+      toolbar={
         <LeadsFilters
           filters={data.filters}
-          ownerOptions={data.ownerOptions}
-          showOwnerFilter={canAssign}
+          ownerOptions={data.salesOptions}
+          showOwnerFilter={canAssign && data.salesOptions.length > 0}
           tagOptions={data.tagOptions}
           scrollTargetId="leads-list"
         />
-      </FiltersPanel>
-
-      <SectionCard
-        eyebrow="线索列表"
-        title={canAssign ? "线索列表与批量分配" : "线索审计列表"}
-        description={
-          canAssign
-            ? "主管和管理员在这里处理分配动作，并回看每条线索的当前状态。"
-            : "保留只读线索审计视图，不在这里承接销售客户主链。"
-        }
-        anchorId="leads-list"
-      >
-        <LeadsTable
-          key={JSON.stringify(data.filters)}
-          items={data.items}
-          filters={data.filters}
-          pagination={data.pagination}
-          canAssign={canAssign}
-          salesOptions={data.salesOptions}
-          scrollTargetId="leads-list"
-        />
-      </SectionCard>
-    </div>
+      }
+    >
+      <LeadsTable
+        key={JSON.stringify(data.filters)}
+        unassigned={data.unassigned}
+        assigned={data.assigned}
+        filters={data.filters}
+        canAssign={canAssign}
+        salesOptions={data.salesOptions}
+        scrollTargetId="leads-list"
+      />
+    </WorkbenchLayout>
   );
 }
