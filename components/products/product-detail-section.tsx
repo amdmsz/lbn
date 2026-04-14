@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { MasterDataRecycleDialog } from "@/components/products/master-data-recycle-dialog";
 import { ProductFormDrawer } from "@/components/products/product-form-drawer";
 import { ProductSkuDrawer } from "@/components/products/product-sku-drawer";
 import { type SupplierOption } from "@/components/products/product-supplier-field";
@@ -12,6 +13,10 @@ import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { formatDateTime } from "@/lib/customers/metadata";
 import { formatCurrency } from "@/lib/fulfillment/metadata";
+import type {
+  MasterDataRecycleGuard,
+  MasterDataRecycleReasonCode,
+} from "@/lib/products/recycle-guards";
 
 type ProductActionResult = {
   status: "success" | "error";
@@ -52,6 +57,7 @@ type ProductDetail = {
     skus: number;
     salesOrderItems: number;
   };
+  recycleGuard: MasterDataRecycleGuard;
   skus: Array<{
     id: string;
     skuCode: string;
@@ -68,8 +74,26 @@ type ProductDetail = {
     _count: {
       salesOrderItems: number;
     };
+    recycleGuard: MasterDataRecycleGuard;
   }>;
 };
+
+type RecycleTarget =
+  | {
+      kind: "product";
+      name: string;
+      secondaryLabel: string;
+      updatedAt: Date;
+      guard: MasterDataRecycleGuard;
+    }
+  | {
+      kind: "sku";
+      name: string;
+      secondaryLabel: string;
+      updatedAt: Date;
+      guard: MasterDataRecycleGuard;
+      skuId: string;
+    };
 
 export function ProductDetailSection({
   product,
@@ -108,6 +132,9 @@ export function ProductDetailSection({
     initialOpenProductEditor,
   );
   const [dismissInitialSkuDrawer, setDismissInitialSkuDrawer] = useState(initialOpenSkuCreator);
+  const [recycleTarget, setRecycleTarget] = useState<RecycleTarget | null>(null);
+  const [recycleReason, setRecycleReason] =
+    useState<MasterDataRecycleReasonCode>("mistaken_creation");
   const [pendingToggle, startToggleTransition] = useTransition();
   const router = useRouter();
 
@@ -160,6 +187,11 @@ export function ProductDetailSection({
     });
   }
 
+  function closeRecycleDialog() {
+    setRecycleTarget(null);
+    setRecycleReason("mistaken_creation");
+  }
+
   return (
     <div className="space-y-4">
       {notice ? (
@@ -183,6 +215,25 @@ export function ProductDetailSection({
                 className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
               >
                 {product.enabled ? "停用商品" : "启用商品"}
+              </button>
+            ) : null}
+            {canManage ? (
+              <button
+                type="button"
+                onClick={() =>
+                  setRecycleTarget({
+                    kind: "product",
+                    name: product.name,
+                    secondaryLabel: product.code,
+                    updatedAt: product.updatedAt,
+                    guard: product.recycleGuard,
+                  })
+                }
+                className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84"
+              >
+                {product.recycleGuard.canMoveToRecycleBin
+                  ? "\u79fb\u5165\u56de\u6536\u7ad9"
+                  : "\u67e5\u770b\u5f15\u7528\u5173\u7cfb"}
               </button>
             ) : null}
           </div>
@@ -343,6 +394,26 @@ export function ProductDetailSection({
                       {sku.enabled ? "停用" : "启用"}
                     </button>
                   ) : null}
+                  {canManage ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setRecycleTarget({
+                          kind: "sku",
+                          name: sku.skuName,
+                          secondaryLabel: sku.skuCode,
+                          updatedAt: sku.updatedAt,
+                          guard: sku.recycleGuard,
+                          skuId: sku.id,
+                        })
+                      }
+                      className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84"
+                    >
+                      {sku.recycleGuard.canMoveToRecycleBin
+                        ? "\u79fb\u5165\u56de\u6536\u7ad9"
+                        : "\u67e5\u770b\u5f15\u7528\u5173\u7cfb"}
+                    </button>
+                  ) : null}
                 </div>
               </article>
             ))}
@@ -430,6 +501,46 @@ export function ProductDetailSection({
           closeSkuDrawer();
           router.refresh();
         }}
+      />
+
+      <MasterDataRecycleDialog
+        open={recycleTarget !== null}
+        objectName={recycleTarget?.name ?? ""}
+        objectTypeLabel={
+          recycleTarget?.kind === "sku" ? "SKU" : "\u5546\u54c1"
+        }
+        secondaryLabel={recycleTarget?.secondaryLabel ?? ""}
+        domainLabel={
+          recycleTarget?.kind === "sku"
+            ? "\u5546\u54c1\u4e3b\u6570\u636e / SKU"
+            : "\u5546\u54c1\u4e3b\u6570\u636e"
+        }
+        updatedAt={recycleTarget?.updatedAt ?? new Date()}
+        guard={
+          recycleTarget?.guard ?? {
+            canMoveToRecycleBin: false,
+            fallbackActionLabel: "\u6539\u4e3a\u505c\u7528\u5546\u54c1",
+            blockerSummary: "",
+            blockers: [],
+            futureRestoreBlockers: [],
+          }
+        }
+        reason={recycleReason}
+        onReasonChange={setRecycleReason}
+        onClose={closeRecycleDialog}
+        pending={pendingToggle}
+        onFallbackAction={
+          recycleTarget
+            ? () => {
+                if (recycleTarget.kind === "sku") {
+                  handleToggleSku(recycleTarget.skuId);
+                } else {
+                  handleToggleProduct();
+                }
+                closeRecycleDialog();
+              }
+            : undefined
+        }
       />
     </div>
   );

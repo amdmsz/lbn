@@ -3,6 +3,10 @@ import { getParamValue, parseActionNotice } from "@/lib/action-notice";
 import { canAccessProductModule } from "@/lib/auth/access";
 import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
+import {
+  buildProductRecycleGuard,
+  buildProductSkuRecycleGuard,
+} from "@/lib/products/recycle-guards";
 
 type SearchParamsValue = string | string[] | undefined;
 
@@ -64,7 +68,7 @@ export async function getProductsPageData(
 
   const where: Prisma.ProductWhereInput = filters.length > 0 ? { AND: filters } : {};
 
-  const [items, suppliers] = await Promise.all([
+  const [rawItems, suppliers] = await Promise.all([
     prisma.product.findMany({
       where,
       orderBy: [{ enabled: "desc" }, { updatedAt: "desc" }, { createdAt: "desc" }],
@@ -103,6 +107,14 @@ export async function getProductsPageData(
     }),
   ]);
 
+  const items = rawItems.map((item) => ({
+    ...item,
+    recycleGuard: buildProductRecycleGuard({
+      skuCount: item._count.skus,
+      salesOrderItemCount: item._count.salesOrderItems,
+    }),
+  }));
+
   return {
     notice: parseActionNotice(rawSearchParams),
     filters: {
@@ -125,7 +137,7 @@ export async function getProductDetail(
     throw new Error("You do not have access to the product center.");
   }
 
-  const [product, suppliers] = await Promise.all([
+  const [rawProduct, suppliers] = await Promise.all([
     prisma.product.findUnique({
       where: { id: productId },
       select: {
@@ -185,6 +197,22 @@ export async function getProductDetail(
       },
     }),
   ]);
+
+  const product = rawProduct
+    ? {
+        ...rawProduct,
+        recycleGuard: buildProductRecycleGuard({
+          skuCount: rawProduct._count.skus,
+          salesOrderItemCount: rawProduct._count.salesOrderItems,
+        }),
+        skus: rawProduct.skus.map((sku) => ({
+          ...sku,
+          recycleGuard: buildProductSkuRecycleGuard({
+            salesOrderItemCount: sku._count.salesOrderItems,
+          }),
+        })),
+      }
+    : null;
 
   return {
     notice: parseActionNotice(rawSearchParams),

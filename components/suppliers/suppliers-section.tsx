@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { MasterDataRecycleDialog } from "@/components/products/master-data-recycle-dialog";
 import { SupplierFormDrawer } from "@/components/suppliers/supplier-form-drawer";
 import { MasterDataStatusBadge } from "@/components/settings/master-data-status-badge";
 import { ActionBanner } from "@/components/shared/action-banner";
@@ -10,6 +11,10 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { formatDateTime } from "@/lib/customers/metadata";
+import type {
+  MasterDataRecycleGuard,
+  MasterDataRecycleReasonCode,
+} from "@/lib/products/recycle-guards";
 
 type SupplierItem = {
   id: string;
@@ -25,7 +30,10 @@ type SupplierItem = {
   _count: {
     products: number;
     salesOrders: number;
+    shippingTasks: number;
+    exportBatches: number;
   };
+  recycleGuard: MasterDataRecycleGuard;
 };
 
 type SupplierActionResult = {
@@ -87,6 +95,9 @@ export function SuppliersSection({
     initialCreateOpen ? "create" : null,
   );
   const [initialDrawerPendingClose, setInitialDrawerPendingClose] = useState(initialCreateOpen);
+  const [recycleTarget, setRecycleTarget] = useState<SupplierItem | null>(null);
+  const [recycleReason, setRecycleReason] =
+    useState<MasterDataRecycleReasonCode>("mistaken_creation");
   const [pendingToggle, startToggleTransition] = useTransition();
 
   const hasActiveFilters = Boolean(filters.supplierQ || filters.supplierStatus);
@@ -132,6 +143,11 @@ export function SuppliersSection({
         router.refresh();
       }
     });
+  }
+
+  function closeRecycleDialog() {
+    setRecycleTarget(null);
+    setRecycleReason("mistaken_creation");
   }
 
   return (
@@ -270,6 +286,17 @@ export function SuppliersSection({
                       {item.enabled ? "停用" : "启用"}
                     </button>
                   ) : null}
+                  {canManage ? (
+                    <button
+                      type="button"
+                      onClick={() => setRecycleTarget(item)}
+                      className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84"
+                    >
+                      {item.recycleGuard.canMoveToRecycleBin
+                        ? "\u79fb\u5165\u56de\u6536\u7ad9"
+                        : "\u67e5\u770b\u5f15\u7528\u5173\u7cfb"}
+                    </button>
+                  ) : null}
                 </div>
               </article>
             ))}
@@ -324,6 +351,36 @@ export function SuppliersSection({
         upsertAction={upsertAction}
         onClose={closeDrawer}
         onSaved={handleSaved}
+      />
+
+      <MasterDataRecycleDialog
+        open={recycleTarget !== null}
+        objectName={recycleTarget?.name ?? ""}
+        objectTypeLabel="\u4f9b\u5e94\u5546"
+        secondaryLabel={recycleTarget?.code ?? ""}
+        domainLabel="\u5546\u54c1\u4e2d\u5fc3 / \u4f9b\u5e94\u5546"
+        updatedAt={recycleTarget?.updatedAt ?? new Date()}
+        guard={
+          recycleTarget?.recycleGuard ?? {
+            canMoveToRecycleBin: false,
+            fallbackActionLabel: "\u6539\u4e3a\u505c\u7528\u4f9b\u5e94\u5546",
+            blockerSummary: "",
+            blockers: [],
+            futureRestoreBlockers: [],
+          }
+        }
+        reason={recycleReason}
+        onReasonChange={setRecycleReason}
+        onClose={closeRecycleDialog}
+        pending={pendingToggle}
+        onFallbackAction={
+          recycleTarget
+            ? () => {
+                handleToggle(recycleTarget);
+                closeRecycleDialog();
+              }
+            : undefined
+        }
       />
     </div>
   );

@@ -3,6 +3,7 @@ import { getParamValue, parseActionNotice } from "@/lib/action-notice";
 import { canAccessSupplierModule } from "@/lib/auth/access";
 import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
+import { buildSupplierRecycleGuard } from "@/lib/products/recycle-guards";
 
 type SearchParamsValue = string | string[] | undefined;
 
@@ -96,6 +97,8 @@ export async function getSuppliersPageData(
         select: {
           products: true,
           salesOrders: true,
+          shippingTasks: true,
+          exportBatches: true,
         },
       },
     },
@@ -117,6 +120,12 @@ export async function getSuppliersPageData(
       item.shippingTasks[0]?.createdAt,
     ]),
     _count: item._count,
+    recycleGuard: buildSupplierRecycleGuard({
+      productCount: item._count.products,
+      salesOrderCount: item._count.salesOrders,
+      shippingTaskCount: item._count.shippingTasks,
+      exportBatchCount: item._count.exportBatches,
+    }),
   }));
 
   return {
