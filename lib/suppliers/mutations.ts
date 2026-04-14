@@ -7,6 +7,7 @@ import { z } from "zod";
 import { canManageSuppliers } from "@/lib/auth/access";
 import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
+import { findActiveRecycleEntry } from "@/lib/recycle-bin/repository";
 
 export type SupplierActor = {
   id: string;
@@ -16,22 +17,38 @@ export type SupplierActor = {
 
 const upsertSupplierSchema = z.object({
   id: z.string().trim().default(""),
-  code: z.string().trim().min(1, "请填写供货商编码").max(50),
-  name: z.string().trim().min(1, "请填写供货商名称").max(120),
+  code: z.string().trim().min(1, "请填写供应商编码").max(50),
+  name: z.string().trim().min(1, "请填写供应商名称").max(120),
   contactName: z.string().trim().max(120).default(""),
   contactPhone: z.string().trim().max(30).default(""),
   remark: z.string().trim().max(1000).default(""),
 });
+
+async function assertSupplierNotInRecycleBin(
+  supplierId: string,
+  actionLabel: string,
+) {
+  const activeEntry = await findActiveRecycleEntry(prisma, "SUPPLIER", supplierId);
+
+  if (activeEntry) {
+    throw new Error(`该供应商已移入回收站，不能继续${actionLabel}。`);
+  }
+}
 
 export async function upsertSupplier(
   actor: SupplierActor,
   rawInput: z.input<typeof upsertSupplierSchema>,
 ) {
   if (!canManageSuppliers(actor.role, actor.permissionCodes)) {
-    throw new Error("当前角色无权维护供货商。");
+    throw new Error("当前角色无权维护供应商。");
   }
 
   const input = upsertSupplierSchema.parse(rawInput);
+
+  if (input.id) {
+    await assertSupplierNotInRecycleBin(input.id, "编辑");
+  }
+
   const existingByCode = await prisma.supplier.findFirst({
     where: {
       code: input.code,
@@ -41,7 +58,7 @@ export async function upsertSupplier(
   });
 
   if (existingByCode) {
-    throw new Error("供货商编码已存在。");
+    throw new Error("供应商编码已存在。");
   }
 
   const existing = input.id
@@ -92,7 +109,7 @@ export async function upsertSupplier(
       action: existing ? "supplier.updated" : "supplier.created",
       targetType: OperationTargetType.SUPPLIER,
       targetId: supplier.id,
-      description: `${existing ? "更新" : "创建"}供货商：${supplier.name}`,
+      description: `${existing ? "更新" : "创建"}供应商：${supplier.name}`,
       beforeData: existing ?? undefined,
       afterData: input,
     },
@@ -103,8 +120,10 @@ export async function upsertSupplier(
 
 export async function toggleSupplier(actor: SupplierActor, supplierId: string) {
   if (!canManageSuppliers(actor.role, actor.permissionCodes)) {
-    throw new Error("当前角色无权维护供货商。");
+    throw new Error("当前角色无权维护供应商。");
   }
+
+  await assertSupplierNotInRecycleBin(supplierId, "启用或停用");
 
   const existing = await prisma.supplier.findUnique({
     where: { id: supplierId },
@@ -116,7 +135,7 @@ export async function toggleSupplier(actor: SupplierActor, supplierId: string) {
   });
 
   if (!existing) {
-    throw new Error("供货商不存在。");
+    throw new Error("供应商不存在。");
   }
 
   const updated = await prisma.supplier.update({
@@ -138,7 +157,7 @@ export async function toggleSupplier(actor: SupplierActor, supplierId: string) {
       action: "supplier.toggled",
       targetType: OperationTargetType.SUPPLIER,
       targetId: existing.id,
-      description: `${updated.enabled ? "启用" : "停用"}供货商：${existing.name}`,
+      description: `${updated.enabled ? "启用" : "停用"}供应商：${existing.name}`,
       beforeData: { enabled: existing.enabled },
       afterData: { enabled: updated.enabled },
     },

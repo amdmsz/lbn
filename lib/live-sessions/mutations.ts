@@ -18,6 +18,7 @@ import {
 import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import { touchCustomerEffectiveFollowUpFromLiveInvitationTx } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
+import { findActiveRecycleEntry } from "@/lib/recycle-bin/repository";
 
 export type LiveActor = {
   id: string;
@@ -104,6 +105,21 @@ function parseDateTimeInput(value: string, label: string) {
   return parsed;
 }
 
+async function assertLiveSessionNotInRecycleBin(
+  liveSessionId: string,
+  actionLabel: string,
+) {
+  const activeEntry = await findActiveRecycleEntry(
+    prisma,
+    "LIVE_SESSION",
+    liveSessionId,
+  );
+
+  if (activeEntry) {
+    throw new Error(`该直播场次已移入回收站，不能继续${actionLabel}。`);
+  }
+}
+
 export async function createLiveSession(
   actor: LiveActor,
   rawInput: CreateLiveSessionInput,
@@ -174,6 +190,7 @@ export async function upsertLiveInvitation(
   }
 
   const parsed = upsertLiveInvitationSchema.parse(rawInput);
+  await assertLiveSessionNotInRecycleBin(parsed.liveSessionId, "维护邀约记录");
   const customerScope = getCustomerScope(actor.role, actor.id);
 
   if (!customerScope) {
@@ -357,6 +374,8 @@ export async function updateLiveSessionLifecycle(
   if (!canManageLiveSessions(actor.role, actor.permissionCodes)) {
     throw new Error("\u5f53\u524d\u89d2\u8272\u4e0d\u80fd\u7ef4\u62a4\u76f4\u64ad\u573a\u6b21\u3002");
   }
+
+  await assertLiveSessionNotInRecycleBin(input.liveSessionId, "编辑");
 
   const session = await prisma.liveSession.findUnique({
     where: { id: input.liveSessionId },

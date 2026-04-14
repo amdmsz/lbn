@@ -7,6 +7,7 @@ import { z } from "zod";
 import { canCreateProducts, canManageProducts } from "@/lib/auth/access";
 import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
+import { findActiveRecycleEntry } from "@/lib/recycle-bin/repository";
 
 export type ProductActor = {
   id: string;
@@ -51,6 +52,33 @@ function ensureCreateProducts(actor: ProductActor) {
   }
 }
 
+async function assertProductNotInRecycleBin(productId: string, actionLabel: string) {
+  const activeEntry = await findActiveRecycleEntry(prisma, "PRODUCT", productId);
+
+  if (activeEntry) {
+    throw new Error(`该商品已移入回收站，不能继续${actionLabel}。`);
+  }
+}
+
+async function assertProductSkuNotInRecycleBin(skuId: string, actionLabel: string) {
+  const activeEntry = await findActiveRecycleEntry(prisma, "PRODUCT_SKU", skuId);
+
+  if (activeEntry) {
+    throw new Error(`该 SKU 已移入回收站，不能继续${actionLabel}。`);
+  }
+}
+
+async function assertSupplierNotInRecycleBin(
+  supplierId: string,
+  actionLabel: string,
+) {
+  const activeEntry = await findActiveRecycleEntry(prisma, "SUPPLIER", supplierId);
+
+  if (activeEntry) {
+    throw new Error(`该供应商已移入回收站，不能继续${actionLabel}。`);
+  }
+}
+
 export async function upsertProduct(
   actor: ProductActor,
   rawInput: z.input<typeof upsertProductSchema>,
@@ -59,9 +87,12 @@ export async function upsertProduct(
 
   if (input.id) {
     ensureManageProducts(actor);
+    await assertProductNotInRecycleBin(input.id, "编辑");
   } else {
     ensureCreateProducts(actor);
   }
+
+  await assertSupplierNotInRecycleBin(input.supplierId, "绑定商品");
 
   const supplier = await prisma.supplier.findUnique({
     where: { id: input.supplierId },
@@ -143,6 +174,7 @@ export async function upsertProduct(
 
 export async function toggleProduct(actor: ProductActor, productId: string) {
   ensureManageProducts(actor);
+  await assertProductNotInRecycleBin(productId, "启用或停用");
 
   const existing = await prisma.product.findUnique({
     where: { id: productId },
@@ -194,6 +226,12 @@ export async function upsertProductSku(
 ) {
   ensureManageProducts(actor);
   const input = upsertProductSkuSchema.parse(rawInput);
+
+  if (input.id) {
+    await assertProductSkuNotInRecycleBin(input.id, "编辑");
+  }
+
+  await assertProductNotInRecycleBin(input.productId, "绑定 SKU");
 
   const product = await prisma.product.findUnique({
     where: { id: input.productId },
@@ -288,6 +326,7 @@ export async function upsertProductSku(
 
 export async function toggleProductSku(actor: ProductActor, skuId: string) {
   ensureManageProducts(actor);
+  await assertProductSkuNotInRecycleBin(skuId, "启用或停用");
 
   const existing = await prisma.productSku.findUnique({
     where: { id: skuId },
