@@ -20,7 +20,7 @@ CREATE TABLE `imported_customer_deletion_requests` (
     `updatedAt` DATETIME(3) NOT NULL,
 
     PRIMARY KEY (`id`)
-);
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 CREATE INDEX `imp_cust_del_req_customer_created_idx`
   ON `imported_customer_deletion_requests`(`customerIdSnapshot`, `createdAt`);

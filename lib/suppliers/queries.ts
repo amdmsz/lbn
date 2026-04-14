@@ -4,6 +4,7 @@ import { canAccessSupplierModule } from "@/lib/auth/access";
 import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { buildSupplierRecycleGuard } from "@/lib/products/recycle-guards";
+import { findActiveTargetIds } from "@/lib/recycle-bin/repository";
 
 type SearchParamsValue = string | string[] | undefined;
 
@@ -54,6 +55,18 @@ export async function getSuppliersPageData(
         { contactPhone: { contains: keyword } },
         { remark: { contains: keyword } },
       ],
+    });
+  }
+
+  const activeSupplierIds = await findActiveTargetIds(prisma, "SUPPLIER");
+
+  // Phase 1 KISS approach: exclude active recycle targets via notIn(activeIds).
+  // If the active-id set grows large later, replace this with anti-join / exists.
+  if (activeSupplierIds.length > 0) {
+    filters.push({
+      id: {
+        notIn: activeSupplierIds,
+      },
     });
   }
 

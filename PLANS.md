@@ -157,7 +157,7 @@
 
 以下事项当前明确不作为正在推进项：
 
-- 不改 Prisma schema
+- 默认不改 Prisma schema；只有进入明确 schema milestone 时才允许增量变更，例如 `RecycleBinEntry`
 - 不回头重做 backfill
 - 不把 `/payment-records`、`/collection-tasks` 改成父单主视角
 - 不把 `GiftRecord` 与订单赠品混链
@@ -168,6 +168,43 @@
 ---
 
 ## 4. 当前建议里程碑
+
+### M6D. RecycleBinEntry Schema Milestone
+
+状态：待开始
+
+目标：
+
+- 把真实回收站从 guard / dialog 语义推进为真实持久化状态
+- 为 `Product / ProductSku / Supplier / LiveSession` 建立统一的回收站数据基线
+- 保持商品域与直播场次的业务生命周期动作不变，不把 `enabled / disabled`、`取消 / 归档` 误当作回收站状态
+
+范围：
+
+- 新增统一 `RecycleBinEntry` 中心表
+- 只覆盖：
+  - `Product`
+  - `ProductSku`
+  - `Supplier`
+  - `LiveSession`
+- 建立 schema、repository + adapter、moveToRecycleBin、restore、purge 的服务边界顺序
+- 业务页查询后续统一排除 `ACTIVE` recycle entry
+
+明确不做：
+
+- 不扩到 `Customer / Lead`
+- 不并行采用“各模型自带 deletedAt”方案
+- 不先做 `/recycle-bin` 页面
+- 不把 guard / dialog 误当作真实回收站落地
+
+第一批实施顺序：
+
+1. schema
+2. repository + adapter
+3. moveToRecycleBin
+4. restore
+5. purge
+6. 最后再做 `/recycle-bin` 页面
 
 ### M7. 执行工作台收口
 
@@ -260,10 +297,11 @@
 
 ## 5. 当前建议执行顺序
 
-1. M7：执行工作台收口
-2. M7B：Lead Import Runtime / Observability 收口
-3. M8：商品经营深化
-4. M9：Finance / Reconciliation 首版
+1. M6D：RecycleBinEntry Schema Milestone
+2. M7：执行工作台收口
+3. M7B：Lead Import Runtime / Observability 收口
+4. M8：商品经营深化
+5. M9：Finance / Reconciliation 首版
 
 ---
 

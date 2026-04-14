@@ -2,25 +2,14 @@ import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
 const datasourceUrl = process.env.DATABASE_URL ?? "";
+const shadowDatabaseUrl = process.env.SHADOW_DATABASE_URL?.trim() ?? "";
 
-function deriveShadowDatabaseUrl(url: string) {
-  if (!url) {
-    return "";
-  }
-
-  try {
-    const parsed = new URL(url);
-    const databaseName = parsed.pathname.replace(/^\//, "");
-
-    if (!databaseName) {
-      return "";
-    }
-
-    parsed.pathname = `/${databaseName}_shadow`;
-    return parsed.toString();
-  } catch {
-    return "";
-  }
+if (
+  datasourceUrl &&
+  shadowDatabaseUrl &&
+  datasourceUrl.trim() === shadowDatabaseUrl
+) {
+  throw new Error("SHADOW_DATABASE_URL must not point to the same database as DATABASE_URL.");
 }
 
 export default defineConfig({
@@ -31,6 +20,6 @@ export default defineConfig({
   },
   datasource: {
     url: datasourceUrl,
-    shadowDatabaseUrl: deriveShadowDatabaseUrl(datasourceUrl),
+    shadowDatabaseUrl,
   },
 });

@@ -113,6 +113,10 @@ export function canAccessPath(
     return canAccessProductModule(role, permissionCodes);
   }
 
+  if (pathname === "/recycle-bin" || pathname.startsWith("/recycle-bin/")) {
+    return canAccessRecycleBinModule(role, permissionCodes);
+  }
+
   if (pathname === "/fulfillment" || pathname.startsWith("/fulfillment/")) {
     return canAccessOrderFulfillmentCenter(role);
   }
@@ -397,6 +401,18 @@ export function canManageLiveSessions(
     role === "OPS" ||
     role === "SHIPPER" ||
     hasExtraPermission(permissionCodes, "LIVE_SESSION_MANAGE")
+  );
+}
+
+export function canAccessRecycleBinModule(
+  role: RoleCode,
+  permissionCodes: readonly ExtraPermissionCode[] = [],
+) {
+  return (
+    canAccessLeadModule(role) ||
+    canManageProducts(role, permissionCodes) ||
+    canManageSuppliers(role, permissionCodes) ||
+    canManageLiveSessions(role, permissionCodes)
   );
 }
 

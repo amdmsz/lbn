@@ -50,7 +50,7 @@ function getModeMeta(mode: LiveSessionDialogMode) {
         description:
           "\u5148\u786e\u8ba4\u573a\u6b21\u662f\u5426\u5df2\u8fdb\u5165\u9080\u7ea6\u3001\u793c\u54c1\u6216\u8fd0\u8425\u5386\u53f2\u94fe\uff0c\u518d\u51b3\u5b9a\u662f\u5426\u5141\u8bb8\u540e\u7eed\u63a5\u5165\u56de\u6536\u7ad9\u3002",
         primaryActionLabel: "\u79fb\u5165\u56de\u6536\u7ad9",
-        hint: "\u672c\u8f6e\u5148\u5b8c\u6210 LiveSession \u7684\u5220\u9664\u9884\u68c0\u548c\u66ff\u4ee3\u52a8\u4f5c\u5206\u6d41\uff0c\u771f\u5b9e\u5165\u56de\u6536\u7ad9\u4f1a\u5728\u540e\u7eed\u56de\u6536\u7ad9\u4e2d\u5fc3\u63a5\u5165\u3002",
+        hint: "\u786e\u8ba4\u540e\u573a\u6b21\u4f1a\u4ece\u5f53\u524d\u4e1a\u52a1\u89c6\u56fe\u4e2d\u9690\u85cf\uff0c\u540e\u7eed\u53ef\u901a\u8fc7\u56de\u6536\u7ad9\u6cbb\u7406\u5165\u53e3\u5904\u7406\u6062\u590d\u4e0e\u6c38\u4e45\u5220\u9664\u3002",
       };
   }
 }
@@ -195,7 +195,7 @@ export function LiveSessionActionDialog({
               ) : (
                 <ActionBanner tone="success">
                   {
-                    "\u5f53\u524d\u573a\u6b21\u5df2\u901a\u8fc7 LiveSession \u8bef\u5efa\u5220\u9664\u9884\u68c0\uff0c\u4f46\u771f\u5b9e\u5165\u56de\u6536\u7ad9\u4f1a\u5728\u540e\u7eed\u56de\u6536\u7ad9\u4e2d\u5fc3\u63a5\u5165\u3002"
+                    "\u5f53\u524d\u573a\u6b21\u5df2\u901a\u8fc7 LiveSession \u8bef\u5efa\u5220\u9664\u9884\u68c0\uff0c\u786e\u8ba4\u540e\u4f1a\u7acb\u5373\u79fb\u5165\u56de\u6536\u7ad9\u3002"
                   }
                 </ActionBanner>
               )}
@@ -278,10 +278,11 @@ export function LiveSessionActionDialog({
               recycleGuard?.canMoveToRecycleBin ? (
                 <button
                   type="button"
-                  disabled
-                  className="crm-button crm-button-primary cursor-not-allowed opacity-55"
+                  onClick={onConfirm}
+                  disabled={pending || !onConfirm}
+                  className="crm-button crm-button-primary disabled:cursor-not-allowed disabled:opacity-55"
                 >
-                  {meta.primaryActionLabel}
+                  {pending ? "\u5904\u7406\u4e2d..." : meta.primaryActionLabel}
                 </button>
               ) : (
                 <button

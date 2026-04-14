@@ -23,10 +23,12 @@ import { getProductsPageData } from "@/lib/products/queries";
 import { getSuppliersPageData } from "@/lib/suppliers/queries";
 import {
   createInlineSupplierAction,
+  moveProductToRecycleBinInlineAction,
   toggleProductInlineAction,
   upsertProductInlineAction,
 } from "./actions";
 import {
+  moveSupplierToRecycleBinInlineAction,
   toggleSupplierInlineAction,
   upsertSupplierInlineAction,
 } from "../suppliers/actions";
@@ -308,6 +310,7 @@ export default async function ProductsPage({
           initialCreateOpen={initialCreateProduct}
           upsertAction={upsertProductInlineAction}
           toggleAction={toggleProductInlineAction}
+          moveToRecycleBinAction={moveProductToRecycleBinInlineAction}
           createInlineSupplierAction={createInlineSupplierAction}
         />
       ) : supplierData ? (
@@ -320,6 +323,7 @@ export default async function ProductsPage({
           initialCreateOpen={initialCreateSupplier}
           upsertAction={upsertSupplierInlineAction}
           toggleAction={toggleSupplierInlineAction}
+          moveToRecycleBinAction={moveSupplierToRecycleBinInlineAction}
         />
       ) : null}
     </WorkbenchLayout>

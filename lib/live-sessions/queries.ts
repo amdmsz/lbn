@@ -3,6 +3,7 @@ import { canAccessLiveSessionModule } from "@/lib/auth/access";
 import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db/prisma";
 import { buildLiveSessionRecycleGuard } from "@/lib/live-sessions/recycle-guards";
+import { findActiveTargetIds } from "@/lib/recycle-bin/repository";
 
 export type LiveSessionViewer = {
   id: string;
@@ -12,12 +13,22 @@ export type LiveSessionViewer = {
 
 export async function getLiveSessionsData(viewer: LiveSessionViewer) {
   if (!canAccessLiveSessionModule(viewer.role, viewer.permissionCodes)) {
-    throw new Error(
-      "\u5f53\u524d\u89d2\u8272\u65e0\u6743\u8bbf\u95ee\u76f4\u64ad\u573a\u6b21\u6a21\u5757\u3002",
-    );
+    throw new Error("You do not have access to the live-session module.");
   }
 
+  const activeLiveSessionIds = await findActiveTargetIds(prisma, "LIVE_SESSION");
+
   const items = await prisma.liveSession.findMany({
+    // Phase 1 KISS approach: exclude active recycle targets via notIn(activeIds).
+    // If the active-id set grows large later, replace this with anti-join / exists.
+    where:
+      activeLiveSessionIds.length > 0
+        ? {
+            id: {
+              notIn: activeLiveSessionIds,
+            },
+          }
+        : undefined,
     orderBy: [{ startAt: "desc" }, { createdAt: "desc" }],
     select: {
       id: true,

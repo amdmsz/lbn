@@ -21,6 +21,7 @@ import type {
 type ProductActionResult = {
   status: "success" | "error";
   message: string;
+  recycleStatus?: "created" | "already_in_recycle_bin" | "blocked";
 };
 
 type InlineSupplierResult =
@@ -105,8 +106,10 @@ export function ProductDetailSection({
   initialOpenSkuCreator,
   upsertProductAction,
   toggleProductAction,
+  moveProductToRecycleBinAction,
   upsertProductSkuAction,
   toggleProductSkuAction,
+  moveProductSkuToRecycleBinAction,
   createInlineSupplierAction,
 }: Readonly<{
   product: ProductDetail;
@@ -118,8 +121,10 @@ export function ProductDetailSection({
   initialOpenSkuCreator: boolean;
   upsertProductAction: (formData: FormData) => Promise<ProductActionResult>;
   toggleProductAction: (formData: FormData) => Promise<ProductActionResult>;
+  moveProductToRecycleBinAction: (formData: FormData) => Promise<ProductActionResult>;
   upsertProductSkuAction: (formData: FormData) => Promise<ProductActionResult>;
   toggleProductSkuAction: (formData: FormData) => Promise<ProductActionResult>;
+  moveProductSkuToRecycleBinAction: (formData: FormData) => Promise<ProductActionResult>;
   createInlineSupplierAction: (formData: FormData) => Promise<InlineSupplierResult>;
 }>) {
   const [notice, setNotice] = useState<ProductActionResult | null>(null);
@@ -135,7 +140,7 @@ export function ProductDetailSection({
   const [recycleTarget, setRecycleTarget] = useState<RecycleTarget | null>(null);
   const [recycleReason, setRecycleReason] =
     useState<MasterDataRecycleReasonCode>("mistaken_creation");
-  const [pendingToggle, startToggleTransition] = useTransition();
+  const [pendingAction, startActionTransition] = useTransition();
   const router = useRouter();
 
   const editingSku =
@@ -164,7 +169,7 @@ export function ProductDetailSection({
     formData.set("id", product.id);
     formData.set("redirectTo", currentHref);
 
-    startToggleTransition(async () => {
+    startActionTransition(async () => {
       const result = await toggleProductAction(formData);
       setNotice(result);
       if (result.status === "success") {
@@ -178,10 +183,44 @@ export function ProductDetailSection({
     formData.set("id", skuId);
     formData.set("redirectTo", currentHref);
 
-    startToggleTransition(async () => {
+    startActionTransition(async () => {
       const result = await toggleProductSkuAction(formData);
       setNotice(result);
       if (result.status === "success") {
+        router.refresh();
+      }
+    });
+  }
+
+  function handleRecycleConfirm() {
+    if (!recycleTarget) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.set("redirectTo", currentHref);
+    formData.set("reasonCode", recycleReason);
+
+    if (recycleTarget.kind === "sku") {
+      formData.set("id", recycleTarget.skuId);
+    } else {
+      formData.set("id", product.id);
+    }
+
+    startActionTransition(async () => {
+      const result =
+        recycleTarget.kind === "sku"
+          ? await moveProductSkuToRecycleBinAction(formData)
+          : await moveProductToRecycleBinAction(formData);
+
+      setNotice(result);
+      closeRecycleDialog();
+
+      if (result.recycleStatus === "created" || result.recycleStatus === "already_in_recycle_bin") {
+        router.refresh();
+      }
+
+      if (result.recycleStatus === "blocked") {
         router.refresh();
       }
     });
@@ -208,10 +247,10 @@ export function ProductDetailSection({
           <div className="flex flex-wrap items-center gap-2">
             <MasterDataStatusBadge isActive={product.enabled} />
             {canManage ? (
-              <button
-                type="button"
-                onClick={handleToggleProduct}
-                disabled={pendingToggle}
+                <button
+                  type="button"
+                  onClick={handleToggleProduct}
+                  disabled={pendingAction}
                 className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
               >
                 {product.enabled ? "停用商品" : "启用商品"}
@@ -388,7 +427,7 @@ export function ProductDetailSection({
                     <button
                       type="button"
                       onClick={() => handleToggleSku(sku.id)}
-                      disabled={pendingToggle}
+                      disabled={pendingAction}
                       className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {sku.enabled ? "停用" : "启用"}
@@ -528,7 +567,8 @@ export function ProductDetailSection({
         reason={recycleReason}
         onReasonChange={setRecycleReason}
         onClose={closeRecycleDialog}
-        pending={pendingToggle}
+        onConfirm={handleRecycleConfirm}
+        pending={pendingAction}
         onFallbackAction={
           recycleTarget
             ? () => {

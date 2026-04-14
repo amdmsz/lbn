@@ -19,6 +19,8 @@ import { auth } from "@/lib/auth/session";
 import { getProductDetail } from "@/lib/products/queries";
 import {
   createInlineSupplierAction,
+  moveProductSkuToRecycleBinInlineAction,
+  moveProductToRecycleBinInlineAction,
   toggleProductInlineAction,
   toggleProductSkuInlineAction,
   upsertProductInlineAction,
@@ -148,8 +150,10 @@ export default async function ProductDetailPage({
         initialOpenSkuCreator={initialOpenSkuCreator}
         upsertProductAction={upsertProductInlineAction}
         toggleProductAction={toggleProductInlineAction}
+        moveProductToRecycleBinAction={moveProductToRecycleBinInlineAction}
         upsertProductSkuAction={upsertProductSkuInlineAction}
         toggleProductSkuAction={toggleProductSkuInlineAction}
+        moveProductSkuToRecycleBinAction={moveProductSkuToRecycleBinInlineAction}
         createInlineSupplierAction={createInlineSupplierAction}
       />
     </WorkbenchLayout>

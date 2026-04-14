@@ -9,7 +9,11 @@ import {
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { canManageLeadAssignments, getLeadScope } from "@/lib/auth/access";
+import {
+  canAccessLeadModule,
+  canManageLeadAssignments,
+  getLeadScope,
+} from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
 import {
   assignCustomerToSalesTx,
@@ -22,6 +26,15 @@ import {
   getLeadImportBatchLeadIds,
   parseLeadListFilters,
 } from "@/lib/leads/queries";
+import {
+  findActiveRecycleEntriesByTargetIds,
+  findActiveTargetIds,
+} from "@/lib/recycle-bin/repository";
+import { moveToRecycleBin } from "@/lib/recycle-bin/lifecycle";
+import type {
+  MoveToRecycleBinResult,
+  RecycleReasonInputCode,
+} from "@/lib/recycle-bin/types";
 
 const assignLeadsSchema = z.object({
   selectionMode: z.enum(["manual", "filtered"]).default("manual"),
@@ -29,6 +42,68 @@ const assignLeadsSchema = z.object({
   toUserId: z.string().trim().min(1, "请选择要分配给哪位销售"),
   note: z.string().trim().max(500).optional(),
 });
+
+export type LeadRecycleActionResult = {
+  status: "success" | "error";
+  message: string;
+  recycleStatus?: MoveToRecycleBinResult["status"];
+};
+
+async function getLeadActionActor() {
+  const session = await auth();
+
+  if (!session?.user) {
+    throw new Error("登录已失效，请重新登录后再试。");
+  }
+
+  return {
+    id: session.user.id,
+    role: session.user.role,
+    permissionCodes: session.user.permissionCodes,
+  };
+}
+
+function getLeadRecycleReasonCode(formData: FormData): RecycleReasonInputCode {
+  const reasonCode = String(formData.get("reasonCode") ?? "");
+
+  if (
+    reasonCode === "mistaken_creation" ||
+    reasonCode === "test_data" ||
+    reasonCode === "duplicate" ||
+    reasonCode === "no_longer_needed" ||
+    reasonCode === "other"
+  ) {
+    return reasonCode;
+  }
+
+  return "mistaken_creation";
+}
+
+function buildLeadRecycleActionResult(
+  result: MoveToRecycleBinResult,
+): LeadRecycleActionResult {
+  if (result.status === "created") {
+    return {
+      status: "success",
+      message: "线索已移入回收站。",
+      recycleStatus: result.status,
+    };
+  }
+
+  if (result.status === "already_in_recycle_bin") {
+    return {
+      status: "success",
+      message: "线索已在回收站中。",
+      recycleStatus: result.status,
+    };
+  }
+
+  return {
+    status: "error",
+    message: result.message,
+    recycleStatus: result.status,
+  };
+}
 
 function getFilterParamsFromFormData(formData: FormData) {
   return {
@@ -114,9 +189,12 @@ export async function batchAssignLeadsAction(
 
   if (parsed.data.selectionMode === "filtered") {
     const filters = parseLeadListFilters(getFilterParamsFromFormData(formData));
-    const importedLeadIds = filters.importBatchId
-      ? await getLeadImportBatchLeadIds(filters.importBatchId)
-      : [];
+    const [importedLeadIds, activeLeadIds] = await Promise.all([
+      filters.importBatchId
+        ? getLeadImportBatchLeadIds(filters.importBatchId)
+        : Promise.resolve([] as string[]),
+      findActiveTargetIds(prisma, "LEAD"),
+    ]);
     const where = buildLeadWhereInput(
       {
         id: session.user.id,
@@ -124,6 +202,7 @@ export async function batchAssignLeadsAction(
       },
       filters,
       importedLeadIds,
+      activeLeadIds,
     );
 
     const matchedLeadIds = await prisma.lead.findMany({
@@ -232,13 +311,46 @@ export async function batchAssignLeadsAction(
     };
   }
 
+  const activeRecycleEntries = await findActiveRecycleEntriesByTargetIds(
+    prisma,
+    "LEAD",
+    uniqueLeadIds,
+  );
+
+  if (activeRecycleEntries.length > 0) {
+    return {
+      status: "error",
+      message:
+        activeRecycleEntries.length === 1
+          ? "所选线索已在回收站中，不能继续分配。"
+          : `所选线索中有 ${activeRecycleEntries.length} 条已在回收站中，不能继续分配。`,
+      assignedCount: 0,
+      skippedCount: 0,
+    };
+  }
+
   const updatedCustomerIds = new Set<string>();
   let assignedCount = 0;
   let skippedCount = 0;
   const ownershipActor = await getCustomerOwnershipActorContext(session.user.id);
 
-  await prisma.$transaction(async (tx) => {
-    for (const lead of leads) {
+  try {
+    await prisma.$transaction(async (tx) => {
+      const activeEntriesInTx = await findActiveRecycleEntriesByTargetIds(
+        tx,
+        "LEAD",
+        uniqueLeadIds,
+      );
+
+      if (activeEntriesInTx.length > 0) {
+        throw new Error(
+          activeEntriesInTx.length === 1
+            ? "所选线索已在回收站中，不能继续分配。"
+            : `所选线索中有 ${activeEntriesInTx.length} 条已在回收站中，不能继续分配。`,
+        );
+      }
+
+      for (const lead of leads) {
       let changed = false;
       const nextStatus =
         lead.status === LeadStatus.NEW ? LeadStatus.ASSIGNED : lead.status;
@@ -431,11 +543,19 @@ export async function batchAssignLeadsAction(
         updatedCustomerIds.add(customer.id);
       }
 
-      if (!changed) {
-        skippedCount += 1;
+        if (!changed) {
+          skippedCount += 1;
+        }
       }
-    }
-  });
+    });
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "批量分配失败，请稍后重试。",
+      assignedCount: 0,
+      skippedCount: 0,
+    };
+  }
 
   if (assignedCount === 0 && updatedCustomerIds.size === 0) {
     return {
@@ -464,4 +584,48 @@ export async function batchAssignLeadsAction(
     assignedCount,
     skippedCount,
   };
+}
+
+export async function moveLeadToRecycleBinAction(
+  formData: FormData,
+): Promise<LeadRecycleActionResult> {
+  try {
+    const actor = await getLeadActionActor();
+
+    if (!canAccessLeadModule(actor.role)) {
+      return {
+        status: "error",
+        message: "当前角色没有处理线索回收站动作的权限。",
+      };
+    }
+
+    const leadId = String(formData.get("id") ?? "").trim();
+
+    if (!leadId) {
+      return {
+        status: "error",
+        message: "线索参数不完整，请刷新后重试。",
+      };
+    }
+
+    const result = await moveToRecycleBin(actor, {
+      targetType: "LEAD",
+      targetId: leadId,
+      reasonCode: getLeadRecycleReasonCode(formData),
+      reasonText: String(formData.get("reasonText") ?? "").trim(),
+    });
+
+    if (result.status !== "blocked") {
+      revalidatePath("/leads");
+      revalidatePath(`/leads/${leadId}`);
+      revalidatePath("/recycle-bin");
+    }
+
+    return buildLeadRecycleActionResult(result);
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "移入回收站失败，请稍后重试。",
+    };
+  }
 }

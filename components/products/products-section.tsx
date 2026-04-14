@@ -57,6 +57,7 @@ type InlineSupplierResult =
 type ProductActionResult = {
   status: "success" | "error";
   message: string;
+  recycleStatus?: "created" | "already_in_recycle_bin" | "blocked";
 };
 
 function buildProductsHref(
@@ -102,6 +103,7 @@ export function ProductsSection({
   initialCreateOpen,
   upsertAction,
   toggleAction,
+  moveToRecycleBinAction,
   createInlineSupplierAction,
 }: Readonly<{
   items: ProductItem[];
@@ -120,6 +122,7 @@ export function ProductsSection({
   initialCreateOpen: boolean;
   upsertAction: (formData: FormData) => Promise<ProductActionResult>;
   toggleAction: (formData: FormData) => Promise<ProductActionResult>;
+  moveToRecycleBinAction: (formData: FormData) => Promise<ProductActionResult>;
   createInlineSupplierAction: (formData: FormData) => Promise<InlineSupplierResult>;
 }>) {
   const router = useRouter();
@@ -132,7 +135,7 @@ export function ProductsSection({
   const [recycleTarget, setRecycleTarget] = useState<ProductItem | null>(null);
   const [recycleReason, setRecycleReason] =
     useState<MasterDataRecycleReasonCode>("mistaken_creation");
-  const [pendingToggleId, startToggleTransition] = useTransition();
+  const [pendingAction, startActionTransition] = useTransition();
 
   const hasActiveFilters = Boolean(filters.q || filters.status || filters.supplierId || filters.category);
 
@@ -170,11 +173,36 @@ export function ProductsSection({
     formData.set("id", item.id);
     formData.set("redirectTo", currentHref);
 
-    startToggleTransition(async () => {
+    startActionTransition(async () => {
       const result = await toggleAction(formData);
       setNotice(result);
 
       if (result.status === "success") {
+        router.refresh();
+      }
+    });
+  }
+
+  function handleRecycleConfirm() {
+    if (!recycleTarget) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.set("id", recycleTarget.id);
+    formData.set("redirectTo", currentHref);
+    formData.set("reasonCode", recycleReason);
+
+    startActionTransition(async () => {
+      const result = await moveToRecycleBinAction(formData);
+      setNotice(result);
+      closeRecycleDialog();
+
+      if (result.recycleStatus === "created" || result.recycleStatus === "already_in_recycle_bin") {
+        router.refresh();
+      }
+
+      if (result.recycleStatus === "blocked") {
         router.refresh();
       }
     });
@@ -337,7 +365,7 @@ export function ProductsSection({
                     <button
                       type="button"
                       onClick={() => handleToggle(item)}
-                      disabled={pendingToggleId}
+                      disabled={pendingAction}
                       className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {item.enabled ? "停用" : "启用"}
@@ -440,7 +468,8 @@ export function ProductsSection({
         reason={recycleReason}
         onReasonChange={setRecycleReason}
         onClose={closeRecycleDialog}
-        pending={pendingToggleId}
+        onConfirm={handleRecycleConfirm}
+        pending={pendingAction}
         onFallbackAction={
           recycleTarget
             ? () => {

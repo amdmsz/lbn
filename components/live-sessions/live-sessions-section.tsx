@@ -5,6 +5,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   createLiveSessionAction,
+  moveLiveSessionToRecycleBinAction,
   updateLiveSessionLifecycleAction,
 } from "@/app/(dashboard)/live-sessions/actions";
 import { LiveSessionActionDialog } from "@/components/live-sessions/live-session-action-dialog";
@@ -25,6 +26,7 @@ import {
 type ActionState = {
   status: "idle" | "success" | "error";
   message: string;
+  recycleStatus?: "created" | "already_in_recycle_bin" | "blocked";
 };
 
 type LiveSessionItem = {
@@ -117,6 +119,28 @@ export function LiveSessionsSection({
 
   function handleDialogConfirm() {
     if (!dialogState) {
+      return;
+    }
+
+    if (dialogState.mode === "recycle" && dialogState.item.recycleGuard.canMoveToRecycleBin) {
+      const formData = new FormData();
+      formData.set("id", dialogState.item.id);
+      formData.set("reasonCode", recycleReason);
+
+      startActionTransition(async () => {
+        const nextState = await moveLiveSessionToRecycleBinAction(formData);
+        setNotice(nextState);
+        closeDialog();
+
+        if (
+          nextState.recycleStatus === "created" ||
+          nextState.recycleStatus === "already_in_recycle_bin" ||
+          nextState.recycleStatus === "blocked"
+        ) {
+          router.refresh();
+        }
+      });
+
       return;
     }
 

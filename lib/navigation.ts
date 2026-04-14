@@ -2,6 +2,7 @@ import type { RoleCode } from "@prisma/client";
 import {
   canAccessLiveSessionModule,
   canAccessProductModule,
+  canAccessRecycleBinModule,
   canAccessSupplierModule,
 } from "@/lib/auth/access";
 import type { ExtraPermissionCode } from "@/lib/auth/permissions";
@@ -14,6 +15,7 @@ export type NavigationIconName =
   | "suppliers"
   | "products"
   | "liveSessions"
+  | "recycleBin"
   | "orders"
   | "fulfillmentCenter"
   | "paymentRecords"
@@ -85,6 +87,13 @@ const navigationItems = {
     description: "直播协同、邀约记录和运营配合入口。",
     iconName: "liveSessions",
     activePrefixes: ["/live-sessions"],
+  }),
+  recycleBin: createItem({
+    title: "回收站",
+    href: "/recycle-bin",
+    description: "统一查看商品主数据与直播场次的回收站对象，并执行恢复或最终清理。",
+    iconName: "recycleBin",
+    activePrefixes: ["/recycle-bin"],
   }),
   suppliers: createItem({
     title: "供应商中心",
@@ -394,6 +403,10 @@ function canAccessNavigationItem(
     return canAccessSupplierModule(role, permissionCodes);
   }
 
+  if (item.href === "/recycle-bin") {
+    return canAccessRecycleBinModule(role, permissionCodes);
+  }
+
   return true;
 }
 
@@ -421,28 +434,42 @@ export function getNavigationGroupsForRole(
     }))
     .filter((group) => group.sections.length > 0);
 
+  const groupsWithRecycleBin =
+    canAccessRecycleBinModule(role, permissionCodes) &&
+    !hasNavigationItem(filteredGroups, navigationItems.recycleBin.href)
+      ? [
+          ...filteredGroups,
+          {
+            key: "governance-tools",
+            title: "治理工具",
+            description: "统一承接删除治理、恢复与最终清理等低频系统动作。",
+            sections: [{ items: [navigationItems.recycleBin] }],
+          },
+        ]
+      : filteredGroups;
+
   const grantedItems: NavigationItem[] = [];
 
   if (
     canAccessLiveSessionModule(role, permissionCodes) &&
-    !hasNavigationItem(filteredGroups, navigationItems.liveSessions.href)
+    !hasNavigationItem(groupsWithRecycleBin, navigationItems.liveSessions.href)
   ) {
     grantedItems.push(navigationItems.liveSessions);
   }
 
   if (
     canAccessProductModule(role, permissionCodes) &&
-    !hasNavigationItem(filteredGroups, navigationItems.products.href)
+    !hasNavigationItem(groupsWithRecycleBin, navigationItems.products.href)
   ) {
     grantedItems.push(navigationItems.products);
   }
 
   if (grantedItems.length === 0) {
-    return filteredGroups;
+    return groupsWithRecycleBin;
   }
 
   return [
-    ...filteredGroups,
+    ...groupsWithRecycleBin,
     {
       key: "granted-access",
       title: "额外授权",

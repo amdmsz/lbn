@@ -16,8 +16,14 @@ import {
   LEADS_PAGE_SIZE_OPTIONS,
   UNASSIGNED_OWNER_VALUE,
 } from "@/lib/leads/metadata";
+import type { LeadRecycleGuard } from "@/lib/leads/recycle-guards";
+import { buildLeadMoveGuardFromRecord } from "@/lib/recycle-bin/lead-adapter";
 import { withVisibleLeadWhere } from "@/lib/leads/visibility";
 import { getActiveTagOptions } from "@/lib/master-data/queries";
+import {
+  findActiveRecycleEntry,
+  findActiveTargetIds,
+} from "@/lib/recycle-bin/repository";
 
 type SearchParamsValue = string | string[] | undefined;
 
@@ -52,6 +58,136 @@ export type LeadAssignedOwnerSummary = {
   ownerUsername: string;
   count: number;
 };
+
+export type LeadListItem = {
+  id: string;
+  name: string | null;
+  phone: string;
+  source: Prisma.$Enums.LeadSource;
+  interestedProduct: string | null;
+  status: LeadStatus;
+  createdAt: Date;
+  updatedAt: Date;
+  owner: {
+    id: string;
+    name: string;
+    username: string;
+  } | null;
+  leadTags: Array<{
+    id: string;
+    tagId: string;
+    tag: {
+      id: string;
+      name: string;
+      color: string | null;
+    };
+  }>;
+  assignments?: Array<{
+    id: string;
+    createdAt: Date;
+    assignedBy: {
+      name: string | null;
+      username: string;
+    } | null;
+  }>;
+  recycleGuard: LeadRecycleGuard;
+};
+
+type LeadListGuardRecord = {
+  id: string;
+  name: string | null;
+  phone: string;
+  status: LeadStatus;
+  conversionStatus: Prisma.$Enums.LeadConversionStatus;
+  ownerId: string | null;
+  customerId: string | null;
+  rolledBackAt: Date | null;
+  rolledBackBatchId: string | null;
+  lastFollowUpAt: Date | null;
+  nextFollowUpAt: Date | null;
+  owner: {
+    id: string;
+    name: string;
+    username: string;
+  } | null;
+  _count: {
+    assignments: number;
+    followUpTasks: number;
+    callRecords: number;
+    wechatRecords: number;
+    liveInvitations: number;
+    orders: number;
+    giftRecords: number;
+    leadTags: number;
+    mergeLogs: number;
+  };
+};
+
+function attachLeadRecycleGuard<T extends LeadListGuardRecord & {
+  source: Prisma.$Enums.LeadSource;
+  interestedProduct: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  leadTags: Array<{
+    id: string;
+    tagId: string;
+    tag: {
+      id: string;
+      name: string;
+      color: string | null;
+    };
+  }>;
+  assignments?: Array<{
+    id: string;
+    createdAt: Date;
+    assignedBy: {
+      name: string | null;
+      username: string;
+    } | null;
+  }>;
+}>(item: T): LeadListItem {
+  return {
+    id: item.id,
+    name: item.name,
+    phone: item.phone,
+    source: item.source,
+    interestedProduct: item.interestedProduct,
+    status: item.status,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    owner: item.owner,
+    leadTags: item.leadTags,
+    assignments: item.assignments,
+    recycleGuard: buildLeadMoveGuardFromRecord({
+      id: item.id,
+      name: item.name,
+      phone: item.phone,
+      status: item.status,
+      conversionStatus: item.conversionStatus,
+      ownerId: item.ownerId,
+      customerId: item.customerId,
+      rolledBackAt: item.rolledBackAt,
+      rolledBackBatchId: item.rolledBackBatchId,
+      lastFollowUpAt: item.lastFollowUpAt,
+      nextFollowUpAt: item.nextFollowUpAt,
+      owner: item.owner,
+      _count: item._count,
+    }),
+  };
+}
+
+function buildLeadRecycleExclusionWhere(activeLeadIds: string[]) {
+  if (activeLeadIds.length === 0) {
+    return null;
+  }
+
+  return {
+    id: {
+      // Phase 2 先用 notIn(activeIds) 保持 KISS，后续若 active ids 规模变大再优化为更稳的查询策略。
+      notIn: activeLeadIds,
+    },
+  } satisfies Prisma.LeadWhereInput;
+}
 
 const filtersSchema = z.object({
   name: z.string().trim().default(""),
@@ -163,6 +299,7 @@ export function buildLeadBaseWhereInput(
   viewer: LeadViewer,
   filters: LeadListFilters,
   importedLeadIds: string[] = [],
+  activeLeadIds: string[] = [],
 ) {
   const scope = getLeadScope(viewer.role, viewer.id);
 
@@ -230,19 +367,28 @@ export function buildLeadBaseWhereInput(
     });
   }
 
-  return andClauses.length === 0
-    ? {}
-    : ({
-        AND: andClauses,
-      } satisfies Prisma.LeadWhereInput);
+  return combineLeadWhere(
+    andClauses.length === 0
+      ? {}
+      : ({
+          AND: andClauses,
+        } satisfies Prisma.LeadWhereInput),
+    buildLeadRecycleExclusionWhere(activeLeadIds),
+  );
 }
 
 export function buildLeadWhereInput(
   viewer: LeadViewer,
   filters: LeadListFilters,
   importedLeadIds: string[] = [],
+  activeLeadIds: string[] = [],
 ) {
-  const baseWhere = buildLeadBaseWhereInput(viewer, filters, importedLeadIds);
+  const baseWhere = buildLeadBaseWhereInput(
+    viewer,
+    filters,
+    importedLeadIds,
+    activeLeadIds,
+  );
   const workspaceWhere =
     filters.view === "assigned"
       ? combineLeadWhere(
@@ -292,7 +438,7 @@ export async function getLeadListData(
   }
 
   const filters = parseLeadListFilters(rawSearchParams);
-  const [importBatch, importedLeadIds] = await Promise.all([
+  const [importBatch, importedLeadIds, activeLeadIds] = await Promise.all([
     filters.importBatchId
       ? prisma.leadImportBatch.findUnique({
           where: { id: filters.importBatchId },
@@ -308,8 +454,14 @@ export async function getLeadListData(
     filters.importBatchId
       ? getLeadImportBatchLeadIds(filters.importBatchId)
       : Promise.resolve([] as string[]),
+    findActiveTargetIds(prisma, "LEAD"),
   ]);
-  const baseWhere = buildLeadBaseWhereInput(viewer, filters, importedLeadIds);
+  const baseWhere = buildLeadBaseWhereInput(
+    viewer,
+    filters,
+    importedLeadIds,
+    activeLeadIds,
+  );
   const unassignedWhere = withVisibleLeadWhere(
     combineLeadWhere(baseWhere, { ownerId: null }),
   );
@@ -328,7 +480,7 @@ export async function getLeadListData(
   const totalPages = Math.max(1, Math.ceil(unassignedTotalCount / filters.pageSize));
   const currentPage = Math.min(filters.page, totalPages);
 
-  const [unassignedItems, assignedItems, assignedOwnerGroups, salesOptions, tagOptions] =
+  const [rawUnassignedItems, rawAssignedItems, assignedOwnerGroups, salesOptions, tagOptions] =
     await Promise.all([
     prisma.lead.findMany({
       where: unassignedWhere,
@@ -342,6 +494,13 @@ export async function getLeadListData(
         source: true,
         interestedProduct: true,
         status: true,
+        conversionStatus: true,
+        ownerId: true,
+        customerId: true,
+        rolledBackAt: true,
+        rolledBackBatchId: true,
+        lastFollowUpAt: true,
+        nextFollowUpAt: true,
         createdAt: true,
         updatedAt: true,
         owner: {
@@ -379,6 +538,13 @@ export async function getLeadListData(
         source: true,
         interestedProduct: true,
         status: true,
+        conversionStatus: true,
+        ownerId: true,
+        customerId: true,
+        rolledBackAt: true,
+        rolledBackBatchId: true,
+        lastFollowUpAt: true,
+        nextFollowUpAt: true,
         createdAt: true,
         updatedAt: true,
         owner: {
@@ -403,6 +569,19 @@ export async function getLeadListData(
             },
           },
         },
+        _count: {
+          select: {
+            assignments: true,
+            followUpTasks: true,
+            callRecords: true,
+            wechatRecords: true,
+            liveInvitations: true,
+            orders: true,
+            giftRecords: true,
+            leadTags: true,
+            mergeLogs: true,
+          },
+        },
         assignments: {
           orderBy: { createdAt: "desc" },
           take: 1,
@@ -415,6 +594,19 @@ export async function getLeadListData(
                 username: true,
               },
             },
+          },
+        },
+        _count: {
+          select: {
+            assignments: true,
+            followUpTasks: true,
+            callRecords: true,
+            wechatRecords: true,
+            liveInvitations: true,
+            orders: true,
+            giftRecords: true,
+            leadTags: true,
+            mergeLogs: true,
           },
         },
       },
@@ -489,6 +681,8 @@ export async function getLeadListData(
     })
     .sort((left, right) => right.count - left.count)
     .slice(0, 5);
+  const unassignedItems = rawUnassignedItems.map(attachLeadRecycleGuard);
+  const assignedItems = rawAssignedItems.map(attachLeadRecycleGuard);
 
   return {
     filters: {
@@ -531,6 +725,12 @@ export async function getLeadDetail(viewer: LeadViewer, leadId: string) {
 
   if (!scope) {
     throw new Error("You do not have access to leads.");
+  }
+
+  const activeRecycleEntry = await findActiveRecycleEntry(prisma, "LEAD", leadId);
+
+  if (activeRecycleEntry) {
+    return null;
   }
 
   const lead = await prisma.lead.findFirst({

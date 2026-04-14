@@ -29,7 +29,7 @@ CREATE TABLE `lead_import_batch_rollbacks` (
     INDEX `lead_import_batch_rollbacks_actorId_executedAt_idx`(`actorId`, `executedAt`),
     INDEX `lead_import_batch_rollbacks_mode_executedAt_idx`(`mode`, `executedAt`),
     PRIMARY KEY (`id`)
-);
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 ALTER TABLE `lead`
   ADD CONSTRAINT `lead_rolledBackBatchId_fkey`

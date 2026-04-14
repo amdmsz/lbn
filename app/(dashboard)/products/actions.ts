@@ -16,11 +16,14 @@ import {
   upsertProduct,
   upsertProductSku,
 } from "@/lib/products/mutations";
+import { moveToRecycleBin } from "@/lib/recycle-bin/lifecycle";
+import type { MoveToRecycleBinResult, RecycleReasonInputCode } from "@/lib/recycle-bin/types";
 import { upsertSupplier } from "@/lib/suppliers/mutations";
 
 export type ProductActionResult = {
   status: "success" | "error";
   message: string;
+  recycleStatus?: MoveToRecycleBinResult["status"];
 };
 
 async function getActor() {
@@ -39,6 +42,49 @@ async function getActor() {
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "操作失败，请稍后重试。";
+}
+
+function getRecycleReasonCode(formData: FormData): RecycleReasonInputCode {
+  const reasonCode = getFormValue(formData, "reasonCode");
+
+  if (
+    reasonCode === "mistaken_creation" ||
+    reasonCode === "test_data" ||
+    reasonCode === "duplicate" ||
+    reasonCode === "no_longer_needed" ||
+    reasonCode === "other"
+  ) {
+    return reasonCode;
+  }
+
+  return "mistaken_creation";
+}
+
+function buildRecycleActionResult(
+  targetLabel: string,
+  result: MoveToRecycleBinResult,
+): ProductActionResult {
+  if (result.status === "created") {
+    return {
+      status: "success",
+      message: `${targetLabel}已移入回收站。`,
+      recycleStatus: result.status,
+    };
+  }
+
+  if (result.status === "already_in_recycle_bin") {
+    return {
+      status: "success",
+      message: `${targetLabel}已在回收站中。`,
+      recycleStatus: result.status,
+    };
+  }
+
+  return {
+    status: "error",
+    message: result.message,
+    recycleStatus: result.status,
+  };
 }
 
 async function runProductAction(
@@ -76,6 +122,40 @@ async function runProductInlineAction(
       status: "success",
       message: "保存成功。",
     };
+  } catch (error) {
+    rethrowRedirectError(error);
+
+    return {
+      status: "error",
+      message: getErrorMessage(error),
+    };
+  }
+}
+
+async function runMoveToRecycleBinInlineAction(
+  formData: FormData,
+  fallbackPath: string,
+  targetType: "PRODUCT" | "PRODUCT_SKU",
+  targetLabel: string,
+): Promise<ProductActionResult> {
+  const redirectTo = sanitizeRedirectTarget(getFormValue(formData, "redirectTo"), fallbackPath);
+  const actor = await getActor();
+
+  try {
+    const result = await moveToRecycleBin(actor, {
+      targetType,
+      targetId: getFormValue(formData, "id"),
+      reasonCode: getRecycleReasonCode(formData),
+      reasonText: getFormValue(formData, "reasonText"),
+    });
+
+    if (result.status !== "blocked") {
+      revalidatePath("/products");
+      revalidatePath("/suppliers");
+      revalidatePath(getRedirectPathname(redirectTo));
+    }
+
+    return buildRecycleActionResult(targetLabel, result);
   } catch (error) {
     rethrowRedirectError(error);
 
@@ -208,4 +288,16 @@ export async function toggleProductSkuInlineAction(
   return runProductInlineAction(formData, "/products", async (actor) => {
     await toggleProductSku(actor, getFormValue(formData, "id"));
   });
+}
+
+export async function moveProductToRecycleBinInlineAction(
+  formData: FormData,
+): Promise<ProductActionResult> {
+  return runMoveToRecycleBinInlineAction(formData, "/products", "PRODUCT", "商品");
+}
+
+export async function moveProductSkuToRecycleBinInlineAction(
+  formData: FormData,
+): Promise<ProductActionResult> {
+  return runMoveToRecycleBinInlineAction(formData, "/products", "PRODUCT_SKU", "SKU");
 }

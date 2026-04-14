@@ -455,6 +455,34 @@ enum LeadImportBatchRollbackMode {
   HARD_DELETE
 }
 
+enum RecycleTargetType {
+  PRODUCT
+  PRODUCT_SKU
+  SUPPLIER
+  LIVE_SESSION
+  LEAD
+}
+
+enum RecycleDomain {
+  PRODUCT_MASTER_DATA
+  LIVE_SESSION
+  LEAD
+}
+
+enum RecycleEntryStatus {
+  ACTIVE
+  RESTORED
+  PURGED
+}
+
+enum RecycleDeleteReasonCode {
+  MISTAKEN_CREATION
+  TEST_DATA
+  DUPLICATE
+  NO_LONGER_NEEDED
+  OTHER
+}
+
 enum OperationModule {
   USER
   TEAM
@@ -651,6 +679,8 @@ model User {
   assignedCustomerTags    CustomerTag[]    @relation("CustomerTagAssignedBy")
   assignedLeadTags        LeadTag[]        @relation("LeadTagAssignedBy")
   operationLogs           OperationLog[]   @relation("OperationLogActor")
+  recycleBinEntriesDeleted RecycleBinEntry[] @relation("RecycleBinEntryDeletedBy")
+  recycleBinEntriesResolved RecycleBinEntry[] @relation("RecycleBinEntryResolvedBy")
   customerOwnershipEventsAsActor CustomerOwnershipEvent[] @relation("CustomerOwnershipEventActor")
   customerOwnershipEventsFrom CustomerOwnershipEvent[] @relation("CustomerOwnershipEventFromOwner")
   customerOwnershipEventsTo CustomerOwnershipEvent[] @relation("CustomerOwnershipEventToOwner")
@@ -667,6 +697,38 @@ model User {
   @@index([supervisorId])
   @@index([invitedById])
   @@index([disabledById])
+}
+
+model RecycleBinEntry {
+  id                     String                 @id @default(cuid())
+  targetType             RecycleTargetType
+  targetId               String
+  domain                 RecycleDomain
+  titleSnapshot          String
+  secondarySnapshot      String?
+  originalStatusSnapshot String?
+  restoreRouteSnapshot   String
+  deleteReasonCode       RecycleDeleteReasonCode
+  deleteReasonText       String?                @db.Text
+  deletedAt              DateTime               @default(now())
+  deletedById            String
+  deletedBy              User                   @relation("RecycleBinEntryDeletedBy", fields: [deletedById], references: [id])
+  recycleExpiresAt       DateTime
+  status                 RecycleEntryStatus     @default(ACTIVE)
+  activeEntryKey         String?                @unique
+  resolvedAt             DateTime?
+  resolvedById           String?
+  resolvedBy             User?                  @relation("RecycleBinEntryResolvedBy", fields: [resolvedById], references: [id])
+  blockerSnapshotJson    Json?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  @@index([targetType, targetId])
+  @@index([domain, status, deletedAt])
+  @@index([status, recycleExpiresAt])
+  @@index([deletedById, deletedAt])
+  @@index([resolvedById, resolvedAt])
+  @@map("recycle_bin_entries")
 }
 
 model UserPermissionGrant {

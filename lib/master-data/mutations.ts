@@ -14,6 +14,7 @@ import {
 } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
 import { isValidHexColor } from "@/lib/master-data/metadata";
+import { findActiveRecycleEntry } from "@/lib/recycle-bin/repository";
 
 type Actor = {
   id: string;
@@ -105,6 +106,17 @@ async function createOperationLog(
   data: Prisma.OperationLogCreateInput,
 ) {
   await tx.operationLog.create({ data });
+}
+
+async function assertLeadNotInRecycleBin(
+  tx: Prisma.TransactionClient,
+  leadId: string,
+) {
+  const activeRecycleEntry = await findActiveRecycleEntry(tx, "LEAD", leadId);
+
+  if (activeRecycleEntry) {
+    throw new Error("该线索已在回收站中，不能继续修改标签。");
+  }
 }
 
 async function toggleIsActive<T extends { id: string; isActive: boolean }>(
@@ -802,6 +814,8 @@ export async function assignLeadTag(
   }
 
   return prisma.$transaction(async (tx) => {
+    await assertLeadNotInRecycleBin(tx, input.leadId);
+
     const [lead, tag] = await Promise.all([
       tx.lead.findFirst({
         where: { id: input.leadId, ...leadScope },
@@ -880,6 +894,8 @@ export async function removeLeadTag(
   }
 
   return prisma.$transaction(async (tx) => {
+    await assertLeadNotInRecycleBin(tx, input.leadId);
+
     const lead = await tx.lead.findFirst({
       where: { id: input.leadId, ...leadScope },
       select: { id: true, name: true, phone: true },

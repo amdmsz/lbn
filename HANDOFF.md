@@ -180,6 +180,29 @@
 - Phase 2 已完成：发货执行 supplier 工作池首版
 - Phase 3 已完成：交易单 / 批次记录收口与跨视图联动
 
+### RecycleBinEntry Schema Milestone Baseline
+
+- 当前商品主数据与 `LiveSession` 已完成危险动作语义、blocker 预检与确认弹层基线，但这仍然只属于 guard / dialog 层
+- 真实回收站如果继续停留在现状，将无法表达：
+  - 哪些对象当前仍在回收站中
+  - 谁删除的、为何删除、何时到期
+  - 恢复 / 永久删除的真实状态
+- 因此下一步必须作为新的 schema milestone 推进，而不是继续以 UI 小尾项方式延后
+- 当前确认采用统一 `RecycleBinEntry` 中心表方案，不再并行讨论“各模型自带 deletedAt”方案
+- 该 milestone 第一批只覆盖：
+  - `Product`
+  - `ProductSku`
+  - `Supplier`
+  - `LiveSession`
+- 第一批实施顺序固定为：
+  1. schema
+  2. repository + adapter
+  3. moveToRecycleBin
+  4. restore
+  5. purge
+  6. 最后再做 `/recycle-bin` 页面
+- 不要先做回收站页面，也不要把 `enabled / disabled`、`取消 / 归档`、现有 guard / dialog 误当作真实回收站状态
+
 ---
 
 ## 5. 当前页面定位
@@ -245,7 +268,7 @@
 ## 6. 当前不要回退的边界
 
 - 不要把系统回退成旧 `SalesOrder` 主单认知
-- 不要重开 schema 改造，除非有明确硬缺字段
+- 不要重开 schema 改造，除非进入明确 schema milestone；当前唯一已确认例外是 `RecycleBinEntry`
 - 不要把 `/payment-records`、`/collection-tasks` 改成父单主视角
 - 不要把批次记录重新升成主工作台
 - 不要动 `GiftRecord` 主链去替代订单 gift 主链

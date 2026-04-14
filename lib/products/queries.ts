@@ -7,6 +7,10 @@ import {
   buildProductRecycleGuard,
   buildProductSkuRecycleGuard,
 } from "@/lib/products/recycle-guards";
+import {
+  findActiveRecycleEntry,
+  findActiveTargetIds,
+} from "@/lib/recycle-bin/repository";
 
 type SearchParamsValue = string | string[] | undefined;
 
@@ -66,6 +70,21 @@ export async function getProductsPageData(
     });
   }
 
+  const [activeProductIds, activeSupplierIds] = await Promise.all([
+    findActiveTargetIds(prisma, "PRODUCT"),
+    findActiveTargetIds(prisma, "SUPPLIER"),
+  ]);
+
+  // Phase 1 KISS approach: exclude active recycle targets via notIn(activeIds).
+  // If the active-id set grows large later, replace this with anti-join / exists.
+  if (activeProductIds.length > 0) {
+    filters.push({
+      id: {
+        notIn: activeProductIds,
+      },
+    });
+  }
+
   const where: Prisma.ProductWhereInput = filters.length > 0 ? { AND: filters } : {};
 
   const [rawItems, suppliers] = await Promise.all([
@@ -97,6 +116,14 @@ export async function getProductsPageData(
       },
     }),
     prisma.supplier.findMany({
+      where:
+        activeSupplierIds.length > 0
+          ? {
+              id: {
+                notIn: activeSupplierIds,
+              },
+            }
+          : undefined,
       orderBy: [{ enabled: "desc" }, { name: "asc" }],
       select: {
         id: true,
@@ -137,6 +164,21 @@ export async function getProductDetail(
     throw new Error("You do not have access to the product center.");
   }
 
+  const activeEntry = await findActiveRecycleEntry(prisma, "PRODUCT", productId);
+
+  if (activeEntry) {
+    return {
+      notice: parseActionNotice(rawSearchParams),
+      product: null,
+      suppliers: [],
+    };
+  }
+
+  const [activeProductSkuIds, activeSupplierIds] = await Promise.all([
+    findActiveTargetIds(prisma, "PRODUCT_SKU"),
+    findActiveTargetIds(prisma, "SUPPLIER"),
+  ]);
+
   const [rawProduct, suppliers] = await Promise.all([
     prisma.product.findUnique({
       where: { id: productId },
@@ -158,6 +200,17 @@ export async function getProductDetail(
           },
         },
         skus: {
+          // Phase 1 KISS approach: exclude active recycle targets via notIn(activeIds).
+          // If the active-id set grows large later, replace this with anti-join / exists.
+          ...(activeProductSkuIds.length > 0
+            ? {
+                where: {
+                  id: {
+                    notIn: activeProductSkuIds,
+                  },
+                },
+              }
+            : {}),
           orderBy: [{ enabled: "desc" }, { updatedAt: "desc" }, { createdAt: "desc" }],
           select: {
             id: true,
@@ -188,6 +241,14 @@ export async function getProductDetail(
       },
     }),
     prisma.supplier.findMany({
+      where:
+        activeSupplierIds.length > 0
+          ? {
+              id: {
+                notIn: activeSupplierIds,
+              },
+            }
+          : undefined,
       orderBy: [{ enabled: "desc" }, { name: "asc" }],
       select: {
         id: true,
