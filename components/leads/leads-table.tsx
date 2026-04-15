@@ -4,11 +4,15 @@ import type { LeadSource, LeadStatus } from "@prisma/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, useTransition } from "react";
-import { batchAssignLeadsAction } from "@/app/(dashboard)/leads/actions";
+import {
+  batchAssignLeadsAction,
+  moveLeadToRecycleBinAction,
+} from "@/app/(dashboard)/leads/actions";
 import {
   initialAssignLeadsActionState,
   type AssignLeadsActionState,
 } from "@/components/leads/lead-actions-state";
+import { LeadRecycleDialog } from "@/components/leads/lead-recycle-dialog";
 import { LeadStatusBadge } from "@/components/leads/lead-status-badge";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -22,6 +26,10 @@ import {
   formatDateTime,
   getLeadSourceLabel,
 } from "@/lib/leads/metadata";
+import type {
+  LeadRecycleGuard,
+  LeadRecycleReasonCode,
+} from "@/lib/leads/recycle-guards";
 import type {
   LeadAssignedOwnerSummary,
   LeadListFilters,
@@ -60,6 +68,7 @@ type LeadListItem = {
       username: string;
     } | null;
   }>;
+  recycleGuard: LeadRecycleGuard;
 };
 
 type PaginationData = {
@@ -82,6 +91,27 @@ type AssignedWorkspaceData = {
 };
 
 type SelectionMode = "manual" | "filtered";
+
+type RecycleNoticeState = {
+  status: "idle" | "success" | "error";
+  message: string;
+  recycleStatus?: "created" | "already_in_recycle_bin" | "blocked";
+};
+
+type RecycleDialogState = {
+  id: string;
+  name: string | null;
+  phone: string;
+  source: LeadSource;
+  status: LeadStatus;
+  updatedAt: Date | string;
+  recycleGuard: LeadRecycleGuard;
+} | null;
+
+const initialRecycleNoticeState: RecycleNoticeState = {
+  status: "idle",
+  message: "",
+};
 
 function normalizeDate(value: Date | string) {
   return value instanceof Date ? value : new Date(value);
@@ -328,10 +358,12 @@ function AssignedReviewTable({
   items,
   canAssign,
   onReassign,
+  onRecycle,
 }: Readonly<{
   items: LeadListItem[];
   canAssign: boolean;
   onReassign: (leadId: string) => void;
+  onRecycle: (item: LeadListItem) => void;
 }>) {
   return (
     <div className="crm-table-shell">
@@ -396,6 +428,15 @@ function AssignedReviewTable({
                         改分配
                       </button>
                     ) : null}
+                    <button
+                      type="button"
+                      onClick={() => onRecycle(item)}
+                      className="crm-text-link"
+                    >
+                      {item.recycleGuard.canMoveToRecycleBin
+                        ? "绉诲叆鍥炴敹绔?"
+                        : "鏌ョ湅闃绘柇鍏崇郴"}
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -428,7 +469,15 @@ export function LeadsTable({
   const [state, setState] = useState<AssignLeadsActionState>(
     initialAssignLeadsActionState,
   );
+  const [recycleNotice, setRecycleNotice] = useState<RecycleNoticeState>(
+    initialRecycleNoticeState,
+  );
+  const [recycleDialogState, setRecycleDialogState] =
+    useState<RecycleDialogState>(null);
+  const [recycleReason, setRecycleReason] =
+    useState<LeadRecycleReasonCode>("mistaken_creation");
   const [pending, startTransition] = useTransition();
+  const [recyclePending, startRecycleTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
 
@@ -491,6 +540,49 @@ export function LeadsTable({
     setSelectionMode("manual");
     setSelectedIds([leadId]);
     setDialogOpen(true);
+  }
+
+  function openRecycleDialog(item: LeadListItem) {
+    setRecycleNotice(initialRecycleNoticeState);
+    setRecycleReason("mistaken_creation");
+    setRecycleDialogState({
+      id: item.id,
+      name: item.name,
+      phone: item.phone,
+      source: item.source,
+      status: item.status,
+      updatedAt: item.updatedAt,
+      recycleGuard: item.recycleGuard,
+    });
+  }
+
+  function closeRecycleDialog() {
+    setRecycleDialogState(null);
+    setRecycleReason("mistaken_creation");
+  }
+
+  function handleRecycleConfirm() {
+    if (!recycleDialogState || !recycleDialogState.recycleGuard.canMoveToRecycleBin) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.set("id", recycleDialogState.id);
+    formData.set("reasonCode", recycleReason);
+
+    startRecycleTransition(async () => {
+      const nextState = await moveLeadToRecycleBinAction(formData);
+      setRecycleNotice(nextState);
+      closeRecycleDialog();
+
+      if (
+        nextState.recycleStatus === "created" ||
+        nextState.recycleStatus === "already_in_recycle_bin" ||
+        nextState.recycleStatus === "blocked"
+      ) {
+        router.refresh();
+      }
+    });
   }
 
   function handleAssignSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -569,6 +661,12 @@ export function LeadsTable({
         importBatchId={filters.importBatchId}
       />
 
+      {recycleNotice.message ? (
+        <ActionBanner tone={recycleNotice.status === "success" ? "success" : "danger"}>
+          {recycleNotice.message}
+        </ActionBanner>
+      ) : null}
+
       {isAssignedView ? (
         <SectionCard
           title="已分配结果"
@@ -609,6 +707,7 @@ export function LeadsTable({
               items={assigned.items}
               canAssign={canAssign}
               onReassign={openReassignDialog}
+              onRecycle={openRecycleDialog}
             />
           )}
         </SectionCard>
@@ -781,6 +880,15 @@ export function LeadsTable({
                             >
                               查看详情
                             </Link>
+                            <button
+                              type="button"
+                              onClick={() => openRecycleDialog(item)}
+                              className="crm-text-link"
+                            >
+                              {item.recycleGuard.canMoveToRecycleBin
+                                ? "绉诲叆鍥炴敹绔?"
+                                : "鏌ョ湅闃绘柇鍏崇郴"}
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -888,6 +996,27 @@ export function LeadsTable({
           </div>
         </div>
       ) : null}
+
+      <LeadRecycleDialog
+        open={recycleDialogState !== null}
+        item={
+          recycleDialogState
+            ? {
+                name: recycleDialogState.name,
+                phone: recycleDialogState.phone,
+                source: recycleDialogState.source,
+                status: recycleDialogState.status,
+                updatedAt: recycleDialogState.updatedAt,
+              }
+            : null
+        }
+        guard={recycleDialogState?.recycleGuard ?? null}
+        reason={recycleReason}
+        onReasonChange={setRecycleReason}
+        onClose={closeRecycleDialog}
+        onConfirm={handleRecycleConfirm}
+        pending={recyclePending}
+      />
     </div>
   );
 }

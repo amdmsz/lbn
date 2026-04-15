@@ -1,4 +1,6 @@
 import {
+  LeadConversionStatus,
+  LeadSource,
   LeadStatus,
   UserStatus,
   type Prisma,
@@ -63,7 +65,7 @@ export type LeadListItem = {
   id: string;
   name: string | null;
   phone: string;
-  source: Prisma.$Enums.LeadSource;
+  source: LeadSource;
   interestedProduct: string | null;
   status: LeadStatus;
   createdAt: Date;
@@ -98,7 +100,7 @@ type LeadListGuardRecord = {
   name: string | null;
   phone: string;
   status: LeadStatus;
-  conversionStatus: Prisma.$Enums.LeadConversionStatus;
+  conversionStatus: LeadConversionStatus;
   ownerId: string | null;
   customerId: string | null;
   rolledBackAt: Date | null;
@@ -124,7 +126,7 @@ type LeadListGuardRecord = {
 };
 
 function attachLeadRecycleGuard<T extends LeadListGuardRecord & {
-  source: Prisma.$Enums.LeadSource;
+  source: LeadSource;
   interestedProduct: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -525,6 +527,19 @@ export async function getLeadListData(
             },
           },
         },
+        _count: {
+          select: {
+            assignments: true,
+            followUpTasks: true,
+            callRecords: true,
+            wechatRecords: true,
+            liveInvitations: true,
+            orders: true,
+            giftRecords: true,
+            leadTags: true,
+            mergeLogs: true,
+          },
+        },
       },
     }),
     prisma.lead.findMany({
@@ -594,19 +609,6 @@ export async function getLeadListData(
                 username: true,
               },
             },
-          },
-        },
-        _count: {
-          select: {
-            assignments: true,
-            followUpTasks: true,
-            callRecords: true,
-            wechatRecords: true,
-            liveInvitations: true,
-            orders: true,
-            giftRecords: true,
-            leadTags: true,
-            mergeLogs: true,
           },
         },
       },
