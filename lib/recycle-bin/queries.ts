@@ -1,6 +1,7 @@
 import type { LeadStatus, RecycleDomain, RecycleTargetType } from "@prisma/client";
 import { getParamValue } from "@/lib/action-notice";
 import {
+  canAccessSalesOrderModule,
   canAccessLeadModule,
   canManageLiveSessions,
   canManageProducts,
@@ -21,6 +22,10 @@ import {
   buildMasterDataRestoreGuard,
 } from "@/lib/recycle-bin/master-data-adapter";
 import {
+  buildTradeOrderPurgeGuard,
+  buildTradeOrderRestoreGuard,
+} from "@/lib/recycle-bin/trade-order-adapter";
+import {
   countActiveRecycleEntries,
   listActiveRecycleEntries,
 } from "@/lib/recycle-bin/repository";
@@ -31,7 +36,11 @@ import type {
 } from "@/lib/recycle-bin/types";
 import { getLeadStatusLabel } from "@/lib/leads/metadata";
 
-export type RecycleBinTabValue = "master-data" | "live-sessions" | "leads";
+export type RecycleBinTabValue =
+  | "master-data"
+  | "live-sessions"
+  | "leads"
+  | "trade-orders";
 export type RecycleBinDeletedRangeValue = "all" | "today" | "last_7d" | "last_30d";
 export type RecycleBinFilterStateValue =
   | "all"
@@ -44,7 +53,8 @@ export type RecycleBinTargetFilterValue =
   | "product_sku"
   | "supplier"
   | "live_session"
-  | "lead";
+  | "lead"
+  | "trade_order";
 
 type RecycleBinListEntry = Awaited<
   ReturnType<typeof listActiveRecycleEntries>
@@ -108,6 +118,25 @@ export type RecycleBinListItem = {
   purgeRequiresAdmin: boolean;
 };
 
+function getSnapshotObject(entry: RecycleBinListEntry) {
+  if (
+    !entry.blockerSnapshotJson ||
+    typeof entry.blockerSnapshotJson !== "object" ||
+    Array.isArray(entry.blockerSnapshotJson)
+  ) {
+    return null;
+  }
+
+  return entry.blockerSnapshotJson as Record<string, unknown>;
+}
+
+function getSnapshotString(entry: RecycleBinListEntry, key: string) {
+  const snapshot = getSnapshotObject(entry);
+  const value = snapshot?.[key];
+
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 export type RecycleBinPageData = {
   activeTab: RecycleBinTabValue;
   tabs: RecycleBinTab[];
@@ -133,6 +162,14 @@ const leadStatusSnapshotValues = new Set([
   "CLOSED_LOST",
   "INVALID",
 ]);
+
+function getResolvedTargetTypeLabel(targetType: RecycleBinListEntry["targetType"]) {
+  if (targetType === "TRADE_ORDER") {
+    return "成交主单";
+  }
+
+  return getTargetTypeLabel(targetType);
+}
 
 function getTargetTypeLabel(targetType: RecycleBinListEntry["targetType"]) {
   switch (targetType) {
@@ -202,9 +239,13 @@ function buildRecycleBinHref(tab: RecycleBinTabValue, filters: RecycleBinFilters
         ? filters.targetType === "live_session"
           ? filters.targetType
           : "all"
-        : filters.targetType === "lead"
-          ? filters.targetType
-          : "all";
+        : tab === "leads"
+          ? filters.targetType === "lead"
+            ? filters.targetType
+            : "all"
+          : filters.targetType === "trade_order"
+            ? filters.targetType
+            : "all";
 
   if (targetTypeValue !== "all") {
     params.set("targetType", targetTypeValue);
@@ -217,9 +258,11 @@ function buildTabs(input: {
   canAccessMasterData: boolean;
   canAccessLiveSessions: boolean;
   canAccessLeads: boolean;
+  canAccessTradeOrders: boolean;
   masterDataCount: number;
   liveSessionCount: number;
   leadCount: number;
+  tradeOrderCount: number;
   filters: RecycleBinFilters;
 }) {
   const tabs: RecycleBinTab[] = [];
@@ -251,6 +294,15 @@ function buildTabs(input: {
     });
   }
 
+  if (input.canAccessTradeOrders) {
+    tabs.push({
+      value: "trade-orders",
+      label: "交易订单",
+      href: buildRecycleBinHref("trade-orders", input.filters),
+      count: input.tradeOrderCount,
+    });
+  }
+
   return tabs;
 }
 
@@ -263,7 +315,11 @@ function getDomainFromTab(tab: RecycleBinTabValue): RecycleDomain {
     return "LIVE_SESSION";
   }
 
-  return "LEAD";
+  if (tab === "leads") {
+    return "LEAD";
+  }
+
+  return "TRADE_ORDER";
 }
 
 function normalizeDeletedRange(value: string): RecycleBinDeletedRangeValue {
@@ -288,6 +344,10 @@ function normalizeTargetType(
 
   if (activeTab === "leads") {
     return value === "lead" ? "lead" : "all";
+  }
+
+  if (activeTab === "trade-orders") {
+    return value === "trade_order" ? "trade_order" : "all";
   }
 
   return value === "product" || value === "product_sku" || value === "supplier"
@@ -342,6 +402,8 @@ function getTargetFilterValue(targetType: RecycleTargetType): RecycleBinTargetFi
       return "live_session";
     case "LEAD":
       return "lead";
+    case "TRADE_ORDER":
+      return "trade_order";
     default:
       return "all";
   }
@@ -393,6 +455,12 @@ async function buildRestoreGuard(
     return liveSessionGuard;
   }
 
+  const tradeOrderGuard = await buildTradeOrderRestoreGuard(prisma, input);
+
+  if (tradeOrderGuard) {
+    return tradeOrderGuard;
+  }
+
   const leadGuard = await buildLeadRestoreGuard(prisma, input);
 
   if (leadGuard) {
@@ -431,6 +499,12 @@ async function buildPurgeGuard(
 
   if (liveSessionGuard) {
     return liveSessionGuard;
+  }
+
+  const tradeOrderGuard = await buildTradeOrderPurgeGuard(prisma, input);
+
+  if (tradeOrderGuard) {
+    return tradeOrderGuard;
   }
 
   const leadGuard = await buildLeadPurgeGuard(prisma, input);
@@ -515,6 +589,16 @@ function buildTargetTypeOptions(
       {
         value: "lead",
         label: "线索",
+        count: entries.length,
+      },
+    ];
+  }
+
+  if (activeTab === "trade-orders") {
+    return [
+      {
+        value: "trade_order",
+        label: "交易订单",
         count: entries.length,
       },
     ];
@@ -781,6 +865,86 @@ function buildMasterDataBlockerGroups(
   return Array.from(groups.values());
 }
 
+function buildTradeOrderBlockerGroups(
+  blockers: Array<{ name: string; description: string }>,
+) {
+  const groups = new Map<string, RecycleBinBlockerGroup>();
+
+  for (const blocker of blockers) {
+    if (
+      blocker.name === "对象缺失" ||
+      blocker.name === "订单已离开草稿态" ||
+      blocker.name === "已取消订单" ||
+      blocker.name === "非草稿订单"
+    ) {
+      appendBlockerGroup(
+        groups,
+        "订单状态",
+        "先确认当前成交主单是否仍处于纯草稿误建语义；非草稿或已取消订单不能再按误建删除处理。",
+        blocker,
+      );
+      continue;
+    }
+
+    if (blocker.name === "已生成供应商子单") {
+      appendBlockerGroup(
+        groups,
+        "审核与拆单",
+        "只要已经进入审核或拆单链，当前成交主单就不再属于可删除的误建草稿。",
+        blocker,
+      );
+      continue;
+    }
+
+    if (
+      blocker.name === "已存在支付计划" ||
+      blocker.name === "已存在支付记录" ||
+      blocker.name === "已存在催收任务"
+    ) {
+      appendBlockerGroup(
+        groups,
+        "支付收款链",
+        "当前成交主单已经进入支付或收款链，需要保留交易真相与追踪能力。",
+        blocker,
+      );
+      continue;
+    }
+
+    if (
+      blocker.name === "已存在发货任务" ||
+      blocker.name === "已存在物流跟进" ||
+      blocker.name === "已存在 COD 回款记录"
+    ) {
+      appendBlockerGroup(
+        groups,
+        "履约执行链",
+        "当前成交主单已经进入履约执行链，不能再当作误建草稿处理。",
+        blocker,
+      );
+      continue;
+    }
+
+    if (blocker.name === "已存在导出批次行") {
+      appendBlockerGroup(
+        groups,
+        "导出与审计链",
+        "当前成交主单已经进入导出审计链，需要保留执行与审计上下文。",
+        blocker,
+      );
+      continue;
+    }
+
+    appendBlockerGroup(
+      groups,
+      "其他阻断",
+      "当前还有未归入主分组的阻断项，需要一并检查。",
+      blocker,
+    );
+  }
+
+  return Array.from(groups.values());
+}
+
 function buildBlockerGroups(input: {
   targetType: RecycleBinListEntry["targetType"];
   blockers: Array<{ name: string; description: string }>;
@@ -798,6 +962,10 @@ function buildBlockerGroups(input: {
     return buildLiveSessionBlockerGroups(input.blockers);
   }
 
+  if (input.targetType === "TRADE_ORDER") {
+    return buildTradeOrderBlockerGroups(input.blockers);
+  }
+
   return buildMasterDataBlockerGroups(input.blockers, input.mode);
 }
 
@@ -807,6 +975,23 @@ function getLeadStatusSnapshotLabel(statusSnapshot: string | null) {
   }
 
   return getLeadStatusLabel(statusSnapshot as LeadStatus);
+}
+
+function getTradeOrderStatusSnapshotLabel(statusSnapshot: string | null) {
+  switch (statusSnapshot) {
+    case "DRAFT":
+      return "草稿";
+    case "PENDING_REVIEW":
+      return "待审核";
+    case "APPROVED":
+      return "已审核";
+    case "REJECTED":
+      return "已驳回";
+    case "CANCELED":
+      return "已取消";
+    default:
+      return null;
+  }
 }
 
 async function loadLeadRuntimeMetadata(entries: RecycleBinListEntry[]) {
@@ -869,14 +1054,21 @@ async function buildListItems(
       return {
         entryId: entry.id,
         targetType: entry.targetType,
-        targetTypeLabel: getTargetTypeLabel(entry.targetType),
+        targetTypeLabel: getResolvedTargetTypeLabel(entry.targetType),
         name: entry.titleSnapshot,
         secondaryLabel: entry.secondarySnapshot || "--",
         statusLabel:
           entry.targetType === "LEAD"
             ? getLeadStatusSnapshotLabel(entry.originalStatusSnapshot)
+            : entry.targetType === "TRADE_ORDER"
+              ? getTradeOrderStatusSnapshotLabel(entry.originalStatusSnapshot)
             : null,
         ownerLabel: entry.targetType === "LEAD" ? leadMetadata?.ownerLabel ?? "未分配" : null,
+        ...(entry.targetType === "TRADE_ORDER"
+          ? {
+              ownerLabel: getSnapshotString(entry, "ownerName") ?? "未分配",
+            }
+          : {}),
         deleteReasonLabel: getDeleteReasonLabel(entry.deleteReasonCode),
         deleteReasonText: entry.deleteReasonText,
         deletedAtLabel: formatDateTime(entry.deletedAt),
@@ -919,8 +1111,9 @@ export async function getRecycleBinPageData(
     viewer.permissionCodes,
   );
   const canAccessLeads = canAccessLeadModule(viewer.role);
+  const canAccessTradeOrders = canAccessSalesOrderModule(viewer.role);
 
-  const [masterDataCount, liveSessionCount, leadCount] = await Promise.all([
+  const [masterDataCount, liveSessionCount, leadCount, tradeOrderCount] = await Promise.all([
     canAccessMasterData
       ? countActiveRecycleEntries(prisma, { domain: "PRODUCT_MASTER_DATA" })
       : Promise.resolve(0),
@@ -930,6 +1123,9 @@ export async function getRecycleBinPageData(
     canAccessLeads
       ? countActiveRecycleEntries(prisma, { domain: "LEAD" })
       : Promise.resolve(0),
+    canAccessTradeOrders
+      ? countActiveRecycleEntries(prisma, { domain: "TRADE_ORDER" })
+      : Promise.resolve(0),
   ]);
 
   const requestedTab = getParamValue(searchParams?.tab);
@@ -937,7 +1133,9 @@ export async function getRecycleBinPageData(
     ? "master-data"
     : canAccessLiveSessions
       ? "live-sessions"
-      : "leads";
+      : canAccessLeads
+        ? "leads"
+        : "trade-orders";
   const activeTab: RecycleBinTabValue =
     requestedTab === "master-data" && canAccessMasterData
       ? "master-data"
@@ -945,6 +1143,8 @@ export async function getRecycleBinPageData(
         ? "live-sessions"
         : requestedTab === "leads" && canAccessLeads
           ? "leads"
+          : requestedTab === "trade-orders" && canAccessTradeOrders
+            ? "trade-orders"
           : defaultTab;
 
   const filters = parseFilters(activeTab, searchParams);
@@ -952,9 +1152,11 @@ export async function getRecycleBinPageData(
     canAccessMasterData,
     canAccessLiveSessions,
     canAccessLeads,
+    canAccessTradeOrders,
     masterDataCount,
     liveSessionCount,
     leadCount,
+    tradeOrderCount,
     filters,
   });
 

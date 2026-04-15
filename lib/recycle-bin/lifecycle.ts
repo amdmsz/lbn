@@ -4,6 +4,7 @@ import {
   canManageLiveSessions,
   canManageProducts,
   canManageSuppliers,
+  canAccessSalesOrderModule,
 } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
 import {
@@ -24,6 +25,12 @@ import {
   getMasterDataRecycleTarget,
   purgeMasterDataTarget,
 } from "@/lib/recycle-bin/master-data-adapter";
+import {
+  buildTradeOrderPurgeGuard,
+  buildTradeOrderRestoreGuard,
+  getTradeOrderRecycleTarget,
+  purgeTradeOrderTarget,
+} from "@/lib/recycle-bin/trade-order-adapter";
 import {
   createActiveRecycleEntry,
   findRecycleEntryById,
@@ -86,6 +93,14 @@ function ensureMoveToRecycleBinPermission(
     return;
   }
 
+  if (targetType === "TRADE_ORDER") {
+    if (!canAccessSalesOrderModule(actor.role)) {
+      throw new Error("You do not have permission to manage trade-order recycle-bin actions.");
+    }
+
+    return;
+  }
+
   throw new Error("Unsupported recycle-bin target type.");
 }
 
@@ -119,6 +134,12 @@ async function loadRecycleTarget(
     return liveSessionTarget;
   }
 
+  const tradeOrderTarget = await getTradeOrderRecycleTarget(tx, targetType, targetId);
+
+  if (tradeOrderTarget) {
+    return tradeOrderTarget;
+  }
+
   return getLeadRecycleTarget(tx, targetType, targetId);
 }
 
@@ -127,7 +148,7 @@ async function buildRestoreGuard(
   input: {
     targetType: RecycleTargetType;
     targetId: string;
-    domain: "PRODUCT_MASTER_DATA" | "LIVE_SESSION" | "LEAD";
+    domain: "PRODUCT_MASTER_DATA" | "LIVE_SESSION" | "LEAD" | "TRADE_ORDER";
     restoreRouteSnapshot: string;
   },
 ): Promise<RecycleRestoreGuard> {
@@ -141,6 +162,12 @@ async function buildRestoreGuard(
 
   if (liveSessionGuard) {
     return liveSessionGuard;
+  }
+
+  const tradeOrderGuard = await buildTradeOrderRestoreGuard(tx, input);
+
+  if (tradeOrderGuard) {
+    return tradeOrderGuard;
   }
 
   const leadGuard = await buildLeadRestoreGuard(tx, input);
@@ -167,7 +194,7 @@ async function buildPurgeGuard(
   input: {
     targetType: RecycleTargetType;
     targetId: string;
-    domain: "PRODUCT_MASTER_DATA" | "LIVE_SESSION" | "LEAD";
+    domain: "PRODUCT_MASTER_DATA" | "LIVE_SESSION" | "LEAD" | "TRADE_ORDER";
   },
 ): Promise<RecyclePurgeGuard> {
   const masterDataGuard = await buildMasterDataPurgeGuard(tx, input);
@@ -180,6 +207,12 @@ async function buildPurgeGuard(
 
   if (liveSessionGuard) {
     return liveSessionGuard;
+  }
+
+  const tradeOrderGuard = await buildTradeOrderPurgeGuard(tx, input);
+
+  if (tradeOrderGuard) {
+    return tradeOrderGuard;
   }
 
   const leadGuard = await buildLeadPurgeGuard(tx, input);
@@ -222,6 +255,12 @@ async function purgeRecycleTarget(
   const purgedLead = await purgeLeadTarget(tx, input);
 
   if (purgedLead) {
+    return;
+  }
+
+  const purgedTradeOrder = await purgeTradeOrderTarget(tx, input);
+
+  if (purgedTradeOrder) {
     return;
   }
 
@@ -297,6 +336,15 @@ function getRestoreOperationMeta(input: {
     };
   }
 
+  if (input.targetType === "TRADE_ORDER") {
+    return {
+      module: "SALES_ORDER" as const,
+      targetType: "TRADE_ORDER" as const,
+      action: "trade_order.restored_from_recycle_bin",
+      description: `Restored trade order from recycle bin: ${input.titleSnapshot}`,
+    };
+  }
+
   throw new Error("Unsupported recycle-bin restore target type.");
 }
 
@@ -346,6 +394,15 @@ function getPurgeOperationMeta(input: {
       targetType: "LEAD" as const,
       action: "lead.purged_from_recycle_bin",
       description: `Permanently deleted lead from recycle bin: ${input.titleSnapshot}`,
+    };
+  }
+
+  if (input.targetType === "TRADE_ORDER") {
+    return {
+      module: "SALES_ORDER" as const,
+      targetType: "TRADE_ORDER" as const,
+      action: "trade_order.purged_from_recycle_bin",
+      description: `Permanently deleted trade order from recycle bin: ${input.titleSnapshot}`,
     };
   }
 

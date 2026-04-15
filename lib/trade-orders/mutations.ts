@@ -22,6 +22,7 @@ import { canCreateSalesOrder, canReviewSalesOrder } from "@/lib/auth/access";
 import { touchCustomerEffectiveFollowUpFromTradeOrderTx } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
 import { syncSalesOrderPaymentArtifacts } from "@/lib/payments/mutations";
+import { assertTradeOrderNotInActiveRecycleBin } from "@/lib/trade-orders/recycle";
 import {
   buildTradeOrderDraftComputation,
   isTradeOrderDraftReadyForSubmit,
@@ -837,6 +838,11 @@ export async function saveTradeOrderDraft(
   }
 
   const input = tradeOrderDraftSchema.parse(rawInput);
+
+  if (input.id) {
+    await assertTradeOrderNotInActiveRecycleBin(prisma, input.id);
+  }
+
   const context = await resolveDraftContext(actor, input);
 
   assertEditableTradeOrderForDraft(context.existingTradeOrder);
@@ -922,6 +928,11 @@ export async function submitTradeOrderForReview(
   }
 
   const input = tradeOrderDraftSchema.parse(rawInput);
+
+  if (input.id) {
+    await assertTradeOrderNotInActiveRecycleBin(prisma, input.id);
+  }
+
   const context = await resolveDraftContext(actor, input);
 
   if (!isTradeOrderDraftReadyForSubmit(context.computation)) {
@@ -1154,6 +1165,8 @@ export async function reviewTradeOrder(
   if (!tradeOrder) {
     throw new Error("Trade order not found or out of scope.");
   }
+
+  await assertTradeOrderNotInActiveRecycleBin(prisma, tradeOrder.id);
 
   if (tradeOrder.tradeStatus !== TradeOrderStatus.PENDING_REVIEW) {
     throw new Error("Only pending-review trade orders can be reviewed.");

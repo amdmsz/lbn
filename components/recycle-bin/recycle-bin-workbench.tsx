@@ -39,6 +39,14 @@ function getTabLabel(activeTab: RecycleBinTabValue) {
   }
 }
 
+function getResolvedTabLabel(activeTab: RecycleBinTabValue) {
+  if (activeTab === "trade-orders") {
+    return "交易订单";
+  }
+
+  return getTabLabel(activeTab);
+}
+
 function getDialogMeta(mode: "restore" | "purge") {
   if (mode === "restore") {
     return {
@@ -85,7 +93,7 @@ export function RecycleBinWorkbench({
     [items, selectedEntryId],
   );
 
-  const showLeadColumns = activeTab === "leads";
+  const showLeadColumns = activeTab === "leads" || activeTab === "trade-orders";
 
   function closeDialog() {
     setDialogState(null);
@@ -126,7 +134,7 @@ export function RecycleBinWorkbench({
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_400px]">
         <DataTableWrapper
-          title={`${getTabLabel(activeTab)}回收站条目`}
+          title={`${getResolvedTabLabel(activeTab)}回收站条目`}
           description="第一版保留恢复、永久删除和 blocker 摘要；点击行即可在右侧查看更完整的治理详情。"
           contentClassName="p-0"
         >
@@ -263,7 +271,7 @@ export function RecycleBinWorkbench({
           ) : (
             <div className="p-4 md:p-5">
               <EmptyState
-                title={`暂无${getTabLabel(activeTab)}回收站条目`}
+                title={`暂无${getResolvedTabLabel(activeTab)}回收站条目`}
                 description="当前范围内没有 ACTIVE 回收站对象，后续移入回收站的对象会在这里统一治理。"
               />
             </div>

@@ -26,6 +26,16 @@ function getActiveTabLabel(activeTab: "master-data" | "live-sessions" | "leads")
   }
 }
 
+function getResolvedActiveTabLabel(
+  activeTab: Awaited<ReturnType<typeof getRecycleBinPageData>>["activeTab"],
+) {
+  if (activeTab === "trade-orders") {
+    return "交易订单";
+  }
+
+  return getActiveTabLabel(activeTab);
+}
+
 export default async function RecycleBinPage({
   searchParams,
 }: Readonly<{
@@ -51,7 +61,7 @@ export default async function RecycleBinPage({
     resolvedSearchParams,
   );
 
-  const activeTabLabel = getActiveTabLabel(data.activeTab);
+  const activeTabLabel = getResolvedActiveTabLabel(data.activeTab);
 
   return (
     <WorkbenchLayout

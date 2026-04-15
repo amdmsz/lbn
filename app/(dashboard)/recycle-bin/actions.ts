@@ -70,7 +70,13 @@ function buildPurgeActionResult(
 }
 
 function revalidateTargetRoutes(input: {
-  targetType: "PRODUCT" | "PRODUCT_SKU" | "SUPPLIER" | "LIVE_SESSION" | "LEAD";
+  targetType:
+    | "PRODUCT"
+    | "PRODUCT_SKU"
+    | "SUPPLIER"
+    | "LIVE_SESSION"
+    | "LEAD"
+    | "TRADE_ORDER";
   restoreRouteSnapshot?: string;
 }) {
   revalidatePath("/recycle-bin");
@@ -79,6 +85,9 @@ function revalidateTargetRoutes(input: {
     revalidatePath("/live-sessions");
   } else if (input.targetType === "LEAD") {
     revalidatePath("/leads");
+  } else if (input.targetType === "TRADE_ORDER") {
+    revalidatePath("/orders");
+    revalidatePath("/fulfillment");
   } else {
     revalidatePath("/products");
   }

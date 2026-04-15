@@ -461,12 +461,14 @@ enum RecycleTargetType {
   SUPPLIER
   LIVE_SESSION
   LEAD
+  TRADE_ORDER
 }
 
 enum RecycleDomain {
   PRODUCT_MASTER_DATA
   LIVE_SESSION
   LEAD
+  TRADE_ORDER
 }
 
 enum RecycleEntryStatus {

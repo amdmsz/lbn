@@ -11,6 +11,10 @@ import { z } from "zod";
 import { getParamValue, parseActionNotice } from "@/lib/action-notice";
 import { canAccessSalesOrderModule, canCreateSalesOrder } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
+import {
+  findActiveTradeOrderRecycleEntry,
+  listActiveTradeOrderIds,
+} from "@/lib/trade-orders/recycle";
 import { getSalesOrderCreateFormOptions } from "@/lib/sales-orders/queries";
 import { getTradeOrderExecutionSummaryMap } from "@/lib/trade-orders/execution-summary";
 
@@ -296,6 +300,14 @@ export async function getCustomerTradeOrderComposerData(
     return null;
   }
 
+  if (tradeOrderId) {
+    const recycleEntry = await findActiveTradeOrderRecycleEntry(prisma, tradeOrderId);
+
+    if (recycleEntry) {
+      return null;
+    }
+  }
+
   const draft = tradeOrderId
     ? await prisma.tradeOrder.findFirst({
         where: {
@@ -448,6 +460,24 @@ function buildTradeOrderCoreWhereInput(
   }
 
   return andClauses.length > 0 ? { AND: andClauses } : {};
+}
+
+function mergeTradeOrderWhereClauses(
+  ...clauses: Prisma.TradeOrderWhereInput[]
+): Prisma.TradeOrderWhereInput {
+  const filteredClauses = clauses.filter((clause) => Object.keys(clause).length > 0);
+
+  if (filteredClauses.length === 0) {
+    return {};
+  }
+
+  if (filteredClauses.length === 1) {
+    return filteredClauses[0] ?? {};
+  }
+
+  return {
+    AND: filteredClauses,
+  };
 }
 
 function getNoTrackingWhere(): Prisma.ShippingTaskWhereInput {
@@ -654,7 +684,19 @@ export async function getTradeOrdersPageData(
 
   const teamId = await getViewerTeamId(viewer);
   const filters = parseTradeOrderFilters(rawSearchParams);
-  const coreWhere = buildTradeOrderCoreWhereInput(viewer, teamId, filters);
+  const activeRecycleTradeOrderIds = await listActiveTradeOrderIds(prisma);
+  const recycleExclusionWhere: Prisma.TradeOrderWhereInput =
+    activeRecycleTradeOrderIds.length > 0
+      ? {
+          id: {
+            notIn: activeRecycleTradeOrderIds,
+          },
+        }
+      : {};
+  const coreWhere = mergeTradeOrderWhereClauses(
+    buildTradeOrderCoreWhereInput(viewer, teamId, filters),
+    recycleExclusionWhere,
+  );
   const supplierCountTradeOrderIds = await resolveSupplierCountTradeOrderIds(
     coreWhere,
     filters.supplierCount,
@@ -663,13 +705,12 @@ export async function getTradeOrdersPageData(
     supplierCountTradeOrderIds === null
       ? coreWhere
       : supplierCountTradeOrderIds.length > 0
-        ? {
-            AND: [coreWhere, { id: { in: supplierCountTradeOrderIds } }],
-          }
+        ? mergeTradeOrderWhereClauses(coreWhere, {
+            id: { in: supplierCountTradeOrderIds },
+          })
         : { id: "__missing_trade_order_supplier_count__" };
   const stateWhere = buildTradeOrderStateWhereInput(filters);
-  const where =
-    Object.keys(stateWhere).length > 0 ? { AND: [scopedWhere, stateWhere] } : scopedWhere;
+  const where = mergeTradeOrderWhereClauses(scopedWhere, stateWhere);
   const orderBy = buildTradeOrderOrderBy(filters.sortBy);
 
   const [
@@ -994,14 +1035,15 @@ export async function getTradeOrderDetail(
     throw new Error("褰撳墠瑙掕壊鏃犳潈璁块棶鎴愪氦涓诲崟妯″潡銆?");
   }
 
+  const recycleEntry = await findActiveTradeOrderRecycleEntry(prisma, tradeOrderId);
+
+  if (recycleEntry) {
+    return null;
+  }
+
   const teamId = await getViewerTeamId(viewer);
   const scope = buildActorTradeOrderWhere(viewer, teamId);
-  const scopedWhere: Prisma.TradeOrderWhereInput =
-    Object.keys(scope).length > 0
-      ? {
-          AND: [{ id: tradeOrderId }, scope],
-        }
-      : { id: tradeOrderId };
+  const scopedWhere = mergeTradeOrderWhereClauses({ id: tradeOrderId }, scope);
 
   const tradeOrder = await prisma.tradeOrder.findFirst({
     where: scopedWhere,
