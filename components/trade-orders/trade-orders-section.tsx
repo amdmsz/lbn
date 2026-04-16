@@ -1,9 +1,15 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { ActionBanner } from "@/components/shared/action-banner";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PaginationControls } from "@/components/shared/pagination-controls";
 import { RecordTabs } from "@/components/shared/record-tabs";
 import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/shared/status-badge";
+import { TradeOrderRecycleDialog } from "@/components/trade-orders/trade-order-recycle-dialog";
 import { TradeOrderLogisticsCell } from "@/components/trade-orders/trade-order-logistics-cell";
 import { formatDateTime } from "@/lib/customers/metadata";
 import {
@@ -16,10 +22,30 @@ import {
   buildFulfillmentShippingHref,
 } from "@/lib/fulfillment/navigation";
 import type { getTradeOrdersPageData, TradeOrderFilters } from "@/lib/trade-orders/queries";
+import type {
+  TradeOrderRecycleGuard,
+  TradeOrderRecycleReasonCode,
+} from "@/lib/trade-orders/recycle-guards";
 import { cn } from "@/lib/utils";
 
 type TradeOrdersData = Awaited<ReturnType<typeof getTradeOrdersPageData>>;
 type TradeOrderItem = TradeOrdersData["items"][number];
+type TradeOrderRecycleActionResult = {
+  status: "success" | "error";
+  message: string;
+  recycleStatus?: "created" | "already_in_recycle_bin" | "blocked";
+};
+type RecycleDialogState = {
+  id: string;
+  tradeNo: string;
+  customerName: string;
+  receiverName: string;
+  receiverPhone: string;
+  tradeStatus: TradeOrderItem["tradeStatus"];
+  reviewStatus: TradeOrderItem["reviewStatus"];
+  updatedAt: TradeOrderItem["updatedAt"];
+  guard: TradeOrderRecycleGuard;
+} | null;
 
 const DESKTOP_COLUMNS =
   "xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1.05fr)_minmax(0,1.1fr)]";
@@ -166,12 +192,14 @@ function TradeOrderRow({
   canCreate,
   canReview,
   reviewAction,
+  onOpenRecycleDialog,
 }: Readonly<{
   item: TradeOrderItem;
   redirectTo: string;
   canCreate: boolean;
   canReview: boolean;
   reviewAction: (formData: FormData) => Promise<void>;
+  onOpenRecycleDialog: (item: TradeOrderItem) => void;
 }>) {
   const product = getProductSummary(item);
   const traceTarget = getTraceTarget(item);
@@ -288,6 +316,13 @@ function TradeOrderRow({
                   继续编辑
                 </Link>
               ) : null}
+              <button
+                type="button"
+                onClick={() => onOpenRecycleDialog(item)}
+                className="block w-full rounded-[0.75rem] px-3 py-2 text-left text-sm text-black/72 hover:bg-[rgba(247,248,250,0.9)]"
+              >
+                {item.recycleGuard.canMoveToRecycleBin ? "移入回收站" : "查看阻断关系"}
+              </button>
             </div>
           </details>
         </div>
@@ -426,6 +461,7 @@ export function TradeOrdersSection({
   canCreate,
   canReview,
   reviewAction,
+  moveToRecycleBinAction,
   basePath = "/orders",
   baseSearchParams,
 }: Readonly<{
@@ -437,6 +473,7 @@ export function TradeOrdersSection({
   canCreate: boolean;
   canReview: boolean;
   reviewAction: (formData: FormData) => Promise<void>;
+  moveToRecycleBinAction: (formData: FormData) => Promise<TradeOrderRecycleActionResult>;
   basePath?: string;
   baseSearchParams?: Record<string, string>;
 }>) {
@@ -447,6 +484,12 @@ export function TradeOrdersSection({
     basePath,
     baseSearchParams,
   );
+  const [notice, setNotice] = useState<TradeOrderRecycleActionResult | null>(null);
+  const [recycleDialogState, setRecycleDialogState] = useState<RecycleDialogState>(null);
+  const [recycleReason, setRecycleReason] =
+    useState<TradeOrderRecycleReasonCode>("mistaken_creation");
+  const [recyclePending, startRecycleTransition] = useTransition();
+  const router = useRouter();
 
   const tabs: Array<{
     value: string;
@@ -480,8 +523,58 @@ export function TradeOrdersSection({
     ),
   }));
 
+  function openRecycleDialog(item: TradeOrderItem) {
+    setNotice(null);
+    setRecycleReason("mistaken_creation");
+    setRecycleDialogState({
+      id: item.id,
+      tradeNo: item.tradeNo,
+      customerName: item.customer.name,
+      receiverName: item.receiverNameSnapshot,
+      receiverPhone: item.receiverPhoneSnapshot,
+      tradeStatus: item.tradeStatus,
+      reviewStatus: item.reviewStatus,
+      updatedAt: item.updatedAt,
+      guard: item.recycleGuard,
+    });
+  }
+
+  function closeRecycleDialog() {
+    setRecycleDialogState(null);
+    setRecycleReason("mistaken_creation");
+  }
+
+  function handleRecycleConfirm() {
+    if (!recycleDialogState || !recycleDialogState.guard.canMoveToRecycleBin) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.set("id", recycleDialogState.id);
+    formData.set("reasonCode", recycleReason);
+
+    startRecycleTransition(async () => {
+      const result = await moveToRecycleBinAction(formData);
+      setNotice(result);
+      closeRecycleDialog();
+
+      if (
+        result.recycleStatus === "created" ||
+        result.recycleStatus === "already_in_recycle_bin"
+      ) {
+        router.refresh();
+      }
+    });
+  }
+
   return (
     <div className="space-y-5">
+      {notice ? (
+        <ActionBanner tone={notice.status === "success" ? "success" : "danger"}>
+          {notice.message}
+        </ActionBanner>
+      ) : null}
+
       <SectionCard
         eyebrow="Parent-Order Workbench"
         title="父单工作池"
@@ -652,6 +745,7 @@ export function TradeOrdersSection({
                   canCreate={canCreate}
                   canReview={canReview}
                   reviewAction={reviewAction}
+                  onOpenRecycleDialog={openRecycleDialog}
                 />
               ))}
             </div>
@@ -682,6 +776,29 @@ export function TradeOrdersSection({
           }
         />
       )}
+
+      <TradeOrderRecycleDialog
+        open={recycleDialogState !== null}
+        item={
+          recycleDialogState
+            ? {
+                tradeNo: recycleDialogState.tradeNo,
+                customerName: recycleDialogState.customerName,
+                receiverName: recycleDialogState.receiverName,
+                receiverPhone: recycleDialogState.receiverPhone,
+                tradeStatus: recycleDialogState.tradeStatus,
+                reviewStatus: recycleDialogState.reviewStatus,
+                updatedAt: recycleDialogState.updatedAt,
+              }
+            : null
+        }
+        guard={recycleDialogState?.guard ?? null}
+        reason={recycleReason}
+        onReasonChange={setRecycleReason}
+        onClose={closeRecycleDialog}
+        onConfirm={handleRecycleConfirm}
+        pending={recyclePending}
+      />
     </div>
   );
 }

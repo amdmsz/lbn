@@ -9,6 +9,7 @@ import {
   rethrowRedirectError,
   sanitizeRedirectTarget,
 } from "@/lib/action-notice";
+import { canAccessSalesOrderModule } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import {
@@ -17,6 +18,11 @@ import {
   updateCollectionTask,
   upsertCollectionTask,
 } from "@/lib/payments/mutations";
+import { moveToRecycleBin } from "@/lib/recycle-bin/lifecycle";
+import type {
+  MoveToRecycleBinResult,
+  RecycleReasonInputCode,
+} from "@/lib/recycle-bin/types";
 import { reviewSalesOrder, saveSalesOrder } from "@/lib/sales-orders/mutations";
 import { updateLogisticsFollowUpTask } from "@/lib/shipping/mutations";
 import { reviewTradeOrder } from "@/lib/trade-orders/mutations";
@@ -27,6 +33,68 @@ function getErrorMessage(error: unknown) {
   }
 
   return error instanceof Error ? error.message : "操作失败，请稍后重试。";
+}
+
+export type TradeOrderRecycleActionResult = {
+  status: "success" | "error";
+  message: string;
+  recycleStatus?: MoveToRecycleBinResult["status"];
+};
+
+async function getTradeOrderActionActor() {
+  const session = await auth();
+
+  if (!session?.user) {
+    throw new Error("登录已失效，请重新登录后再试。");
+  }
+
+  return {
+    id: session.user.id,
+    role: session.user.role,
+    permissionCodes: session.user.permissionCodes,
+  };
+}
+
+function getTradeOrderRecycleReasonCode(formData: FormData): RecycleReasonInputCode {
+  const reasonCode = String(formData.get("reasonCode") ?? "");
+
+  if (
+    reasonCode === "mistaken_creation" ||
+    reasonCode === "test_data" ||
+    reasonCode === "duplicate" ||
+    reasonCode === "no_longer_needed" ||
+    reasonCode === "other"
+  ) {
+    return reasonCode;
+  }
+
+  return "mistaken_creation";
+}
+
+function buildTradeOrderRecycleActionResult(
+  result: MoveToRecycleBinResult,
+): TradeOrderRecycleActionResult {
+  if (result.status === "created") {
+    return {
+      status: "success",
+      message: "成交主单已移入回收站。",
+      recycleStatus: result.status,
+    };
+  }
+
+  if (result.status === "already_in_recycle_bin") {
+    return {
+      status: "success",
+      message: "成交主单已在回收站中。",
+      recycleStatus: result.status,
+    };
+  }
+
+  return {
+    status: "error",
+    message: result.message,
+    recycleStatus: result.status,
+  };
 }
 
 export async function saveSalesOrderAction(formData: FormData) {
@@ -232,6 +300,51 @@ export async function reviewTradeOrderAction(formData: FormData) {
   } catch (error) {
     rethrowRedirectError(error);
     redirect(buildRedirectTarget(redirectTo, "error", getErrorMessage(error)));
+  }
+}
+
+export async function moveTradeOrderToRecycleBinAction(
+  formData: FormData,
+): Promise<TradeOrderRecycleActionResult> {
+  try {
+    const actor = await getTradeOrderActionActor();
+
+    if (!canAccessSalesOrderModule(actor.role)) {
+      return {
+        status: "error",
+        message: "当前角色没有处理成交主单回收站动作的权限。",
+      };
+    }
+
+    const tradeOrderId = getFormValue(formData, "id");
+
+    if (!tradeOrderId) {
+      return {
+        status: "error",
+        message: "成交主单参数不完整，请刷新后重试。",
+      };
+    }
+
+    const result = await moveToRecycleBin(actor, {
+      targetType: "TRADE_ORDER",
+      targetId: tradeOrderId,
+      reasonCode: getTradeOrderRecycleReasonCode(formData),
+      reasonText: getFormValue(formData, "reasonText"),
+    });
+
+    if (result.status !== "blocked") {
+      revalidatePath("/orders");
+      revalidatePath("/fulfillment");
+      revalidatePath(`/orders/${tradeOrderId}`);
+      revalidatePath("/recycle-bin");
+    }
+
+    return buildTradeOrderRecycleActionResult(result);
+  } catch (error) {
+    return {
+      status: "error",
+      message: getErrorMessage(error),
+    };
   }
 }
 

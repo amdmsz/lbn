@@ -113,6 +113,7 @@ export function OrderFulfillmentCenter({
   canReviewTradeOrder,
   canManageShippingReporting,
   reviewTradeOrderAction,
+  moveTradeOrderToRecycleBinAction,
   createShippingExportBatchAction,
   updateShippingAction,
   bulkUpdateShippingAction,
@@ -127,6 +128,11 @@ export function OrderFulfillmentCenter({
   canReviewTradeOrder: boolean;
   canManageShippingReporting: boolean;
   reviewTradeOrderAction: (formData: FormData) => Promise<void>;
+  moveTradeOrderToRecycleBinAction: (formData: FormData) => Promise<{
+    status: "success" | "error";
+    message: string;
+    recycleStatus?: "created" | "already_in_recycle_bin" | "blocked";
+  }>;
   createShippingExportBatchAction: (formData: FormData) => Promise<void>;
   updateShippingAction: (formData: FormData) => Promise<void>;
   bulkUpdateShippingAction: (formData: FormData) => Promise<void>;
@@ -445,6 +451,7 @@ export function OrderFulfillmentCenter({
           canCreate={canCreateTradeOrder}
           canReview={canReviewTradeOrder}
           reviewAction={reviewTradeOrderAction}
+          moveToRecycleBinAction={moveTradeOrderToRecycleBinAction}
           basePath="/fulfillment"
           baseSearchParams={{ tab: "trade-orders" }}
         />

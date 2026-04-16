@@ -1,6 +1,12 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
+import { useState, useTransition } from "react";
+import { ActionBanner } from "@/components/shared/action-banner";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/shared/status-badge";
+import { TradeOrderRecycleDialog } from "@/components/trade-orders/trade-order-recycle-dialog";
 import { formatDateTime } from "@/lib/customers/metadata";
 import {
   buildFulfillmentBatchesHref,
@@ -23,7 +29,8 @@ import {
   buildTradeOrderCollectionHref,
   buildTradeOrderPaymentHref,
 } from "@/lib/trade-orders/execution-links";
-import { getTradeOrderDetail } from "@/lib/trade-orders/queries";
+import type { getTradeOrderDetail } from "@/lib/trade-orders/queries";
+import type { TradeOrderRecycleReasonCode } from "@/lib/trade-orders/recycle-guards";
 
 type TradeOrderDetailData = NonNullable<Awaited<ReturnType<typeof getTradeOrderDetail>>>;
 type TradeOrderDetail = TradeOrderDetailData["order"];
@@ -32,6 +39,11 @@ type TradeOrderPaymentRecordItem = TradeOrderDetail["paymentRecords"][number];
 type TradeOrderCollectionTaskItem = TradeOrderDetail["collectionTasks"][number];
 type SalesOrderItem = TradeOrderDetail["salesOrders"][number];
 type SalesOrderExecutionItem = NonNullable<TradeOrderDetail["executionSummary"]>["salesOrders"][number];
+type TradeOrderRecycleActionResult = {
+  status: "success" | "error";
+  message: string;
+  recycleStatus?: "created" | "already_in_recycle_bin" | "blocked";
+};
 
 type BatchReference = {
   id: string;
@@ -356,6 +368,7 @@ export function TradeOrderDetailSection({
   canContinueEdit,
   continueEditHref,
   reviewAction,
+  moveToRecycleBinAction,
 }: Readonly<{
   order: TradeOrderDetail;
   operationLogs: OperationLogItem[];
@@ -363,7 +376,14 @@ export function TradeOrderDetailSection({
   canContinueEdit: boolean;
   continueEditHref?: string;
   reviewAction: (formData: FormData) => Promise<void>;
+  moveToRecycleBinAction: (formData: FormData) => Promise<TradeOrderRecycleActionResult>;
 }>) {
+  const [notice, setNotice] = useState<TradeOrderRecycleActionResult | null>(null);
+  const [recycleDialogOpen, setRecycleDialogOpen] = useState(false);
+  const [recycleReason, setRecycleReason] =
+    useState<TradeOrderRecycleReasonCode>("mistaken_creation");
+  const [recyclePending, startRecycleTransition] = useTransition();
+  const router = useRouter();
   const plannedSupplierGroups = Array.from(
     order.components.reduce<
       Map<
@@ -518,8 +538,48 @@ export function TradeOrderDetailSection({
   });
   const batchHref = buildFulfillmentBatchesHref({ keyword: order.tradeNo });
 
+  function openRecycleDialog() {
+    setNotice(null);
+    setRecycleReason("mistaken_creation");
+    setRecycleDialogOpen(true);
+  }
+
+  function closeRecycleDialog() {
+    setRecycleDialogOpen(false);
+    setRecycleReason("mistaken_creation");
+  }
+
+  function handleRecycleConfirm() {
+    if (!order.recycleGuard.canMoveToRecycleBin) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.set("id", order.id);
+    formData.set("reasonCode", recycleReason);
+
+    startRecycleTransition(async () => {
+      const result = await moveToRecycleBinAction(formData);
+      setNotice(result);
+      closeRecycleDialog();
+
+      if (
+        result.recycleStatus === "created" ||
+        result.recycleStatus === "already_in_recycle_bin"
+      ) {
+        router.refresh();
+      }
+    });
+  }
+
   return (
     <div className="space-y-6">
+      {notice ? (
+        <ActionBanner tone={notice.status === "success" ? "success" : "danger"}>
+          {notice.message}
+        </ActionBanner>
+      ) : null}
+
       <section className="crm-section-card">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-3">
@@ -575,6 +635,13 @@ export function TradeOrderDetailSection({
             <Link href={batchHref} className="crm-button crm-button-secondary">
               {latestBatch ? `查看批次 ${latestBatch.exportNo}` : "查看批次记录"}
             </Link>
+            <button
+              type="button"
+              onClick={openRecycleDialog}
+              className="crm-button crm-button-secondary"
+            >
+              {order.recycleGuard.canMoveToRecycleBin ? "移入回收站" : "查看阻断关系"}
+            </button>
           </div>
         </div>
       </section>
@@ -1252,6 +1319,25 @@ export function TradeOrderDetailSection({
           </div>
         </section>
       </div>
+
+      <TradeOrderRecycleDialog
+        open={recycleDialogOpen}
+        item={{
+          tradeNo: order.tradeNo,
+          customerName: order.customer.name,
+          receiverName: order.receiverNameSnapshot,
+          receiverPhone: order.receiverPhoneSnapshot,
+          tradeStatus: order.tradeStatus,
+          reviewStatus: order.reviewStatus,
+          updatedAt: order.updatedAt,
+        }}
+        guard={order.recycleGuard}
+        reason={recycleReason}
+        onReasonChange={setRecycleReason}
+        onClose={closeRecycleDialog}
+        onConfirm={handleRecycleConfirm}
+        pending={recyclePending}
+      />
     </div>
   );
 }

@@ -24,6 +24,7 @@ import { buildFulfillmentTradeOrdersHref } from "@/lib/fulfillment/navigation";
 import { getSalesOrderDetail } from "@/lib/sales-orders/queries";
 import { getTradeOrderDetail } from "@/lib/trade-orders/queries";
 import {
+  moveTradeOrderToRecycleBinAction,
   reviewPaymentRecordAction,
   reviewSalesOrderAction,
   reviewTradeOrderAction,
@@ -118,6 +119,7 @@ export default async function SalesOrderDetailPage({
                 : undefined
             }
             reviewAction={reviewTradeOrderAction}
+            moveToRecycleBinAction={moveTradeOrderToRecycleBinAction}
           />
         </DataTableWrapper>
       </div>

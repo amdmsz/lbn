@@ -11,10 +11,12 @@ import { z } from "zod";
 import { getParamValue, parseActionNotice } from "@/lib/action-notice";
 import { canAccessSalesOrderModule, canCreateSalesOrder } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
+import { getTradeOrderRecycleTarget } from "@/lib/recycle-bin/trade-order-adapter";
 import {
   findActiveTradeOrderRecycleEntry,
   listActiveTradeOrderIds,
 } from "@/lib/trade-orders/recycle";
+import type { TradeOrderRecycleGuard } from "@/lib/trade-orders/recycle-guards";
 import { getSalesOrderCreateFormOptions } from "@/lib/sales-orders/queries";
 import { getTradeOrderExecutionSummaryMap } from "@/lib/trade-orders/execution-summary";
 
@@ -65,6 +67,19 @@ const tradeOrderFiltersSchema = z.object({
 });
 
 const TRADE_ORDER_PAGE_SIZE = 10;
+
+function getRequiredTradeOrderRecycleGuard(
+  recycleGuardByTradeOrderId: Map<string, TradeOrderRecycleGuard>,
+  tradeOrderId: string,
+) {
+  const recycleGuard = recycleGuardByTradeOrderId.get(tradeOrderId);
+
+  if (!recycleGuard) {
+    throw new Error("Trade-order recycle guard is missing.");
+  }
+
+  return recycleGuard;
+}
 
 async function getViewerTeamId(viewer: TradeOrderViewer) {
   if (viewer.role !== "SUPERVISOR") {
@@ -970,6 +985,17 @@ export async function getTradeOrdersPageData(
     });
   }
 
+  const recycleTargets = await Promise.all(
+    pageTradeOrderIds.map((tradeOrderId) =>
+      getTradeOrderRecycleTarget(prisma, "TRADE_ORDER", tradeOrderId),
+    ),
+  );
+  const recycleGuardByTradeOrderId = new Map(
+    recycleTargets
+      .filter((target): target is NonNullable<(typeof recycleTargets)[number]> => Boolean(target))
+      .map((target) => [target.targetId, target.guard]),
+  );
+
   return {
     notice: parseActionNotice(rawSearchParams),
     summary: {
@@ -1017,6 +1043,7 @@ export async function getTradeOrdersPageData(
       })),
       executionSummary: executionSummaryMap.get(item.id) ?? null,
       latestExportBatch: latestExportBatchByTradeOrderId.get(item.id) ?? null,
+      recycleGuard: getRequiredTradeOrderRecycleGuard(recycleGuardByTradeOrderId, item.id),
     })),
     pagination: {
       page,
@@ -1287,6 +1314,11 @@ export async function getTradeOrderDetail(
   }
 
   const executionSummaryMap = await getTradeOrderExecutionSummaryMap([tradeOrder.id]);
+  const recycleTarget = await getTradeOrderRecycleTarget(prisma, "TRADE_ORDER", tradeOrder.id);
+
+  if (!recycleTarget) {
+    throw new Error("Trade-order recycle target is missing.");
+  }
 
   const operationLogs = await prisma.operationLog.findMany({
     where: {
@@ -1376,6 +1408,7 @@ export async function getTradeOrderDetail(
       })),
       collectionTasks: tradeOrder.collectionTasks,
       executionSummary: executionSummaryMap.get(tradeOrder.id) ?? null,
+      recycleGuard: recycleTarget.guard,
     },
     operationLogs,
   };

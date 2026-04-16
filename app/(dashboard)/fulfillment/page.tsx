@@ -19,7 +19,10 @@ import {
   getShippingOperationsPageData,
 } from "@/lib/shipping/queries";
 import { getTradeOrdersPageData } from "@/lib/trade-orders/queries";
-import { reviewTradeOrderAction } from "../orders/actions";
+import {
+  moveTradeOrderToRecycleBinAction,
+  reviewTradeOrderAction,
+} from "../orders/actions";
 import {
   bulkUpdateSalesOrderShippingAction,
   createShippingExportBatchAction,
@@ -86,6 +89,7 @@ export default async function FulfillmentPage({
       canReviewTradeOrder={canReviewSalesOrder(session.user.role)}
       canManageShippingReporting={canManageShippingReporting(session.user.role)}
       reviewTradeOrderAction={reviewTradeOrderAction}
+      moveTradeOrderToRecycleBinAction={moveTradeOrderToRecycleBinAction}
       createShippingExportBatchAction={createShippingExportBatchAction}
       updateShippingAction={updateSalesOrderShippingAction}
       bulkUpdateShippingAction={bulkUpdateSalesOrderShippingAction}
