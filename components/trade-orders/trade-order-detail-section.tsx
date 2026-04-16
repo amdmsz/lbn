@@ -30,7 +30,10 @@ import {
   buildTradeOrderPaymentHref,
 } from "@/lib/trade-orders/execution-links";
 import type { getTradeOrderDetail } from "@/lib/trade-orders/queries";
-import type { TradeOrderRecycleReasonCode } from "@/lib/trade-orders/recycle-guards";
+import type {
+  TradeOrderRecycleGuard,
+  TradeOrderRecycleReasonCode,
+} from "@/lib/trade-orders/recycle-guards";
 
 type TradeOrderDetailData = NonNullable<Awaited<ReturnType<typeof getTradeOrderDetail>>>;
 type TradeOrderDetail = TradeOrderDetailData["order"];
@@ -43,6 +46,7 @@ type TradeOrderRecycleActionResult = {
   status: "success" | "error";
   message: string;
   recycleStatus?: "created" | "already_in_recycle_bin" | "blocked";
+  guard?: TradeOrderRecycleGuard;
 };
 
 type BatchReference = {
@@ -537,9 +541,15 @@ export function TradeOrderDetailSection({
     stageView: getTradeOrderShippingStage(executionSummary),
   });
   const batchHref = buildFulfillmentBatchesHref({ keyword: order.tradeNo });
+  const recycleGuard =
+    notice?.recycleStatus === "blocked" && notice.guard ? notice.guard : order.recycleGuard;
+  order = {
+    ...order,
+    recycleGuard,
+  };
 
   function openRecycleDialog() {
-    setNotice(null);
+    setNotice((current) => (current?.recycleStatus === "blocked" ? current : null));
     setRecycleReason("mistaken_creation");
     setRecycleDialogOpen(true);
   }
@@ -560,15 +570,23 @@ export function TradeOrderDetailSection({
 
     startRecycleTransition(async () => {
       const result = await moveToRecycleBinAction(formData);
-      setNotice(result);
-      closeRecycleDialog();
 
       if (
         result.recycleStatus === "created" ||
         result.recycleStatus === "already_in_recycle_bin"
       ) {
+        setNotice(result);
+        closeRecycleDialog();
         router.refresh();
+        return;
       }
+
+      if (result.recycleStatus === "blocked" && result.guard) {
+        setNotice(result);
+        return;
+      }
+
+      setNotice(result);
     });
   }
 
@@ -1331,7 +1349,7 @@ export function TradeOrderDetailSection({
           reviewStatus: order.reviewStatus,
           updatedAt: order.updatedAt,
         }}
-        guard={order.recycleGuard}
+        guard={notice?.recycleStatus === "blocked" && notice.guard ? notice.guard : order.recycleGuard}
         reason={recycleReason}
         onReasonChange={setRecycleReason}
         onClose={closeRecycleDialog}

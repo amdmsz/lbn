@@ -34,6 +34,7 @@ type TradeOrderRecycleActionResult = {
   status: "success" | "error";
   message: string;
   recycleStatus?: "created" | "already_in_recycle_bin" | "blocked";
+  guard?: TradeOrderRecycleGuard;
 };
 type RecycleDialogState = {
   id: string;
@@ -187,7 +188,8 @@ function getOwnerLabel(item: TradeOrderItem) {
 }
 
 function TradeOrderRow({
-  item,
+  item: initialItem,
+  recycleGuard,
   redirectTo,
   canCreate,
   canReview,
@@ -195,12 +197,17 @@ function TradeOrderRow({
   onOpenRecycleDialog,
 }: Readonly<{
   item: TradeOrderItem;
+  recycleGuard: TradeOrderRecycleGuard;
   redirectTo: string;
   canCreate: boolean;
   canReview: boolean;
   reviewAction: (formData: FormData) => Promise<void>;
   onOpenRecycleDialog: (item: TradeOrderItem) => void;
 }>) {
+  const item = {
+    ...initialItem,
+    recycleGuard,
+  };
   const product = getProductSummary(item);
   const traceTarget = getTraceTarget(item);
   const shippingHref = getShippingHref(item);
@@ -486,6 +493,9 @@ export function TradeOrdersSection({
   );
   const [notice, setNotice] = useState<TradeOrderRecycleActionResult | null>(null);
   const [recycleDialogState, setRecycleDialogState] = useState<RecycleDialogState>(null);
+  const [recycleGuardOverrides, setRecycleGuardOverrides] = useState<
+    Record<string, TradeOrderRecycleGuard>
+  >({});
   const [recycleReason, setRecycleReason] =
     useState<TradeOrderRecycleReasonCode>("mistaken_creation");
   const [recyclePending, startRecycleTransition] = useTransition();
@@ -535,7 +545,7 @@ export function TradeOrdersSection({
       tradeStatus: item.tradeStatus,
       reviewStatus: item.reviewStatus,
       updatedAt: item.updatedAt,
-      guard: item.recycleGuard,
+      guard: recycleGuardOverrides[item.id] ?? item.recycleGuard,
     });
   }
 
@@ -555,15 +565,36 @@ export function TradeOrdersSection({
 
     startRecycleTransition(async () => {
       const result = await moveToRecycleBinAction(formData);
-      setNotice(result);
-      closeRecycleDialog();
 
       if (
         result.recycleStatus === "created" ||
         result.recycleStatus === "already_in_recycle_bin"
       ) {
+        setNotice(result);
+        closeRecycleDialog();
         router.refresh();
+        return;
       }
+
+      if (result.recycleStatus === "blocked" && result.guard) {
+        const blockedGuard = result.guard;
+        setNotice(null);
+        setRecycleGuardOverrides((current) => ({
+          ...current,
+          [recycleDialogState.id]: blockedGuard,
+        }));
+        setRecycleDialogState((current) =>
+          current
+            ? {
+                ...current,
+                guard: blockedGuard,
+              }
+            : current,
+        );
+        return;
+      }
+
+      setNotice(result);
     });
   }
 
@@ -741,6 +772,7 @@ export function TradeOrdersSection({
                 <TradeOrderRow
                   key={item.id}
                   item={item}
+                  recycleGuard={recycleGuardOverrides[item.id] ?? item.recycleGuard}
                   redirectTo={currentPageHref}
                   canCreate={canCreate}
                   canReview={canReview}

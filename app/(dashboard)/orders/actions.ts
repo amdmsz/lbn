@@ -39,6 +39,7 @@ export type TradeOrderRecycleActionResult = {
   status: "success" | "error";
   message: string;
   recycleStatus?: MoveToRecycleBinResult["status"];
+  guard?: MoveToRecycleBinResult["guard"];
 };
 
 async function getTradeOrderActionActor() {
@@ -94,6 +95,7 @@ function buildTradeOrderRecycleActionResult(
     status: "error",
     message: result.message,
     recycleStatus: result.status,
+    guard: result.guard,
   };
 }
 
