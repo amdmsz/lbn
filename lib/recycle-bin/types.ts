@@ -22,6 +22,9 @@ export type RecycleLifecycleActor = {
 };
 
 export type RecycleGuardBlocker = {
+  code?: string;
+  group?: string;
+  suggestedAction?: string;
   name: string;
   count: number;
   blocksMoveToRecycleBin: boolean;
@@ -62,6 +65,9 @@ export type MoveToRecycleBinInput = {
 };
 
 export type RecycleRestoreBlocker = {
+  code?: string;
+  group?: string;
+  suggestedAction?: string;
   name: string;
   description: string;
 };
@@ -117,6 +123,9 @@ export type RestoreFromRecycleBinResult =
     };
 
 export type RecyclePurgeBlocker = {
+  code?: string;
+  group?: string;
+  suggestedAction?: string;
   name: string;
   description: string;
 };

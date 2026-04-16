@@ -14,6 +14,7 @@ import { mapCallResultCodeToLegacyEnum } from "@/lib/calls/metadata";
 import {
   getEnabledCallResultDefinitionByCode,
 } from "@/lib/calls/settings";
+import { assertCustomerNotInActiveRecycleBin } from "@/lib/customers/recycle";
 import { prisma } from "@/lib/db/prisma";
 
 export type CallRecordActor = {
@@ -101,6 +102,8 @@ export async function createCallRecord(
   if (!customer) {
     throw new Error("客户不存在，或你无权访问该客户。");
   }
+
+  await assertCustomerNotInActiveRecycleBin(prisma, customer.id);
 
   if (actor.role === "SALES" && customer.ownerId !== actor.id) {
     throw new Error("销售只能为自己负责的客户新增通话记录。");

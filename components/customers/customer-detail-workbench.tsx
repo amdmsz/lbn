@@ -5,6 +5,7 @@ import { CustomerCallRecordsSection } from "@/components/customers/customer-call
 import { CustomerDetailTabs } from "@/components/customers/customer-detail-tabs";
 import { ImportedCustomerDeletionPanel } from "@/components/customers/imported-customer-deletion-panel";
 import { CustomerLiveRecordsSection } from "@/components/customers/customer-live-records-section";
+import { CustomerRecycleEntry } from "@/components/customers/customer-recycle-entry";
 import {
   CustomerMobileDialButton,
   MobileCallFollowUpSheet,
@@ -30,6 +31,7 @@ import {
   getCustomerDetailTabGroupMeta,
   getCustomerDetailTabMeta,
   getCustomerLevelLabel,
+  getCustomerStatusLabel,
   type CustomerDetailTab,
 } from "@/lib/customers/metadata";
 import {
@@ -64,6 +66,7 @@ import {
   getShippingStatusLabel,
 } from "@/lib/fulfillment/metadata";
 import { getLeadSourceLabel, getLeadStatusLabel } from "@/lib/leads/metadata";
+import type { RecycleMoveGuard } from "@/lib/recycle-bin/types";
 import { cn } from "@/lib/utils";
 
 type CustomerDetailShellData = NonNullable<
@@ -114,6 +117,13 @@ type ImportedCustomerDeletionReviewAction = (input: {
   status: "success" | "error";
   message: string;
   redirectTo: string | null;
+}>;
+
+type MoveCustomerToRecycleBinAction = (formData: FormData) => Promise<{
+  status: "success" | "error";
+  message: string;
+  recycleStatus?: "created" | "already_in_recycle_bin" | "blocked";
+  guard?: RecycleMoveGuard;
 }>;
 
 type CustomerDetailTabDataMap = {
@@ -1086,6 +1096,8 @@ export function CustomerDetailWorkbench({
   canCreateSalesOrders,
   tradeOrderComposer,
   navigationContext,
+  customerRecycleGuard,
+  moveCustomerToRecycleBinAction,
   saveTradeOrderDraftAction,
   submitTradeOrderForReviewAction,
   requestImportedCustomerDeletionAction,
@@ -1106,6 +1118,8 @@ export function CustomerDetailWorkbench({
   tradeOrderComposer: TradeOrderComposerData | null;
   saveTradeOrderDraftAction?: (formData: FormData) => Promise<void>;
   submitTradeOrderForReviewAction?: (formData: FormData) => Promise<void>;
+  customerRecycleGuard: RecycleMoveGuard | null;
+  moveCustomerToRecycleBinAction?: MoveCustomerToRecycleBinAction;
   requestImportedCustomerDeletionAction: ImportedCustomerDeletionAction;
   reviewImportedCustomerDeletionAction: ImportedCustomerDeletionReviewAction;
   deleteImportedCustomerDirectAction: ImportedCustomerDeletionAction;
@@ -1293,6 +1307,23 @@ export function CustomerDetailWorkbench({
                     {primaryAction.secondaryLabel}
                   </SmartLink>
                 </div>
+
+                {customerRecycleGuard && moveCustomerToRecycleBinAction ? (
+                  <CustomerRecycleEntry
+                    key={`${shell.id}-${customerRecycleGuard.canMoveToRecycleBin ? "move" : "blocked"}-${customerRecycleGuard.blockers.length}`}
+                    customerId={shell.id}
+                    customerName={shell.name}
+                    phone={shell.phone}
+                    statusLabel={getCustomerStatusLabel(shell.status)}
+                    ownershipLabel={ownershipLabel}
+                    ownerLabel={formatOwnerLabel(shell.owner)}
+                    lastEffectiveFollowUpAt={shell.lastEffectiveFollowUpAt}
+                    approvedTradeOrderCount={shell.tradeOrderSummary.approvedCount}
+                    linkedLeadCount={shell.importSummary.linkedLeadCount}
+                    initialGuard={customerRecycleGuard}
+                    moveToRecycleBinAction={moveCustomerToRecycleBinAction}
+                  />
+                ) : null}
               </div>
             </div>
           </div>

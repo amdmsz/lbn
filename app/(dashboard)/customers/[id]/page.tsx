@@ -25,10 +25,13 @@ import {
   getCustomerDetailWechatData,
   parseCustomerDetailTab,
 } from "@/lib/customers/queries";
+import { prisma } from "@/lib/db/prisma";
 import { parseMasterDataNotice } from "@/lib/master-data/metadata";
+import { getCustomerRecycleTarget } from "@/lib/recycle-bin/customer-adapter";
 import { getCustomerTradeOrderComposerData } from "@/lib/trade-orders/queries";
 import {
   deleteImportedCustomerDirectAction,
+  moveCustomerToRecycleBinAction,
   requestImportedCustomerDeletionAction,
   saveTradeOrderDraftAction,
   reviewImportedCustomerDeletionAction,
@@ -151,6 +154,7 @@ export default async function CustomerDetailPage({
           tradeOrderId || undefined,
         )
       : null;
+  const customerRecycleTarget = await getCustomerRecycleTarget(prisma, "CUSTOMER", id);
 
   return (
     <CustomerDetailWorkbench
@@ -178,6 +182,8 @@ export default async function CustomerDetailPage({
       }
       canCreateSalesOrders={canCreateSalesOrders}
       tradeOrderComposer={tradeOrderComposer}
+      customerRecycleGuard={customerRecycleTarget?.guard ?? null}
+      moveCustomerToRecycleBinAction={moveCustomerToRecycleBinAction}
       saveTradeOrderDraftAction={saveTradeOrderDraftAction}
       submitTradeOrderForReviewAction={submitTradeOrderForReviewAction}
       requestImportedCustomerDeletionAction={requestImportedCustomerDeletionAction}

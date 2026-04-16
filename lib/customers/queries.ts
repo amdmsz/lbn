@@ -27,6 +27,10 @@ import {
   type CustomerQueueKey,
   type CustomerWorkStatusKey,
 } from "@/lib/customers/metadata";
+import {
+  findActiveCustomerRecycleEntry,
+  listActiveCustomerIds,
+} from "@/lib/customers/recycle";
 import { parseCustomerImportOperationLogData } from "@/lib/customers/customer-import-operation-log";
 import { resolveImportedCustomerDeletionGuard } from "@/lib/customers/imported-customer-deletion";
 import { prisma } from "@/lib/db/prisma";
@@ -1428,6 +1432,7 @@ export async function getCustomerCenterData(
 
   const actor = await getCustomerCenterActor(viewer.id);
   const visibleWhere = getCustomerVisibilityWhereInput(actor);
+  const recycledCustomerIds = await listActiveCustomerIds(prisma);
   const [teams, salesUsers, customerSnapshots, activeTags] = await Promise.all([
     actor.role === "ADMIN"
       ? prisma.team.findMany({
@@ -1492,7 +1497,20 @@ export async function getCustomerCenterData(
       },
     }),
     prisma.customer.findMany({
-      where: visibleWhere,
+      where: {
+        AND: [
+          visibleWhere,
+          ...(recycledCustomerIds.length > 0
+            ? [
+                {
+                  id: {
+                    notIn: recycledCustomerIds,
+                  },
+                } satisfies Prisma.CustomerWhereInput,
+              ]
+            : []),
+        ],
+      },
       select: customerSnapshotSelect,
     }),
     getActiveTagOptions(),
@@ -2242,6 +2260,12 @@ export async function getCustomerDetail(viewer: CustomerViewer, customerId: stri
 async function getVisibleCustomerDetailBase(viewer: CustomerViewer, customerId: string) {
   if (!canAccessCustomerModule(viewer.role)) {
     throw new Error("You do not have access to customers.");
+  }
+
+  const recycledEntry = await findActiveCustomerRecycleEntry(prisma, customerId);
+
+  if (recycledEntry) {
+    return null;
   }
 
   const actor = await getCustomerCenterActor(viewer.id);

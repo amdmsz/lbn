@@ -16,6 +16,7 @@ import {
   getCustomerScope,
 } from "@/lib/auth/access";
 import type { ExtraPermissionCode } from "@/lib/auth/permissions";
+import { assertCustomerNotInActiveRecycleBin } from "@/lib/customers/recycle";
 import { touchCustomerEffectiveFollowUpFromLiveInvitationTx } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
 import { findActiveRecycleEntry } from "@/lib/recycle-bin/repository";
@@ -215,6 +216,8 @@ export async function upsertLiveInvitation(
       "\u5ba2\u6237\u4e0d\u5b58\u5728\uff0c\u6216\u4f60\u65e0\u6743\u8bbf\u95ee\u8be5\u5ba2\u6237\u3002",
     );
   }
+
+  await assertCustomerNotInActiveRecycleBin(prisma, customer.id);
 
   if (customer.ownerId !== actor.id) {
     throw new Error(

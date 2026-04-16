@@ -13,7 +13,9 @@ import {
 import { auth } from "@/lib/auth/session";
 import { getRecycleBinPageData } from "@/lib/recycle-bin/queries";
 
-function getActiveTabLabel(activeTab: "master-data" | "live-sessions" | "leads") {
+function getActiveTabLabel(
+  activeTab: Awaited<ReturnType<typeof getRecycleBinPageData>>["activeTab"],
+) {
   switch (activeTab) {
     case "master-data":
       return "商品主数据";
@@ -21,6 +23,10 @@ function getActiveTabLabel(activeTab: "master-data" | "live-sessions" | "leads")
       return "直播场次";
     case "leads":
       return "线索";
+    case "customers":
+      return "客户";
+    case "trade-orders":
+      return "交易订单";
     default:
       return "回收站";
   }
@@ -29,10 +35,6 @@ function getActiveTabLabel(activeTab: "master-data" | "live-sessions" | "leads")
 function getResolvedActiveTabLabel(
   activeTab: Awaited<ReturnType<typeof getRecycleBinPageData>>["activeTab"],
 ) {
-  if (activeTab === "trade-orders") {
-    return "交易订单";
-  }
-
   return getActiveTabLabel(activeTab);
 }
 
@@ -70,7 +72,7 @@ export default async function RecycleBinPage({
           <PageHeader
             eyebrow="回收站治理工作台"
             title="回收站"
-            description="统一治理已移入回收站的商品主数据、直播场次与线索。第一版提供恢复、永久删除、基础筛选和 blocker 详情，不扩批量动作与高级筛选系统。"
+            description="统一治理已移入回收站的商品主数据、直播场次、线索、交易订单与客户。第一版只保留恢复、永久删除、基础筛选和 blocker 详情，不扩批量动作与复杂治理树。"
             meta={
               <>
                 <StatusBadge label={activeTabLabel} variant="info" />

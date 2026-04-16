@@ -10,6 +10,7 @@ import {
 import { z } from "zod";
 import { getParamValue, parseActionNotice } from "@/lib/action-notice";
 import { canAccessSalesOrderModule, canCreateSalesOrder } from "@/lib/auth/access";
+import { findActiveCustomerRecycleEntry } from "@/lib/customers/recycle";
 import { prisma } from "@/lib/db/prisma";
 import { getTradeOrderRecycleTarget } from "@/lib/recycle-bin/trade-order-adapter";
 import {
@@ -312,6 +313,12 @@ export async function getCustomerTradeOrderComposerData(
   ]);
 
   if (!customer) {
+    return null;
+  }
+
+  const customerRecycleEntry = await findActiveCustomerRecycleEntry(prisma, customer.id);
+
+  if (customerRecycleEntry) {
     return null;
   }
 

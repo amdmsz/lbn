@@ -19,6 +19,7 @@ import {
 } from "@prisma/client";
 import { z } from "zod";
 import { canCreateSalesOrder, canReviewSalesOrder } from "@/lib/auth/access";
+import { assertCustomerNotInActiveRecycleBin } from "@/lib/customers/recycle";
 import { touchCustomerEffectiveFollowUpFromTradeOrderTx } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
 import { syncSalesOrderPaymentArtifacts } from "@/lib/payments/mutations";
@@ -468,6 +469,8 @@ async function resolveDraftContext(
   if (!customer) {
     throw new Error("Customer not found or out of scope.");
   }
+
+  await assertCustomerNotInActiveRecycleBin(prisma, customer.id);
 
   if (existingTradeOrder && existingTradeOrder.customerId !== customer.id) {
     throw new Error("Trade order does not belong to the current customer.");

@@ -10,10 +10,16 @@ import {
 } from "@/lib/action-notice";
 import { auth } from "@/lib/auth/session";
 import {
+  CUSTOMER_RECYCLE_REASON_OPTIONS,
+  type CustomerRecycleReasonCode,
+} from "@/lib/customers/recycle";
+import {
   deleteImportedCustomersDirect,
   requestImportedCustomerDeletion,
   reviewImportedCustomerDeletion,
 } from "@/lib/customers/imported-customer-deletion";
+import { moveToRecycleBin } from "@/lib/recycle-bin/lifecycle";
+import type { MoveToRecycleBinResult } from "@/lib/recycle-bin/types";
 import {
   saveTradeOrderDraft,
   submitTradeOrderForReview,
@@ -34,6 +40,13 @@ export type ImportedCustomerDeletionActionResult = {
   status: "success" | "error";
   message: string;
   redirectTo: string | null;
+};
+
+export type CustomerRecycleActionResult = {
+  status: "success" | "error";
+  message: string;
+  recycleStatus?: MoveToRecycleBinResult["status"];
+  guard?: MoveToRecycleBinResult["guard"];
 };
 
 function getErrorMessage(error: unknown) {
@@ -79,6 +92,43 @@ function revalidateImportedCustomerDeletionPaths(input: {
   if (input.batchId) {
     revalidatePath(`/lead-imports/${input.batchId}`);
   }
+}
+
+function getCustomerRecycleReasonCode(formData: FormData): CustomerRecycleReasonCode {
+  const value = getFormValue(formData, "reasonCode");
+
+  return CUSTOMER_RECYCLE_REASON_OPTIONS.some((option) => option.value === value)
+    ? (value as CustomerRecycleReasonCode)
+    : "mistaken_creation";
+}
+
+function buildCustomerRecycleActionResult(
+  result: MoveToRecycleBinResult,
+): CustomerRecycleActionResult {
+  if (result.status === "created") {
+    return {
+      status: "success",
+      message: "客户已移入回收站。",
+      recycleStatus: result.status,
+      guard: result.guard,
+    };
+  }
+
+  if (result.status === "already_in_recycle_bin") {
+    return {
+      status: "success",
+      message: "客户已在回收站中。",
+      recycleStatus: result.status,
+      guard: result.guard,
+    };
+  }
+
+  return {
+    status: "error",
+    message: result.message,
+    recycleStatus: result.status,
+    guard: result.guard,
+  };
 }
 
 function parseTradeOrderLinesJson(rawValue: string) {
@@ -324,6 +374,53 @@ export async function submitTradeOrderForReviewAction(formData: FormData) {
   } catch (error) {
     rethrowRedirectError(error);
     redirect(buildRedirectTarget(errorRedirect, "error", getErrorMessage(error)));
+  }
+}
+
+export async function moveCustomerToRecycleBinAction(
+  formData: FormData,
+): Promise<CustomerRecycleActionResult> {
+  try {
+    const session = await auth();
+
+    if (!session?.user) {
+      redirect("/login");
+    }
+
+    const customerId = getFormValue(formData, "id");
+
+    if (!customerId) {
+      return {
+        status: "error",
+        message: "客户参数不完整，请刷新后重试。",
+      };
+    }
+
+    const result = await moveToRecycleBin(
+      {
+        id: session.user.id,
+        role: session.user.role,
+        permissionCodes: session.user.permissionCodes,
+      },
+      {
+        targetType: "CUSTOMER",
+        targetId: customerId,
+        reasonCode: getCustomerRecycleReasonCode(formData),
+      },
+    );
+
+    if (result.status !== "blocked") {
+      revalidatePath("/customers");
+      revalidatePath(`/customers/${customerId}`);
+      revalidatePath("/recycle-bin");
+    }
+
+    return buildCustomerRecycleActionResult(result);
+  } catch (error) {
+    return {
+      status: "error",
+      message: getErrorMessage(error),
+    };
   }
 }
 

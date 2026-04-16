@@ -5,6 +5,7 @@ import {
   canCreateWechatRecord,
   getCustomerScope,
 } from "@/lib/auth/access";
+import { assertCustomerNotInActiveRecycleBin } from "@/lib/customers/recycle";
 import { touchCustomerEffectiveFollowUpFromWechatTx } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
 import { parseWechatTags } from "@/lib/wechat/metadata";
@@ -85,6 +86,8 @@ export async function createWechatRecord(
   if (!customer) {
     throw new Error("客户不存在，或你无权访问该客户。");
   }
+
+  await assertCustomerNotInActiveRecycleBin(prisma, customer.id);
 
   if (customer.ownerId !== actor.id) {
     throw new Error("销售只能为自己负责的客户新增微信记录。");

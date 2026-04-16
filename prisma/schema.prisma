@@ -462,6 +462,7 @@ enum RecycleTargetType {
   LIVE_SESSION
   LEAD
   TRADE_ORDER
+  CUSTOMER
 }
 
 enum RecycleDomain {
@@ -469,6 +470,7 @@ enum RecycleDomain {
   LIVE_SESSION
   LEAD
   TRADE_ORDER
+  CUSTOMER
 }
 
 enum RecycleEntryStatus {

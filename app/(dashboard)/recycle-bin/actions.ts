@@ -76,7 +76,8 @@ function revalidateTargetRoutes(input: {
     | "SUPPLIER"
     | "LIVE_SESSION"
     | "LEAD"
-    | "TRADE_ORDER";
+    | "TRADE_ORDER"
+    | "CUSTOMER";
   restoreRouteSnapshot?: string;
 }) {
   revalidatePath("/recycle-bin");
@@ -88,6 +89,8 @@ function revalidateTargetRoutes(input: {
   } else if (input.targetType === "TRADE_ORDER") {
     revalidatePath("/orders");
     revalidatePath("/fulfillment");
+  } else if (input.targetType === "CUSTOMER") {
+    revalidatePath("/customers");
   } else {
     revalidatePath("/products");
   }

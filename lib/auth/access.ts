@@ -409,6 +409,7 @@ export function canAccessRecycleBinModule(
   permissionCodes: readonly ExtraPermissionCode[] = [],
 ) {
   return (
+    canAccessCustomerModule(role) ||
     canAccessSalesOrderModule(role) ||
     canAccessLeadModule(role) ||
     canManageProducts(role, permissionCodes) ||

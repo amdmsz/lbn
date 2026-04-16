@@ -424,3 +424,148 @@
   - do not reopen schema work for public pool in this release-prep stage
   - do not regress sales execution back to `Lead`
   - do not move Prisma enum runtime objects back into frontend/shared settings or metadata code
+
+---
+
+## 12. Customer RecycleBinEntry Planning Addendum
+
+状态：方案已确认，待进入实现前评审
+
+定位：
+
+- `Customer recycle` 只处理误建轻客户。
+- `Customer recycle` 不替代 `/customers/public-pool` ownership lifecycle。
+- `Customer recycle` 不替代 `DORMANT / LOST / BLACKLISTED` 状态治理。
+- `Customer recycle` 不替代 merge / merge release。
+- 本阶段只固定 `Customer` 的 recycle planning 与 service contract，不展开 `Lead / TradeOrder / SalesOrder`。
+
+轻客户 / 重客户边界：
+
+- 轻客户：仅有基础识别信息，最多保留当前 `ownerId`，仍处于 `ACTIVE + PRIVATE`，尚未进入 ownership、公海、跟进、成交、支付、履约、物流、归并链。
+- 重客户：只要进入以下任一链路，就不再属于可删除对象：
+  - ownership lifecycle / public-pool / claim-lock
+  - 销售跟进执行链
+  - 成交 / 资金 / 履约 / 物流链
+  - merge / import 审计链
+- `ownerId` 单独存在不直接判重；否则手工误建客户几乎没有纠错空间。
+
+允许 moveToRecycleBin 的 Customer：
+
+- `status = ACTIVE`
+- `ownershipMode = PRIVATE`
+- `publicPoolEnteredAt / publicPoolReason / claimLockedUntil / lastEffectiveFollowUpAt / publicPoolTeamId / lastOwnerId` 为空
+- `ownershipEvents = 0`
+- `followUpTasks / callRecords / wechatRecords / liveInvitations = 0`
+- `orders / tradeOrders / paymentPlans / paymentRecords / collectionTasks / giftRecords / shippingTasks / logisticsFollowUpTasks / codCollectionRecords = 0`
+- `mergeLogs = 0`
+
+不允许 moveToRecycleBin 的 Customer：
+
+- `DORMANT / LOST / BLACKLISTED`：继续走客户状态治理，不走 recycle。
+- `PUBLIC / LOCKED` 或已有公海字段：继续走 `/customers/public-pool`。
+- 已有 `ownershipEvents / lastOwnerId / claimLockedUntil / lastEffectiveFollowUpAt`：说明已进入 ownership 或跟进保护链。
+- 已有跟进、通话、微信、直播邀约痕迹：继续走跟进终止、失效、公海等业务动作。
+- 已有关联订单、支付、催收、礼品、履约、物流、COD：继续保留客户真相，不删除。
+- 已进入 merge 审计链：继续走 merge，不删除。
+
+service contract 固定口径：
+
+- move guard 返回：
+  - `mode = move`
+  - `decision = movable | blocked`
+  - `summary`
+  - `targetSnapshot`
+    - `targetType = CUSTOMER`
+    - `targetId`
+    - `name`
+    - `phone`
+    - `status`
+    - `ownershipMode`
+    - `ownerLabel`
+  - `blockers`
+    - `code`
+    - `name`
+    - `group`
+    - `description`
+    - `suggestedAction`
+  - `blockerGroups`
+    - `group`
+    - `summary`
+    - `items`
+
+- restore guard 返回：
+  - `mode = restore`
+  - `decision = restorable | blocked`
+  - `summary`
+  - `targetSnapshot`
+  - `blockers`
+  - `blockerGroups`
+- restore 固定规则：
+  - `DORMANT / LOST / BLACKLISTED` 阻断 move，但不阻断 restore。
+  - 跟进、成交、支付、履约、物流痕迹不阻断 restore。
+  - restore 只保留最小硬阻断：
+    - `对象缺失`
+    - `已完成归并且当前对象不应恢复为独立客户`
+
+- purge blocker 返回：
+  - `mode = purge`
+  - `decision = purgeable | blocked`
+  - `summary`
+  - `targetSnapshot`
+  - `blockers`
+  - `blockerGroups`
+- purge 固定规则：
+  - `purge` 是最严 guard。
+  - move blocker 中的阻断项，默认同时阻断 purge。
+  - `关联线索`、`客户标签` 额外阻断 purge。
+
+blocker 分组与建议动作：
+
+- `对象状态`
+  - blocker：`对象缺失`
+  - suggestedAction：先确认原始客户记录是否仍存在；不存在则不再恢复或清理。
+- `客户生命周期`
+  - blocker：`非 ACTIVE 客户`
+  - suggestedAction：改走 `DORMANT / LOST / BLACKLISTED` 状态治理，不走 recycle。
+- `公海与归属链`
+  - blocker：`公海客户`、`锁定客户`、`已有归属历史`
+  - suggestedAction：改走 `/customers/public-pool` ownership lifecycle。
+- `销售跟进痕迹`
+  - blocker：`已有有效跟进时间`、`跟进任务`、`通话记录`、`微信记录`、`直播邀请`
+  - suggestedAction：保留客户，改走跟进终止、冻结、失效或公海治理。
+- `成交与资金链`
+  - blocker：`历史订单`、`成交主单`、`礼品记录`、`支付计划`、`支付记录`、`催收任务`
+  - suggestedAction：保留客户，在订单 / 支付域做取消、作废、关闭等业务动作。
+- `履约与物流链`
+  - blocker：`发货任务`、`物流跟进`、`COD 回款记录`
+  - suggestedAction：保留客户，在履约 / 物流链完成后续治理。
+- `归并与导入审计`
+  - blocker：`归并审计链`、`关联线索`、`客户标签`
+  - suggestedAction：保留 merge / import 审计上下文，不做 recycle 清理。
+- `其他阻断`
+  - suggestedAction：保留服务端返回原始阻断项，避免前端擅自推断。
+
+`/recycle-bin?tab=customers` 规划口径：
+
+- tab：`customers`
+- targetType：`customer`
+- 列表字段至少包括：
+  - `name`
+  - `phone`
+  - `status`
+  - `level`
+  - `ownershipMode`
+  - `ownerLabel`
+  - `deletedAt`
+  - `deletedBy`
+  - `deleteReason`
+  - `blockerSummary`
+- 风险补充字段至少包括：
+  - `lastEffectiveFollowUpAt`
+  - `tradeOrderSummary.approvedCount`
+  - `importSummary.linkedLeadCount`
+
+当前规划边界：
+
+- 当前只固定实现前评审口径，不在本阶段展开 schema、旧 migration 或页面接线。
+- 服务端 guard 继续作为唯一真相来源，前端只消费结果，不在组件里重写客户可删规则。

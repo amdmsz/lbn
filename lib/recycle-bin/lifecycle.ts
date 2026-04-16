@@ -1,12 +1,20 @@
 import { Prisma, RecycleEntryStatus, type RecycleTargetType } from "@prisma/client";
 import {
   canAccessLeadModule,
+  canAccessCustomerModule,
   canManageLiveSessions,
   canManageProducts,
   canManageSuppliers,
   canAccessSalesOrderModule,
 } from "@/lib/auth/access";
+import { assertActorCanAccessCustomerRecycleTarget } from "@/lib/customers/recycle";
 import { prisma } from "@/lib/db/prisma";
+import {
+  buildCustomerPurgeGuard,
+  buildCustomerRestoreGuard,
+  getCustomerRecycleTarget,
+  purgeCustomerTarget,
+} from "@/lib/recycle-bin/customer-adapter";
 import {
   buildLeadPurgeGuard,
   buildLeadRestoreGuard,
@@ -101,6 +109,14 @@ function ensureMoveToRecycleBinPermission(
     return;
   }
 
+  if (targetType === "CUSTOMER") {
+    if (!canAccessCustomerModule(actor.role)) {
+      throw new Error("You do not have permission to manage customer recycle-bin actions.");
+    }
+
+    return;
+  }
+
   throw new Error("Unsupported recycle-bin target type.");
 }
 
@@ -140,6 +156,12 @@ async function loadRecycleTarget(
     return tradeOrderTarget;
   }
 
+  const customerTarget = await getCustomerRecycleTarget(tx, targetType, targetId);
+
+  if (customerTarget) {
+    return customerTarget;
+  }
+
   return getLeadRecycleTarget(tx, targetType, targetId);
 }
 
@@ -148,7 +170,7 @@ async function buildRestoreGuard(
   input: {
     targetType: RecycleTargetType;
     targetId: string;
-    domain: "PRODUCT_MASTER_DATA" | "LIVE_SESSION" | "LEAD" | "TRADE_ORDER";
+    domain: "PRODUCT_MASTER_DATA" | "LIVE_SESSION" | "LEAD" | "TRADE_ORDER" | "CUSTOMER";
     restoreRouteSnapshot: string;
   },
 ): Promise<RecycleRestoreGuard> {
@@ -168,6 +190,12 @@ async function buildRestoreGuard(
 
   if (tradeOrderGuard) {
     return tradeOrderGuard;
+  }
+
+  const customerGuard = await buildCustomerRestoreGuard(tx, input);
+
+  if (customerGuard) {
+    return customerGuard;
   }
 
   const leadGuard = await buildLeadRestoreGuard(tx, input);
@@ -194,7 +222,7 @@ async function buildPurgeGuard(
   input: {
     targetType: RecycleTargetType;
     targetId: string;
-    domain: "PRODUCT_MASTER_DATA" | "LIVE_SESSION" | "LEAD" | "TRADE_ORDER";
+    domain: "PRODUCT_MASTER_DATA" | "LIVE_SESSION" | "LEAD" | "TRADE_ORDER" | "CUSTOMER";
   },
 ): Promise<RecyclePurgeGuard> {
   const masterDataGuard = await buildMasterDataPurgeGuard(tx, input);
@@ -213,6 +241,12 @@ async function buildPurgeGuard(
 
   if (tradeOrderGuard) {
     return tradeOrderGuard;
+  }
+
+  const customerGuard = await buildCustomerPurgeGuard(tx, input);
+
+  if (customerGuard) {
+    return customerGuard;
   }
 
   const leadGuard = await buildLeadPurgeGuard(tx, input);
@@ -261,6 +295,12 @@ async function purgeRecycleTarget(
   const purgedTradeOrder = await purgeTradeOrderTarget(tx, input);
 
   if (purgedTradeOrder) {
+    return;
+  }
+
+  const purgedCustomer = await purgeCustomerTarget(tx, input);
+
+  if (purgedCustomer) {
     return;
   }
 
@@ -345,6 +385,15 @@ function getRestoreOperationMeta(input: {
     };
   }
 
+  if (input.targetType === "CUSTOMER") {
+    return {
+      module: "CUSTOMER" as const,
+      targetType: "CUSTOMER" as const,
+      action: "customer.restored_from_recycle_bin",
+      description: `Restored customer from recycle bin: ${input.titleSnapshot}`,
+    };
+  }
+
   throw new Error("Unsupported recycle-bin restore target type.");
 }
 
@@ -406,6 +455,15 @@ function getPurgeOperationMeta(input: {
     };
   }
 
+  if (input.targetType === "CUSTOMER") {
+    return {
+      module: "CUSTOMER" as const,
+      targetType: "CUSTOMER" as const,
+      action: "customer.purged_from_recycle_bin",
+      description: `Permanently deleted customer from recycle bin: ${input.titleSnapshot}`,
+    };
+  }
+
   throw new Error("Unsupported recycle-bin purge target type.");
 }
 
@@ -413,9 +471,18 @@ export async function moveToRecycleBin(
   actor: RecycleLifecycleActor,
   input: MoveToRecycleBinInput,
 ): Promise<MoveToRecycleBinResult> {
-  ensureMoveToRecycleBinPermission(actor, input.targetType);
+  if (input.targetType !== "CUSTOMER") {
+    ensureMoveToRecycleBinPermission(actor, input.targetType);
+  }
 
   return prisma.$transaction(async (tx) => {
+    if (input.targetType === "CUSTOMER") {
+      await assertActorCanAccessCustomerRecycleTarget(tx, actor, {
+        customerId: input.targetId,
+      });
+      ensureMoveToRecycleBinPermission(actor, input.targetType);
+    }
+
     const existingEntry = await findActiveRecycleEntry(tx, input.targetType, input.targetId);
     const target = await loadRecycleTarget(tx, input.targetType, input.targetId);
 
@@ -509,7 +576,15 @@ export async function restoreFromRecycleBin(
       throw new Error("Only active recycle-bin entries can be restored.");
     }
 
-    ensureRestorePermission(actor, entry.targetType);
+    if (entry.targetType === "CUSTOMER") {
+      await assertActorCanAccessCustomerRecycleTarget(tx, actor, {
+        customerId: entry.targetId,
+        snapshotJson: entry.blockerSnapshotJson,
+      });
+      ensureRestorePermission(actor, entry.targetType);
+    } else {
+      ensureRestorePermission(actor, entry.targetType);
+    }
 
     const guard = await buildRestoreGuard(tx, {
       targetType: entry.targetType,

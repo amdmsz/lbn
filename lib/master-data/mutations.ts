@@ -12,6 +12,7 @@ import {
   getCustomerScope,
   getLeadScope,
 } from "@/lib/auth/access";
+import { assertCustomerNotInActiveRecycleBin } from "@/lib/customers/recycle";
 import { prisma } from "@/lib/db/prisma";
 import { isValidHexColor } from "@/lib/master-data/metadata";
 import { findActiveRecycleEntry } from "@/lib/recycle-bin/repository";
@@ -676,6 +677,8 @@ export async function assignCustomerTag(
       throw new Error("客户不存在，或你无权访问该客户。");
     }
 
+    await assertCustomerNotInActiveRecycleBin(tx, customer.id);
+
     if (!tag) {
       throw new Error("标签不存在或已停用。");
     }
@@ -747,6 +750,8 @@ export async function removeCustomerTag(
     if (!customer) {
       throw new Error("客户不存在，或你无权访问该客户。");
     }
+
+    await assertCustomerNotInActiveRecycleBin(tx, customer.id);
 
     const relation = await tx.customerTag.findUnique({
       where: {

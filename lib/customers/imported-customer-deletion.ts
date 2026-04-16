@@ -13,6 +13,7 @@ import {
   canReviewImportedCustomerDeletion,
 } from "@/lib/auth/access";
 import { parseCustomerImportOperationLogData } from "@/lib/customers/customer-import-operation-log";
+import { assertCustomerNotInActiveRecycleBin } from "@/lib/customers/recycle";
 import {
   getImportedCustomerDeletionRequestStatusLabel,
   getImportedCustomerDeletionRequestStatusVariant,
@@ -819,6 +820,17 @@ async function createImportedCustomerDeletionOperationLogTx(
   });
 }
 
+async function assertImportedCustomerDeletionCustomerNotRecycled(
+  tx: Prisma.TransactionClient | typeof prisma,
+  customerId: string,
+) {
+  await assertCustomerNotInActiveRecycleBin(
+    tx,
+    customerId,
+    "当前客户已移入回收站，导入删除旧链路不能继续执行。",
+  );
+}
+
 export async function resolveImportedCustomerDeletionGuardTx(
   tx: Prisma.TransactionClient | typeof prisma,
   actor: DeletionActor,
@@ -829,6 +841,8 @@ export async function resolveImportedCustomerDeletionGuardTx(
   if (!customer) {
     return null;
   }
+
+  await assertImportedCustomerDeletionCustomerNotRecycled(tx, customer.id);
 
   const [{ latestRequest, pendingRequest }, source, suggestedReviewer] =
     await Promise.all([
@@ -862,6 +876,8 @@ export async function executeImportedCustomerDeletionTx(
     reason: string;
   } & ImportedCustomerDeletionExecutionContext,
 ) {
+  await assertImportedCustomerDeletionCustomerNotRecycled(tx, input.customer.id);
+
   const detachedLeads = await tx.lead.updateMany({
     where: {
       customerId: input.customer.id,
@@ -1032,6 +1048,8 @@ export async function requestImportedCustomerDeletion(
       if (!customer) {
         throw new Error("当前客户不存在、已删除，或不在你的可见范围内。");
       }
+
+      await assertImportedCustomerDeletionCustomerNotRecycled(tx, customer.id);
 
       const [{ latestRequest, pendingRequest }, source] = await Promise.all([
         findImportedCustomerDeletionRequestsTx(tx, customer.id),
@@ -1254,6 +1272,8 @@ export async function reviewImportedCustomerDeletion(
         };
       }
 
+      await assertImportedCustomerDeletionCustomerNotRecycled(tx, customer.id);
+
       const [{ latestRequest, pendingRequest }, source, suggestedReviewer] =
         await Promise.all([
           findImportedCustomerDeletionRequestsTx(tx, customer.id),
@@ -1347,6 +1367,8 @@ export async function deleteImportedCustomersDirect(
               message: "客户不存在、已删除，或不在当前可管理范围内。",
             };
           }
+
+          await assertImportedCustomerDeletionCustomerNotRecycled(tx, customer.id);
 
           const [{ latestRequest, pendingRequest }, source, suggestedReviewer] =
             await Promise.all([

@@ -1,14 +1,28 @@
 import type { LeadStatus, RecycleDomain, RecycleTargetType } from "@prisma/client";
 import { getParamValue } from "@/lib/action-notice";
 import {
+  canAccessCustomerModule,
   canAccessSalesOrderModule,
   canAccessLeadModule,
   canManageLiveSessions,
   canManageProducts,
   canManageSuppliers,
 } from "@/lib/auth/access";
-import { formatDateTime } from "@/lib/customers/metadata";
+import {
+  formatDateTime,
+  getCustomerLevelLabel,
+  getCustomerStatusLabel,
+} from "@/lib/customers/metadata";
+import { getCustomerOwnershipModeLabel } from "@/lib/customers/public-pool-metadata";
+import {
+  listVisibleCustomerRecycleTargetIds,
+  parseCustomerRecycleSnapshot,
+} from "@/lib/customers/recycle";
 import { prisma } from "@/lib/db/prisma";
+import {
+  buildCustomerPurgeGuard,
+  buildCustomerRestoreGuard,
+} from "@/lib/recycle-bin/customer-adapter";
 import {
   buildLeadPurgeGuard,
   buildLeadRestoreGuard,
@@ -40,7 +54,8 @@ export type RecycleBinTabValue =
   | "master-data"
   | "live-sessions"
   | "leads"
-  | "trade-orders";
+  | "trade-orders"
+  | "customers";
 export type RecycleBinDeletedRangeValue = "all" | "today" | "last_7d" | "last_30d";
 export type RecycleBinFilterStateValue =
   | "all"
@@ -54,7 +69,8 @@ export type RecycleBinTargetFilterValue =
   | "supplier"
   | "live_session"
   | "lead"
-  | "trade_order";
+  | "trade_order"
+  | "customer";
 
 type RecycleBinListEntry = Awaited<
   ReturnType<typeof listActiveRecycleEntries>
@@ -92,6 +108,7 @@ export type RecycleBinBlockerGroup = {
   items: Array<{
     name: string;
     description: string;
+    suggestedAction?: string;
   }>;
 };
 
@@ -116,6 +133,14 @@ export type RecycleBinListItem = {
   canRestore: boolean;
   canPurge: boolean;
   purgeRequiresAdmin: boolean;
+  customerSummary?: {
+    phone: string;
+    levelLabel: string;
+    ownershipLabel: string;
+    lastEffectiveFollowUpAtLabel: string | null;
+    approvedTradeOrderCount: number;
+    linkedLeadCount: number;
+  };
 };
 
 function getSnapshotObject(entry: RecycleBinListEntry) {
@@ -168,6 +193,10 @@ function getResolvedTargetTypeLabel(targetType: RecycleBinListEntry["targetType"
     return "成交主单";
   }
 
+  if (targetType === "CUSTOMER") {
+    return "客户";
+  }
+
   return getTargetTypeLabel(targetType);
 }
 
@@ -183,6 +212,10 @@ function getTargetTypeLabel(targetType: RecycleBinListEntry["targetType"]) {
       return "直播场次";
     case "LEAD":
       return "线索";
+    case "TRADE_ORDER":
+      return "成交主单";
+    case "CUSTOMER":
+      return "客户";
     default:
       return "对象";
   }
@@ -243,9 +276,13 @@ function buildRecycleBinHref(tab: RecycleBinTabValue, filters: RecycleBinFilters
           ? filters.targetType === "lead"
             ? filters.targetType
             : "all"
-          : filters.targetType === "trade_order"
-            ? filters.targetType
-            : "all";
+          : tab === "trade-orders"
+            ? filters.targetType === "trade_order"
+              ? filters.targetType
+              : "all"
+            : filters.targetType === "customer"
+              ? filters.targetType
+              : "all";
 
   if (targetTypeValue !== "all") {
     params.set("targetType", targetTypeValue);
@@ -259,10 +296,12 @@ function buildTabs(input: {
   canAccessLiveSessions: boolean;
   canAccessLeads: boolean;
   canAccessTradeOrders: boolean;
+  canAccessCustomers: boolean;
   masterDataCount: number;
   liveSessionCount: number;
   leadCount: number;
   tradeOrderCount: number;
+  customerCount: number;
   filters: RecycleBinFilters;
 }) {
   const tabs: RecycleBinTab[] = [];
@@ -303,6 +342,15 @@ function buildTabs(input: {
     });
   }
 
+  if (input.canAccessCustomers) {
+    tabs.push({
+      value: "customers",
+      label: "客户",
+      href: buildRecycleBinHref("customers", input.filters),
+      count: input.customerCount,
+    });
+  }
+
   return tabs;
 }
 
@@ -319,7 +367,11 @@ function getDomainFromTab(tab: RecycleBinTabValue): RecycleDomain {
     return "LEAD";
   }
 
-  return "TRADE_ORDER";
+  if (tab === "trade-orders") {
+    return "TRADE_ORDER";
+  }
+
+  return "CUSTOMER";
 }
 
 function normalizeDeletedRange(value: string): RecycleBinDeletedRangeValue {
@@ -348,6 +400,10 @@ function normalizeTargetType(
 
   if (activeTab === "trade-orders") {
     return value === "trade_order" ? "trade_order" : "all";
+  }
+
+  if (activeTab === "customers") {
+    return value === "customer" ? "customer" : "all";
   }
 
   return value === "product" || value === "product_sku" || value === "supplier"
@@ -404,6 +460,8 @@ function getTargetFilterValue(targetType: RecycleTargetType): RecycleBinTargetFi
       return "lead";
     case "TRADE_ORDER":
       return "trade_order";
+    case "CUSTOMER":
+      return "customer";
     default:
       return "all";
   }
@@ -461,6 +519,12 @@ async function buildRestoreGuard(
     return tradeOrderGuard;
   }
 
+  const customerGuard = await buildCustomerRestoreGuard(prisma, input);
+
+  if (customerGuard) {
+    return customerGuard;
+  }
+
   const leadGuard = await buildLeadRestoreGuard(prisma, input);
 
   if (leadGuard) {
@@ -505,6 +569,12 @@ async function buildPurgeGuard(
 
   if (tradeOrderGuard) {
     return tradeOrderGuard;
+  }
+
+  const customerGuard = await buildCustomerPurgeGuard(prisma, input);
+
+  if (customerGuard) {
+    return customerGuard;
   }
 
   const leadGuard = await buildLeadPurgeGuard(prisma, input);
@@ -604,6 +674,16 @@ function buildTargetTypeOptions(
     ];
   }
 
+  if (activeTab === "customers") {
+    return [
+      {
+        value: "customer",
+        label: "客户",
+        count: entries.length,
+      },
+    ];
+  }
+
   const counts = new Map<RecycleBinTargetFilterValue, number>([
     ["product", 0],
     ["product_sku", 0],
@@ -641,7 +721,7 @@ function appendBlockerGroup(
   groups: Map<string, RecycleBinBlockerGroup>,
   title: string,
   description: string,
-  blocker: { name: string; description: string },
+  blocker: { name: string; description: string; suggestedAction?: string },
 ) {
   const existing = groups.get(title);
 
@@ -945,9 +1025,93 @@ function buildTradeOrderBlockerGroups(
   return Array.from(groups.values());
 }
 
+function buildCustomerBlockerGroups(
+  blockers: Array<{
+    name: string;
+    description: string;
+    group?: string;
+    suggestedAction?: string;
+  }>,
+) {
+  const groupMeta = new Map<
+    string,
+    {
+      title: string;
+      description: string;
+    }
+  >([
+    [
+      "object_state",
+      {
+        title: "对象状态",
+        description: "先确认原始客户记录是否仍存在，再决定是否继续恢复或清理。",
+      },
+    ],
+    [
+      "customer_lifecycle",
+      {
+        title: "客户生命周期",
+        description: "Customer recycle 只承接误建轻客户，不替代 DORMANT / LOST / BLACKLISTED。",
+      },
+    ],
+    [
+      "ownership_lifecycle",
+      {
+        title: "公海与归属链",
+        description: "当前客户已进入 ownership lifecycle，应继续走公海 / claim / 归属治理。",
+      },
+    ],
+    [
+      "sales_engagement",
+      {
+        title: "销售跟进痕迹",
+        description: "一旦已有有效跟进、通话、微信或邀约记录，就不再属于误建轻客户。",
+      },
+    ],
+    [
+      "transaction_chain",
+      {
+        title: "成交与资金链",
+        description: "客户一旦进入订单、支付、催收链，就必须保留交易真相与审计上下文。",
+      },
+    ],
+    [
+      "fulfillment_chain",
+      {
+        title: "履约与物流链",
+        description: "客户一旦进入履约、物流或 COD 链，就不再适合按误建客户处理。",
+      },
+    ],
+    [
+      "import_audit",
+      {
+        title: "归并与导入审计",
+        description: "涉及 merge / import / 标签上下文时，应优先保留审计链，不直接 purge。",
+      },
+    ],
+  ]);
+  const groups = new Map<string, RecycleBinBlockerGroup>();
+
+  for (const blocker of blockers) {
+    const meta = groupMeta.get(blocker.group ?? "") ?? {
+      title: "其他阻断",
+      description: "保留服务端返回的原始阻断项，不在前端重写额外规则。",
+    };
+
+    appendBlockerGroup(groups, meta.title, meta.description, blocker);
+  }
+
+  return Array.from(groups.values());
+}
+
 function buildBlockerGroups(input: {
   targetType: RecycleBinListEntry["targetType"];
-  blockers: Array<{ name: string; description: string }>;
+  blockers: Array<{
+    name: string;
+    description: string;
+    group?: string;
+    suggestedAction?: string;
+  }>;
   mode: "restore" | "purge";
 }): RecycleBinBlockerGroup[] {
   if (input.blockers.length === 0) {
@@ -964,6 +1128,10 @@ function buildBlockerGroups(input: {
 
   if (input.targetType === "TRADE_ORDER") {
     return buildTradeOrderBlockerGroups(input.blockers);
+  }
+
+  if (input.targetType === "CUSTOMER") {
+    return buildCustomerBlockerGroups(input.blockers);
   }
 
   return buildMasterDataBlockerGroups(input.blockers, input.mode);
@@ -992,6 +1160,40 @@ function getTradeOrderStatusSnapshotLabel(statusSnapshot: string | null) {
     default:
       return null;
   }
+}
+
+function getCustomerListSummary(entry: RecycleBinListEntry) {
+  const snapshot = parseCustomerRecycleSnapshot(entry.blockerSnapshotJson);
+
+  if (!snapshot) {
+    return null;
+  }
+
+  const statusLabel = snapshot.status
+    ? getCustomerStatusLabel(snapshot.status as never)
+    : "未知状态";
+  const levelLabel = snapshot.level
+    ? getCustomerLevelLabel(snapshot.level as never)
+    : "未知等级";
+  const ownershipLabel = snapshot.ownershipMode
+    ? getCustomerOwnershipModeLabel(snapshot.ownershipMode as never)
+    : "未知归属";
+
+  return {
+    phone: snapshot.phone ?? entry.secondarySnapshot ?? "--",
+    ownerLabel: snapshot.ownerLabel ?? "--",
+    statusLabel: `${statusLabel} / ${levelLabel} / ${ownershipLabel}`,
+    customerSummary: {
+      phone: snapshot.phone ?? entry.secondarySnapshot ?? "--",
+      levelLabel,
+      ownershipLabel,
+      lastEffectiveFollowUpAtLabel: snapshot.lastEffectiveFollowUpAt
+        ? formatDateTime(new Date(snapshot.lastEffectiveFollowUpAt))
+        : null,
+      approvedTradeOrderCount: snapshot.approvedTradeOrderCount,
+      linkedLeadCount: snapshot.linkedLeadCount,
+    },
+  };
 }
 
 async function loadLeadRuntimeMetadata(entries: RecycleBinListEntry[]) {
@@ -1050,25 +1252,36 @@ async function buildListItems(
       const purgeGuard = await buildPurgeGuard(entry);
       const leadMetadata =
         entry.targetType === "LEAD" ? leadRuntimeMetadata.get(entry.targetId) : null;
+      const customerSummary =
+        entry.targetType === "CUSTOMER" ? getCustomerListSummary(entry) : null;
+      const ownerLabel =
+        entry.targetType === "LEAD"
+          ? leadMetadata?.ownerLabel ?? "未分配"
+          : entry.targetType === "TRADE_ORDER"
+            ? getSnapshotString(entry, "ownerName") ?? "未分配"
+            : entry.targetType === "CUSTOMER"
+              ? customerSummary?.ownerLabel ?? "--"
+              : null;
 
       return {
         entryId: entry.id,
         targetType: entry.targetType,
         targetTypeLabel: getResolvedTargetTypeLabel(entry.targetType),
         name: entry.titleSnapshot,
-        secondaryLabel: entry.secondarySnapshot || "--",
+        secondaryLabel:
+          entry.targetType === "CUSTOMER"
+            ? customerSummary?.phone ?? entry.secondarySnapshot ?? "--"
+            : entry.secondarySnapshot || "--",
         statusLabel:
           entry.targetType === "LEAD"
             ? getLeadStatusSnapshotLabel(entry.originalStatusSnapshot)
             : entry.targetType === "TRADE_ORDER"
               ? getTradeOrderStatusSnapshotLabel(entry.originalStatusSnapshot)
-            : null,
-        ownerLabel: entry.targetType === "LEAD" ? leadMetadata?.ownerLabel ?? "未分配" : null,
-        ...(entry.targetType === "TRADE_ORDER"
-          ? {
-              ownerLabel: getSnapshotString(entry, "ownerName") ?? "未分配",
-            }
-          : {}),
+              : entry.targetType === "CUSTOMER"
+                ? customerSummary?.statusLabel ?? null
+                : null,
+        ownerLabel,
+        customerSummary: customerSummary?.customerSummary,
         deleteReasonLabel: getDeleteReasonLabel(entry.deleteReasonCode),
         deleteReasonText: entry.deleteReasonText,
         deletedAtLabel: formatDateTime(entry.deletedAt),
@@ -1112,8 +1325,15 @@ export async function getRecycleBinPageData(
   );
   const canAccessLeads = canAccessLeadModule(viewer.role);
   const canAccessTradeOrders = canAccessSalesOrderModule(viewer.role);
+  const canAccessCustomers = canAccessCustomerModule(viewer.role);
 
-  const [masterDataCount, liveSessionCount, leadCount, tradeOrderCount] = await Promise.all([
+  const [
+    masterDataCount,
+    liveSessionCount,
+    leadCount,
+    tradeOrderCount,
+    customerEntries,
+  ] = await Promise.all([
     canAccessMasterData
       ? countActiveRecycleEntries(prisma, { domain: "PRODUCT_MASTER_DATA" })
       : Promise.resolve(0),
@@ -1126,7 +1346,14 @@ export async function getRecycleBinPageData(
     canAccessTradeOrders
       ? countActiveRecycleEntries(prisma, { domain: "TRADE_ORDER" })
       : Promise.resolve(0),
+    canAccessCustomers
+      ? listActiveRecycleEntries(prisma, { domain: "CUSTOMER" })
+      : Promise.resolve([]),
   ]);
+  const visibleCustomerEntryIds = canAccessCustomers
+    ? await listVisibleCustomerRecycleTargetIds(prisma, viewer, customerEntries)
+    : new Set<string>();
+  const customerCount = visibleCustomerEntryIds.size;
 
   const requestedTab = getParamValue(searchParams?.tab);
   const defaultTab: RecycleBinTabValue = canAccessMasterData
@@ -1135,7 +1362,9 @@ export async function getRecycleBinPageData(
       ? "live-sessions"
       : canAccessLeads
         ? "leads"
-        : "trade-orders";
+        : canAccessTradeOrders
+          ? "trade-orders"
+          : "customers";
   const activeTab: RecycleBinTabValue =
     requestedTab === "master-data" && canAccessMasterData
       ? "master-data"
@@ -1145,7 +1374,9 @@ export async function getRecycleBinPageData(
           ? "leads"
           : requestedTab === "trade-orders" && canAccessTradeOrders
             ? "trade-orders"
-          : defaultTab;
+            : requestedTab === "customers" && canAccessCustomers
+              ? "customers"
+              : defaultTab;
 
   const filters = parseFilters(activeTab, searchParams);
   const tabs = buildTabs({
@@ -1153,16 +1384,21 @@ export async function getRecycleBinPageData(
     canAccessLiveSessions,
     canAccessLeads,
     canAccessTradeOrders,
+    canAccessCustomers,
     masterDataCount,
     liveSessionCount,
     leadCount,
     tradeOrderCount,
+    customerCount,
     filters,
   });
 
-  const activeEntries = await listActiveRecycleEntries(prisma, {
-    domain: getDomainFromTab(activeTab),
-  });
+  const activeEntries =
+    activeTab === "customers"
+      ? customerEntries.filter((entry) => visibleCustomerEntryIds.has(entry.targetId))
+      : await listActiveRecycleEntries(prisma, {
+          domain: getDomainFromTab(activeTab),
+        });
 
   const deletedByOptions = buildDeletedByOptions(activeEntries);
   const targetTypeOptions = buildTargetTypeOptions(activeTab, activeEntries);

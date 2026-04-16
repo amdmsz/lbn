@@ -34,16 +34,16 @@ function getTabLabel(activeTab: RecycleBinTabValue) {
       return "直播场次";
     case "leads":
       return "线索";
+    case "customers":
+      return "客户";
+    case "trade-orders":
+      return "交易订单";
     default:
       return "回收站";
   }
 }
 
 function getResolvedTabLabel(activeTab: RecycleBinTabValue) {
-  if (activeTab === "trade-orders") {
-    return "交易订单";
-  }
-
   return getTabLabel(activeTab);
 }
 
@@ -93,7 +93,8 @@ export function RecycleBinWorkbench({
     [items, selectedEntryId],
   );
 
-  const showLeadColumns = activeTab === "leads" || activeTab === "trade-orders";
+  const showStatusColumns =
+    activeTab === "leads" || activeTab === "trade-orders" || activeTab === "customers";
 
   function closeDialog() {
     setDialogState(null);
@@ -146,8 +147,8 @@ export function RecycleBinWorkbench({
                     <th>对象类型</th>
                     <th>名称</th>
                     <th>次标识</th>
-                    {showLeadColumns ? <th>删除前状态</th> : null}
-                    {showLeadColumns ? <th>删除前负责人</th> : null}
+                    {showStatusColumns ? <th>删除前状态</th> : null}
+                    {showStatusColumns ? <th>删除前负责人</th> : null}
                     <th>删除原因</th>
                     <th>删除时间</th>
                     <th>删除人</th>
@@ -198,10 +199,10 @@ export function RecycleBinWorkbench({
                           </div>
                         </td>
                         <td className="text-black/56">{item.secondaryLabel}</td>
-                        {showLeadColumns ? (
+                        {showStatusColumns ? (
                           <td className="text-black/62">{item.statusLabel ?? "--"}</td>
                         ) : null}
-                        {showLeadColumns ? (
+                        {showStatusColumns ? (
                           <td className="text-black/62">{item.ownerLabel ?? "--"}</td>
                         ) : null}
                         <td>{item.deleteReasonLabel}</td>
@@ -301,6 +302,31 @@ export function RecycleBinWorkbench({
                   ) : null}
                 </div>
               </div>
+
+              {selectedItem.customerSummary ? (
+                <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
+                  <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                    客户补充信息
+                  </p>
+                  <div className="space-y-2">
+                    <DetailRow label="手机号" value={selectedItem.customerSummary.phone} />
+                    <DetailRow label="客户等级" value={selectedItem.customerSummary.levelLabel} />
+                    <DetailRow label="归属模式" value={selectedItem.customerSummary.ownershipLabel} />
+                    <DetailRow
+                      label="最近有效跟进"
+                      value={selectedItem.customerSummary.lastEffectiveFollowUpAtLabel ?? "暂无"}
+                    />
+                    <DetailRow
+                      label="已审核成交主单"
+                      value={`${selectedItem.customerSummary.approvedTradeOrderCount} 笔`}
+                    />
+                    <DetailRow
+                      label="关联线索"
+                      value={`${selectedItem.customerSummary.linkedLeadCount} 条`}
+                    />
+                  </div>
+                </div>
+              ) : null}
 
               <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
                 <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
@@ -568,6 +594,11 @@ function GuardSection({
                     <p className="mt-1 text-[12px] leading-5 text-black/56">
                       {blocker.description}
                     </p>
+                    {blocker.suggestedAction ? (
+                      <p className="mt-1 text-[12px] leading-5 text-black/48">
+                        建议动作：{blocker.suggestedAction}
+                      </p>
+                    ) : null}
                   </div>
                 ))}
               </div>

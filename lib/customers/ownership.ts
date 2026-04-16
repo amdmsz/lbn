@@ -12,6 +12,7 @@ import {
 } from "@prisma/client";
 import type { CallResultEffectLevelValue } from "@/lib/calls/metadata";
 import { prisma } from "@/lib/db/prisma";
+import { assertCustomerNotInActiveRecycleBin } from "@/lib/customers/recycle";
 import { getResolvedTeamPublicPoolSetting } from "@/lib/customers/public-pool-settings";
 import { getWechatAddedStatusEffectMeta } from "@/lib/wechat/metadata";
 
@@ -377,6 +378,12 @@ export async function getAssignableSalesTarget(
 }
 
 async function getOwnershipCustomerTx(tx: TransactionClient, customerId: string) {
+  await assertCustomerNotInActiveRecycleBin(
+    tx,
+    customerId,
+    "当前客户已移入回收站，不能继续执行公海 / 归属链路动作。",
+  );
+
   const customer = await tx.customer.findUnique({
     where: { id: customerId },
     select: ownershipCustomerSelect,

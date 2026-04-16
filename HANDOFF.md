@@ -407,3 +407,139 @@
 - 新 schema 改造
 - 与当前 release 无关的二次 schema 重构
 - 无边界全站 UI 翻修
+
+---
+
+## 14. Customer RecycleBinEntry Planning Addendum
+
+当前对 `Customer recycle` 的交接结论已经固定如下：
+
+- `Customer recycle` 只删除误建轻客户。
+- `Customer recycle` 不替代 `/customers/public-pool` ownership lifecycle。
+- `Customer recycle` 不替代 `DORMANT / LOST / BLACKLISTED`。
+- `Customer recycle` 不替代 merge / merge release。
+- 当前这一步只确认 `Customer` 的 planning 与 service contract，不展开 `Lead / TradeOrder / SalesOrder`。
+
+轻客户 / 重客户固定边界：
+
+- 轻客户：仅有基础识别信息，最多带当前 `ownerId`，仍处于 `ACTIVE + PRIVATE`，尚未进入 ownership、公海、跟进、成交、支付、履约、物流、归并链。
+- 重客户：只要进入以下任一链路，就不能再按误建客户删除：
+  - ownership lifecycle / public-pool / claim-lock
+  - 销售跟进执行链
+  - 成交 / 资金 / 履约 / 物流链
+  - merge / import 审计链
+- `ownerId` 单独存在不阻断 move；否则手工误建客户缺少纠错空间。
+
+move guard 固定返回口径：
+
+- 返回：
+  - `mode = move`
+  - `decision = movable | blocked`
+  - `summary`
+  - `targetSnapshot`
+  - `blockers`
+  - `blockerGroups`
+- `targetSnapshot` 至少包括：
+  - `targetType = CUSTOMER`
+  - `targetId`
+  - `name`
+  - `phone`
+  - `status`
+  - `ownershipMode`
+  - `ownerLabel`
+- `blockers[]` 至少包括：
+  - `code`
+  - `name`
+  - `group`
+  - `description`
+  - `suggestedAction`
+- move 允许范围固定为：
+  - `status = ACTIVE`
+  - `ownershipMode = PRIVATE`
+  - 无公海字段
+  - 无 ownership event
+  - 无跟进痕迹
+  - 无订单 / 资金 / 履约 / 物流链
+  - 无 merge 审计链
+- `DORMANT / LOST / BLACKLISTED` 必须阻断 move。
+
+restore guard 固定返回口径：
+
+- 返回：
+  - `mode = restore`
+  - `decision = restorable | blocked`
+  - `summary`
+  - `targetSnapshot`
+  - `blockers`
+  - `blockerGroups`
+- restore 固定规则：
+  - `DORMANT / LOST / BLACKLISTED` 阻断 move，但不阻断 restore。
+  - 跟进、成交、支付、履约、物流痕迹不阻断 restore。
+  - restore 仅保留最小硬阻断：
+    - `对象缺失`
+    - `已完成归并且当前对象不应恢复为独立客户`
+
+purge blocker 固定返回口径：
+
+- 返回：
+  - `mode = purge`
+  - `decision = purgeable | blocked`
+  - `summary`
+  - `targetSnapshot`
+  - `blockers`
+  - `blockerGroups`
+- purge 固定规则：
+  - `purge` 是最严 guard。
+  - move blocker 中的阻断项默认同时阻断 purge。
+  - `关联线索`、`客户标签` 额外阻断 purge。
+
+blocker 分组与建议动作固定为：
+
+- `对象状态`
+  - blocker：`对象缺失`
+  - suggestedAction：确认原始客户记录是否仍存在。
+- `客户生命周期`
+  - blocker：`非 ACTIVE 客户`
+  - suggestedAction：改走 `DORMANT / LOST / BLACKLISTED` 状态治理。
+- `公海与归属链`
+  - blocker：`公海客户`、`锁定客户`、`已有归属历史`
+  - suggestedAction：改走 `/customers/public-pool` ownership lifecycle。
+- `销售跟进痕迹`
+  - blocker：`已有有效跟进时间`、`跟进任务`、`通话记录`、`微信记录`、`直播邀请`
+  - suggestedAction：改走跟进终止、冻结、失效或公海治理。
+- `成交与资金链`
+  - blocker：`历史订单`、`成交主单`、`礼品记录`、`支付计划`、`支付记录`、`催收任务`
+  - suggestedAction：在订单 / 支付域继续治理，不删除客户。
+- `履约与物流链`
+  - blocker：`发货任务`、`物流跟进`、`COD 回款记录`
+  - suggestedAction：在履约 / 物流链继续治理，不删除客户。
+- `归并与导入审计`
+  - blocker：`归并审计链`、`关联线索`、`客户标签`
+  - suggestedAction：保留 merge / import 审计上下文，不做 recycle 清理。
+- `其他阻断`
+  - suggestedAction：保留服务端原始返回，不做前端重写。
+
+`/recycle-bin?tab=customers` 固定规划口径：
+
+- tab：`customers`
+- targetType：`customer`
+- 列表字段至少包括：
+  - `name`
+  - `phone`
+  - `status`
+  - `level`
+  - `ownershipMode`
+  - `ownerLabel`
+  - `deletedAt`
+  - `deletedBy`
+  - `deleteReason`
+  - `blockerSummary`
+- 风险补充字段至少包括：
+  - `lastEffectiveFollowUpAt`
+  - `tradeOrderSummary.approvedCount`
+  - `importSummary.linkedLeadCount`
+
+交接提醒：
+
+- 服务端 guard 继续是唯一真相来源；前端只消费 `decision / blockers / blockerGroups`，不在组件里重写客户可删规则。
+- 当前只进入实现前评审，不在这一步重开 schema、旧 migration 或页面接线。
