@@ -9,13 +9,17 @@ import {
   CUSTOMER_RECYCLE_REASON_OPTIONS,
   type CustomerRecycleReasonCode,
 } from "@/lib/customers/recycle";
-import type { RecycleMoveGuard } from "@/lib/recycle-bin/types";
+import type {
+  RecycleFinalizePreview,
+  RecycleMoveGuard,
+} from "@/lib/recycle-bin/types";
 
 type CustomerRecycleActionResult = {
   status: "success" | "error";
   message: string;
   recycleStatus?: "created" | "already_in_recycle_bin" | "blocked";
   guard?: RecycleMoveGuard;
+  finalizePreview?: RecycleFinalizePreview | null;
 };
 
 type CustomerRecycleEntryProps = {
@@ -29,6 +33,7 @@ type CustomerRecycleEntryProps = {
   approvedTradeOrderCount: number;
   linkedLeadCount: number;
   initialGuard: RecycleMoveGuard;
+  initialFinalizePreview: RecycleFinalizePreview | null;
   moveToRecycleBinAction: (formData: FormData) => Promise<CustomerRecycleActionResult>;
 };
 
@@ -43,36 +48,49 @@ type BlockerGroup = {
   }>;
 };
 
+type BlockerLike = {
+  group?: string;
+  name: string;
+  description: string;
+  suggestedAction?: string;
+};
+
 const customerBlockerGroupMeta = [
   {
     key: "customer_lifecycle",
     title: "客户生命周期",
-    description: "Customer recycle 只承接误建轻客户，不替代 DORMANT / LOST / BLACKLISTED。",
+    description:
+      "Customer recycle 只承接误建轻客户，不替代 DORMANT / LOST / BLACKLISTED。",
   },
   {
     key: "ownership_lifecycle",
     title: "公海与归属链",
-    description: "如果客户已经进入 ownership lifecycle，应继续走公海、claim、释放或回收治理。",
+    description:
+      "如果客户已经进入 ownership lifecycle，应继续走 public-pool / claim / release / recycle 治理。",
   },
   {
     key: "sales_engagement",
     title: "销售跟进痕迹",
-    description: "一旦已有有效跟进、通话、微信或直播邀约，就不再属于误建轻客户。",
+    description:
+      "一旦已经形成有效跟进、通话、微信或直播邀请，就不再属于误建轻客户。",
   },
   {
     key: "transaction_chain",
-    title: "成交与资金链",
-    description: "进入订单、支付、催收链后，客户必须继续保留交易真相和审计上下文。",
+    title: "订单与资金链",
+    description:
+      "进入订单、支付、催收链后，客户必须继续保留交易真相与审计上下文。",
   },
   {
     key: "fulfillment_chain",
     title: "履约与物流链",
-    description: "进入发货、物流或 COD 履约链后，不应再按误建客户删除。",
+    description:
+      "进入发货、物流或 COD 履约链后，不应再按误建客户删除。",
   },
   {
     key: "import_audit",
     title: "归并与导入审计",
-    description: "涉及 merge、import、标签或其他审计链时，应优先保留治理上下文。",
+    description:
+      "涉及 merge、import、标签等审计链时，可以先回收，但最终处理会转为封存而不是硬删。",
   },
   {
     key: "object_state",
@@ -86,7 +104,7 @@ const customerBlockerGroupMeta = [
   },
 ] as const;
 
-function buildBlockerGroups(guard: RecycleMoveGuard): BlockerGroup[] {
+function buildBlockerGroups(blockers: BlockerLike[]) {
   const groups = new Map<string, BlockerGroup>();
 
   for (const meta of customerBlockerGroupMeta) {
@@ -98,15 +116,15 @@ function buildBlockerGroups(guard: RecycleMoveGuard): BlockerGroup[] {
     });
   }
 
-  for (const blocker of guard.blockers) {
+  for (const blocker of blockers) {
     const key = blocker.group ?? "other";
-    const targetGroup = groups.get(key) ?? groups.get("other");
+    const group = groups.get(key) ?? groups.get("other");
 
-    if (!targetGroup) {
+    if (!group) {
       continue;
     }
 
-    targetGroup.items.push({
+    group.items.push({
       name: blocker.name,
       description: blocker.description,
       suggestedAction: blocker.suggestedAction,
@@ -114,6 +132,40 @@ function buildBlockerGroups(guard: RecycleMoveGuard): BlockerGroup[] {
   }
 
   return [...groups.values()].filter((group) => group.items.length > 0);
+}
+
+function getFinalizePreviewLabel(preview: RecycleFinalizePreview | null) {
+  if (!preview) {
+    return "3 天后待重算";
+  }
+
+  return preview.finalAction === "PURGE" ? "3 天后可 PURGE" : "3 天后仅 ARCHIVE";
+}
+
+function getFinalizePreviewVariant(preview: RecycleFinalizePreview | null) {
+  if (!preview) {
+    return "neutral" as const;
+  }
+
+  return preview.finalAction === "PURGE" ? "warning" : "info" as const;
+}
+
+function getFinalizePreviewHint(preview: RecycleFinalizePreview | null) {
+  if (!preview) {
+    return "当前还没有拿到最终处理预览，请刷新后重试。";
+  }
+
+  if (preview.finalAction === "PURGE") {
+    return preview.canEarlyPurge
+      ? "move 只代表进入 3 天冷静期；冷静期内仅 ADMIN 可在回收站提前永久删除。"
+      : "move 只代表进入 3 天冷静期；最终仍以到期时的最新服务端真相为准。";
+  }
+
+  return "即使先移入回收站，3 天后也只会封存/脱敏归档，不会伪装成 PURGED。";
+}
+
+function getFallbackSuggestion() {
+  return "建议改走 public-pool / DORMANT / LOST / BLACKLISTED / merge / 订单支付履约治理。";
 }
 
 export function CustomerRecycleEntry({
@@ -127,6 +179,7 @@ export function CustomerRecycleEntry({
   approvedTradeOrderCount,
   linkedLeadCount,
   initialGuard,
+  initialFinalizePreview,
   moveToRecycleBinAction,
 }: Readonly<CustomerRecycleEntryProps>) {
   const router = useRouter();
@@ -134,9 +187,18 @@ export function CustomerRecycleEntry({
   const [notice, setNotice] = useState<CustomerRecycleActionResult | null>(null);
   const [reason, setReason] = useState<CustomerRecycleReasonCode>("mistaken_creation");
   const [guard, setGuard] = useState(initialGuard);
+  const [finalizePreview, setFinalizePreview] =
+    useState<RecycleFinalizePreview | null>(initialFinalizePreview);
   const [pending, startTransition] = useTransition();
 
-  const blockerGroups = useMemo(() => buildBlockerGroups(guard), [guard]);
+  const moveBlockerGroups = useMemo(
+    () => buildBlockerGroups(guard.blockers),
+    [guard.blockers],
+  );
+  const finalizeBlockerGroups = useMemo(
+    () => buildBlockerGroups(finalizePreview?.blockers ?? []),
+    [finalizePreview],
+  );
 
   function openDialog() {
     setNotice(null);
@@ -169,10 +231,14 @@ export function CustomerRecycleEntry({
         return;
       }
 
-      if (result.recycleStatus === "blocked" && result.guard) {
-        setGuard(result.guard);
-        setNotice(result);
-        return;
+      if (result.recycleStatus === "blocked") {
+        if (result.guard) {
+          setGuard(result.guard);
+        }
+
+        if (result.finalizePreview !== undefined) {
+          setFinalizePreview(result.finalizePreview ?? null);
+        }
       }
 
       setNotice(result);
@@ -193,7 +259,8 @@ export function CustomerRecycleEntry({
             Customer Recycle
           </p>
           <p className="text-[13px] leading-6 text-black/56">
-            只承接误建轻客户；不替代公海、失效、休眠、拉黑或归并治理。
+            只承接误建轻客户；不替代 public-pool、DORMANT、LOST、BLACKLISTED、merge
+            或订单支付履约治理。
           </p>
         </div>
         <button
@@ -201,7 +268,7 @@ export function CustomerRecycleEntry({
           onClick={openDialog}
           className="crm-button crm-button-secondary min-h-0 px-3.5 py-2 text-sm"
         >
-          {guard.canMoveToRecycleBin ? "移入回收站" : "查看回收阻断"}
+          {guard.canMoveToRecycleBin ? "移入回收站" : "查看回收判断"}
         </button>
       </div>
 
@@ -210,7 +277,11 @@ export function CustomerRecycleEntry({
           label={guard.canMoveToRecycleBin ? "当前可回收" : "当前不可回收"}
           variant={guard.canMoveToRecycleBin ? "warning" : "danger"}
         />
-        <StatusBadge label={`已审核成交 ${approvedTradeOrderCount} 笔`} variant="neutral" />
+        <StatusBadge
+          label={getFinalizePreviewLabel(finalizePreview)}
+          variant={getFinalizePreviewVariant(finalizePreview)}
+        />
+        <StatusBadge label={`已审核成交单 ${approvedTradeOrderCount} 笔`} variant="neutral" />
         <StatusBadge label={`关联线索 ${linkedLeadCount} 条`} variant="neutral" />
       </div>
 
@@ -221,15 +292,22 @@ export function CustomerRecycleEntry({
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge
-                    label={guard.canMoveToRecycleBin ? "可移入回收站" : "当前存在阻断"}
+                    label={guard.canMoveToRecycleBin ? "可移入回收站" : "move 已被阻断"}
                     variant={guard.canMoveToRecycleBin ? "warning" : "danger"}
+                  />
+                  <StatusBadge
+                    label={getFinalizePreviewLabel(finalizePreview)}
+                    variant={getFinalizePreviewVariant(finalizePreview)}
                   />
                   <StatusBadge label="Customer" variant="neutral" />
                 </div>
                 <div>
-                  <h3 className="text-[1.02rem] font-semibold text-black/86">移入回收站</h3>
+                  <h3 className="text-[1.02rem] font-semibold text-black/86">
+                    移入回收站
+                  </h3>
                   <p className="mt-1 text-sm leading-6 text-black/58">
-                    完全复用现有 Customer recycle guard 真相，只在这里解释当前为什么能移入或不能移入。
+                    这里不重写规则，只展示 customer-adapter
+                    返回的最新 move guard 与 finalize preview。
                   </p>
                 </div>
               </div>
@@ -259,8 +337,58 @@ export function CustomerRecycleEntry({
                   label="最近有效跟进"
                   value={lastEffectiveFollowUpAt ? formatDateTime(lastEffectiveFollowUpAt) : "暂无"}
                 />
-                <SummaryRow label="已审核成交主单" value={`${approvedTradeOrderCount} 笔`} />
+                <SummaryRow label="已审核成交单" value={`${approvedTradeOrderCount} 笔`} />
                 <SummaryRow label="关联线索" value={`${linkedLeadCount} 条`} />
+              </div>
+
+              <div className="space-y-2 rounded-[0.95rem] border border-black/7 bg-white/82 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                    当前 move guard
+                  </p>
+                  <StatusBadge
+                    label={guard.canMoveToRecycleBin ? "当前可 move" : "当前不可 move"}
+                    variant={guard.canMoveToRecycleBin ? "warning" : "danger"}
+                  />
+                </div>
+                <p className="text-[13px] leading-5 text-black/58">
+                  {guard.canMoveToRecycleBin
+                    ? "当前仍满足“误建轻客户”进入回收站语义，可以先进入 3 天冷静期。"
+                    : guard.blockerSummary}
+                </p>
+                {!guard.canMoveToRecycleBin && moveBlockerGroups.length > 0 ? (
+                  <div className="grid gap-3 pt-1">
+                    {moveBlockerGroups.map((group) => (
+                      <BlockerGroupCard key={`move-${group.key}`} group={group} />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="space-y-2 rounded-[0.95rem] border border-black/7 bg-white/82 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                    3 天后最终处理预览
+                  </p>
+                  <StatusBadge
+                    label={getFinalizePreviewLabel(finalizePreview)}
+                    variant={getFinalizePreviewVariant(finalizePreview)}
+                  />
+                </div>
+                <p className="text-[13px] leading-5 text-black/58">
+                  {finalizePreview?.blockerSummary ??
+                    "当前还没有拿到最终处理预览，请刷新后重试。"}
+                </p>
+                <p className="text-[12px] leading-5 text-black/48">
+                  {getFinalizePreviewHint(finalizePreview)}
+                </p>
+                {finalizeBlockerGroups.length > 0 ? (
+                  <div className="grid gap-3 pt-1">
+                    {finalizeBlockerGroups.map((group) => (
+                      <BlockerGroupCard key={`finalize-${group.key}`} group={group} />
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               {guard.canMoveToRecycleBin ? (
@@ -268,10 +396,10 @@ export function CustomerRecycleEntry({
                   <div className="space-y-2 rounded-[0.95rem] border border-black/7 bg-white/82 p-4">
                     <div>
                       <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
-                        删除原因
+                        回收原因
                       </p>
                       <p className="mt-1 text-[13px] leading-5 text-black/54">
-                        仅用于记录这位客户为什么被判定为误建轻客户。
+                        这里只记录为什么当前客户被判定为误建轻客户，不在组件里扩展额外规则。
                       </p>
                     </div>
                     <select
@@ -289,77 +417,22 @@ export function CustomerRecycleEntry({
                     </select>
                   </div>
 
-                  <ActionBanner tone="success">
-                    当前客户仍未进入公海、跟进、成交和履约链，符合误建轻客户语义；确认后会从客户主视图自然隐藏。
-                  </ActionBanner>
+                  <div className="rounded-[0.95rem] border border-[rgba(155,106,29,0.18)] bg-[rgba(255,248,238,0.86)] px-4 py-3 text-[13px] leading-6 text-[rgba(92,61,30,0.92)]">
+                    确认后只会进入 3 天冷静期。move 不等于将来一定能 purge，最终以到期时最新服务端真相重算。
+                  </div>
                 </>
               ) : (
-                <>
-                  <div className="space-y-2 rounded-[0.95rem] border border-[rgba(141,59,51,0.14)] bg-[rgba(255,247,246,0.86)] p-4">
-                    <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--color-danger)]">
-                      为什么不能移入回收站
-                    </p>
-                    <p className="text-[13px] leading-5 text-black/58">{guard.blockerSummary}</p>
-                  </div>
-
-                  <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-white/82 p-4">
-                    <div>
-                      <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
-                        当前卡点层级
-                      </p>
-                      <p className="mt-1 text-[13px] leading-5 text-black/54">
-                        下列分组直接复用服务端返回的 blocker group，只做最小展示归类。
-                      </p>
-                    </div>
-
-                    <div className="grid gap-3">
-                      {blockerGroups.map((group) => (
-                        <div
-                          key={group.key}
-                          className="rounded-[0.9rem] border border-black/8 bg-[rgba(249,250,252,0.78)] p-3.5"
-                        >
-                          <div className="space-y-1">
-                            <p className="text-sm font-semibold text-black/82">{group.title}</p>
-                            <p className="text-[13px] leading-5 text-black/54">
-                              {group.description}
-                            </p>
-                          </div>
-
-                          <div className="mt-3 space-y-2">
-                            {group.items.map((item) => (
-                              <div
-                                key={`${group.key}-${item.name}`}
-                                className="rounded-[0.8rem] border border-black/8 bg-white/86 px-3 py-2.5"
-                              >
-                                <p className="text-sm font-medium text-black/82">{item.name}</p>
-                                <p className="mt-1 text-[13px] leading-5 text-black/56">
-                                  {item.description}
-                                </p>
-                                {item.suggestedAction ? (
-                                  <p className="mt-1 text-[12px] leading-5 text-black/48">
-                                    建议动作：{item.suggestedAction}
-                                  </p>
-                                ) : null}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <ActionBanner tone="danger">
-                    当前建议改走：{guard.fallbackActionLabel}。Customer recycle 只承接误建轻客户，不替代公海、失效、休眠、拉黑或归并治理。
-                  </ActionBanner>
-                </>
+                <ActionBanner tone="danger">
+                  {guard.blockerSummary} {getFallbackSuggestion()}
+                </ActionBanner>
               )}
             </div>
 
             <div className="flex flex-col gap-3 border-t border-black/7 bg-[rgba(247,248,250,0.8)] px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
               <p className="text-[13px] leading-5 text-black/56">
                 {guard.canMoveToRecycleBin
-                  ? "确认后会沿用现有查询隐藏规则，并在当前详情页刷新后继续走安全缺省 / not found 语义。"
-                  : `${guard.blockerSummary} 建议改走：${guard.fallbackActionLabel}。`}
+                  ? "详情页成功后只会 router.refresh()，随后自然进入 notFound / 安全缺省语义。"
+                  : `${guard.blockerSummary} ${getFallbackSuggestion()}`}
               </p>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <button
@@ -399,6 +472,40 @@ function SummaryRow({
     <div className="space-y-1">
       <p className="text-[12px] text-black/42">{label}</p>
       <p className="text-sm font-medium leading-5 text-black/78">{value}</p>
+    </div>
+  );
+}
+
+function BlockerGroupCard({
+  group,
+}: Readonly<{
+  group: BlockerGroup;
+}>) {
+  return (
+    <div className="rounded-[0.9rem] border border-black/8 bg-[rgba(249,250,252,0.78)] p-3.5">
+      <div className="space-y-1">
+        <p className="text-sm font-semibold text-black/82">{group.title}</p>
+        <p className="text-[13px] leading-5 text-black/54">{group.description}</p>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {group.items.map((item) => (
+          <div
+            key={`${group.key}-${item.name}`}
+            className="rounded-[0.8rem] border border-black/8 bg-white/86 px-3 py-2.5"
+          >
+            <p className="text-sm font-medium text-black/82">{item.name}</p>
+            <p className="mt-1 text-[13px] leading-5 text-black/56">
+              {item.description}
+            </p>
+            {item.suggestedAction ? (
+              <p className="mt-1 text-[12px] leading-5 text-black/48">
+                建议动作：{item.suggestedAction}
+              </p>
+            ) : null}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -1,8 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import {
-  findActiveRecycleEntry,
-  findActiveTargetIds,
+  findHiddenRecycleEntry,
+  findHiddenTargetIds,
 } from "@/lib/recycle-bin/repository";
 
 type TradeOrderRecycleDbClient = typeof prisma | Prisma.TransactionClient;
@@ -14,11 +14,11 @@ export async function findActiveTradeOrderRecycleEntry(
   db: TradeOrderRecycleDbClient,
   tradeOrderId: string,
 ) {
-  return findActiveRecycleEntry(db, "TRADE_ORDER", tradeOrderId);
+  return findHiddenRecycleEntry(db, "TRADE_ORDER", tradeOrderId);
 }
 
 export async function listActiveTradeOrderIds(db: TradeOrderRecycleDbClient) {
-  return findActiveTargetIds(db, "TRADE_ORDER");
+  return findHiddenTargetIds(db, "TRADE_ORDER");
 }
 
 export async function assertTradeOrderNotInActiveRecycleBin(

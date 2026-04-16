@@ -17,15 +17,22 @@ const deletedRangeOptions: Array<{
   { value: "last_30d", label: "近 30 天" },
 ];
 
-const stateOptions: Array<{
-  value: RecycleBinFilterStateValue;
-  label: string;
-}> = [
-  { value: "all", label: "全部状态" },
-  { value: "restorable", label: "可恢复" },
-  { value: "restore_blocked", label: "restore 被阻断" },
-  { value: "purge_blocked", label: "purge 被阻断" },
-];
+function getStateOptions(activeTab: RecycleBinTabValue) {
+  const options: Array<{
+    value: RecycleBinFilterStateValue;
+    label: string;
+  }> = [
+    { value: "all", label: "全部状态" },
+    { value: "restorable", label: "可恢复" },
+    { value: "restore_blocked", label: "恢复受阻" },
+    {
+      value: "purge_blocked",
+      label: activeTab === "customers" ? "最终处理受限" : "永久删除受阻",
+    },
+  ];
+
+  return options;
+}
 
 export function RecycleBinFilterBar({
   activeTab,
@@ -40,6 +47,8 @@ export function RecycleBinFilterBar({
   targetTypeOptions: RecycleBinFilterOption[];
   resetHref: string;
 }>) {
+  const stateOptions = getStateOptions(activeTab);
+
   return (
     <form method="get" className="crm-filter-panel">
       <input type="hidden" name="tab" value={activeTab} />

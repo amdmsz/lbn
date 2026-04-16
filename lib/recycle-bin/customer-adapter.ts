@@ -10,6 +10,9 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type {
+  RecycleArchivePayload,
+  RecycleFinalizeBlocker,
+  RecycleFinalizePreview,
   RecycleGuardBlocker,
   RecyclePurgeBlocker,
   RecyclePurgeGuard,
@@ -505,6 +508,58 @@ function buildPurgeBlockers(
   return blockers;
 }
 
+function buildFinalizePreview(input: {
+  targetExists: boolean;
+  blockers: RecycleFinalizeBlocker[];
+}): RecycleFinalizePreview {
+  if (!input.targetExists) {
+    return {
+      canFinalize: true,
+      targetExists: false,
+      finalAction: "PURGE",
+      finalActionLabel: "可 purge",
+      blockerSummary: "原始客户已不存在，回收站条目会按 PURGE 终态收口。",
+      blockers: [],
+      canEarlyPurge: true,
+      earlyPurgeRequiresAdmin: true,
+    };
+  }
+
+  if (input.blockers.length === 0) {
+    return {
+      canFinalize: true,
+      targetExists: true,
+      finalAction: "PURGE",
+      finalActionLabel: "可 purge",
+      blockerSummary: "当前客户仍满足误建轻客户条件，3 天冷静期结束后会执行 PURGE。",
+      blockers: [],
+      canEarlyPurge: true,
+      earlyPurgeRequiresAdmin: true,
+    };
+  }
+
+  return {
+    canFinalize: true,
+    targetExists: true,
+    finalAction: "ARCHIVE",
+    finalActionLabel: "仅封存",
+    blockerSummary:
+      input.blockers[0]?.description ??
+      "当前客户已进入需要保留业务真相或审计锚点的链路，3 天冷静期结束后仅封存。",
+    blockers: input.blockers,
+    canEarlyPurge: false,
+    earlyPurgeRequiresAdmin: true,
+  };
+}
+
+function buildArchivedCustomerName(customerId: string) {
+  return `已封存客户#${customerId.slice(-6).toUpperCase()}`;
+}
+
+function buildArchivedCustomerPhone(customerId: string) {
+  return `ARCHIVED:${customerId}`;
+}
+
 export async function getCustomerRecycleTarget(
   db: RecycleDbClient,
   targetType: RecycleTargetType,
@@ -615,6 +670,33 @@ export async function buildCustomerPurgeGuard(
   return buildPurgeGuard(buildPurgeBlockers(customer));
 }
 
+export async function buildCustomerFinalizePreview(
+  db: RecycleDbClient,
+  input: {
+    targetType: RecycleTargetType;
+    targetId: string;
+    domain: RecycleDomain;
+  },
+) {
+  if (input.domain !== "CUSTOMER" || input.targetType !== "CUSTOMER") {
+    return null;
+  }
+
+  const customer = await getCustomerRecord(db, input.targetId);
+
+  if (!customer) {
+    return buildFinalizePreview({
+      targetExists: false,
+      blockers: [],
+    });
+  }
+
+  return buildFinalizePreview({
+    targetExists: true,
+    blockers: buildPurgeBlockers(customer),
+  });
+}
+
 export async function purgeCustomerTarget(
   db: RecycleDbClient,
   input: {
@@ -633,4 +715,74 @@ export async function purgeCustomerTarget(
   });
 
   return true;
+}
+
+export async function archiveCustomerTarget(
+  db: RecycleDbClient,
+  input: {
+    targetType: RecycleTargetType;
+    targetId: string;
+    preview: RecycleFinalizePreview;
+  },
+): Promise<RecycleArchivePayload | null> {
+  if (input.targetType !== "CUSTOMER") {
+    return null;
+  }
+
+  const customer = await db.customer.findUnique({
+    where: {
+      id: input.targetId,
+    },
+    select: {
+      id: true,
+      status: true,
+      ownershipMode: true,
+    },
+  });
+
+  if (!customer) {
+    return {
+      finalAction: "ARCHIVE",
+      archivedAt: new Date().toISOString(),
+      blockerSummary: input.preview.blockerSummary,
+      blockers: input.preview.blockers,
+      snapshot: {
+        customerId: input.targetId,
+        targetMissing: true,
+      },
+    };
+  }
+
+  const archivedName = buildArchivedCustomerName(customer.id);
+  const archivedPhone = buildArchivedCustomerPhone(customer.id);
+
+  await db.customer.update({
+    where: {
+      id: customer.id,
+    },
+    data: {
+      name: archivedName,
+      phone: archivedPhone,
+      wechatId: null,
+      province: null,
+      city: null,
+      district: null,
+      address: null,
+      remark: null,
+    },
+  });
+
+  return {
+    finalAction: "ARCHIVE",
+    archivedAt: new Date().toISOString(),
+    blockerSummary: input.preview.blockerSummary,
+    blockers: input.preview.blockers,
+    snapshot: {
+      customerId: customer.id,
+      archivedName,
+      archivedPhone,
+      status: customer.status,
+      ownershipMode: customer.ownershipMode,
+    },
+  };
 }

@@ -477,6 +477,7 @@ enum RecycleEntryStatus {
   ACTIVE
   RESTORED
   PURGED
+  ARCHIVED
 }
 
 enum RecycleDeleteReasonCode {
@@ -724,6 +725,7 @@ model RecycleBinEntry {
   resolvedById           String?
   resolvedBy             User?                  @relation("RecycleBinEntryResolvedBy", fields: [resolvedById], references: [id])
   blockerSnapshotJson    Json?
+  archivePayloadJson     Json?
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
 

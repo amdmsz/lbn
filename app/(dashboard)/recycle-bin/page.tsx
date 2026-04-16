@@ -32,12 +32,6 @@ function getActiveTabLabel(
   }
 }
 
-function getResolvedActiveTabLabel(
-  activeTab: Awaited<ReturnType<typeof getRecycleBinPageData>>["activeTab"],
-) {
-  return getActiveTabLabel(activeTab);
-}
-
 export default async function RecycleBinPage({
   searchParams,
 }: Readonly<{
@@ -63,7 +57,13 @@ export default async function RecycleBinPage({
     resolvedSearchParams,
   );
 
-  const activeTabLabel = getResolvedActiveTabLabel(data.activeTab);
+  const activeTabLabel = getActiveTabLabel(data.activeTab);
+  const isCustomerTab = data.activeTab === "customers";
+  const archiveOnlyCount = isCustomerTab
+    ? data.items.filter(
+        (item) => item.finalActionPreview?.finalAction === "ARCHIVE",
+      ).length
+    : data.summary.purgeBlockedCount;
 
   return (
     <WorkbenchLayout
@@ -72,7 +72,11 @@ export default async function RecycleBinPage({
           <PageHeader
             eyebrow="回收站治理工作台"
             title="回收站"
-            description="统一治理已移入回收站的商品主数据、直播场次、线索、交易订单与客户。第一版只保留恢复、永久删除、基础筛选和 blocker 详情，不扩批量动作与复杂治理树。"
+            description={
+              isCustomerTab
+                ? "客户 tab 已切到双终态 finalize 视角：move 只代表进入 3 天冷静期，到期后再按最新服务端真相收口为 PURGE 或 ARCHIVE。"
+                : "统一治理已移入回收站的商品主数据、直播场次、线索与交易订单。当前保留恢复、永久删除、基础筛选和 blocker 详情。"
+            }
             meta={
               <>
                 <StatusBadge label={activeTabLabel} variant="info" />
@@ -93,7 +97,11 @@ export default async function RecycleBinPage({
           <MetricCard
             label="当前条目"
             value={String(data.summary.totalCount)}
-            note="当前 tab 与筛选条件下，仍处于 ACTIVE 的回收站对象数量。"
+            note={
+              isCustomerTab
+                ? "当前 tab 与筛选条件下，仍处于 ACTIVE 的客户回收站对象数量。"
+                : "当前 tab 与筛选条件下，仍处于 ACTIVE 的回收站对象数量。"
+            }
             density="strip"
           />
           <MetricCard
@@ -103,9 +111,13 @@ export default async function RecycleBinPage({
             density="strip"
           />
           <MetricCard
-            label="永久删除受阻"
-            value={String(data.summary.purgeBlockedCount)}
-            note="当前筛选结果中，包含 purge blocker 未通过或仅管理员可执行的对象。"
+            label={isCustomerTab ? "3 天后仅封存" : "永久删除受阻"}
+            value={String(archiveOnlyCount)}
+            note={
+              isCustomerTab
+                ? "当前筛选结果中，按最新 finalize preview 判断，3 天后只能 ARCHIVE 的客户数量。"
+                : "当前筛选结果中，包含 purge blocker 未通过或仅管理员可执行的对象。"
+            }
             density="strip"
           />
         </div>

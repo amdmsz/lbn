@@ -33,8 +33,17 @@ import {
 import { moveToRecycleBin } from "@/lib/recycle-bin/lifecycle";
 import type {
   MoveToRecycleBinResult,
+  RecycleGuardBlocker,
   RecycleReasonInputCode,
 } from "@/lib/recycle-bin/types";
+
+const leadRecycleReasonValues = [
+  "mistaken_creation",
+  "test_data",
+  "duplicate",
+  "no_longer_needed",
+  "other",
+] as const;
 
 const assignLeadsSchema = z.object({
   selectionMode: z.enum(["manual", "filtered"]).default("manual"),
@@ -43,10 +52,37 @@ const assignLeadsSchema = z.object({
   note: z.string().trim().max(500).optional(),
 });
 
+const batchMoveLeadsToRecycleBinSchema = z.object({
+  selectionMode: z.enum(["manual", "filtered"]).default("manual"),
+  leadIds: z.array(z.string().trim().min(1)).default([]),
+  reasonCode: z.enum(leadRecycleReasonValues).default("mistaken_creation"),
+});
+
 export type LeadRecycleActionResult = {
   status: "success" | "error";
   message: string;
   recycleStatus?: MoveToRecycleBinResult["status"];
+};
+
+export type LeadBatchRecycleBlockedReason = {
+  code: string;
+  label: string;
+  count: number;
+  description: string;
+  group?: string;
+  suggestedAction?: string;
+};
+
+export type LeadBatchRecycleActionResult = {
+  status: "success" | "error";
+  message: string;
+  summary: {
+    totalCount: number;
+    createdCount: number;
+    alreadyInRecycleBinCount: number;
+    blockedCount: number;
+  };
+  blockedReasons: LeadBatchRecycleBlockedReason[];
 };
 
 async function getLeadActionActor() {
@@ -66,14 +102,8 @@ async function getLeadActionActor() {
 function getLeadRecycleReasonCode(formData: FormData): RecycleReasonInputCode {
   const reasonCode = String(formData.get("reasonCode") ?? "");
 
-  if (
-    reasonCode === "mistaken_creation" ||
-    reasonCode === "test_data" ||
-    reasonCode === "duplicate" ||
-    reasonCode === "no_longer_needed" ||
-    reasonCode === "other"
-  ) {
-    return reasonCode;
+  if (leadRecycleReasonValues.includes(reasonCode as RecycleReasonInputCode)) {
+    return reasonCode as RecycleReasonInputCode;
   }
 
   return "mistaken_creation";
@@ -121,6 +151,184 @@ function getFilterParamsFromFormData(formData: FormData) {
     page: String(formData.get("page") ?? "1"),
     pageSize: String(formData.get("pageSize") ?? ""),
   };
+}
+
+function buildLeadBatchRecycleErrorResult(
+  message: string,
+): LeadBatchRecycleActionResult {
+  return {
+    status: "error",
+    message,
+    summary: {
+      totalCount: 0,
+      createdCount: 0,
+      alreadyInRecycleBinCount: 0,
+      blockedCount: 0,
+    },
+    blockedReasons: [],
+  };
+}
+
+function buildLeadBatchRecycleMessage(summary: {
+  createdCount: number;
+  alreadyInRecycleBinCount: number;
+  blockedCount: number;
+}) {
+  if (summary.createdCount > 0 && summary.blockedCount === 0) {
+    return "已完成批量移入回收站。";
+  }
+
+  if (summary.createdCount > 0 || summary.alreadyInRecycleBinCount > 0) {
+    return "已部分完成批量移入回收站。";
+  }
+
+  return "所选线索均未移入回收站。";
+}
+
+function groupLeadBatchRecycleBlocker(
+  groupedReasons: Map<string, LeadBatchRecycleBlockedReason>,
+  blocker: Pick<
+    RecycleGuardBlocker,
+    "code" | "group" | "suggestedAction" | "name" | "description"
+  >,
+) {
+  const blockerCode = blocker.code?.trim() || blocker.name;
+  const existingBlocker = groupedReasons.get(blockerCode);
+
+  if (existingBlocker) {
+    existingBlocker.count += 1;
+    return;
+  }
+
+  groupedReasons.set(blockerCode, {
+    code: blockerCode,
+    label: blocker.name,
+    count: 1,
+    description: blocker.description,
+    group: blocker.group,
+    suggestedAction: blocker.suggestedAction,
+  });
+}
+
+function collectLeadBatchRecycleBlockedReasons(
+  results: MoveToRecycleBinResult[],
+): LeadBatchRecycleBlockedReason[] {
+  const groupedReasons = new Map<string, LeadBatchRecycleBlockedReason>();
+
+  for (const result of results) {
+    if (result.status !== "blocked") {
+      continue;
+    }
+
+    if (result.guard.blockers.length === 0) {
+      groupLeadBatchRecycleBlocker(groupedReasons, {
+        code: "blocked_without_reason",
+        name: "其他阻断",
+        description: result.message,
+      });
+      continue;
+    }
+
+    for (const blocker of result.guard.blockers) {
+      groupLeadBatchRecycleBlocker(groupedReasons, blocker);
+    }
+  }
+
+  return [...groupedReasons.values()].sort(
+    (left, right) => right.count - left.count || left.label.localeCompare(right.label),
+  );
+}
+
+async function resolveBatchRecycleLeadIds(input: {
+  actor: Awaited<ReturnType<typeof getLeadActionActor>>;
+  selectionMode: "manual" | "filtered";
+  formData: FormData;
+  leadIds: string[];
+}): Promise<string[] | LeadBatchRecycleActionResult> {
+  if (input.selectionMode === "filtered") {
+    const filters = parseLeadListFilters(getFilterParamsFromFormData(input.formData));
+
+    if (filters.view !== "unassigned") {
+      return buildLeadBatchRecycleErrorResult(
+        "当前只支持未分配视图批量移入回收站。",
+      );
+    }
+
+    const [importedLeadIds, activeLeadIds] = await Promise.all([
+      filters.importBatchId
+        ? getLeadImportBatchLeadIds(filters.importBatchId)
+        : Promise.resolve([] as string[]),
+      findActiveTargetIds(prisma, "LEAD"),
+    ]);
+    const where = buildLeadWhereInput(
+      {
+        id: input.actor.id,
+        role: input.actor.role,
+      },
+      {
+        ...filters,
+        view: "unassigned",
+        assignedOwnerId: "",
+      },
+      importedLeadIds,
+      activeLeadIds,
+    );
+    const matchedLeadIds = await prisma.lead.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: MAX_BATCH_ASSIGNMENT_SIZE + 1,
+      select: {
+        id: true,
+      },
+    });
+
+    if (matchedLeadIds.length === 0) {
+      return buildLeadBatchRecycleErrorResult(
+        "当前筛选条件下没有可移入回收站的线索。",
+      );
+    }
+
+    if (matchedLeadIds.length > MAX_BATCH_ASSIGNMENT_SIZE) {
+      return buildLeadBatchRecycleErrorResult(
+        `当前筛选结果超过 ${MAX_BATCH_ASSIGNMENT_SIZE} 条，请先缩小范围后再批量移入回收站。`,
+      );
+    }
+
+    return matchedLeadIds.map((lead) => lead.id);
+  }
+
+  const uniqueLeadIds = [...new Set(input.leadIds)];
+
+  if (uniqueLeadIds.length === 0) {
+    return buildLeadBatchRecycleErrorResult("请先选择线索。");
+  }
+
+  const scope = getLeadScope(input.actor.role, input.actor.id);
+
+  if (!scope) {
+    return buildLeadBatchRecycleErrorResult("当前角色没有访问线索数据的权限。");
+  }
+
+  const visibleLeadIds = await prisma.lead.findMany({
+    where: {
+      id: {
+        in: uniqueLeadIds,
+      },
+      ownerId: null,
+      ...scope,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (visibleLeadIds.length !== uniqueLeadIds.length) {
+    return buildLeadBatchRecycleErrorResult(
+      "部分线索已不在当前未分配视图，请刷新后重试。",
+    );
+  }
+
+  return uniqueLeadIds;
 }
 
 export async function batchAssignLeadsAction(
@@ -627,5 +835,89 @@ export async function moveLeadToRecycleBinAction(
       status: "error",
       message: error instanceof Error ? error.message : "移入回收站失败，请稍后重试。",
     };
+  }
+}
+
+export async function batchMoveLeadsToRecycleBinAction(
+  formData: FormData,
+): Promise<LeadBatchRecycleActionResult> {
+  try {
+    const actor = await getLeadActionActor();
+
+    if (!canAccessLeadModule(actor.role) || !canManageLeadAssignments(actor.role)) {
+      return buildLeadBatchRecycleErrorResult(
+        "当前角色没有批量移入回收站的权限。",
+      );
+    }
+
+    const parsed = batchMoveLeadsToRecycleBinSchema.safeParse({
+      selectionMode: String(formData.get("selectionMode") ?? "manual"),
+      leadIds: formData.getAll("leadIds").map((value) => String(value).trim()),
+      reasonCode: getLeadRecycleReasonCode(formData),
+    });
+
+    if (!parsed.success) {
+      return buildLeadBatchRecycleErrorResult(
+        parsed.error.issues[0]?.message ?? "提交数据不完整，无法执行批量移入回收站。",
+      );
+    }
+
+    const resolvedLeadIds = await resolveBatchRecycleLeadIds({
+      actor,
+      selectionMode: parsed.data.selectionMode,
+      formData,
+      leadIds: parsed.data.leadIds,
+    });
+
+    if (!Array.isArray(resolvedLeadIds)) {
+      return resolvedLeadIds;
+    }
+
+    if (resolvedLeadIds.length > MAX_BATCH_ASSIGNMENT_SIZE) {
+      return buildLeadBatchRecycleErrorResult(
+        `单次最多批量移入回收站 ${MAX_BATCH_ASSIGNMENT_SIZE} 条线索。`,
+      );
+    }
+
+    const results: MoveToRecycleBinResult[] = [];
+
+    for (const leadId of resolvedLeadIds) {
+      results.push(
+        await moveToRecycleBin(actor, {
+          targetType: "LEAD",
+          targetId: leadId,
+          reasonCode: parsed.data.reasonCode,
+        }),
+      );
+    }
+
+    const summary = {
+      totalCount: resolvedLeadIds.length,
+      createdCount: results.filter((result) => result.status === "created").length,
+      alreadyInRecycleBinCount: results.filter(
+        (result) => result.status === "already_in_recycle_bin",
+      ).length,
+      blockedCount: results.filter((result) => result.status === "blocked").length,
+    };
+    const blockedReasons = collectLeadBatchRecycleBlockedReasons(results);
+
+    if (summary.createdCount > 0 || summary.alreadyInRecycleBinCount > 0) {
+      revalidatePath("/leads");
+      revalidatePath("/recycle-bin");
+    }
+
+    return {
+      status:
+        summary.createdCount > 0 || summary.alreadyInRecycleBinCount > 0
+          ? "success"
+          : "error",
+      message: buildLeadBatchRecycleMessage(summary),
+      summary,
+      blockedReasons,
+    };
+  } catch (error) {
+    return buildLeadBatchRecycleErrorResult(
+      error instanceof Error ? error.message : "批量移入回收站失败，请稍后重试。",
+    );
   }
 }

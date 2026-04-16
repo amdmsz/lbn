@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  finalizeRecycleBinEntryAction,
   purgeRecycleBinEntryAction,
   restoreRecycleBinEntryAction,
   type RecycleBinActionResult,
@@ -11,7 +12,10 @@ import { ActionBanner } from "@/components/shared/action-banner";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
 import { SectionCard } from "@/components/shared/section-card";
-import { StatusBadge } from "@/components/shared/status-badge";
+import {
+  StatusBadge,
+  type StatusBadgeVariant,
+} from "@/components/shared/status-badge";
 import type {
   RecycleBinBlockerGroup,
   RecycleBinListItem,
@@ -21,10 +25,20 @@ import { cn } from "@/lib/utils";
 
 type RecycleBinDialogState =
   | {
-      mode: "restore" | "purge";
+      mode: "restore" | "purge" | "finalize";
       item: RecycleBinListItem;
     }
   | null;
+
+type RecycleBinDialogMeta = {
+  title: string;
+  badgeLabel: string;
+  badgeVariant: StatusBadgeVariant;
+  description: string;
+  primaryLabel: string;
+  impactLabel: string;
+  impactHint: string;
+};
 
 function getTabLabel(activeTab: RecycleBinTabValue) {
   switch (activeTab) {
@@ -43,34 +57,316 @@ function getTabLabel(activeTab: RecycleBinTabValue) {
   }
 }
 
-function getResolvedTabLabel(activeTab: RecycleBinTabValue) {
-  return getTabLabel(activeTab);
+function getTargetVariant(item: RecycleBinListItem) {
+  if (item.targetType === "LIVE_SESSION") {
+    return "info" as const;
+  }
+
+  if (item.targetType === "LEAD") {
+    return "warning" as const;
+  }
+
+  if (item.targetType === "CUSTOMER") {
+    return "warning" as const;
+  }
+
+  return "neutral" as const;
 }
 
-function getDialogMeta(mode: "restore" | "purge") {
-  if (mode === "restore") {
+function getDialogMeta(state: RecycleBinDialogState): RecycleBinDialogMeta | null {
+  if (!state) {
+    return null;
+  }
+
+  if (state.mode === "restore") {
     return {
       title: "恢复对象",
       badgeLabel: "恢复操作",
       badgeVariant: "success" as const,
-      description: "恢复后，对象会按现有查询规则重新回到原业务工作区。",
+      description:
+        "恢复后，对象会按现有查询规则重新回到原业务工作区，不会重写对象原有业务字段。",
       primaryLabel: "确认恢复",
-      impactHint:
-        "恢复不会改写对象原有的业务生命周期字段，只会让回收站条目退出 ACTIVE 状态。",
       impactLabel: "恢复目标位置",
+      impactHint:
+        "恢复不会改写对象原有生命周期字段，只会让回收站条目退出 ACTIVE 状态。",
+    };
+  }
+
+  if (state.mode === "finalize") {
+    const finalAction = state.item.finalActionPreview?.finalAction ?? "PURGE";
+
+    return {
+      title: "执行最终处理",
+      badgeLabel: finalAction === "PURGE" ? "最终处理 / PURGE" : "最终处理 / ARCHIVE",
+      badgeVariant: finalAction === "PURGE" ? "danger" : "info" as const,
+      description:
+        finalAction === "PURGE"
+          ? "冷静期已结束，将按最新服务端真相执行 PURGE。"
+          : "冷静期已结束，将按最新服务端真相执行 ARCHIVE。",
+      primaryLabel: finalAction === "PURGE" ? "确认 PURGE" : "确认 ARCHIVE",
+      impactLabel: "Finalize preview",
+      impactHint:
+        finalAction === "PURGE"
+          ? "最终处理会物理删除对象，且不会再保留该对象本体。"
+          : "最终处理会将对象按 ARCHIVE 终态封存/脱敏归档，不会伪装成 PURGED。",
     };
   }
 
   return {
-    title: "永久删除对象",
-    badgeLabel: "最终清理",
+    title:
+      state.item.finalActionPreview !== null ? "提前永久删除" : "永久删除对象",
+    badgeLabel: state.item.finalActionPreview !== null ? "提前永久删除" : "最终清理",
     badgeVariant: "danger" as const,
-    description: "永久删除后会物理移除源对象，且无法恢复。",
-    primaryLabel: "确认永久删除",
+    description:
+      state.item.finalActionPreview !== null
+        ? "这会绕过 3 天冷静期，立即执行永久删除。仅 light 对象开放，且仅管理员可执行。"
+        : "永久删除后会物理移除源对象，且无法恢复。",
+    primaryLabel: state.item.finalActionPreview !== null ? "确认提前永久删除" : "确认永久删除",
+    impactLabel: "最终处理说明",
     impactHint:
-      "永久删除前会再次实时重算 purge blocker，不能只依赖删除时的快照。",
-    impactLabel: "最终清理说明",
+      state.item.finalActionPreview !== null
+        ? "提前永久删除前，服务端仍会按最新真相重算，不能只依赖移入回收站时的快照。"
+        : "永久删除前会再次实时重算 purge blocker，不能只依赖删除时的快照。",
   };
+}
+
+function getCustomerActionBadges(item: RecycleBinListItem) {
+  if (!item.finalActionPreview) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <StatusBadge
+        label={item.finalActionPreview.finalAction}
+        variant={item.finalActionPreview.finalAction === "PURGE" ? "warning" : "info"}
+      />
+      {item.finalActionLabel ? (
+        <StatusBadge label={item.finalActionLabel} variant="neutral" />
+      ) : null}
+      {item.remainingTimeLabel ? (
+        <StatusBadge
+          label={item.remainingTimeLabel}
+          variant={item.isExpired ? "danger" : "neutral"}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function GuardSection({
+  title,
+  summary,
+  groups,
+  emptyLabel,
+}: Readonly<{
+  title: string;
+  summary: string;
+  groups: RecycleBinBlockerGroup[];
+  emptyLabel: string;
+}>) {
+  const blockerCount = groups.reduce((count, group) => count + group.items.length, 0);
+
+  return (
+    <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+          {title}
+        </p>
+        <StatusBadge
+          label={blockerCount > 0 ? `${blockerCount} 个阻断项` : emptyLabel}
+          variant={blockerCount > 0 ? "warning" : "success"}
+        />
+      </div>
+      <p className="text-[13px] leading-5 text-black/58">{summary}</p>
+      {groups.length > 0 ? (
+        <div className="space-y-2">
+          {groups.map((group) => (
+            <div
+              key={`${title}-${group.title}`}
+              className="space-y-2 rounded-[0.85rem] border border-black/7 bg-white/78 px-3 py-2.5"
+            >
+              <div className="space-y-1">
+                <p className="text-[13px] font-medium leading-5 text-black/78">
+                  {group.title}
+                </p>
+                <p className="text-[12.5px] leading-5 text-black/56">
+                  {group.description}
+                </p>
+              </div>
+              <div className="space-y-2">
+                {group.items.map((blocker) => (
+                  <div
+                    key={`${title}-${group.title}-${blocker.name}`}
+                    className="rounded-[0.75rem] border border-black/6 bg-[rgba(249,250,252,0.82)] px-3 py-2"
+                  >
+                    <p className="text-[12.5px] font-medium leading-5 text-black/76">
+                      {blocker.name}
+                    </p>
+                    <p className="mt-1 text-[12px] leading-5 text-black/56">
+                      {blocker.description}
+                    </p>
+                    {blocker.suggestedAction ? (
+                      <p className="mt-1 text-[12px] leading-5 text-black/48">
+                        建议动作：{blocker.suggestedAction}
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SummaryRow({
+  label,
+  value,
+}: Readonly<{
+  label: string;
+  value: string;
+}>) {
+  return (
+    <div className="space-y-1">
+      <p className="text-[12px] text-black/42">{label}</p>
+      <p className="text-sm font-medium leading-5 text-black/78">{value}</p>
+    </div>
+  );
+}
+
+function DetailRow({
+  label,
+  value,
+  multiline = false,
+}: Readonly<{
+  label: string;
+  value: string;
+  multiline?: boolean;
+}>) {
+  return (
+    <div className="space-y-1">
+      <p className="text-[12px] text-black/42">{label}</p>
+      <p
+        className={cn(
+          "text-sm font-medium text-black/78",
+          multiline ? "leading-6" : "leading-5",
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function renderCustomerActionButtons({
+  item,
+  pending,
+  onOpenDialog,
+}: {
+  item: RecycleBinListItem;
+  pending: boolean;
+  onOpenDialog: (mode: "restore" | "purge" | "finalize", item: RecycleBinListItem) => void;
+}) {
+  return (
+    <div className="flex min-w-[12rem] flex-col items-start gap-2">
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpenDialog("restore", item);
+        }}
+        disabled={!item.canRestore || pending}
+        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-55"
+        title={item.canRestore ? "恢复对象" : item.restoreSummary}
+      >
+        恢复
+      </button>
+
+      {item.isExpired ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenDialog("finalize", item);
+          }}
+          disabled={!item.canFinalizeNow || pending}
+          className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-55"
+          title={
+            item.canFinalizeNow
+              ? "执行最终处理"
+              : `最终处理仅管理员可执行：${item.finalActionPreview?.finalAction ?? "PURGE"}`
+          }
+        >
+          执行最终处理
+        </button>
+      ) : item.canPurge ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpenDialog("purge", item);
+          }}
+          disabled={pending}
+          className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm text-[var(--color-danger)] hover:border-[rgba(141,59,51,0.16)] hover:bg-[rgba(255,247,246,0.88)] disabled:cursor-not-allowed disabled:text-black/42 disabled:opacity-55"
+          title="提前永久删除"
+        >
+          提前永久删除
+        </button>
+      ) : item.finalActionPreview?.finalAction === "ARCHIVE" ? (
+        <p className="text-xs leading-5 text-black/48">3 天后仅封存</p>
+      ) : item.purgeRequiresAdmin ? (
+        <p className="text-xs leading-5 text-black/48">仅管理员可提前永久删除</p>
+      ) : null}
+    </div>
+  );
+}
+
+function renderDefaultActionButtons({
+  item,
+  pending,
+  onOpenDialog,
+}: {
+  item: RecycleBinListItem;
+  pending: boolean;
+  onOpenDialog: (mode: "restore" | "purge" | "finalize", item: RecycleBinListItem) => void;
+}) {
+  return (
+    <div className="flex min-w-[12rem] flex-col items-start gap-2">
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpenDialog("restore", item);
+        }}
+        disabled={!item.canRestore || pending}
+        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-55"
+        title={item.canRestore ? "恢复对象" : item.restoreSummary}
+      >
+        恢复
+      </button>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpenDialog("purge", item);
+        }}
+        disabled={!item.canPurge || pending}
+        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm text-[var(--color-danger)] hover:border-[rgba(141,59,51,0.16)] hover:bg-[rgba(255,247,246,0.88)] disabled:cursor-not-allowed disabled:text-black/42 disabled:opacity-55"
+        title={
+          item.canPurge
+            ? "永久删除对象"
+            : item.purgeRequiresAdmin
+              ? "永久删除仅管理员可执行"
+              : item.purgeSummary
+        }
+      >
+        永久删除
+      </button>
+    </div>
+  );
 }
 
 export function RecycleBinWorkbench({
@@ -92,7 +388,7 @@ export function RecycleBinWorkbench({
     () => items.find((item) => item.entryId === selectedEntryId) ?? items[0] ?? null,
     [items, selectedEntryId],
   );
-
+  const isCustomerTab = activeTab === "customers";
   const showStatusColumns =
     activeTab === "leads" || activeTab === "trade-orders" || activeTab === "customers";
 
@@ -100,7 +396,7 @@ export function RecycleBinWorkbench({
     setDialogState(null);
   }
 
-  function openDialog(mode: "restore" | "purge", item: RecycleBinListItem) {
+  function openDialog(mode: "restore" | "purge" | "finalize", item: RecycleBinListItem) {
     setSelectedEntryId(item.entryId);
     setDialogState({ mode, item });
   }
@@ -117,7 +413,9 @@ export function RecycleBinWorkbench({
       const result =
         dialogState.mode === "restore"
           ? await restoreRecycleBinEntryAction(formData)
-          : await purgeRecycleBinEntryAction(formData);
+          : dialogState.mode === "finalize"
+            ? await finalizeRecycleBinEntryAction(formData)
+            : await purgeRecycleBinEntryAction(formData);
 
       setNotice(result);
       closeDialog();
@@ -135,8 +433,12 @@ export function RecycleBinWorkbench({
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] 2xl:grid-cols-[minmax(0,1fr)_400px]">
         <DataTableWrapper
-          title={`${getResolvedTabLabel(activeTab)}回收站条目`}
-          description="第一版保留恢复、永久删除和 blocker 摘要；点击行即可在右侧查看更完整的治理详情。"
+          title={`${getTabLabel(activeTab)}回收站条目`}
+          description={
+            isCustomerTab
+              ? "Customer tab 已切到 finalize 视角：左侧保留恢复，提前永久删除只对 light + ADMIN 开放，到期后统一执行最终处理。"
+              : "当前保留恢复、永久删除和 blocker 摘要；点击行即可在右侧查看更完整的治理详情。"
+          }
           contentClassName="p-0"
         >
           {items.length > 0 ? (
@@ -152,7 +454,7 @@ export function RecycleBinWorkbench({
                     <th>删除原因</th>
                     <th>删除时间</th>
                     <th>删除人</th>
-                    <th>blocker 摘要</th>
+                    <th>{isCustomerTab ? "Finalize 预览" : "blocker 摘要"}</th>
                     <th>操作</th>
                   </tr>
                 </thead>
@@ -174,13 +476,7 @@ export function RecycleBinWorkbench({
                         <td>
                           <StatusBadge
                             label={item.targetTypeLabel}
-                            variant={
-                              item.targetType === "LIVE_SESSION"
-                                ? "info"
-                                : item.targetType === "LEAD"
-                                  ? "warning"
-                                  : "neutral"
-                            }
+                            variant={getTargetVariant(item)}
                           />
                         </td>
                         <td className="text-black/82">
@@ -210,58 +506,52 @@ export function RecycleBinWorkbench({
                         <td>{item.deletedByLabel}</td>
                         <td className="min-w-[18rem]">
                           <div className="space-y-2">
-                            <p className="text-sm leading-6 text-black/62">{item.blockerSummary}</p>
-                            <div className="flex flex-wrap gap-2">
-                              <StatusBadge
-                                label={item.canRestore ? "可恢复" : "恢复受阻"}
-                                variant={item.canRestore ? "success" : "warning"}
-                              />
-                              <StatusBadge
-                                label={
-                                  item.canPurge
-                                    ? "可永久删除"
-                                    : item.purgeRequiresAdmin
-                                      ? "仅管理员可清理"
-                                      : "永久删除受阻"
-                                }
-                                variant={item.canPurge ? "danger" : "neutral"}
-                              />
-                            </div>
+                            <p className="text-sm leading-6 text-black/62">
+                              {isCustomerTab && item.finalActionPreview
+                                ? item.finalActionPreview.blockerSummary
+                                : item.blockerSummary}
+                            </p>
+                            {isCustomerTab && item.finalActionPreview ? (
+                              <>
+                                {getCustomerActionBadges(item)}
+                                <p className="text-xs leading-5 text-black/48">
+                                  {item.remainingTimeLabel
+                                    ? `剩余时间：${item.remainingTimeLabel}`
+                                    : "剩余时间：待重算"}
+                                </p>
+                              </>
+                            ) : (
+                              <div className="flex flex-wrap gap-2">
+                                <StatusBadge
+                                  label={item.canRestore ? "可恢复" : "恢复受阻"}
+                                  variant={item.canRestore ? "success" : "warning"}
+                                />
+                                <StatusBadge
+                                  label={
+                                    item.canPurge
+                                      ? "可永久删除"
+                                      : item.purgeRequiresAdmin
+                                        ? "仅管理员可删除"
+                                        : "永久删除受阻"
+                                  }
+                                  variant={item.canPurge ? "danger" : "neutral"}
+                                />
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td className="align-top">
-                          <div className="flex min-w-[12rem] flex-col items-start gap-2">
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openDialog("restore", item);
-                              }}
-                              disabled={!item.canRestore || pending}
-                              className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-55"
-                              title={item.canRestore ? "恢复对象" : item.restoreSummary}
-                            >
-                              恢复
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openDialog("purge", item);
-                              }}
-                              disabled={!item.canPurge || pending}
-                              className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm text-[var(--color-danger)] hover:border-[rgba(141,59,51,0.16)] hover:bg-[rgba(255,247,246,0.88)] disabled:cursor-not-allowed disabled:text-black/42 disabled:opacity-55"
-                              title={
-                                item.canPurge
-                                  ? "永久删除对象"
-                                  : item.purgeRequiresAdmin
-                                    ? "永久删除仅管理员可执行"
-                                    : item.purgeSummary
-                              }
-                            >
-                              永久删除
-                            </button>
-                          </div>
+                          {isCustomerTab
+                            ? renderCustomerActionButtons({
+                                item,
+                                pending,
+                                onOpenDialog: openDialog,
+                              })
+                            : renderDefaultActionButtons({
+                                item,
+                                pending,
+                                onOpenDialog: openDialog,
+                              })}
                         </td>
                       </tr>
                     );
@@ -272,16 +562,24 @@ export function RecycleBinWorkbench({
           ) : (
             <div className="p-4 md:p-5">
               <EmptyState
-                title={`暂无${getResolvedTabLabel(activeTab)}回收站条目`}
-                description="当前范围内没有 ACTIVE 回收站对象，后续移入回收站的对象会在这里统一治理。"
+                title={`暂无${getTabLabel(activeTab)}回收站条目`}
+                description={
+                  isCustomerTab
+                    ? "当前范围内没有 ACTIVE 客户回收站对象。后续移入回收站的客户会在这里按 finalize 视角统一治理。"
+                    : "当前范围内没有 ACTIVE 回收站对象，后续移入回收站的对象会在这里统一治理。"
+                }
               />
             </div>
           )}
         </DataTableWrapper>
 
         <SectionCard
-          title="Blocker 详情"
-          description="右侧只展示当前选中对象的恢复与最终清理判断，不在这里扩复杂治理流程。"
+          title={isCustomerTab ? "Finalize Preview" : "Blocker 详情"}
+          description={
+            isCustomerTab
+              ? "右侧只展示当前选中客户的 restore 与 finalize preview，不在这里扩复杂治理树。"
+              : "右侧只展示当前选中对象的恢复与最终清理判断，不在这里扩复杂治理流程。"
+          }
           className="xl:sticky xl:top-[var(--crm-sticky-top)] xl:self-start"
         >
           {selectedItem ? (
@@ -310,8 +608,14 @@ export function RecycleBinWorkbench({
                   </p>
                   <div className="space-y-2">
                     <DetailRow label="手机号" value={selectedItem.customerSummary.phone} />
-                    <DetailRow label="客户等级" value={selectedItem.customerSummary.levelLabel} />
-                    <DetailRow label="归属模式" value={selectedItem.customerSummary.ownershipLabel} />
+                    <DetailRow
+                      label="客户等级"
+                      value={selectedItem.customerSummary.levelLabel}
+                    />
+                    <DetailRow
+                      label="归属模式"
+                      value={selectedItem.customerSummary.ownershipLabel}
+                    />
                     <DetailRow
                       label="最近有效跟进"
                       value={selectedItem.customerSummary.lastEffectiveFollowUpAtLabel ?? "暂无"}
@@ -359,18 +663,76 @@ export function RecycleBinWorkbench({
                 groups={selectedItem.restoreBlockerGroups}
               />
 
-              <GuardSection
-                title="Purge blocker"
-                emptyLabel={
-                  selectedItem.canPurge
-                    ? "当前可永久删除"
-                    : selectedItem.purgeRequiresAdmin
-                      ? "当前无结构性阻断，但仅管理员可永久删除"
-                      : "当前可见 blocker 已清零"
-                }
-                summary={selectedItem.purgeSummary}
-                groups={selectedItem.purgeBlockerGroups}
-              />
+              {isCustomerTab && selectedItem.finalActionPreview ? (
+                <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                      Finalize preview
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <StatusBadge
+                        label={selectedItem.finalActionPreview.finalAction}
+                        variant={
+                          selectedItem.finalActionPreview.finalAction === "PURGE"
+                            ? "warning"
+                            : "info"
+                        }
+                      />
+                      {selectedItem.finalActionLabel ? (
+                        <StatusBadge
+                          label={selectedItem.finalActionLabel}
+                          variant="neutral"
+                        />
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <DetailRow
+                      label="剩余时间"
+                      value={selectedItem.remainingTimeLabel ?? "待重算"}
+                    />
+                    <DetailRow
+                      label="当前判断"
+                      value={selectedItem.finalActionPreview.blockerSummary}
+                      multiline
+                    />
+                    <DetailRow
+                      label="提前永久删除"
+                      value={
+                        selectedItem.finalActionPreview.canEarlyPurge
+                          ? "仅 ADMIN 可在冷静期内提前永久删除"
+                          : "当前不开放提前永久删除"
+                      }
+                      multiline
+                    />
+                  </div>
+
+                  <GuardSection
+                    title="Finalize blocker"
+                    emptyLabel={
+                      selectedItem.finalActionPreview.finalAction === "PURGE"
+                        ? "当前终态为 PURGE"
+                        : "当前终态为 ARCHIVE"
+                    }
+                    summary={selectedItem.finalActionPreview.blockerSummary}
+                    groups={selectedItem.finalizeBlockerGroups}
+                  />
+                </div>
+              ) : (
+                <GuardSection
+                  title="Purge blocker"
+                  emptyLabel={
+                    selectedItem.canPurge
+                      ? "当前可永久删除"
+                      : selectedItem.purgeRequiresAdmin
+                        ? "当前无结构性阻断，但仅管理员可永久删除"
+                        : "当前可见 blocker 已清零"
+                  }
+                  summary={selectedItem.purgeSummary}
+                  groups={selectedItem.purgeBlockerGroups}
+                />
+              )}
 
               <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
                 <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
@@ -384,7 +746,7 @@ export function RecycleBinWorkbench({
           ) : (
             <EmptyState
               title="暂未选中回收站对象"
-              description="从左侧表格选择一条对象后，这里会展示它的 blocker 与恢复目标位置。"
+              description="从左侧表格选择一条对象后，这里会展示它的 blocker、恢复位置与最终处理判断。"
             />
           )}
         </SectionCard>
@@ -411,11 +773,27 @@ function RecycleBinConfirmDialog({
   onClose: () => void;
   onConfirm: () => void;
 }>) {
-  if (!state) {
+  const meta = getDialogMeta(state);
+
+  if (!state || !meta) {
     return null;
   }
 
-  const meta = getDialogMeta(state.mode);
+  const currentSummary =
+    state.mode === "restore"
+      ? state.item.restoreSummary
+      : state.mode === "finalize"
+        ? state.item.finalActionPreview?.blockerSummary ?? "当前未拿到最终处理预览。"
+        : state.item.purgeSummary;
+
+  const impactContent =
+    state.mode === "restore"
+      ? state.item.restoreRouteSnapshot
+      : state.mode === "finalize"
+        ? `${state.item.remainingTimeLabel ?? "冷静期已到期"} / ${
+            state.item.finalActionPreview?.finalAction ?? "PURGE"
+          }`
+        : meta.impactHint;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/34 px-4 py-8">
@@ -425,6 +803,16 @@ function RecycleBinConfirmDialog({
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge label={meta.badgeLabel} variant={meta.badgeVariant} />
               <StatusBadge label={state.item.targetTypeLabel} variant="neutral" />
+              {state.mode === "finalize" && state.item.finalActionPreview ? (
+                <StatusBadge
+                  label={state.item.finalActionPreview.finalAction}
+                  variant={
+                    state.item.finalActionPreview.finalAction === "PURGE"
+                      ? "warning"
+                      : "info"
+                  }
+                />
+              ) : null}
             </div>
             <div>
               <h3 className="text-[1.02rem] font-semibold text-black/86">{meta.title}</h3>
@@ -460,21 +848,15 @@ function RecycleBinConfirmDialog({
             <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
               当前判断
             </p>
-            <p className="text-[13px] leading-5 text-black/58">
-              {state.mode === "restore" ? state.item.restoreSummary : state.item.purgeSummary}
-            </p>
+            <p className="text-[13px] leading-5 text-black/58">{currentSummary}</p>
           </div>
 
           <div className="space-y-2 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.74)] p-4">
             <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
               {meta.impactLabel}
             </p>
-            <p className="text-[13px] leading-5 text-black/58">
-              {state.mode === "restore" ? state.item.restoreRouteSnapshot : meta.impactHint}
-            </p>
-            {state.mode === "restore" ? (
-              <p className="text-[12px] leading-5 text-black/46">{meta.impactHint}</p>
-            ) : null}
+            <p className="text-[13px] leading-5 text-black/58">{impactContent}</p>
+            <p className="text-[12px] leading-5 text-black/46">{meta.impactHint}</p>
           </div>
         </div>
 
@@ -482,7 +864,11 @@ function RecycleBinConfirmDialog({
           <p className="text-[13px] leading-5 text-black/56">
             {state.mode === "restore"
               ? "恢复成功后，对象会按原业务入口重新可见。"
-              : "永久删除成功后，该对象会从系统中彻底移除。"}
+              : state.mode === "finalize"
+                ? "最终处理成功后会按 PURGE 或 ARCHIVE 收口；ARCHIVE 不会伪装成 PURGED。"
+                : state.item.finalActionPreview
+                  ? "提前永久删除会绕过 3 天冷静期，立即执行物理删除。"
+                  : "永久删除成功后，该对象会从系统中彻底移除。"}
           </p>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
@@ -503,109 +889,6 @@ function RecycleBinConfirmDialog({
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function SummaryRow({
-  label,
-  value,
-}: Readonly<{
-  label: string;
-  value: string;
-}>) {
-  return (
-    <div className="space-y-1">
-      <p className="text-[12px] text-black/42">{label}</p>
-      <p className="text-sm font-medium leading-5 text-black/78">{value}</p>
-    </div>
-  );
-}
-
-function DetailRow({
-  label,
-  value,
-  multiline = false,
-}: Readonly<{
-  label: string;
-  value: string;
-  multiline?: boolean;
-}>) {
-  return (
-    <div className="space-y-1">
-      <p className="text-[12px] text-black/42">{label}</p>
-      <p
-        className={cn(
-          "text-sm font-medium text-black/78",
-          multiline ? "leading-6" : "leading-5",
-        )}
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function GuardSection({
-  title,
-  summary,
-  groups,
-  emptyLabel,
-}: Readonly<{
-  title: string;
-  summary: string;
-  groups: RecycleBinBlockerGroup[];
-  emptyLabel: string;
-}>) {
-  const blockerCount = groups.reduce((count, group) => count + group.items.length, 0);
-
-  return (
-    <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
-          {title}
-        </p>
-        <StatusBadge
-          label={blockerCount > 0 ? `${blockerCount} 个阻断项` : emptyLabel}
-          variant={blockerCount > 0 ? "warning" : "success"}
-        />
-      </div>
-      <p className="text-[13px] leading-5 text-black/58">{summary}</p>
-      {groups.length > 0 ? (
-        <div className="space-y-2">
-          {groups.map((group) => (
-            <div
-              key={`${title}-${group.title}`}
-              className="space-y-2 rounded-[0.85rem] border border-black/7 bg-white/78 px-3 py-2.5"
-            >
-              <div className="space-y-1">
-                <p className="text-[13px] font-medium leading-5 text-black/78">{group.title}</p>
-                <p className="text-[12.5px] leading-5 text-black/56">{group.description}</p>
-              </div>
-              <div className="space-y-2">
-                {group.items.map((blocker) => (
-                  <div
-                    key={`${title}-${group.title}-${blocker.name}`}
-                    className="rounded-[0.75rem] border border-black/6 bg-[rgba(249,250,252,0.82)] px-3 py-2"
-                  >
-                    <p className="text-[12.5px] font-medium leading-5 text-black/76">
-                      {blocker.name}
-                    </p>
-                    <p className="mt-1 text-[12px] leading-5 text-black/56">
-                      {blocker.description}
-                    </p>
-                    {blocker.suggestedAction ? (
-                      <p className="mt-1 text-[12px] leading-5 text-black/48">
-                        建议动作：{blocker.suggestedAction}
-                      </p>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }

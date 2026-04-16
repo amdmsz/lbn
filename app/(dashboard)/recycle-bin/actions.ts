@@ -4,10 +4,12 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth/session";
 import { getRedirectPathname, getFormValue } from "@/lib/action-notice";
 import {
+  finalizeRecycleBinEntry,
   purgeFromRecycleBin,
   restoreFromRecycleBin,
 } from "@/lib/recycle-bin/lifecycle";
 import type {
+  FinalizeRecycleBinResult,
   PurgeFromRecycleBinResult,
   RestoreFromRecycleBinResult,
 } from "@/lib/recycle-bin/types";
@@ -17,6 +19,7 @@ export type RecycleBinActionResult = {
   message: string;
   restoreStatus?: RestoreFromRecycleBinResult["status"];
   purgeStatus?: PurgeFromRecycleBinResult["status"];
+  finalizeStatus?: FinalizeRecycleBinResult["status"];
 };
 
 async function getActor() {
@@ -66,6 +69,27 @@ function buildPurgeActionResult(
     status: "error",
     message: result.message,
     purgeStatus: result.status,
+  };
+}
+
+function buildFinalizeActionResult(
+  result: FinalizeRecycleBinResult,
+): RecycleBinActionResult {
+  if (result.status === "purged" || result.status === "archived") {
+    return {
+      status: "success",
+      message:
+        result.status === "purged"
+          ? "对象已完成最终处理：PURGE。"
+          : "对象已完成最终处理：ARCHIVE。",
+      finalizeStatus: result.status,
+    };
+  }
+
+  return {
+    status: "error",
+    message: result.message,
+    finalizeStatus: result.status,
   };
 }
 
@@ -141,6 +165,28 @@ export async function purgeRecycleBinEntryAction(
     return {
       status: "error",
       message: error instanceof Error ? error.message : "永久删除失败，请稍后重试。",
+    };
+  }
+}
+
+export async function finalizeRecycleBinEntryAction(
+  formData: FormData,
+): Promise<RecycleBinActionResult> {
+  try {
+    const actor = await getActor();
+    const result = await finalizeRecycleBinEntry(actor, {
+      entryId: getFormValue(formData, "entryId"),
+    });
+
+    revalidateTargetRoutes({
+      targetType: result.targetType,
+    });
+
+    return buildFinalizeActionResult(result);
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "最终处理失败，请稍后重试。",
     };
   }
 }

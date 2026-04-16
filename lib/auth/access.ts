@@ -426,6 +426,10 @@ export function canUseCustomerTags(role: RoleCode) {
   return canAccessCustomerModule(role);
 }
 
+export function canBatchManageCustomerTags(role: RoleCode) {
+  return role === "ADMIN" || role === "SUPERVISOR";
+}
+
 export function getLeadScope(role: RoleCode, userId: string) {
   if (canAccessAllData(role)) {
     return {};

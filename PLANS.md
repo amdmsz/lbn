@@ -569,3 +569,151 @@ blocker 分组与建议动作：
 
 - 当前只固定实现前评审口径，不在本阶段展开 schema、旧 migration 或页面接线。
 - 服务端 guard 继续作为唯一真相来源，前端只消费结果，不在组件里重写客户可删规则。
+
+---
+
+## 13. Customer / TradeOrder Dual-Terminal Recycle Lifecycle Addendum
+
+状态：规则已定稿，待进入实现前评审
+
+本节为当前有效口径，覆盖上一节仅面向 `Customer` 的单对象 recycle 规划。
+
+定位：
+
+- 本节只固定 `Customer / TradeOrder` 的 recycle lifecycle 规则与 contract，不进入 schema 和实现。
+- `move` 与 `finalize` 解耦：进入回收站只表示进入 `3` 天冷静期，不等于将来一定可以 `PURGE`。
+- `finalize` 固定拆成两个终态：
+  - `PURGE`
+  - `ARCHIVE`
+- `Customer recycle` 只处理误建轻客户，不替代 `/customers/public-pool` ownership lifecycle，不替代 `DORMANT / LOST / BLACKLISTED`，不替代 merge / merge release。
+- `TradeOrder recycle` 只处理误建草稿单，不替代取消 / 作废 / 关单，也不替代审核、拆单、支付、履约、物流链治理。
+
+为什么不能“有关联也直接硬删”：
+
+- `Customer` 一旦进入 ownership、公海、跟进、成交、支付、履约、物流、merge、import 审计链，硬删会直接破坏这些记录的主锚点。
+- `TradeOrder` 一旦进入审核、拆单、支付、催收、履约、导出、物流、COD 链，硬删会直接破坏成交主单与执行子链的真相链。
+- 这样只会产生两种错误结果：
+  - 级联删掉仍需保留的业务真相
+  - 留下失去主锚点的孤儿记录
+- 因此必须把 `move` 放宽，但把 `finalize` 拆成 `PURGE / ARCHIVE` 两条终态。
+
+为什么 `ARCHIVE` 不能伪装成 `PURGED`：
+
+- `PURGED` 表示对象与其可删上下文已经被真实清除。
+- `ARCHIVE` 表示对象退出主工作台，但仍保留审计锚点、业务摘要或脱敏后的历史外壳。
+- 如果把 `ARCHIVE` 伪装成 `PURGED`，后续就无法区分“真实物理删除”与“最终封存 / 脱敏归档”，会直接污染审计语义和生命周期语义。
+
+Customer 规则：
+
+- 轻对象：
+  - 误建轻客户。
+  - 仅有基础识别信息，最多带当前 `ownerId`、客户标签等弱关联。
+  - 仍处于 `ACTIVE + PRIVATE`。
+  - 尚未进入 ownership、公海、claim lock、跟进、成交、支付、履约、物流、merge、import 审计链。
+- 重对象：
+  - 只要进入以下任一强链路，即视为 heavy：
+  - `ownership lifecycle / public-pool / claim-lock / lastOwner`
+  - `followUp / call / wechat / live invitation`
+  - `tradeOrder / paymentPlan / paymentRecord / collectionTask`
+  - `shippingTask / logisticsFollowUp / COD`
+  - `merge / import audit / linked lead`
+- 仍应阻断 move 的 Customer：
+  - `DORMANT / LOST / BLACKLISTED`
+  - `PUBLIC / LOCKED`
+  - 已进入 `/customers/public-pool`
+  - 已进入 merge 主流程
+- 允许 move 的 Customer 新语义：
+  - 进入 `3` 天冷静期。
+  - 退出主工作台，但不预判 `3` 天后一定能 `PURGE`。
+  - 到期后必须重新按最新服务端真相判断 `PURGE` 或 `ARCHIVE`。
+- `3` 天到期后的 Customer 终态：
+  - 轻对象：`PURGE`
+  - 重对象：`ARCHIVE`
+- Customer `ARCHIVE` 语义：
+  - 保留 customer id 与下游锚点。
+  - 不再回到 `/customers` 主工作台。
+  - 对 `phone / wechatId / address / remark` 脱敏或清空。
+  - `name` 仅保留最小可读掩码。
+
+TradeOrder 规则：
+
+- 轻对象：
+  - 纯误建草稿单。
+  - `tradeStatus = DRAFT`。
+  - 尚未生成 `SalesOrder`。
+  - 尚未进入审核、支付、催收、履约、导出、物流、COD 链。
+- 重对象：
+  - 只要满足以下任一条件，即视为 heavy：
+  - 非 `DRAFT`
+  - 已生成 `SalesOrder`
+  - 已有 `paymentPlan / paymentRecord / collectionTask`
+  - 已有 `shippingTask / exportLine / logisticsFollowUp / COD`
+  - 已进入审核、驳回、取消、作废、关闭等正式业务语义
+- TradeOrder move 放宽边界：
+  - 放宽的是“与其他对象有关联”本身不再自动等于不能 move。
+  - 但仍不应把正在活跃支付、履约、物流执行中的订单直接放进 recycle；否则会破坏 `/fulfillment` 当前执行真相。
+  - move 放宽仅适用于“存在历史关联，但已不再承担活跃执行主视图职责”的对象。
+- `3` 天到期后的 TradeOrder 终态：
+  - 轻对象：`PURGE`
+  - 重对象：`ARCHIVE`
+- TradeOrder `ARCHIVE` 语义：
+  - 保留 `tradeNo / customer snapshot / tradeStatus / reviewStatus / finalAmount` 及对子单、支付、催收、履约、导出、物流、COD 的锚点。
+  - 对 `receiverName / receiverPhone / 地址快照` 做脱敏。
+  - 不再作为主工作台活跃对象返回。
+
+双终态 lifecycle contract：
+
+- `move`
+  - 语义：进入 `3` 天冷静期。
+  - 结论：`move` 成功不代表将来一定能 `PURGE`。
+  - 约束：前端不在组件里预测最终终态，只消费服务端返回。
+- `restore`
+  - 截止点：只允许在对象仍处于回收站冷静期、且尚未完成最终 `PURGE` 或 `ARCHIVE` 前执行。
+  - 到达最终 `PURGE` 或最终 `ARCHIVE` 后，不再从 recycle-bin 恢复回 active 对象。
+  - `Customer` 补充：`DORMANT / LOST / BLACKLISTED` 阻断 move，但不阻断冷静期内 restore。
+  - `TradeOrder` 补充：restore 不回滚原有取消 / 驳回 / 关闭等业务真相，只负责撤销 recycle 态。
+- `finalize`
+  - 触发点：对象进入回收站满 `3` 天。
+  - 判断源：必须基于“最新服务端真相”重算。
+  - 禁止事项：不允许只依赖 `move` 当时快照做最终处理。
+  - 固定终态：
+    - `PURGE`
+    - `ARCHIVE`
+  - 判断原则：
+    - 最新真相仍为 light：`PURGE`
+    - 最新真相已为 heavy：`ARCHIVE`
+- `PURGE`
+  - 只允许 light 对象进入。
+  - 表示真实物理删除。
+- `ARCHIVE`
+  - 只允许 heavy 对象进入。
+  - 表示最终封存 / 脱敏归档，不等于物理删除。
+  - 必须与 `PURGED` 保持独立语义。
+
+`/recycle-bin` 展示 contract：
+
+- `customers` 与 `trade-orders` 两个 tab 都要展示：
+  - `最终处理：可 purge`
+  - `最终处理：仅封存`
+  - `剩余时间`
+- 剩余时间固定以“距最终处理”口径展示，例如：
+  - `距最终处理 2d 6h`
+- 冷静期内的按钮语义：
+  - light 对象显示 `永久删除`
+  - heavy 对象不显示 `永久删除`
+  - heavy 对象只显示 `3 天后仅封存`
+- “提前永久删除”规则：
+  - 只对 light 对象开放
+  - 仅管理员可见
+- blocker / summary 展示方向：
+  - 不再只回答“能不能删”
+  - 要明确回答“为什么最终可 purge”或“为什么最终仅封存”
+
+必须先改规则再实现的项：
+
+- 先把保留期口径从当前历史值统一为 `3` 天冷静期，再谈后续实现。
+- 先把 lifecycle 口径从“restore / purge 二元”改成“move / restore / finalize，且 finalize = `PURGE | ARCHIVE`”。
+- 先确认 `Customer / TradeOrder` 的 light / heavy 判定口径，再改 move guard 放宽范围。
+- 先确认 heavy 对象的 `ARCHIVE` 语义不是“伪装成 purged”，再做最终处理实现。
+- 先确认 `/recycle-bin` 的按钮和文案语义，再开放“提前永久删除”。
+- 先确认到期重算必须基于最新服务端真相，再做任何定时最终处理。

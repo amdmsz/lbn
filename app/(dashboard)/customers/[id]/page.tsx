@@ -27,7 +27,10 @@ import {
 } from "@/lib/customers/queries";
 import { prisma } from "@/lib/db/prisma";
 import { parseMasterDataNotice } from "@/lib/master-data/metadata";
-import { getCustomerRecycleTarget } from "@/lib/recycle-bin/customer-adapter";
+import {
+  buildCustomerFinalizePreview,
+  getCustomerRecycleTarget,
+} from "@/lib/recycle-bin/customer-adapter";
 import { getCustomerTradeOrderComposerData } from "@/lib/trade-orders/queries";
 import {
   deleteImportedCustomerDirectAction,
@@ -148,18 +151,25 @@ export default async function CustomerDetailPage({
   const canEditProfile =
     session.user.role !== "SALES" || isOwnedByCurrentSales;
   const callResultOptions = canCreateCalls ? await getEnabledCallResultOptions() : [];
-  const tradeOrderComposer =
-    activeTab === "orders" && createTradeOrder && canCreateSalesOrders
-      ? await getCustomerTradeOrderComposerData(
-          {
-            id: session.user.id,
-            role: session.user.role,
-          },
-          id,
-          tradeOrderId || undefined,
-        )
-      : null;
-  const customerRecycleTarget = await getCustomerRecycleTarget(prisma, "CUSTOMER", id);
+  const [tradeOrderComposer, customerRecycleTarget, customerFinalizePreview] =
+    await Promise.all([
+      activeTab === "orders" && createTradeOrder && canCreateSalesOrders
+        ? getCustomerTradeOrderComposerData(
+            {
+              id: session.user.id,
+              role: session.user.role,
+            },
+            id,
+            tradeOrderId || undefined,
+          )
+        : Promise.resolve(null),
+      getCustomerRecycleTarget(prisma, "CUSTOMER", id),
+      buildCustomerFinalizePreview(prisma, {
+        targetType: "CUSTOMER",
+        targetId: id,
+        domain: "CUSTOMER",
+      }),
+    ]);
 
   return (
     <CustomerDetailWorkbench
@@ -190,6 +200,7 @@ export default async function CustomerDetailPage({
       canCreateSalesOrders={canCreateSalesOrders}
       tradeOrderComposer={tradeOrderComposer}
       customerRecycleGuard={customerRecycleTarget?.guard ?? null}
+      customerFinalizePreview={customerFinalizePreview}
       moveCustomerToRecycleBinAction={moveCustomerToRecycleBinAction}
       updateCustomerProfileAction={updateCustomerProfileAction}
       saveTradeOrderDraftAction={saveTradeOrderDraftAction}

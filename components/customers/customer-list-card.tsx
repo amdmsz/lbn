@@ -2,9 +2,9 @@
 
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import { FilePlus2, FileText, MoreHorizontal, Phone, SquarePen } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { CustomerCallRecordForm } from "@/components/customers/customer-call-record-form";
 import { CustomerCallRecordHistory } from "@/components/customers/customer-call-record-history";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -169,11 +169,17 @@ export function CustomerListCard({
   callResultOptions,
   canCreateCallRecord,
   canCreateSalesOrder = false,
+  selectable = false,
+  selected = false,
+  onToggleSelected,
 }: Readonly<{
   item: CustomerListItem;
   callResultOptions: CallResultOption[];
   canCreateCallRecord: boolean;
   canCreateSalesOrder?: boolean;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelected?: () => void;
 }>) {
   const router = useRouter();
   const mobileMenuRef = useRef<HTMLDivElement>(null);
@@ -283,32 +289,46 @@ export function CustomerListCard({
         )}
       >
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate text-[18px] font-semibold leading-5 tracking-[-0.03em] text-[#0f172a]">
-                {item.name}
-              </h3>
-              <StatusBadge
-                label={
-                  primaryStatus
-                    ? getCustomerWorkStatusLabel(primaryStatus)
-                    : getCustomerStatusLabel(item.status)
-                }
-                variant={
-                  primaryStatus ? getCustomerWorkStatusVariant(primaryStatus) : "neutral"
-                }
-              />
-            </div>
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            {selectable ? (
+              <div className="flex shrink-0 items-center pt-0.5" onClick={stopCardNavigation}>
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  onChange={() => onToggleSelected?.()}
+                  aria-label={`选择客户 ${item.name}`}
+                  className="h-4 w-4 rounded border border-black/18 text-black focus:ring-black/15"
+                />
+              </div>
+            ) : null}
 
-            <p className="mt-1.5 text-[18px] font-semibold leading-none tracking-[0.02em] text-[#0f172a] tabular-nums">
-              {phoneText}
-            </p>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="truncate text-[18px] font-semibold leading-5 tracking-[-0.03em] text-[#0f172a]">
+                  {item.name}
+                </h3>
+                <StatusBadge
+                  label={
+                    primaryStatus
+                      ? getCustomerWorkStatusLabel(primaryStatus)
+                      : getCustomerStatusLabel(item.status)
+                  }
+                  variant={
+                    primaryStatus ? getCustomerWorkStatusVariant(primaryStatus) : "neutral"
+                  }
+                />
+              </div>
 
-            <div className="mt-2.5 flex items-start gap-2 text-[12px] leading-5 text-black/56">
-              <span className="shrink-0 font-medium text-black/38">最近意向</span>
-              <p title={recentInterest} className="min-w-0 truncate font-medium text-black/76">
-                {recentInterest}
+              <p className="mt-1.5 text-[18px] font-semibold leading-none tracking-[0.02em] text-[#0f172a] tabular-nums">
+                {phoneText}
               </p>
+
+              <div className="mt-2.5 flex items-start gap-2 text-[12px] leading-5 text-black/56">
+                <span className="shrink-0 font-medium text-black/38">最近意向</span>
+                <p title={recentInterest} className="min-w-0 truncate font-medium text-black/76">
+                  {recentInterest}
+                </p>
+              </div>
             </div>
           </div>
 

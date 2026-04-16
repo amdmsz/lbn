@@ -10,6 +10,8 @@ import {
 import { assertActorCanAccessCustomerRecycleTarget } from "@/lib/customers/recycle";
 import { prisma } from "@/lib/db/prisma";
 import {
+  archiveCustomerTarget,
+  buildCustomerFinalizePreview,
   buildCustomerPurgeGuard,
   buildCustomerRestoreGuard,
   getCustomerRecycleTarget,
@@ -34,6 +36,8 @@ import {
   purgeMasterDataTarget,
 } from "@/lib/recycle-bin/master-data-adapter";
 import {
+  archiveTradeOrderTarget,
+  buildTradeOrderFinalizePreview,
   buildTradeOrderPurgeGuard,
   buildTradeOrderRestoreGuard,
   getTradeOrderRecycleTarget,
@@ -44,15 +48,21 @@ import {
   findRecycleEntryById,
   findActiveRecycleEntry,
   isRecycleEntryUniqueConflict,
+  resolveRecycleEntryAsArchived,
   resolveRecycleEntryAsPurged,
   resolveRecycleEntryAsRestored,
 } from "@/lib/recycle-bin/repository";
 import {
+  type FinalizeRecycleBinInput,
+  type FinalizeRecycleBinResult,
   RECYCLE_REASON_CODE_MAP,
   type MoveToRecycleBinInput,
   type MoveToRecycleBinResult,
+  type PreviewRecycleBinFinalizeInput,
+  type PreviewRecycleBinFinalizeResult,
   type PurgeFromRecycleBinInput,
   type PurgeFromRecycleBinResult,
+  type RecycleFinalizePreview,
   type RecyclePurgeGuard,
   type RecycleRestoreGuard,
   type RecycleLifecycleActor,
@@ -61,7 +71,7 @@ import {
   type RecycleTargetSnapshot,
 } from "@/lib/recycle-bin/types";
 
-const RECYCLE_RETENTION_DAYS = 30;
+export const RECYCLE_RETENTION_DAYS = 3;
 
 type RecycleTx = Prisma.TransactionClient;
 
@@ -131,6 +141,88 @@ function ensurePurgePermission(actor: RecycleLifecycleActor) {
   if (actor.role !== "ADMIN") {
     throw new Error("Only ADMIN can permanently delete recycle-bin targets.");
   }
+}
+
+function ensureFinalizePermission(actor: RecycleLifecycleActor) {
+  if (actor.role !== "ADMIN") {
+    throw new Error("Only ADMIN can finalize recycle-bin targets.");
+  }
+}
+
+function isRecycleEntryExpired(entry: { recycleExpiresAt: Date }, now = new Date()) {
+  return entry.recycleExpiresAt.getTime() <= now.getTime();
+}
+
+async function ensureActorCanAccessRecycleEntry(
+  tx: RecycleTx,
+  actor: RecycleLifecycleActor,
+  entry: {
+    targetType: RecycleTargetType;
+    targetId: string;
+    blockerSnapshotJson: unknown;
+  },
+) {
+  if (entry.targetType === "CUSTOMER") {
+    await assertActorCanAccessCustomerRecycleTarget(tx, actor, {
+      customerId: entry.targetId,
+      snapshotJson: entry.blockerSnapshotJson,
+    });
+  }
+
+  ensureMoveToRecycleBinPermission(actor, entry.targetType);
+}
+
+function buildExpiredRestoreGuard(restoreRouteSnapshot: string): RecycleRestoreGuard {
+  return {
+    canRestore: false,
+    blockerSummary: "3 天冷静期已结束，当前条目只能进入最终处理，不能再恢复。",
+    blockers: [
+      {
+        code: "recycle_restore_window_closed",
+        name: "恢复窗口已关闭",
+        description: "3 天冷静期已结束，当前条目只能进入最终处理，不能再恢复。",
+        group: "object_state",
+        suggestedAction: "改走最终处理，不再从回收站恢复到主工作台。",
+      },
+    ],
+    restoreRouteSnapshot,
+  };
+}
+
+function buildFinalizePreviewFromPurgeGuard(
+  guard: RecyclePurgeGuard,
+): RecycleFinalizePreview {
+  return {
+    canFinalize: guard.canPurge,
+    targetExists: true,
+    finalAction: "PURGE",
+    finalActionLabel: "可 purge",
+    blockerSummary: guard.blockerSummary,
+    blockers: guard.blockers,
+    canEarlyPurge: guard.canPurge,
+    earlyPurgeRequiresAdmin: true,
+  };
+}
+
+function buildPurgeGuardFromFinalizePreview(
+  preview: RecycleFinalizePreview,
+): RecyclePurgeGuard {
+  if (preview.canEarlyPurge) {
+    return {
+      canPurge: true,
+      blockerSummary: preview.blockerSummary,
+      blockers: [],
+    };
+  }
+
+  return {
+    canPurge: false,
+    blockerSummary:
+      preview.finalAction === "ARCHIVE"
+        ? "当前对象 3 天后仅封存，不支持提前永久删除。"
+        : preview.blockerSummary,
+    blockers: preview.blockers,
+  };
 }
 
 async function loadRecycleTarget(
@@ -267,6 +359,30 @@ async function buildPurgeGuard(
   };
 }
 
+async function buildFinalizePreview(
+  tx: RecycleTx,
+  input: {
+    targetType: RecycleTargetType;
+    targetId: string;
+    domain: "PRODUCT_MASTER_DATA" | "LIVE_SESSION" | "LEAD" | "TRADE_ORDER" | "CUSTOMER";
+  },
+): Promise<RecycleFinalizePreview> {
+  const customerPreview = await buildCustomerFinalizePreview(tx, input);
+
+  if (customerPreview) {
+    return customerPreview;
+  }
+
+  const tradeOrderPreview = await buildTradeOrderFinalizePreview(tx, input);
+
+  if (tradeOrderPreview) {
+    return tradeOrderPreview;
+  }
+
+  const purgeGuard = await buildPurgeGuard(tx, input);
+  return buildFinalizePreviewFromPurgeGuard(purgeGuard);
+}
+
 async function purgeRecycleTarget(
   tx: RecycleTx,
   input: {
@@ -305,6 +421,29 @@ async function purgeRecycleTarget(
   }
 
   throw new Error("Unsupported recycle-bin purge target type.");
+}
+
+async function archiveRecycleTarget(
+  tx: RecycleTx,
+  input: {
+    targetType: RecycleTargetType;
+    targetId: string;
+    preview: RecycleFinalizePreview;
+  },
+) {
+  const archivedTradeOrder = await archiveTradeOrderTarget(tx, input);
+
+  if (archivedTradeOrder) {
+    return archivedTradeOrder;
+  }
+
+  const archivedCustomer = await archiveCustomerTarget(tx, input);
+
+  if (archivedCustomer) {
+    return archivedCustomer;
+  }
+
+  throw new Error("Unsupported recycle-bin archive target type.");
 }
 
 function buildAlreadyInRecycleBinResult(
@@ -467,6 +606,63 @@ function getPurgeOperationMeta(input: {
   throw new Error("Unsupported recycle-bin purge target type.");
 }
 
+function getArchiveOperationMeta(input: {
+  targetType: RecycleTargetType;
+  titleSnapshot: string;
+}) {
+  if (input.targetType === "TRADE_ORDER") {
+    return {
+      module: "SALES_ORDER" as const,
+      targetType: "TRADE_ORDER" as const,
+      action: "trade_order.archived_from_recycle_bin",
+      description: `Archived trade order from recycle bin: ${input.titleSnapshot}`,
+    };
+  }
+
+  if (input.targetType === "CUSTOMER") {
+    return {
+      module: "CUSTOMER" as const,
+      targetType: "CUSTOMER" as const,
+      action: "customer.archived_from_recycle_bin",
+      description: `Archived customer from recycle bin: ${input.titleSnapshot}`,
+    };
+  }
+
+  throw new Error("Unsupported recycle-bin archive target type.");
+}
+
+export async function previewRecycleBinFinalize(
+  actor: RecycleLifecycleActor,
+  input: PreviewRecycleBinFinalizeInput,
+): Promise<PreviewRecycleBinFinalizeResult> {
+  return prisma.$transaction(async (tx) => {
+    const entry = await findRecycleEntryById(tx, input.entryId);
+
+    if (!entry) {
+      throw new Error("The recycle-bin entry does not exist.");
+    }
+
+    if (entry.status !== RecycleEntryStatus.ACTIVE) {
+      throw new Error("Only active recycle-bin entries can preview finalization.");
+    }
+
+    await ensureActorCanAccessRecycleEntry(tx, actor, entry);
+
+    return {
+      entryId: entry.id,
+      targetType: entry.targetType,
+      targetId: entry.targetId,
+      isExpired: isRecycleEntryExpired(entry),
+      expiresAt: entry.recycleExpiresAt.toISOString(),
+      preview: await buildFinalizePreview(tx, {
+        targetType: entry.targetType,
+        targetId: entry.targetId,
+        domain: entry.domain,
+      }),
+    };
+  });
+}
+
 export async function moveToRecycleBin(
   actor: RecycleLifecycleActor,
   input: MoveToRecycleBinInput,
@@ -576,14 +772,21 @@ export async function restoreFromRecycleBin(
       throw new Error("Only active recycle-bin entries can be restored.");
     }
 
-    if (entry.targetType === "CUSTOMER") {
-      await assertActorCanAccessCustomerRecycleTarget(tx, actor, {
-        customerId: entry.targetId,
-        snapshotJson: entry.blockerSnapshotJson,
-      });
-      ensureRestorePermission(actor, entry.targetType);
-    } else {
-      ensureRestorePermission(actor, entry.targetType);
+    await ensureActorCanAccessRecycleEntry(tx, actor, entry);
+    ensureRestorePermission(actor, entry.targetType);
+
+    if (isRecycleEntryExpired(entry)) {
+      const guard = buildExpiredRestoreGuard(entry.restoreRouteSnapshot);
+
+      return {
+        status: "blocked",
+        message: guard.blockerSummary,
+        entryId: entry.id,
+        targetType: entry.targetType,
+        targetId: entry.targetId,
+        restoreRouteSnapshot: entry.restoreRouteSnapshot,
+        guard,
+      };
     }
 
     const guard = await buildRestoreGuard(tx, {
@@ -659,12 +862,14 @@ export async function purgeFromRecycleBin(
     }
 
     ensurePurgePermission(actor);
+    await ensureActorCanAccessRecycleEntry(tx, actor, entry);
 
-    const guard = await buildPurgeGuard(tx, {
+    const preview = await buildFinalizePreview(tx, {
       targetType: entry.targetType,
       targetId: entry.targetId,
       domain: entry.domain,
     });
+    const guard = buildPurgeGuardFromFinalizePreview(preview);
 
     if (!guard.canPurge) {
       return {
@@ -677,10 +882,12 @@ export async function purgeFromRecycleBin(
       };
     }
 
-    await purgeRecycleTarget(tx, {
-      targetType: entry.targetType,
-      targetId: entry.targetId,
-    });
+    if (preview.targetExists) {
+      await purgeRecycleTarget(tx, {
+        targetType: entry.targetType,
+        targetId: entry.targetId,
+      });
+    }
 
     await resolveRecycleEntryAsPurged(tx, {
       entryId: entry.id,
@@ -714,6 +921,141 @@ export async function purgeFromRecycleBin(
       targetType: entry.targetType,
       targetId: entry.targetId,
       guard,
+    };
+  });
+}
+
+export async function finalizeRecycleBinEntry(
+  actor: RecycleLifecycleActor,
+  input: FinalizeRecycleBinInput,
+): Promise<FinalizeRecycleBinResult> {
+  return prisma.$transaction(async (tx) => {
+    const entry = await findRecycleEntryById(tx, input.entryId);
+
+    if (!entry) {
+      throw new Error("The recycle-bin entry does not exist.");
+    }
+
+    if (entry.status !== RecycleEntryStatus.ACTIVE) {
+      throw new Error("Only active recycle-bin entries can be finalized.");
+    }
+
+    ensureFinalizePermission(actor);
+    await ensureActorCanAccessRecycleEntry(tx, actor, entry);
+
+    const preview = await buildFinalizePreview(tx, {
+      targetType: entry.targetType,
+      targetId: entry.targetId,
+      domain: entry.domain,
+    });
+
+    if (!isRecycleEntryExpired(entry)) {
+      return {
+        status: "blocked",
+        message: "3 天冷静期未结束，当前条目还不能执行最终处理。",
+        entryId: entry.id,
+        targetType: entry.targetType,
+        targetId: entry.targetId,
+        preview,
+      };
+    }
+
+    if (!preview.canFinalize) {
+      return {
+        status: "blocked",
+        message: preview.blockerSummary,
+        entryId: entry.id,
+        targetType: entry.targetType,
+        targetId: entry.targetId,
+        preview,
+      };
+    }
+
+    if (preview.finalAction === "PURGE") {
+      if (preview.targetExists) {
+        await purgeRecycleTarget(tx, {
+          targetType: entry.targetType,
+          targetId: entry.targetId,
+        });
+      }
+
+      await resolveRecycleEntryAsPurged(tx, {
+        entryId: entry.id,
+        resolvedById: actor.id,
+      });
+
+      const operationMeta = getPurgeOperationMeta({
+        targetType: entry.targetType,
+        titleSnapshot: entry.titleSnapshot,
+      });
+
+      await tx.operationLog.create({
+        data: {
+          actorId: actor.id,
+          module: operationMeta.module,
+          action: operationMeta.action,
+          targetType: operationMeta.targetType,
+          targetId: entry.targetId,
+          description: operationMeta.description,
+          afterData: {
+            recycleEntryId: entry.id,
+            recycleStatus: RecycleEntryStatus.PURGED,
+            recycleFinalAction: "PURGE",
+          },
+        },
+      });
+
+      return {
+        status: "purged",
+        message: "The target was finalized as PURGE.",
+        entryId: entry.id,
+        targetType: entry.targetType,
+        targetId: entry.targetId,
+        preview,
+      };
+    }
+
+    const archivePayload = await archiveRecycleTarget(tx, {
+      targetType: entry.targetType,
+      targetId: entry.targetId,
+      preview,
+    });
+
+    await resolveRecycleEntryAsArchived(tx, {
+      entryId: entry.id,
+      resolvedById: actor.id,
+      archivePayloadJson: archivePayload,
+    });
+
+    const operationMeta = getArchiveOperationMeta({
+      targetType: entry.targetType,
+      titleSnapshot: entry.titleSnapshot,
+    });
+
+    await tx.operationLog.create({
+      data: {
+        actorId: actor.id,
+        module: operationMeta.module,
+        action: operationMeta.action,
+        targetType: operationMeta.targetType,
+        targetId: entry.targetId,
+        description: operationMeta.description,
+        afterData: {
+          recycleEntryId: entry.id,
+          recycleStatus: RecycleEntryStatus.ARCHIVED,
+          recycleFinalAction: "ARCHIVE",
+          archivePayload: archivePayload as Prisma.InputJsonValue,
+        } as Prisma.InputJsonValue,
+      },
+    });
+
+    return {
+      status: "archived",
+      message: "The target was finalized as ARCHIVE.",
+      entryId: entry.id,
+      targetType: entry.targetType,
+      targetId: entry.targetId,
+      preview,
     };
   });
 }

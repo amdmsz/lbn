@@ -10,6 +10,11 @@ import { prisma } from "@/lib/db/prisma";
 
 type RecycleDbClient = typeof prisma | Prisma.TransactionClient;
 
+export const HIDDEN_RECYCLE_ENTRY_STATUSES = [
+  RecycleEntryStatus.ACTIVE,
+  RecycleEntryStatus.ARCHIVED,
+] as const;
+
 export function buildActiveRecycleEntryKey(
   targetType: RecycleTargetType,
   targetId: string,
@@ -31,6 +36,36 @@ export async function findActiveRecycleEntry(
   });
 }
 
+export async function findRecycleEntryByStatuses(
+  db: RecycleDbClient,
+  targetType: RecycleTargetType,
+  targetId: string,
+  statuses: readonly RecycleEntryStatus[],
+) {
+  return db.recycleBinEntry.findFirst({
+    where: {
+      targetType,
+      targetId,
+      status: {
+        in: [...statuses],
+      },
+    },
+  });
+}
+
+export async function findHiddenRecycleEntry(
+  db: RecycleDbClient,
+  targetType: RecycleTargetType,
+  targetId: string,
+) {
+  return findRecycleEntryByStatuses(
+    db,
+    targetType,
+    targetId,
+    HIDDEN_RECYCLE_ENTRY_STATUSES,
+  );
+}
+
 export async function findRecycleEntryById(db: RecycleDbClient, entryId: string) {
   return db.recycleBinEntry.findUnique({
     where: {
@@ -43,10 +78,20 @@ export async function findActiveTargetIds(
   db: RecycleDbClient,
   targetType: RecycleTargetType,
 ) {
+  return findTargetIdsByStatuses(db, targetType, [RecycleEntryStatus.ACTIVE]);
+}
+
+export async function findTargetIdsByStatuses(
+  db: RecycleDbClient,
+  targetType: RecycleTargetType,
+  statuses: readonly RecycleEntryStatus[],
+) {
   const rows = await db.recycleBinEntry.findMany({
     where: {
       targetType,
-      status: RecycleEntryStatus.ACTIVE,
+      status: {
+        in: [...statuses],
+      },
     },
     select: {
       targetId: true,
@@ -56,10 +101,31 @@ export async function findActiveTargetIds(
   return rows.map((row) => row.targetId);
 }
 
+export async function findHiddenTargetIds(
+  db: RecycleDbClient,
+  targetType: RecycleTargetType,
+) {
+  return findTargetIdsByStatuses(db, targetType, HIDDEN_RECYCLE_ENTRY_STATUSES);
+}
+
 export async function findActiveRecycleEntriesByTargetIds(
   db: RecycleDbClient,
   targetType: RecycleTargetType,
   targetIds: string[],
+) {
+  return findRecycleEntriesByTargetIdsAndStatuses(
+    db,
+    targetType,
+    targetIds,
+    [RecycleEntryStatus.ACTIVE],
+  );
+}
+
+export async function findRecycleEntriesByTargetIdsAndStatuses(
+  db: RecycleDbClient,
+  targetType: RecycleTargetType,
+  targetIds: string[],
+  statuses: readonly RecycleEntryStatus[],
 ) {
   if (targetIds.length === 0) {
     return [];
@@ -71,13 +137,28 @@ export async function findActiveRecycleEntriesByTargetIds(
       targetId: {
         in: targetIds,
       },
-      status: RecycleEntryStatus.ACTIVE,
+      status: {
+        in: [...statuses],
+      },
     },
     select: {
       id: true,
       targetId: true,
     },
   });
+}
+
+export async function findHiddenRecycleEntriesByTargetIds(
+  db: RecycleDbClient,
+  targetType: RecycleTargetType,
+  targetIds: string[],
+) {
+  return findRecycleEntriesByTargetIdsAndStatuses(
+    db,
+    targetType,
+    targetIds,
+    HIDDEN_RECYCLE_ENTRY_STATUSES,
+  );
 }
 
 export async function countActiveRecycleEntries(
@@ -116,6 +197,34 @@ export async function listActiveRecycleEntries(
     orderBy: {
       deletedAt: "desc",
     },
+  });
+}
+
+export async function listExpiredActiveRecycleEntries(
+  db: RecycleDbClient,
+  input?: {
+    domain?: RecycleDomain;
+    limit?: number;
+    now?: Date;
+  },
+) {
+  return db.recycleBinEntry.findMany({
+    where: {
+      status: RecycleEntryStatus.ACTIVE,
+      domain: input?.domain,
+      recycleExpiresAt: {
+        lte: input?.now ?? new Date(),
+      },
+    },
+    orderBy: [
+      {
+        recycleExpiresAt: "asc",
+      },
+      {
+        deletedAt: "asc",
+      },
+    ],
+    take: input?.limit,
   });
 }
 
@@ -199,6 +308,31 @@ export async function resolveRecycleEntryAsPurged(
   });
 }
 
+export async function resolveRecycleEntryAsArchived(
+  db: RecycleDbClient,
+  input: {
+    entryId: string;
+    resolvedById: string;
+    archivePayloadJson: unknown;
+  },
+) {
+  return db.recycleBinEntry.update({
+    where: {
+      id: input.entryId,
+    },
+    data: {
+      status: RecycleEntryStatus.ARCHIVED,
+      activeEntryKey: null,
+      resolvedAt: new Date(),
+      resolvedById: input.resolvedById,
+      archivePayloadJson:
+        input.archivePayloadJson === undefined
+          ? Prisma.JsonNull
+          : (input.archivePayloadJson as Prisma.InputJsonValue),
+    },
+  });
+}
+
 export function isRecycleEntryUniqueConflict(error: unknown) {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -208,4 +342,13 @@ export function isRecycleEntryUniqueConflict(error: unknown) {
 
 export function isActiveRecycleEntry(entry: Pick<RecycleBinEntry, "status"> | null) {
   return entry?.status === RecycleEntryStatus.ACTIVE;
+}
+
+export function isHiddenRecycleEntry(entry: Pick<RecycleBinEntry, "status"> | null) {
+  return Boolean(
+    entry &&
+      HIDDEN_RECYCLE_ENTRY_STATUSES.includes(
+        entry.status as (typeof HIDDEN_RECYCLE_ENTRY_STATUSES)[number],
+      ),
+  );
 }

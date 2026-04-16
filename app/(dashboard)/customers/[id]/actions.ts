@@ -15,14 +15,21 @@ import {
   CUSTOMER_RECYCLE_REASON_OPTIONS,
   type CustomerRecycleReasonCode,
 } from "@/lib/customers/recycle";
+import { prisma } from "@/lib/db/prisma";
 import { updateCustomerProfile } from "@/lib/customers/mutations";
+import {
+  buildCustomerFinalizePreview,
+} from "@/lib/recycle-bin/customer-adapter";
 import {
   deleteImportedCustomersDirect,
   requestImportedCustomerDeletion,
   reviewImportedCustomerDeletion,
 } from "@/lib/customers/imported-customer-deletion";
 import { moveToRecycleBin } from "@/lib/recycle-bin/lifecycle";
-import type { MoveToRecycleBinResult } from "@/lib/recycle-bin/types";
+import type {
+  MoveToRecycleBinResult,
+  RecycleFinalizePreview,
+} from "@/lib/recycle-bin/types";
 import {
   saveTradeOrderDraft,
   submitTradeOrderForReview,
@@ -50,6 +57,7 @@ export type CustomerRecycleActionResult = {
   message: string;
   recycleStatus?: MoveToRecycleBinResult["status"];
   guard?: MoveToRecycleBinResult["guard"];
+  finalizePreview?: RecycleFinalizePreview | null;
 };
 
 function getErrorMessage(error: unknown) {
@@ -469,7 +477,20 @@ export async function moveCustomerToRecycleBinAction(
       revalidatePath("/recycle-bin");
     }
 
-    return buildCustomerRecycleActionResult(result);
+    const actionResult = buildCustomerRecycleActionResult(result);
+
+    if (result.status === "blocked") {
+      return {
+        ...actionResult,
+        finalizePreview: await buildCustomerFinalizePreview(prisma, {
+          targetType: "CUSTOMER",
+          targetId: customerId,
+          domain: "CUSTOMER",
+        }),
+      };
+    }
+
+    return actionResult;
   } catch (error) {
     return {
       status: "error",

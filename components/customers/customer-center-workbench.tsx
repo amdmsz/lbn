@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { RoleCode } from "@prisma/client";
 import {
   canAccessCustomerPublicPool,
+  canBatchManageCustomerTags,
   canCreateCallRecord,
   canCreateSalesOrder,
 } from "@/lib/auth/access";
@@ -412,6 +413,8 @@ export function CustomerCenterWorkbench({
           callResultOptions={data.callResultOptions}
           canCreateCallRecord={canCreateCallRecord(role)}
           canCreateSalesOrder={canCreateSalesOrder(role)}
+          canBatchAddTags={canBatchManageCustomerTags(role)}
+          batchTagOptions={data.tagOptions}
           emptyTitle="当前筛选条件下没有客户"
           emptyDescription="试试调整筛选条件或重置工作台范围。"
           filters={data.filters}

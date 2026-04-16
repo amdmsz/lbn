@@ -66,7 +66,10 @@ import {
   getShippingStatusLabel,
 } from "@/lib/fulfillment/metadata";
 import { getLeadSourceLabel, getLeadStatusLabel } from "@/lib/leads/metadata";
-import type { RecycleMoveGuard } from "@/lib/recycle-bin/types";
+import type {
+  RecycleFinalizePreview,
+  RecycleMoveGuard,
+} from "@/lib/recycle-bin/types";
 import { cn } from "@/lib/utils";
 
 type CustomerDetailShellData = NonNullable<
@@ -126,6 +129,7 @@ type MoveCustomerToRecycleBinAction = (formData: FormData) => Promise<{
   message: string;
   recycleStatus?: "created" | "already_in_recycle_bin" | "blocked";
   guard?: RecycleMoveGuard;
+  finalizePreview?: RecycleFinalizePreview | null;
 }>;
 
 type CustomerDetailTabDataMap = {
@@ -1318,6 +1322,7 @@ export function CustomerDetailWorkbench({
   tradeOrderComposer,
   navigationContext,
   customerRecycleGuard,
+  customerFinalizePreview,
   moveCustomerToRecycleBinAction,
   updateCustomerProfileAction,
   saveTradeOrderDraftAction,
@@ -1344,6 +1349,7 @@ export function CustomerDetailWorkbench({
   saveTradeOrderDraftAction?: (formData: FormData) => Promise<void>;
   submitTradeOrderForReviewAction?: (formData: FormData) => Promise<void>;
   customerRecycleGuard: RecycleMoveGuard | null;
+  customerFinalizePreview: RecycleFinalizePreview | null;
   moveCustomerToRecycleBinAction?: MoveCustomerToRecycleBinAction;
   requestImportedCustomerDeletionAction: ImportedCustomerDeletionAction;
   reviewImportedCustomerDeletionAction: ImportedCustomerDeletionReviewAction;
@@ -1546,6 +1552,7 @@ export function CustomerDetailWorkbench({
                     approvedTradeOrderCount={shell.tradeOrderSummary.approvedCount}
                     linkedLeadCount={shell.importSummary.linkedLeadCount}
                     initialGuard={customerRecycleGuard}
+                    initialFinalizePreview={customerFinalizePreview}
                     moveToRecycleBinAction={moveCustomerToRecycleBinAction}
                   />
                 ) : null}

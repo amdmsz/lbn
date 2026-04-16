@@ -79,6 +79,27 @@ export type RecycleRestoreGuard = {
   restoreRouteSnapshot: string;
 };
 
+export type RecycleFinalizeAction = "PURGE" | "ARCHIVE";
+
+export type RecycleFinalizeBlocker = {
+  code?: string;
+  group?: string;
+  suggestedAction?: string;
+  name: string;
+  description: string;
+};
+
+export type RecycleFinalizePreview = {
+  canFinalize: boolean;
+  targetExists: boolean;
+  finalAction: RecycleFinalizeAction;
+  finalActionLabel: string;
+  blockerSummary: string;
+  blockers: RecycleFinalizeBlocker[];
+  canEarlyPurge: boolean;
+  earlyPurgeRequiresAdmin: boolean;
+};
+
 export type MoveToRecycleBinResult =
   | {
       status: "created";
@@ -156,6 +177,57 @@ export type PurgeFromRecycleBinResult =
       targetType: RecycleTargetType;
       targetId: string;
       guard: RecyclePurgeGuard;
+    };
+
+export type PreviewRecycleBinFinalizeInput = {
+  entryId: string;
+};
+
+export type PreviewRecycleBinFinalizeResult = {
+  entryId: string;
+  targetType: RecycleTargetType;
+  targetId: string;
+  isExpired: boolean;
+  expiresAt: string;
+  preview: RecycleFinalizePreview;
+};
+
+export type FinalizeRecycleBinInput = {
+  entryId: string;
+};
+
+export type RecycleArchivePayload = {
+  finalAction: "ARCHIVE";
+  archivedAt: string;
+  blockerSummary: string;
+  blockers: RecycleFinalizeBlocker[];
+  snapshot: Record<string, unknown>;
+};
+
+export type FinalizeRecycleBinResult =
+  | {
+      status: "purged";
+      message: string;
+      entryId: string;
+      targetType: RecycleTargetType;
+      targetId: string;
+      preview: RecycleFinalizePreview;
+    }
+  | {
+      status: "archived";
+      message: string;
+      entryId: string;
+      targetType: RecycleTargetType;
+      targetId: string;
+      preview: RecycleFinalizePreview;
+    }
+  | {
+      status: "blocked";
+      message: string;
+      entryId: string;
+      targetType: RecycleTargetType;
+      targetId: string;
+      preview: RecycleFinalizePreview;
     };
 
 export const RECYCLE_REASON_CODE_MAP: Record<

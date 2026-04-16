@@ -1,15 +1,15 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import {
-  findActiveRecycleEntry,
-  findActiveTargetIds,
+  findHiddenRecycleEntry,
+  findHiddenTargetIds,
 } from "@/lib/recycle-bin/repository";
 import type { RecycleLifecycleActor } from "@/lib/recycle-bin/types";
 
 type CustomerRecycleDbClient = typeof prisma | Prisma.TransactionClient;
 
 export const ACTIVE_CUSTOMER_RECYCLE_ERROR =
-  "当前客户已移入回收站，请先恢复后再继续操作。";
+  "当前客户已进入回收/封存生命周期，不能继续写入；如需继续操作请先恢复。";
 
 export const CUSTOMER_RECYCLE_REASON_OPTIONS = [
   { value: "mistaken_creation", label: "误建轻客户" },
@@ -43,11 +43,11 @@ export async function findActiveCustomerRecycleEntry(
   db: CustomerRecycleDbClient,
   customerId: string,
 ) {
-  return findActiveRecycleEntry(db, "CUSTOMER", customerId);
+  return findHiddenRecycleEntry(db, "CUSTOMER", customerId);
 }
 
 export async function listActiveCustomerIds(db: CustomerRecycleDbClient) {
-  return findActiveTargetIds(db, "CUSTOMER");
+  return findHiddenTargetIds(db, "CUSTOMER");
 }
 
 export async function assertCustomerNotInActiveRecycleBin(

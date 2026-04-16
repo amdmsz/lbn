@@ -694,7 +694,10 @@ export async function assignCustomerTag(
     });
 
     if (existing) {
-      return existing;
+      return {
+        status: "already_assigned" as const,
+        relationId: existing.id,
+      };
     }
 
     const created = await tx.customerTag.create({
@@ -721,7 +724,10 @@ export async function assignCustomerTag(
       },
     });
 
-    return created;
+    return {
+      status: "created" as const,
+      relationId: created.id,
+    };
   });
 }
 

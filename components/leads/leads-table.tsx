@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, useTransition } from "react";
 import {
   batchAssignLeadsAction,
+  batchMoveLeadsToRecycleBinAction,
   moveLeadToRecycleBinAction,
 } from "@/app/(dashboard)/leads/actions";
 import {
@@ -26,9 +27,10 @@ import {
   formatDateTime,
   getLeadSourceLabel,
 } from "@/lib/leads/metadata";
-import type {
-  LeadRecycleGuard,
-  LeadRecycleReasonCode,
+import {
+  LEAD_RECYCLE_REASON_OPTIONS,
+  type LeadRecycleGuard,
+  type LeadRecycleReasonCode,
 } from "@/lib/leads/recycle-guards";
 import type {
   LeadAssignedOwnerSummary,
@@ -92,10 +94,26 @@ type AssignedWorkspaceData = {
 
 type SelectionMode = "manual" | "filtered";
 
+type BatchRecycleBlockedReason = {
+  code: string;
+  label: string;
+  count: number;
+  description: string;
+  group?: string;
+  suggestedAction?: string;
+};
+
 type RecycleNoticeState = {
   status: "idle" | "success" | "error";
   message: string;
   recycleStatus?: "created" | "already_in_recycle_bin" | "blocked";
+  summary?: {
+    totalCount: number;
+    createdCount: number;
+    alreadyInRecycleBinCount: number;
+    blockedCount: number;
+  };
+  blockedReasons?: BatchRecycleBlockedReason[];
 };
 
 type RecycleDialogState = {
@@ -112,6 +130,14 @@ const initialRecycleNoticeState: RecycleNoticeState = {
   status: "idle",
   message: "",
 };
+
+function buildBatchRecycleSummaryText(summary: NonNullable<RecycleNoticeState["summary"]>) {
+  return `成功移入回收站 ${summary.createdCount} 条，已在回收站 ${summary.alreadyInRecycleBinCount} 条，被阻断 ${summary.blockedCount} 条。`;
+}
+
+function buildBlockedReasonText(blockedReasons: BatchRecycleBlockedReason[]) {
+  return blockedReasons.map((item) => `${item.label} ${item.count} 条`).join("；");
+}
 
 function normalizeDate(value: Date | string) {
   return value instanceof Date ? value : new Date(value);
@@ -476,8 +502,12 @@ export function LeadsTable({
     useState<RecycleDialogState>(null);
   const [recycleReason, setRecycleReason] =
     useState<LeadRecycleReasonCode>("mistaken_creation");
+  const [batchRecycleDialogOpen, setBatchRecycleDialogOpen] = useState(false);
+  const [batchRecycleReason, setBatchRecycleReason] =
+    useState<LeadRecycleReasonCode>("mistaken_creation");
   const [pending, startTransition] = useTransition();
   const [recyclePending, startRecycleTransition] = useTransition();
+  const [batchRecyclePending, startBatchRecycleTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
 
@@ -536,6 +566,12 @@ export function LeadsTable({
     setDialogOpen(true);
   }
 
+  function openBatchRecycleDialog() {
+    setRecycleNotice(initialRecycleNoticeState);
+    setBatchRecycleReason("mistaken_creation");
+    setBatchRecycleDialogOpen(true);
+  }
+
   function openReassignDialog(leadId: string) {
     setSelectionMode("manual");
     setSelectedIds([leadId]);
@@ -559,6 +595,11 @@ export function LeadsTable({
   function closeRecycleDialog() {
     setRecycleDialogState(null);
     setRecycleReason("mistaken_creation");
+  }
+
+  function closeBatchRecycleDialog() {
+    setBatchRecycleDialogOpen(false);
+    setBatchRecycleReason("mistaken_creation");
   }
 
   function handleRecycleConfirm() {
@@ -602,6 +643,27 @@ export function LeadsTable({
         resetSelection();
         setDialogOpen(false);
         formRef.current?.reset();
+        router.refresh();
+      }
+    });
+  }
+
+  function handleBatchRecycleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+
+    startBatchRecycleTransition(async () => {
+      const nextState = await batchMoveLeadsToRecycleBinAction(formData);
+      setRecycleNotice(nextState);
+      closeBatchRecycleDialog();
+
+      if (
+        nextState.summary &&
+        (nextState.summary.createdCount > 0 ||
+          nextState.summary.alreadyInRecycleBinCount > 0)
+      ) {
+        resetSelection();
         router.refresh();
       }
     });
@@ -663,7 +725,15 @@ export function LeadsTable({
 
       {recycleNotice.message ? (
         <ActionBanner tone={recycleNotice.status === "success" ? "success" : "danger"}>
-          {recycleNotice.message}
+          <div className="space-y-1.5">
+            <p>{recycleNotice.message}</p>
+            {recycleNotice.summary && recycleNotice.summary.totalCount > 0 ? (
+              <p>{buildBatchRecycleSummaryText(recycleNotice.summary)}</p>
+            ) : null}
+            {recycleNotice.blockedReasons && recycleNotice.blockedReasons.length > 0 ? (
+              <p>阻断原因：{buildBlockedReasonText(recycleNotice.blockedReasons)}</p>
+            ) : null}
+          </div>
         </ActionBanner>
       ) : null}
 
@@ -723,7 +793,8 @@ export function LeadsTable({
             <div className="flex flex-wrap items-center gap-2 text-sm text-black/55">
               <span>共 {unassigned.totalCount} 条</span>
               {canAssign ? (
-                <button
+                <>
+                  <button
                   type="button"
                   disabled={selectedCount === 0 || salesOptions.length === 0}
                   onClick={openAssignDialog}
@@ -731,6 +802,15 @@ export function LeadsTable({
                 >
                   批量分配
                 </button>
+                <button
+                  type="button"
+                  disabled={selectedCount === 0}
+                  onClick={openBatchRecycleDialog}
+                  className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                >
+                  批量移入回收站
+                </button>
+                </>
               ) : null}
             </div>
           }
@@ -745,7 +825,7 @@ export function LeadsTable({
             {selectionMode === "filtered" ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-[var(--color-accent)]/16 bg-[var(--color-accent)]/5 px-3.5 py-3 text-sm text-black/72">
                 <span>
-                  已选择当前筛选结果全部 {unassigned.totalCount} 条未分配线索，可直接执行跨页批量分配。
+                  已选择当前筛选结果全部 {unassigned.totalCount} 条未分配线索，可直接执行跨页批量分配或批量移入回收站。
                 </span>
                 <button
                   type="button"
@@ -990,6 +1070,93 @@ export function LeadsTable({
                   className="crm-button crm-button-primary"
                 >
                   {pending ? "分配中..." : "确认分配"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {batchRecycleDialogOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8">
+          <div className="crm-card w-full max-w-lg p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-semibold text-black/85">批量移入回收站</h3>
+                <p className="mt-2 text-sm leading-6 text-black/60">
+                  {selectionMode === "filtered"
+                    ? `本次将按当前未分配筛选结果检查 ${unassigned.totalCount} 条线索，并逐条复用现有回收站 guard。`
+                    : `本次将检查已选中的 ${selectedCount} 条未分配线索，并逐条复用现有回收站 guard。`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeBatchRecycleDialog}
+                className="crm-button crm-button-ghost min-h-0 px-2 py-2 text-sm"
+              >
+                关闭
+              </button>
+            </div>
+
+            <form onSubmit={handleBatchRecycleSubmit} className="mt-5 space-y-3.5">
+              <input type="hidden" name="selectionMode" value={selectionMode} />
+
+              {selectionMode === "filtered" ? (
+                <FilterHiddenInputs
+                  filters={filters}
+                  includePage
+                  overrides={{
+                    view: "unassigned",
+                    assignedOwnerId: "",
+                  }}
+                />
+              ) : (
+                selectedIds.map((leadId) => (
+                  <input key={leadId} type="hidden" name="leadIds" value={leadId} />
+                ))
+              )}
+
+              <label className="block space-y-2">
+                <span className="crm-label">移入原因</span>
+                <select
+                  name="reasonCode"
+                  value={batchRecycleReason}
+                  onChange={(event) =>
+                    setBatchRecycleReason(event.currentTarget.value as LeadRecycleReasonCode)
+                  }
+                  className="crm-select"
+                >
+                  {LEAD_RECYCLE_REASON_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.74)] p-4">
+                <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                  结果说明
+                </p>
+                <p className="mt-2 text-[13px] leading-5 text-black/56">
+                  执行结果会明确区分成功移入回收站、已在回收站和被阻断；被阻断线索会继续保留在当前未分配工作台。
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={closeBatchRecycleDialog}
+                  className="crm-button crm-button-secondary"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  disabled={batchRecyclePending || selectedCount === 0}
+                  className="crm-button crm-button-primary"
+                >
+                  {batchRecyclePending ? "移入中..." : "确认移入回收站"}
                 </button>
               </div>
             </form>

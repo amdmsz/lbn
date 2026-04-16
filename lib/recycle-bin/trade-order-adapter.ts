@@ -8,6 +8,9 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type {
+  RecycleArchivePayload,
+  RecycleFinalizeBlocker,
+  RecycleFinalizePreview,
   RecycleGuardBlocker,
   RecyclePurgeBlocker,
   RecyclePurgeGuard,
@@ -459,6 +462,58 @@ function buildLifecycleBlockers(
   return blockers;
 }
 
+function buildFinalizePreview(input: {
+  targetExists: boolean;
+  blockers: RecycleFinalizeBlocker[];
+}): RecycleFinalizePreview {
+  if (!input.targetExists) {
+    return {
+      canFinalize: true,
+      targetExists: false,
+      finalAction: "PURGE",
+      finalActionLabel: "可 purge",
+      blockerSummary: "原始交易订单已不存在，回收站条目会按 PURGE 终态收口。",
+      blockers: [],
+      canEarlyPurge: true,
+      earlyPurgeRequiresAdmin: true,
+    };
+  }
+
+  if (input.blockers.length === 0) {
+    return {
+      canFinalize: true,
+      targetExists: true,
+      finalAction: "PURGE",
+      finalActionLabel: "可 purge",
+      blockerSummary: "当前订单仍满足误建轻对象条件，3 天冷静期结束后会执行 PURGE。",
+      blockers: [],
+      canEarlyPurge: true,
+      earlyPurgeRequiresAdmin: true,
+    };
+  }
+
+  return {
+    canFinalize: true,
+    targetExists: true,
+    finalAction: "ARCHIVE",
+    finalActionLabel: "仅封存",
+    blockerSummary:
+      input.blockers[0]?.description ??
+      "当前订单已进入需要保留交易真相或执行锚点的链路，3 天冷静期结束后仅封存。",
+    blockers: input.blockers,
+    canEarlyPurge: false,
+    earlyPurgeRequiresAdmin: true,
+  };
+}
+
+function buildArchivedReceiverName(tradeOrderId: string) {
+  return `已封存收货人#${tradeOrderId.slice(-6).toUpperCase()}`;
+}
+
+function buildArchivedReceiverPhone(tradeOrderId: string) {
+  return `ARCHIVED:${tradeOrderId}`;
+}
+
 export async function getTradeOrderRecycleTarget(
   db: RecycleDbClient,
   targetType: RecycleTargetType,
@@ -578,6 +633,33 @@ export async function buildTradeOrderPurgeGuard(
   );
 }
 
+export async function buildTradeOrderFinalizePreview(
+  db: RecycleDbClient,
+  input: {
+    targetType: RecycleTargetType;
+    targetId: string;
+    domain: RecycleDomain;
+  },
+) {
+  if (input.domain !== "TRADE_ORDER" || input.targetType !== "TRADE_ORDER") {
+    return null;
+  }
+
+  const tradeOrder = await getTradeOrderRecord(db, input.targetId);
+
+  if (!tradeOrder) {
+    return buildFinalizePreview({
+      targetExists: false,
+      blockers: [],
+    });
+  }
+
+  return buildFinalizePreview({
+    targetExists: true,
+    blockers: buildLifecycleBlockers(tradeOrder, summarizeLifecycleCounts(tradeOrder)),
+  });
+}
+
 export async function purgeTradeOrderTarget(
   db: RecycleDbClient,
   input: {
@@ -602,4 +684,81 @@ export async function purgeTradeOrderTarget(
   });
 
   return true;
+}
+
+export async function archiveTradeOrderTarget(
+  db: RecycleDbClient,
+  input: {
+    targetType: RecycleTargetType;
+    targetId: string;
+    preview: RecycleFinalizePreview;
+  },
+): Promise<RecycleArchivePayload | null> {
+  if (input.targetType !== "TRADE_ORDER") {
+    return null;
+  }
+
+  const tradeOrder = await db.tradeOrder.findUnique({
+    where: {
+      id: input.targetId,
+    },
+    select: {
+      id: true,
+      tradeNo: true,
+      customerId: true,
+      customer: {
+        select: {
+          name: true,
+        },
+      },
+      tradeStatus: true,
+      reviewStatus: true,
+      finalAmount: true,
+    },
+  });
+
+  if (!tradeOrder) {
+    return {
+      finalAction: "ARCHIVE",
+      archivedAt: new Date().toISOString(),
+      blockerSummary: input.preview.blockerSummary,
+      blockers: input.preview.blockers,
+      snapshot: {
+        tradeOrderId: input.targetId,
+        targetMissing: true,
+      },
+    };
+  }
+
+  const archivedReceiverName = buildArchivedReceiverName(tradeOrder.id);
+  const archivedReceiverPhone = buildArchivedReceiverPhone(tradeOrder.id);
+
+  await db.tradeOrder.update({
+    where: {
+      id: tradeOrder.id,
+    },
+    data: {
+      receiverNameSnapshot: archivedReceiverName,
+      receiverPhoneSnapshot: archivedReceiverPhone,
+      receiverAddressSnapshot: "已封存地址",
+    },
+  });
+
+  return {
+    finalAction: "ARCHIVE",
+    archivedAt: new Date().toISOString(),
+    blockerSummary: input.preview.blockerSummary,
+    blockers: input.preview.blockers,
+    snapshot: {
+      tradeOrderId: tradeOrder.id,
+      tradeNo: tradeOrder.tradeNo,
+      customerId: tradeOrder.customerId,
+      customerName: tradeOrder.customer.name,
+      tradeStatus: tradeOrder.tradeStatus,
+      reviewStatus: tradeOrder.reviewStatus,
+      finalAmount: tradeOrder.finalAmount.toString(),
+      archivedReceiverName,
+      archivedReceiverPhone,
+    },
+  };
 }
