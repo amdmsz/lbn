@@ -82,6 +82,14 @@ function LeadImportPartition({
     duplicateRows: number;
     createdAt: Date;
     importKind: "LEAD" | "CUSTOMER_CONTINUATION";
+    customerContinuationResultSummary?: {
+      createdAssignedCount: number;
+      matchedAssignedCount: number;
+      matchedKeptExistingCount: number;
+      publicPoolCount: number;
+      duplicateCount: number;
+      failedCount: number;
+    } | null;
   }>;
 }>) {
   return (
@@ -113,11 +121,34 @@ function LeadImportPartition({
                   />
                 </div>
               </div>
-              <div className="mt-3 flex flex-wrap gap-3 text-sm text-black/62">
-                <span>成功 {item.successRows}</span>
-                <span>重复 {item.duplicateRows}</span>
-                <span>失败 {item.failedRows}</span>
-              </div>
+              {item.importKind === "CUSTOMER_CONTINUATION" &&
+              item.customerContinuationResultSummary ? (
+                <div className="mt-3 grid gap-2 text-[12px] text-black/62 sm:grid-cols-2">
+                  <span className="text-[var(--color-success)]">
+                    新建并匹配：{item.customerContinuationResultSummary.createdAssignedCount}
+                  </span>
+                  <span className="text-[var(--color-info)]">
+                    命中补齐：{item.customerContinuationResultSummary.matchedAssignedCount}
+                  </span>
+                  <span className="text-[var(--color-info)]">
+                    保留原负责人：
+                    {item.customerContinuationResultSummary.matchedKeptExistingCount}
+                  </span>
+                  <span>进入公海：{item.customerContinuationResultSummary.publicPoolCount}</span>
+                  <span className="text-[var(--color-warning)]">
+                    重复剔除：{item.customerContinuationResultSummary.duplicateCount}
+                  </span>
+                  <span className="text-[var(--color-danger)]">
+                    失败：{item.customerContinuationResultSummary.failedCount}
+                  </span>
+                </div>
+              ) : (
+                <div className="mt-3 flex flex-wrap gap-3 text-sm text-black/62">
+                  <span>成功 {item.successRows}</span>
+                  <span>重复 {item.duplicateRows}</span>
+                  <span>失败 {item.failedRows}</span>
+                </div>
+              )}
             </div>
           ))}
         </div>

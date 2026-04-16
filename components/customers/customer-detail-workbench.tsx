@@ -119,6 +119,8 @@ type ImportedCustomerDeletionReviewAction = (input: {
   redirectTo: string | null;
 }>;
 
+type UpdateCustomerProfileAction = (formData: FormData) => Promise<void>;
+
 type MoveCustomerToRecycleBinAction = (formData: FormData) => Promise<{
   status: "success" | "error";
   message: string;
@@ -168,6 +170,19 @@ const summaryToneClassName: Record<SummaryTone, string> = {
   danger: "border-[rgba(141,59,51,0.16)]",
   success: "border-[rgba(47,107,71,0.16)]",
 };
+
+const customerProfileStatusOptions = [
+  { value: "ACTIVE", label: getCustomerStatusLabel("ACTIVE") },
+  { value: "DORMANT", label: getCustomerStatusLabel("DORMANT") },
+  { value: "LOST", label: getCustomerStatusLabel("LOST") },
+  { value: "BLACKLISTED", label: getCustomerStatusLabel("BLACKLISTED") },
+] as const;
+
+const customerProfileLevelOptions = [
+  { value: "NEW", label: getCustomerLevelLabel("NEW") },
+  { value: "REGULAR", label: getCustomerLevelLabel("REGULAR") },
+  { value: "VIP", label: getCustomerLevelLabel("VIP") },
+] as const;
 
 function formatLeadSourceSummary(
   source: CustomerDetailShellData["importSummary"]["firstSource"],
@@ -298,6 +313,12 @@ function buildCustomerTradeOrderHref(
     `/customers/${customerId}?${params.toString()}`,
     navigationContext,
   );
+}
+
+function appendHrefSearchParam(href: string, key: string, value: string) {
+  const url = new URL(href, "https://crm.local");
+  url.searchParams.set(key, value);
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 function getCustomerDetailBackLabel(
@@ -501,6 +522,9 @@ function renderProfileTab({
   shell,
   data,
   canManageTags,
+  canEditProfile,
+  isEditingProfile,
+  updateCustomerProfileAction,
   navigationContext,
   requestImportedCustomerDeletionAction,
   reviewImportedCustomerDeletionAction,
@@ -509,18 +533,34 @@ function renderProfileTab({
   shell: CustomerDetailShellData;
   data: CustomerProfileData;
   canManageTags: boolean;
+  canEditProfile: boolean;
+  isEditingProfile: boolean;
+  updateCustomerProfileAction?: UpdateCustomerProfileAction;
   navigationContext?: CustomerDetailNavigationContext;
   requestImportedCustomerDeletionAction: ImportedCustomerDeletionAction;
   reviewImportedCustomerDeletionAction: ImportedCustomerDeletionReviewAction;
   deleteImportedCustomerDirectAction: ImportedCustomerDeletionAction;
 }>) {
   const archiveHref = buildCustomerTabHref(shell.id, "profile", navigationContext);
+  const editProfileHref = appendHrefSearchParam(archiveHref, "editProfile", "1");
+  const profileSectionActions = canEditProfile ? (
+    isEditingProfile ? (
+      <Link href={archiveHref} scroll={false} className="crm-text-link">
+        取消编辑
+      </Link>
+    ) : (
+      <Link href={editProfileHref} scroll={false} className="crm-text-link">
+        编辑资料
+      </Link>
+    )
+  ) : null;
 
   return (
     <div className="space-y-5">
       <CustomerTabSection
         eyebrow="客户档案"
         title="基础信息"
+        actions={profileSectionActions}
       >
         <CustomerTagsPanel
           customerId={shell.id}
@@ -533,6 +573,175 @@ function renderProfileTab({
         />
 
         <div className="mt-5">
+          {isEditingProfile && updateCustomerProfileAction ? (
+            <form action={updateCustomerProfileAction} className="space-y-4">
+              <input type="hidden" name="customerId" value={shell.id} />
+              <input type="hidden" name="redirectTo" value={archiveHref} />
+
+              <div className="rounded-[0.95rem] border border-[rgba(54,95,135,0.12)] bg-[rgba(247,249,252,0.88)] px-4 py-3 text-[12px] leading-5 text-black/52">
+                第一版仅支持编辑基础资料。手机号、负责人、归属模式、公海字段与保护期字段继续保持只读；保存后会写入操作日志。
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <label className="space-y-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/42">
+                    姓名
+                  </span>
+                  <input
+                    name="name"
+                    required
+                    maxLength={100}
+                    defaultValue={shell.name}
+                    className="crm-input"
+                  />
+                </label>
+
+                <div className="space-y-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/42">
+                    手机号
+                  </span>
+                  <div className="crm-input flex items-center bg-[rgba(247,248,250,0.9)] text-sm text-black/56">
+                    {shell.phone}
+                  </div>
+                </div>
+
+                <label className="space-y-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/42">
+                    微信号
+                  </span>
+                  <input
+                    name="wechatId"
+                    maxLength={100}
+                    defaultValue={shell.wechatId ?? ""}
+                    className="crm-input"
+                  />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/42">
+                    客户状态
+                  </span>
+                  <select
+                    name="status"
+                    defaultValue={shell.status}
+                    className="crm-select"
+                  >
+                    {customerProfileStatusOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/42">
+                    客户等级
+                  </span>
+                  <select
+                    name="level"
+                    defaultValue={shell.level}
+                    className="crm-select"
+                  >
+                    {customerProfileLevelOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/42">
+                    省份
+                  </span>
+                  <input
+                    name="province"
+                    maxLength={50}
+                    defaultValue={shell.province ?? ""}
+                    className="crm-input"
+                  />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/42">
+                    城市
+                  </span>
+                  <input
+                    name="city"
+                    maxLength={50}
+                    defaultValue={shell.city ?? ""}
+                    className="crm-input"
+                  />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/42">
+                    区县
+                  </span>
+                  <input
+                    name="district"
+                    maxLength={50}
+                    defaultValue={shell.district ?? ""}
+                    className="crm-input"
+                  />
+                </label>
+
+                <div className="space-y-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/42">
+                    最近更新
+                  </span>
+                  <div className="crm-input flex items-center bg-[rgba(247,248,250,0.9)] text-sm text-black/56">
+                    {formatDateTime(shell.updatedAt)}
+                  </div>
+                </div>
+
+                <label className="space-y-2 md:col-span-2 xl:col-span-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/42">
+                    地址
+                  </span>
+                  <input
+                    name="address"
+                    maxLength={500}
+                    defaultValue={shell.address ?? ""}
+                    className="crm-input"
+                  />
+                </label>
+
+                <label className="space-y-2 md:col-span-2 xl:col-span-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/42">
+                    备注
+                  </span>
+                  <textarea
+                    name="remark"
+                    rows={4}
+                    maxLength={1000}
+                    defaultValue={shell.remark ?? ""}
+                    className="crm-textarea min-h-[7rem]"
+                  />
+                </label>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <button
+                  type="submit"
+                  className="crm-button crm-button-primary min-h-0 px-3.5 py-2 text-sm"
+                >
+                  保存资料
+                </button>
+                <Link
+                  href={archiveHref}
+                  scroll={false}
+                  className="crm-button crm-button-secondary min-h-0 px-3.5 py-2 text-sm"
+                >
+                  取消
+                </Link>
+                <p className="text-[12px] leading-5 text-black/46">
+                  保存成功后可在 logs tab 查看本次修改摘要。
+                </p>
+              </div>
+            </form>
+          ) : (
           <DetailFieldGrid
             columns="three"
             items={[
@@ -550,6 +759,7 @@ function renderProfileTab({
               { label: "备注", value: shell.remark?.trim() || "暂无备注", span: "full" },
             ]}
           />
+          )}
         </div>
       </CustomerTabSection>
 
@@ -999,9 +1209,12 @@ function renderTabContent({
   canCreateWechat,
   canManageLiveInvitations,
   canManageTags,
+  canEditProfile,
+  isEditingProfile,
   canCreateSalesOrders,
   tradeOrderComposer,
   navigationContext,
+  updateCustomerProfileAction,
   saveTradeOrderDraftAction,
   submitTradeOrderForReviewAction,
   requestImportedCustomerDeletionAction,
@@ -1015,9 +1228,12 @@ function renderTabContent({
   canCreateWechat: boolean;
   canManageLiveInvitations: boolean;
   canManageTags: boolean;
+  canEditProfile: boolean;
+  isEditingProfile: boolean;
   canCreateSalesOrders: boolean;
   tradeOrderComposer: TradeOrderComposerData | null;
   navigationContext?: CustomerDetailNavigationContext;
+  updateCustomerProfileAction?: UpdateCustomerProfileAction;
   saveTradeOrderDraftAction?: (formData: FormData) => Promise<void>;
   submitTradeOrderForReviewAction?: (formData: FormData) => Promise<void>;
   requestImportedCustomerDeletionAction: ImportedCustomerDeletionAction;
@@ -1030,6 +1246,9 @@ function renderTabContent({
         shell,
         data: tabData as CustomerProfileData,
         canManageTags,
+        canEditProfile,
+        isEditingProfile,
+        updateCustomerProfileAction,
         navigationContext,
         requestImportedCustomerDeletionAction,
         reviewImportedCustomerDeletionAction,
@@ -1093,11 +1312,14 @@ export function CustomerDetailWorkbench({
   canCreateWechat,
   canManageLiveInvitations,
   canManageTags,
+  canEditProfile,
+  isEditingProfile,
   canCreateSalesOrders,
   tradeOrderComposer,
   navigationContext,
   customerRecycleGuard,
   moveCustomerToRecycleBinAction,
+  updateCustomerProfileAction,
   saveTradeOrderDraftAction,
   submitTradeOrderForReviewAction,
   requestImportedCustomerDeletionAction,
@@ -1114,8 +1336,11 @@ export function CustomerDetailWorkbench({
   canCreateWechat: boolean;
   canManageLiveInvitations: boolean;
   canManageTags: boolean;
+  canEditProfile: boolean;
+  isEditingProfile: boolean;
   canCreateSalesOrders: boolean;
   tradeOrderComposer: TradeOrderComposerData | null;
+  updateCustomerProfileAction?: UpdateCustomerProfileAction;
   saveTradeOrderDraftAction?: (formData: FormData) => Promise<void>;
   submitTradeOrderForReviewAction?: (formData: FormData) => Promise<void>;
   customerRecycleGuard: RecycleMoveGuard | null;
@@ -1439,9 +1664,12 @@ export function CustomerDetailWorkbench({
         canCreateWechat,
         canManageLiveInvitations,
         canManageTags,
+        canEditProfile,
+        isEditingProfile,
         canCreateSalesOrders,
         tradeOrderComposer,
         navigationContext,
+        updateCustomerProfileAction,
         saveTradeOrderDraftAction,
         submitTradeOrderForReviewAction,
         requestImportedCustomerDeletionAction,

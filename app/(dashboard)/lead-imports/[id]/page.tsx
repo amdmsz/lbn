@@ -215,6 +215,123 @@ function getRollbackExecutionMeta(
   }
 }
 
+function CustomerContinuationRowsTable({
+  rows,
+}: Readonly<{
+  rows: LeadImportDetailRow[];
+}>) {
+  return (
+    <div className="crm-table-shell">
+      <table className="crm-table">
+        <thead>
+          <tr>
+            <th>撤销预检</th>
+            <th>执行结果</th>
+            <th>行号</th>
+            <th>导入状态</th>
+            <th>客户</th>
+            <th>负责人结果</th>
+            <th>标签结果</th>
+            <th>迁移摘要</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const continuation = row.customerContinuation;
+            const customer = getRowCustomerSnapshot(row);
+            const rollbackAction = getRollbackActionSummary(row);
+            const executionMeta = row.rollback.execution
+              ? getRollbackExecutionMeta(row.rollback.execution.outcome)
+              : null;
+
+            return (
+              <tr key={row.id}>
+                <td>
+                  {row.rollback.preview ? (
+                    <div className="space-y-1.5">
+                      <StatusBadge
+                        label={row.rollback.preview.stateLabel}
+                        variant={row.rollback.preview.stateVariant}
+                      />
+                      <p className="text-xs leading-5 text-black/55">
+                        {row.rollback.preview.reason}
+                      </p>
+                      {rollbackAction ? (
+                        <p className="text-xs leading-5 text-black/45">{rollbackAction}</p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    "-"
+                  )}
+                </td>
+                <td>
+                  {row.rollback.execution && executionMeta ? (
+                    <div className="space-y-1.5">
+                      <StatusBadge
+                        label={executionMeta.label}
+                        variant={executionMeta.variant}
+                      />
+                      <p className="text-xs leading-5 text-black/55">
+                        {row.rollback.execution.note}
+                      </p>
+                    </div>
+                  ) : (
+                    "-"
+                  )}
+                </td>
+                <td>{row.rowNumber}</td>
+                <td>
+                  <StatusBadge
+                    label={getLeadImportRowStatusLabel(row.status)}
+                    variant={getLeadImportRowStatusVariant(row.status)}
+                  />
+                </td>
+                <td>
+                  <div className="space-y-1">
+                    {customer.href ? (
+                      <Link href={customer.href} className="crm-text-link">
+                        {customer.name}
+                      </Link>
+                    ) : (
+                      <p>{customer.name}</p>
+                    )}
+                    <p className="text-xs text-black/45">{customer.phone}</p>
+                    {customer.helper ? (
+                      <p className="text-xs text-[var(--color-warning)]">{customer.helper}</p>
+                    ) : null}
+                  </div>
+                </td>
+                <td>
+                  <div className="space-y-1 text-sm text-black/65">
+                    <p>{getOwnerOutcomeLabel(continuation?.result.ownerOutcome ?? "-")}</p>
+                    <p className="text-xs text-black/45">
+                      {formatSummaryValue(continuation?.mappedCustomer.ownerUsername)}
+                    </p>
+                  </div>
+                </td>
+                <td>
+                  <div className="space-y-1 text-sm text-black/65">
+                    <p>{continuation?.mappedCustomer.tags.join(" / ") || "无标签"}</p>
+                    <p className="text-xs text-[var(--color-warning)]">
+                      {continuation?.mappedCustomer.unresolvedTags.join(" / ") || "无 warning"}
+                    </p>
+                  </div>
+                </td>
+                <td className="max-w-[26rem]">
+                  {continuation
+                    ? formatCustomerContinuationSummary(continuation.mappedCustomer.summary) ||
+                      "-"
+                    : "-"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default async function LeadImportDetailPage({
   params,
   searchParams,
@@ -266,6 +383,8 @@ export default async function LeadImportDetailPage({
   const rollbackPrecheck = batch.rollback.currentPrecheck;
   const rollbackSummary = rollbackPrecheck?.summary ?? null;
   const rollbackExecutionSummary = batch.rollback.executed?.execution?.summary ?? null;
+  const customerContinuationResultSummary = batch.customerContinuationResultSummary;
+  const customerContinuationGroupedRows = batch.customerContinuationGroupedRows;
   const customerContinuationMetricCards =
     mode === "customer_continuation"
       ? [
@@ -563,126 +682,129 @@ export default async function LeadImportDetailPage({
       <section className="crm-card p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-black/85">
-            {mode === "customer_continuation" ? "续接结果" : "导入结果"}
+            {mode === "customer_continuation" ? "续接结果分组" : "导入结果"}
           </h2>
-          <StatusBadge label={`展示前 ${batch.rows.length} 行`} variant="neutral" />
+          <StatusBadge
+            label={
+              mode === "customer_continuation"
+                ? `6 组结果 / 展示前 ${batch.rows.length} 行`
+                : `展示前 ${batch.rows.length} 行`
+            }
+            variant="neutral"
+          />
         </div>
 
         {batch.rows.length > 0 ? (
           mode === "customer_continuation" ? (
-            <div className="mt-4 crm-table-shell">
-              <table className="crm-table">
-                <thead>
-                  <tr>
-                    <th>撤销预检</th>
-                    <th>执行结果</th>
-                    <th>行号</th>
-                    <th>导入状态</th>
-                    <th>客户</th>
-                    <th>负责人结果</th>
-                    <th>标签结果</th>
-                    <th>迁移摘要</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {batch.rows.map((row) => {
-                    const continuation = row.customerContinuation;
-                    const customer = getRowCustomerSnapshot(row);
-                    const rollbackAction = getRollbackActionSummary(row);
-                    const executionMeta = row.rollback.execution
-                      ? getRollbackExecutionMeta(row.rollback.execution.outcome)
-                      : null;
+            <div className="mt-4 space-y-6">
+              {customerContinuationResultSummary ? (
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="crm-section-card">
+                    <p className="text-xs uppercase tracking-[0.18em] text-black/45">
+                      新建并匹配负责人
+                    </p>
+                    <p className="mt-3 text-3xl font-semibold text-[var(--color-success)]">
+                      {customerContinuationResultSummary.createdAssignedCount}
+                    </p>
+                  </div>
+                  <div className="crm-section-card">
+                    <p className="text-xs uppercase tracking-[0.18em] text-black/45">
+                      命中已有并补齐负责人
+                    </p>
+                    <p className="mt-3 text-3xl font-semibold text-[var(--color-info)]">
+                      {customerContinuationResultSummary.matchedAssignedCount}
+                    </p>
+                  </div>
+                  <div className="crm-section-card">
+                    <p className="text-xs uppercase tracking-[0.18em] text-black/45">
+                      命中已有并保留原负责人
+                    </p>
+                    <p className="mt-3 text-3xl font-semibold text-[var(--color-info)]">
+                      {customerContinuationResultSummary.matchedKeptExistingCount}
+                    </p>
+                  </div>
+                  <div className="crm-section-card">
+                    <p className="text-xs uppercase tracking-[0.18em] text-black/45">
+                      进入公海
+                    </p>
+                    <p className="mt-3 text-3xl font-semibold text-black/85">
+                      {customerContinuationResultSummary.publicPoolCount}
+                    </p>
+                  </div>
+                  <div className="crm-section-card">
+                    <p className="text-xs uppercase tracking-[0.18em] text-black/45">
+                      重复剔除
+                    </p>
+                    <p className="mt-3 text-3xl font-semibold text-[var(--color-warning)]">
+                      {customerContinuationResultSummary.duplicateCount}
+                    </p>
+                  </div>
+                  <div className="crm-section-card">
+                    <p className="text-xs uppercase tracking-[0.18em] text-black/45">失败</p>
+                    <p className="mt-3 text-3xl font-semibold text-[var(--color-danger)]">
+                      {customerContinuationResultSummary.failedCount}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
 
-                    return (
-                      <tr key={row.id}>
-                        <td>
-                          {row.rollback.preview ? (
-                            <div className="space-y-1.5">
-                              <StatusBadge
-                                label={row.rollback.preview.stateLabel}
-                                variant={row.rollback.preview.stateVariant}
-                              />
-                              <p className="text-xs leading-5 text-black/55">
-                                {row.rollback.preview.reason}
-                              </p>
-                              {rollbackAction ? (
-                                <p className="text-xs leading-5 text-black/45">
-                                  {rollbackAction}
-                                </p>
-                              ) : null}
-                            </div>
-                          ) : (
-                            "-"
-                          )}
-                        </td>
-                        <td>
-                          {row.rollback.execution && executionMeta ? (
-                            <div className="space-y-1.5">
-                              <StatusBadge
-                                label={executionMeta.label}
-                                variant={executionMeta.variant}
-                              />
-                              <p className="text-xs leading-5 text-black/55">
-                                {row.rollback.execution.note}
-                              </p>
-                            </div>
-                          ) : (
-                            "-"
-                          )}
-                        </td>
-                        <td>{row.rowNumber}</td>
-                        <td>
-                          <StatusBadge
-                            label={getLeadImportRowStatusLabel(row.status)}
-                            variant={getLeadImportRowStatusVariant(row.status)}
-                          />
-                        </td>
-                        <td>
-                          <div className="space-y-1">
-                            {customer.href ? (
-                              <Link href={customer.href} className="crm-text-link">
-                                {customer.name}
-                              </Link>
-                            ) : (
-                              <p>{customer.name}</p>
-                            )}
-                            <p className="text-xs text-black/45">{customer.phone}</p>
-                            {customer.helper ? (
-                              <p className="text-xs text-[var(--color-warning)]">
-                                {customer.helper}
-                              </p>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td>
-                          <div className="space-y-1 text-sm text-black/65">
-                            <p>{getOwnerOutcomeLabel(continuation?.result.ownerOutcome ?? "-")}</p>
-                            <p className="text-xs text-black/45">
-                              {formatSummaryValue(continuation?.mappedCustomer.ownerUsername)}
-                            </p>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="space-y-1 text-sm text-black/65">
-                            <p>{continuation?.mappedCustomer.tags.join(" / ") || "无标签"}</p>
-                            <p className="text-xs text-[var(--color-warning)]">
-                              {continuation?.mappedCustomer.unresolvedTags.join(" / ") ||
-                                "无 warning"}
-                            </p>
-                          </div>
-                        </td>
-                        <td className="max-w-[26rem]">
-                          {continuation
-                            ? formatCustomerContinuationSummary(
-                                continuation.mappedCustomer.summary,
-                              ) || "-"
-                            : "-"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div className="space-y-4">
+                {[
+                  {
+                    key: "createdAssignedRows",
+                    title: "新建客户并已匹配负责人",
+                    description: "本批次直接新建 Customer，并同步完成负责人匹配。",
+                    variant: "success" as const,
+                    rows: customerContinuationGroupedRows?.createdAssignedRows ?? [],
+                  },
+                  {
+                    key: "matchedAssignedRows",
+                    title: "命中已有客户并补齐负责人",
+                    description: "命中已有 Customer，但原先无人负责，本次导入完成了承接。",
+                    variant: "info" as const,
+                    rows: customerContinuationGroupedRows?.matchedAssignedRows ?? [],
+                  },
+                  {
+                    key: "matchedKeptExistingRows",
+                    title: "命中已有客户并保留原负责人",
+                    description: "命中已有 Customer，且沿用原负责人，不改 owner 保留规则。",
+                    variant: "info" as const,
+                    rows: customerContinuationGroupedRows?.matchedKeptExistingRows ?? [],
+                  },
+                  {
+                    key: "publicPoolRows",
+                    title: "进入公海",
+                    description: "导入后保留到 Customer 主链，但当前不绑定具体负责人。",
+                    variant: "neutral" as const,
+                    rows: customerContinuationGroupedRows?.publicPoolRows ?? [],
+                  },
+                ].map((group) => (
+                  <div key={group.key} className="crm-subtle-panel">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-base font-semibold text-black/84">{group.title}</h3>
+                        <p className="mt-1 text-sm leading-6 text-black/58">
+                          {group.description}
+                        </p>
+                      </div>
+                      <StatusBadge label={`${group.rows.length} 行`} variant={group.variant} />
+                    </div>
+
+                    {group.rows.length > 0 ? (
+                      <div className="mt-4">
+                        <CustomerContinuationRowsTable rows={group.rows} />
+                      </div>
+                    ) : (
+                      <div className="mt-4">
+                        <EmptyState
+                          title={`暂无${group.title}`}
+                          description="当前批次在这一组里没有结果行。"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             <div className="mt-4 crm-table-shell">

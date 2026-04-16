@@ -106,6 +106,120 @@ function parseCustomerContinuationRowMappedData(
   return value as CustomerContinuationRowMappedData;
 }
 
+type CustomerContinuationResultBucket =
+  | "created_assigned"
+  | "matched_assigned"
+  | "matched_kept_existing"
+  | "public_pool"
+  | "duplicate"
+  | "failed";
+
+type CustomerContinuationResultGroupCounts = {
+  createdAssignedCount: number;
+  matchedAssignedCount: number;
+  matchedKeptExistingCount: number;
+  publicPoolCount: number;
+  duplicateCount: number;
+  failedCount: number;
+};
+
+function createEmptyCustomerContinuationResultGroupCounts(): CustomerContinuationResultGroupCounts {
+  return {
+    createdAssignedCount: 0,
+    matchedAssignedCount: 0,
+    matchedKeptExistingCount: 0,
+    publicPoolCount: 0,
+    duplicateCount: 0,
+    failedCount: 0,
+  };
+}
+
+function getCustomerContinuationResultBucket(input: {
+  status: LeadImportRowStatus;
+  customerContinuation: CustomerContinuationRowMappedData | null;
+}): CustomerContinuationResultBucket | null {
+  if (input.status === LeadImportRowStatus.DUPLICATE) {
+    return "duplicate";
+  }
+
+  if (input.status === LeadImportRowStatus.FAILED) {
+    return "failed";
+  }
+
+  if (input.status !== LeadImportRowStatus.IMPORTED || !input.customerContinuation) {
+    return null;
+  }
+
+  const { action, ownerOutcome } = input.customerContinuation.result;
+
+  if (ownerOutcome === "PUBLIC_POOL") {
+    return "public_pool";
+  }
+
+  if (action === "CREATED_CUSTOMER" && ownerOutcome === "ASSIGNED") {
+    return "created_assigned";
+  }
+
+  if (action === "MATCHED_EXISTING_CUSTOMER" && ownerOutcome === "ASSIGNED") {
+    return "matched_assigned";
+  }
+
+  if (action === "MATCHED_EXISTING_CUSTOMER" && ownerOutcome === "KEPT_EXISTING") {
+    return "matched_kept_existing";
+  }
+
+  return null;
+}
+
+function accumulateCustomerContinuationResultBucket(
+  summary: CustomerContinuationResultGroupCounts,
+  bucket: CustomerContinuationResultBucket | null,
+) {
+  switch (bucket) {
+    case "created_assigned":
+      summary.createdAssignedCount += 1;
+      break;
+    case "matched_assigned":
+      summary.matchedAssignedCount += 1;
+      break;
+    case "matched_kept_existing":
+      summary.matchedKeptExistingCount += 1;
+      break;
+    case "public_pool":
+      summary.publicPoolCount += 1;
+      break;
+    case "duplicate":
+      summary.duplicateCount += 1;
+      break;
+    case "failed":
+      summary.failedCount += 1;
+      break;
+    default:
+      break;
+  }
+}
+
+function buildCustomerContinuationResultGroupCounts(
+  rows: Array<{
+    status: LeadImportRowStatus;
+    customerContinuation: CustomerContinuationRowMappedData | null;
+  }>,
+) {
+  const summary = createEmptyCustomerContinuationResultGroupCounts();
+
+  for (const row of rows) {
+    accumulateCustomerContinuationResultBucket(
+      summary,
+      getCustomerContinuationResultBucket({
+        status: row.status,
+        customerContinuation: row.customerContinuation,
+      }),
+    );
+  }
+
+  return summary;
+}
+
 function matchesMode(kind: LeadImportKind, mode: LeadImportMode) {
   return getLeadImportModeFromKind(kind) === mode;
 }
@@ -646,8 +760,78 @@ export async function getLeadImportListData(
     (currentPage - 1) * LEAD_IMPORT_PAGE_SIZE,
     currentPage * LEAD_IMPORT_PAGE_SIZE,
   );
+  const partitionPreview = {
+    success: filteredBatches.filter((batch) => batch.successRows > 0).slice(0, 5),
+    duplicate: filteredBatches.filter((batch) => batch.duplicateRows > 0).slice(0, 5),
+    failed: filteredBatches
+      .filter(
+        (batch) =>
+          batch.status === LeadImportBatchStatus.FAILED || batch.failedRows > 0,
+      )
+      .slice(0, 5),
+  };
+  const customerContinuationSummaryBatchIds =
+    filters.mode === "customer_continuation"
+      ? [...new Set([
+          ...pagedItems.map((item) => item.id),
+          ...partitionPreview.success.map((item) => item.id),
+          ...partitionPreview.duplicate.map((item) => item.id),
+          ...partitionPreview.failed.map((item) => item.id),
+        ])]
+      : [];
+  const customerContinuationResultSummaryByBatchId = new Map<
+    string,
+    CustomerContinuationResultGroupCounts
+  >();
 
-  const overview = filteredBatches.reduce(
+  if (customerContinuationSummaryBatchIds.length > 0) {
+    const summaryRows = await prisma.leadImportRow.findMany({
+      where: {
+        batchId: {
+          in: customerContinuationSummaryBatchIds,
+        },
+        status: {
+          in: [
+            LeadImportRowStatus.IMPORTED,
+            LeadImportRowStatus.DUPLICATE,
+            LeadImportRowStatus.FAILED,
+          ],
+        },
+      },
+      select: {
+        batchId: true,
+        status: true,
+        mappedData: true,
+      },
+    });
+
+    for (const row of summaryRows) {
+      const current =
+        customerContinuationResultSummaryByBatchId.get(row.batchId) ??
+        createEmptyCustomerContinuationResultGroupCounts();
+
+      accumulateCustomerContinuationResultBucket(
+        current,
+        getCustomerContinuationResultBucket({
+          status: row.status,
+          customerContinuation: parseCustomerContinuationRowMappedData(row.mappedData),
+        }),
+      );
+
+      customerContinuationResultSummaryByBatchId.set(row.batchId, current);
+    }
+  }
+
+  const enrichedFilteredBatches = filteredBatches.map((batch) => ({
+    ...batch,
+    customerContinuationResultSummary:
+      filters.mode === "customer_continuation"
+        ? customerContinuationResultSummaryByBatchId.get(batch.id) ??
+          createEmptyCustomerContinuationResultGroupCounts()
+        : null,
+  }));
+
+  const overview = enrichedFilteredBatches.reduce(
     (summary, batch) => {
       summary.totalBatches += 1;
 
@@ -682,7 +866,7 @@ export async function getLeadImportListData(
     },
   );
 
-  const statistics = filteredBatches.reduce(
+  const statistics = enrichedFilteredBatches.reduce(
     (summary, batch) => {
       summary.totalRows += batch.totalRows;
       summary.successRows += batch.successRows;
@@ -755,13 +939,18 @@ export async function getLeadImportListData(
       ...filters,
       page: currentPage,
     },
-    items: pagedItems,
+    items: enrichedFilteredBatches.slice(
+      (currentPage - 1) * LEAD_IMPORT_PAGE_SIZE,
+      currentPage * LEAD_IMPORT_PAGE_SIZE,
+    ),
     overview,
     statistics,
     partitions: {
-      success: filteredBatches.filter((batch) => batch.successRows > 0).slice(0, 5),
-      duplicate: filteredBatches.filter((batch) => batch.duplicateRows > 0).slice(0, 5),
-      failed: filteredBatches
+      success: enrichedFilteredBatches.filter((batch) => batch.successRows > 0).slice(0, 5),
+      duplicate: enrichedFilteredBatches
+        .filter((batch) => batch.duplicateRows > 0)
+        .slice(0, 5),
+      failed: enrichedFilteredBatches
         .filter(
           (batch) =>
             batch.status === LeadImportBatchStatus.FAILED || batch.failedRows > 0,
@@ -973,6 +1162,43 @@ export async function getLeadImportDetailData(
   const failureRows = rows.filter((row) => row.status === LeadImportRowStatus.FAILED);
   const duplicateRows = rows.filter((row) => row.status === LeadImportRowStatus.DUPLICATE);
   const importedRows = rows.filter((row) => row.status === LeadImportRowStatus.IMPORTED);
+  const customerContinuationGroupedRows =
+    mode === "customer_continuation"
+      ? {
+          createdAssignedRows: importedRows.filter(
+            (row) =>
+              getCustomerContinuationResultBucket({
+                status: row.status,
+                customerContinuation: row.customerContinuation,
+              }) === "created_assigned",
+          ),
+          matchedAssignedRows: importedRows.filter(
+            (row) =>
+              getCustomerContinuationResultBucket({
+                status: row.status,
+                customerContinuation: row.customerContinuation,
+              }) === "matched_assigned",
+          ),
+          matchedKeptExistingRows: importedRows.filter(
+            (row) =>
+              getCustomerContinuationResultBucket({
+                status: row.status,
+                customerContinuation: row.customerContinuation,
+              }) === "matched_kept_existing",
+          ),
+          publicPoolRows: importedRows.filter(
+            (row) =>
+              getCustomerContinuationResultBucket({
+                status: row.status,
+                customerContinuation: row.customerContinuation,
+              }) === "public_pool",
+          ),
+        }
+      : null;
+  const customerContinuationResultSummary =
+    mode === "customer_continuation"
+      ? buildCustomerContinuationResultGroupCounts(rows)
+      : null;
   const derivedCustomerContinuationMetrics = buildCustomerContinuationMetrics(rows);
   const customerContinuationMetrics = resolveCustomerContinuationMetrics(
     parsedCustomerContinuationReport,
@@ -1005,6 +1231,8 @@ export async function getLeadImportDetailData(
     customerContinuationReport: parsedCustomerContinuationReport,
     customerContinuationMetrics,
     customerContinuationMetricsEstimated,
+    customerContinuationResultSummary,
+    customerContinuationGroupedRows,
     rows,
     rollback: {
       selectedMode: selectedRollbackMode,

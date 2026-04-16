@@ -36,6 +36,7 @@ import {
   saveTradeOrderDraftAction,
   reviewImportedCustomerDeletionAction,
   submitTradeOrderForReviewAction,
+  updateCustomerProfileAction,
 } from "./actions";
 
 function getCustomerDetailNavigationContext(
@@ -103,6 +104,8 @@ export default async function CustomerDetailPage({
   const navigationContext = getCustomerDetailNavigationContext(resolvedSearchParams);
   const activeTab = parseCustomerDetailTab(resolvedSearchParams, "profile");
   const notice = parseMasterDataNotice(resolvedSearchParams);
+  const isEditingProfile =
+    activeTab === "profile" && getParamValue(resolvedSearchParams?.editProfile) === "1";
   const createTradeOrder =
     getParamValue(resolvedSearchParams?.createTradeOrder) === "1";
   const tradeOrderId = getParamValue(resolvedSearchParams?.tradeOrderId);
@@ -142,6 +145,8 @@ export default async function CustomerDetailPage({
     isExecutionReady &&
     canCreateSalesOrder(session.user.role) &&
     (session.user.role !== "SALES" || isOwnedByCurrentSales);
+  const canEditProfile =
+    session.user.role !== "SALES" || isOwnedByCurrentSales;
   const callResultOptions = canCreateCalls ? await getEnabledCallResultOptions() : [];
   const tradeOrderComposer =
     activeTab === "orders" && createTradeOrder && canCreateSalesOrders
@@ -180,10 +185,13 @@ export default async function CustomerDetailPage({
         canUseCustomerTags(session.user.role) &&
         (session.user.role !== "SALES" || isOwnedByCurrentSales)
       }
+      canEditProfile={canEditProfile}
+      isEditingProfile={isEditingProfile}
       canCreateSalesOrders={canCreateSalesOrders}
       tradeOrderComposer={tradeOrderComposer}
       customerRecycleGuard={customerRecycleTarget?.guard ?? null}
       moveCustomerToRecycleBinAction={moveCustomerToRecycleBinAction}
+      updateCustomerProfileAction={updateCustomerProfileAction}
       saveTradeOrderDraftAction={saveTradeOrderDraftAction}
       submitTradeOrderForReviewAction={submitTradeOrderForReviewAction}
       requestImportedCustomerDeletionAction={requestImportedCustomerDeletionAction}

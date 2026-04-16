@@ -45,6 +45,14 @@ type LeadImportBatchListItem = {
   } | null;
   createdBy: { name: string; username: string };
   template: { id: string; name: string } | null;
+  customerContinuationResultSummary?: {
+    createdAssignedCount: number;
+    matchedAssignedCount: number;
+    matchedKeptExistingCount: number;
+    publicPoolCount: number;
+    duplicateCount: number;
+    failedCount: number;
+  } | null;
 };
 
 type LeadImportListFilters = {
@@ -171,15 +179,41 @@ export function LeadImportBatchesTable({
                     </div>
                   </td>
                   <td>
-                    <div className="space-y-0.5 text-sm text-black/65">
-                      <p className="text-[var(--color-success)]">新增客户：{item.createdCustomerRows}</p>
-                      <p className="text-[var(--color-info)]">命中已有：{item.matchedCustomerRows}</p>
-                      {item.rollback?.executionSummary ? (
-                        <p className="text-xs text-black/50">
-                          删客 {item.rollback.executionSummary.deletedCustomerRows} / Lead {rollbackLeadRows}
+                    {item.importKind === "CUSTOMER_CONTINUATION" &&
+                    item.customerContinuationResultSummary ? (
+                      <div className="space-y-0.5 text-sm text-black/65">
+                        <p className="text-[var(--color-success)]">
+                          新建并匹配：{item.customerContinuationResultSummary.createdAssignedCount}
                         </p>
-                      ) : null}
-                    </div>
+                        <p className="text-[var(--color-info)]">
+                          命中补齐：{item.customerContinuationResultSummary.matchedAssignedCount}
+                        </p>
+                        <p className="text-[var(--color-info)]">
+                          保留原负责人：
+                          {item.customerContinuationResultSummary.matchedKeptExistingCount}
+                        </p>
+                        <p>进入公海：{item.customerContinuationResultSummary.publicPoolCount}</p>
+                        {item.rollback?.executionSummary ? (
+                          <p className="text-xs text-black/50">
+                            删客 {item.rollback.executionSummary.deletedCustomerRows} / Lead {rollbackLeadRows}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="space-y-0.5 text-sm text-black/65">
+                        <p className="text-[var(--color-success)]">
+                          新增客户：{item.createdCustomerRows}
+                        </p>
+                        <p className="text-[var(--color-info)]">
+                          命中已有：{item.matchedCustomerRows}
+                        </p>
+                        {item.rollback?.executionSummary ? (
+                          <p className="text-xs text-black/50">
+                            删客 {item.rollback.executionSummary.deletedCustomerRows} / Lead {rollbackLeadRows}
+                          </p>
+                        ) : null}
+                      </div>
+                    )}
                   </td>
                   <td>
                     {item.createdBy.name}

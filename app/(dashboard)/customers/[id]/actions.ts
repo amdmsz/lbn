@@ -4,15 +4,18 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ZodError, z } from "zod";
 import {
+  appendRedirectSearchParams,
   buildRedirectTarget,
   getFormValue,
   rethrowRedirectError,
+  sanitizeRedirectTarget,
 } from "@/lib/action-notice";
 import { auth } from "@/lib/auth/session";
 import {
   CUSTOMER_RECYCLE_REASON_OPTIONS,
   type CustomerRecycleReasonCode,
 } from "@/lib/customers/recycle";
+import { updateCustomerProfile } from "@/lib/customers/mutations";
 import {
   deleteImportedCustomersDirect,
   requestImportedCustomerDeletion,
@@ -76,6 +79,10 @@ function buildCustomerOrdersRedirect(
   }
 
   return `/customers/${customerId}?${params.toString()}`;
+}
+
+function buildCustomerProfileRedirect(customerId: string) {
+  return `/customers/${customerId}`;
 }
 
 function revalidateImportedCustomerDeletionPaths(input: {
@@ -282,6 +289,53 @@ function buildDraftPayload(formData: FormData) {
     insuranceAmount: getFormValue(formData, "insuranceAmount"),
     remark: getFormValue(formData, "remark"),
   };
+}
+
+export async function updateCustomerProfileAction(formData: FormData) {
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const customerId = getFormValue(formData, "customerId");
+  const redirectTo = sanitizeRedirectTarget(
+    getFormValue(formData, "redirectTo"),
+    customerId ? buildCustomerProfileRedirect(customerId) : "/customers",
+  );
+  const errorRedirect = appendRedirectSearchParams(redirectTo, {
+    editProfile: "1",
+  });
+
+  try {
+    const result = await updateCustomerProfile(
+      {
+        id: session.user.id,
+        role: session.user.role,
+      },
+      {
+        customerId,
+        name: getFormValue(formData, "name"),
+        wechatId: getFormValue(formData, "wechatId"),
+        province: getFormValue(formData, "province"),
+        city: getFormValue(formData, "city"),
+        district: getFormValue(formData, "district"),
+        address: getFormValue(formData, "address"),
+        status: getFormValue(formData, "status"),
+        level: getFormValue(formData, "level"),
+        remark: getFormValue(formData, "remark"),
+      },
+    );
+
+    revalidatePath("/customers");
+    revalidatePath("/customers/public-pool");
+    revalidatePath(`/customers/${result.customerId}`);
+
+    redirect(buildRedirectTarget(redirectTo, "success", result.description));
+  } catch (error) {
+    rethrowRedirectError(error);
+    redirect(buildRedirectTarget(errorRedirect, "error", getErrorMessage(error)));
+  }
 }
 
 export async function saveTradeOrderDraftAction(formData: FormData) {
