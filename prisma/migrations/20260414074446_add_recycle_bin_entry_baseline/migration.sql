@@ -29,9 +29,3 @@ CREATE TABLE `recycle_bin_entries` (
     INDEX `recycle_bin_entries_resolvedById_resolvedAt_idx`(`resolvedById`, `resolvedAt`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
--- AddForeignKey
-ALTER TABLE `recycle_bin_entries` ADD CONSTRAINT `recycle_bin_entries_deletedById_fkey` FOREIGN KEY (`deletedById`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE `recycle_bin_entries` ADD CONSTRAINT `recycle_bin_entries_resolvedById_fkey` FOREIGN KEY (`resolvedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
