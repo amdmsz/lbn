@@ -1,6 +1,3 @@
--- DropForeignKey
-ALTER TABLE `lead` DROP FOREIGN KEY `lead_rolledBackBatchId_fkey`;
-
 -- CreateTable
 CREATE TABLE `recycle_bin_entries` (
     `id` VARCHAR(191) NOT NULL,
@@ -38,12 +35,3 @@ ALTER TABLE `recycle_bin_entries` ADD CONSTRAINT `recycle_bin_entries_deletedByI
 
 -- AddForeignKey
 ALTER TABLE `recycle_bin_entries` ADD CONSTRAINT `recycle_bin_entries_resolvedById_fkey` FOREIGN KEY (`resolvedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE `lead` ADD CONSTRAINT `Lead_rolledBackBatchId_fkey` FOREIGN KEY (`rolledBackBatchId`) REFERENCES `lead_import_batches`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
-
--- RenameIndex
-ALTER TABLE `lead` RENAME INDEX `lead_rolledBackAt_idx` TO `Lead_rolledBackAt_idx`;
-
--- RenameIndex
-ALTER TABLE `lead` RENAME INDEX `lead_rolledBackBatchId_idx` TO `Lead_rolledBackBatchId_idx`;
