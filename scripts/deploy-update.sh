@@ -15,6 +15,24 @@ RUN_MIGRATE_DEPLOY="${RUN_MIGRATE_DEPLOY:-0}"
 DB_BACKUP_DIR="${DB_BACKUP_DIR:-$PROJECT_ROOT/backups/mysql}"
 RUNTIME_BACKUP_DIR="${RUNTIME_BACKUP_DIR:-$PROJECT_ROOT/backups/runtime-assets}"
 
+info() {
+  echo "[deploy-update] $*"
+}
+
+fail() {
+  echo "[deploy-update] ERROR: $*" >&2
+  exit 1
+}
+
+assert_clean_worktree() {
+  local status_output
+  status_output="$(git status --short)"
+  if [[ -n "$status_output" ]]; then
+    echo "$status_output"
+    fail "Git working tree is not clean."
+  fi
+}
+
 cd "$PROJECT_ROOT"
 
 if [[ -f "$ENV_FILE" ]]; then
@@ -22,6 +40,12 @@ if [[ -f "$ENV_FILE" ]]; then
   # shellcheck disable=SC1090
   . "$ENV_FILE"
   set +a
+fi
+
+assert_clean_worktree
+
+if [[ "${RUN_DB_PUSH:-0}" == "1" ]]; then
+  fail "RUN_DB_PUSH is disabled in the hardened release pipeline. Use Prisma migrations or a manual reviewed operation."
 fi
 
 mkdir -p "$PROJECT_ROOT/public/exports/shipping"
@@ -42,32 +66,39 @@ else
   git pull --ff-only
 fi
 
+assert_clean_worktree
+
 if [[ "$RUN_DB_BACKUP" == "1" ]]; then
-  echo "RUN_DB_BACKUP=1 detected. Creating MySQL backup."
+  info "RUN_DB_BACKUP=1 detected. Creating MySQL backup."
   ENV_FILE="$ENV_FILE" BACKUP_DIR="$DB_BACKUP_DIR" bash "$PROJECT_ROOT/scripts/backup-mysql.sh"
 fi
 
 if [[ "$RUN_RUNTIME_BACKUP" == "1" ]]; then
-  echo "RUN_RUNTIME_BACKUP=1 detected. Backing up runtime assets."
+  info "RUN_RUNTIME_BACKUP=1 detected. Backing up runtime assets."
   BACKUP_DIR="$RUNTIME_BACKUP_DIR" bash "$PROJECT_ROOT/scripts/backup-runtime-assets.sh"
 fi
 
 npm ci --include=dev
-npx prisma validate
+
+ENV_FILE="$ENV_FILE" \
+ALLOW_PENDING_MIGRATIONS="$RUN_MIGRATE_DEPLOY" \
+SKIP_BUILD=1 \
+bash "$PROJECT_ROOT/scripts/release-preflight.sh"
 
 if [[ "$RUN_MIGRATE_DEPLOY" == "1" ]]; then
-  echo "RUN_MIGRATE_DEPLOY=1 detected. Running prisma migrate deploy."
+  info "RUN_MIGRATE_DEPLOY=1 detected. Running prisma migrate deploy."
   npx prisma migrate deploy
+  ENV_FILE="$ENV_FILE" SKIP_BUILD=1 bash "$PROJECT_ROOT/scripts/release-preflight.sh"
 fi
 
 npx prisma generate
 
-if [[ "${RUN_DB_PUSH:-0}" == "1" ]]; then
-  echo "RUN_DB_PUSH=1 detected. Running prisma db push."
-  npx prisma db push
+npm run build
+
+if [[ ! -f "$PROJECT_ROOT/.next/BUILD_ID" ]]; then
+  fail "Build completed without .next/BUILD_ID."
 fi
 
-npm run build
 "$SYSTEMCTL_BIN" restart "$SERVICE_NAME"
 "$SYSTEMCTL_BIN" --no-pager --full status "$SERVICE_NAME"
 
