@@ -186,7 +186,7 @@ npm run db:migration-baseline:reconcile -- --apply
 
 当前首发空库的正式顺序明确写死为：
 
-npm ci
+npm ci --include=dev
 npx prisma validate
 npx prisma migrate deploy
 npx prisma generate
@@ -197,6 +197,8 @@ npm run worker:lead-imports
 
 注意：
 
+npm ci 必须显式使用 --include=dev，因为当前仓库在服务器上执行构建时仍依赖 devDependencies 中的 Next/Tailwind/PostCSS 构建链
+npm run build 当前固定走 webpack：package.json 中已将 build 脚本收口为 next build --webpack，避免服务器默认 Turbopack 构建不稳定导致没有 .next/BUILD_ID
 npm run start 与 npm run worker:lead-imports 是两个独立进程
 正式环境不能只起 Web，不起 worker
 如果通过 systemd 启动，则这两个进程应由两个独立 service 托管
@@ -295,18 +297,18 @@ WantedBy=multi-user.target
 
 推荐保存为：
 
-/etc/systemd/system/jiuzhuang-crm-lead-import-worker.service
+/etc/systemd/system/jiuzhuang-crm-import-worker.service
 
 然后执行：
 
 sudo systemctl daemon-reload
-sudo systemctl enable jiuzhuang-crm-lead-import-worker
-sudo systemctl start jiuzhuang-crm-lead-import-worker
-sudo systemctl status jiuzhuang-crm-lead-import-worker --no-pager
+sudo systemctl enable jiuzhuang-crm-import-worker
+sudo systemctl start jiuzhuang-crm-import-worker
+sudo systemctl status jiuzhuang-crm-import-worker --no-pager
 
 查看日志：
 
-sudo journalctl -u jiuzhuang-crm-lead-import-worker -f
+sudo journalctl -u jiuzhuang-crm-import-worker -f
 9. Nginx 反向代理
 
 模板文件：
@@ -419,7 +421,7 @@ bash scripts/deploy-update.sh
 运行时目录准备
 可选数据库备份
 可选运行时文件备份
-npm ci
+npm ci --include=dev
 npx prisma validate
 可选 npx prisma migrate deploy
 npx prisma generate
@@ -428,7 +430,7 @@ systemctl restart <service>
 
 如果部署里包含 lead import 相关链路，还要额外：
 
-sudo systemctl restart jiuzhuang-crm-lead-import-worker
+sudo systemctl restart jiuzhuang-crm-import-worker
 13. 日志与最低回滚方案
 日志
 
@@ -436,14 +438,14 @@ sudo systemctl restart jiuzhuang-crm-lead-import-worker
 
 Next.js 标准输出 / 标准错误交给 systemd
 Web 日志查看使用 journalctl -u jiuzhuang-crm
-lead import worker 日志查看使用 journalctl -u jiuzhuang-crm-lead-import-worker
+lead import worker 日志查看使用 journalctl -u jiuzhuang-crm-import-worker
 
 常用命令：
 
 sudo journalctl -u jiuzhuang-crm -n 200 --no-pager
 sudo journalctl -u jiuzhuang-crm -f
-sudo journalctl -u jiuzhuang-crm-lead-import-worker -n 200 --no-pager
-sudo journalctl -u jiuzhuang-crm-lead-import-worker -f
+sudo journalctl -u jiuzhuang-crm-import-worker -n 200 --no-pager
+sudo journalctl -u jiuzhuang-crm-import-worker -f
 回滚
 
 每次正式发布至少满足：
@@ -458,11 +460,11 @@ sudo journalctl -u jiuzhuang-crm-lead-import-worker -f
 
 停止继续切流或先摘掉外部流量
 回到上一个可启动版本
-npm ci
+npm ci --include=dev
 npx prisma generate
 npm run build
 systemctl restart jiuzhuang-crm
-systemctl restart jiuzhuang-crm-lead-import-worker
+systemctl restart jiuzhuang-crm-import-worker
 如果问题来自数据库或 migration metadata，再恢复数据库快照和 _prisma_migrations 备份
 14. 常见失败排查
 DATABASE_URL is required
@@ -543,6 +545,6 @@ LEAD_IMPORT_WORKER_CONCURRENCY、LEAD_IMPORT_CHUNK_SIZE 是否配置异常
 执行 npx prisma migrate status
 手动确认 public/exports/shipping 和 public/uploads/avatars 可写
 手动确认 Redis 可连通
-确认 jiuzhuang-crm-lead-import-worker 正常启动
+确认 jiuzhuang-crm-import-worker 正常启动
 从线索导入入口提交一批异步导入并确认批次被消费
 如果需要物流远程查询，再单独验证 XXAPI_* 配置

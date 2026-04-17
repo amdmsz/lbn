@@ -34,13 +34,13 @@ CREATE TABLE `recycle_bin_entries` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- AddForeignKey
-ALTER TABLE `recycle_bin_entries` ADD CONSTRAINT `recycle_bin_entries_deletedById_fkey` FOREIGN KEY (`deletedById`) REFERENCES `User`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `recycle_bin_entries` ADD CONSTRAINT `recycle_bin_entries_deletedById_fkey` FOREIGN KEY (`deletedById`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `recycle_bin_entries` ADD CONSTRAINT `recycle_bin_entries_resolvedById_fkey` FOREIGN KEY (`resolvedById`) REFERENCES `User`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `recycle_bin_entries` ADD CONSTRAINT `recycle_bin_entries_resolvedById_fkey` FOREIGN KEY (`resolvedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `Lead` ADD CONSTRAINT `Lead_rolledBackBatchId_fkey` FOREIGN KEY (`rolledBackBatchId`) REFERENCES `lead_import_batches`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `lead` ADD CONSTRAINT `Lead_rolledBackBatchId_fkey` FOREIGN KEY (`rolledBackBatchId`) REFERENCES `lead_import_batches`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- RenameIndex
 ALTER TABLE `lead` RENAME INDEX `lead_rolledBackAt_idx` TO `Lead_rolledBackAt_idx`;

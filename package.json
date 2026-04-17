@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "worker:lead-imports": "tsx scripts/lead-import-worker.ts",
     "worker:recycle-auto-finalize": "tsx scripts/recycle-auto-finalize.ts",

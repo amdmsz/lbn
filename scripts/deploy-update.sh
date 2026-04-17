@@ -52,7 +52,7 @@ if [[ "$RUN_RUNTIME_BACKUP" == "1" ]]; then
   BACKUP_DIR="$RUNTIME_BACKUP_DIR" bash "$PROJECT_ROOT/scripts/backup-runtime-assets.sh"
 fi
 
-npm ci
+npm ci --include=dev
 npx prisma validate
 
 if [[ "$RUN_MIGRATE_DEPLOY" == "1" ]]; then

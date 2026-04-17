@@ -18,8 +18,12 @@ export default defineConfig({
     path: "prisma/migrations",
     seed: "node prisma/seed.mjs",
   },
-  datasource: {
-    url: datasourceUrl,
-    shadowDatabaseUrl,
-  },
+  datasource: shadowDatabaseUrl
+    ? {
+        url: datasourceUrl,
+        shadowDatabaseUrl,
+      }
+    : {
+        url: datasourceUrl,
+      },
 });
