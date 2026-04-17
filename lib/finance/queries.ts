@@ -57,6 +57,49 @@ export type FinancePaymentsFilters = {
   page: number;
 };
 
+export type FinancePaymentsExportItem = {
+  id: string;
+  sourceType: "SALES_ORDER" | "GIFT_RECORD";
+  occurredAt: Date;
+  amount: string;
+  channel:
+    | "ORDER_FORM_DECLARED"
+    | "BANK_TRANSFER"
+    | "WECHAT_TRANSFER"
+    | "ALIPAY_TRANSFER"
+    | "COD"
+    | "CASH"
+    | "OTHER";
+  status: "SUBMITTED" | "CONFIRMED" | "REJECTED";
+  referenceNo: string | null;
+  remark: string | null;
+  customer: {
+    id: string;
+    name: string;
+    phone: string;
+  } | null;
+  giftRecord: {
+    id: string;
+    giftName: string;
+  } | null;
+  salesOrder: {
+    id: string;
+    orderNo: string;
+    items: Array<{
+      id: string;
+      titleSnapshot: string | null;
+      productNameSnapshot: string;
+      skuNameSnapshot: string;
+      specSnapshot: string;
+      qty: number;
+    }>;
+  } | null;
+  shippingTask: {
+    id: string;
+    trackingNumber: string | null;
+  } | null;
+};
+
 export type FinanceExceptionKind =
   | "SHIPPED_WITHOUT_PAYMENT_PLAN"
   | "DELIVERED_COD_UNPAID"
@@ -455,6 +498,95 @@ export async function getFinancePaymentsPageData(
       totalCount,
       totalPages,
     },
+  };
+}
+
+export async function getFinancePaymentsExportData(
+  viewer: FinanceViewer,
+  rawSearchParams?: Record<string, SearchParamsValue>,
+): Promise<{
+  filters: FinancePaymentsFilters;
+  scopeLabel: string;
+  items: FinancePaymentsExportItem[];
+}> {
+  if (!canAccessFinanceModule(viewer.role)) {
+    throw new Error("You do not have access to finance payments export.");
+  }
+
+  const teamId = await getViewerTeamId(viewer);
+  const filters = parseFinancePaymentsFilters(rawSearchParams);
+  const where = getFinancePaymentsWhere(viewer, teamId, filters);
+
+  const items = await prisma.paymentRecord.findMany({
+    where,
+    orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      sourceType: true,
+      occurredAt: true,
+      amount: true,
+      channel: true,
+      status: true,
+      referenceNo: true,
+      remark: true,
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+        },
+      },
+      giftRecord: {
+        select: {
+          id: true,
+          giftName: true,
+        },
+      },
+      salesOrder: {
+        select: {
+          id: true,
+          orderNo: true,
+          items: {
+            orderBy: [{ lineNo: "asc" }, { createdAt: "asc" }],
+            select: {
+              id: true,
+              titleSnapshot: true,
+              productNameSnapshot: true,
+              skuNameSnapshot: true,
+              specSnapshot: true,
+              qty: true,
+            },
+          },
+        },
+      },
+      shippingTask: {
+        select: {
+          id: true,
+          trackingNumber: true,
+        },
+      },
+    },
+  });
+
+  const normalizedItems: FinancePaymentsExportItem[] = items.map((item) => ({
+    id: item.id,
+    sourceType: item.sourceType,
+    occurredAt: item.occurredAt,
+    amount: item.amount.toString(),
+    channel: item.channel,
+    status: item.status,
+    referenceNo: item.referenceNo,
+    remark: item.remark,
+    customer: item.customer,
+    giftRecord: item.giftRecord,
+    salesOrder: item.salesOrder,
+    shippingTask: item.shippingTask,
+  }));
+
+  return {
+    filters,
+    scopeLabel: getFinanceScopeLabel(viewer),
+    items: normalizedItems,
   };
 }
 

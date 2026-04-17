@@ -9,6 +9,7 @@ import {
   getDefaultRouteForRole,
 } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
+import { buildFinancePaymentsExportHref } from "@/lib/finance/export";
 import { getFinancePaymentsPageData } from "@/lib/finance/queries";
 
 export default async function FinancePaymentsPage({
@@ -53,6 +54,14 @@ export default async function FinancePaymentsPage({
       <DataTableWrapper
         title="收款记录"
         description="按订单编号、客户、销售、收款渠道、收款状态和日期范围筛选财务收款视图。"
+        toolbar={
+          <a
+            href={buildFinancePaymentsExportHref(data.filters)}
+            className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+          >
+            导出当前筛选结果
+          </a>
+        }
       >
         <FinancePaymentsSection
           scopeLabel={data.scopeLabel}

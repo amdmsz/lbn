@@ -440,8 +440,8 @@ function AssignedReviewTable({
                       className="crm-text-link"
                     >
                       {item.recycleGuard.canMoveToRecycleBin
-                        ? "绉诲叆鍥炴敹绔?"
-                        : "鏌ョ湅闃绘柇鍏崇郴"}
+                        ? "移入回收站"
+                        : "查看阻断关系"}
                     </button>
                   </div>
                 </td>
@@ -923,22 +923,24 @@ export function LeadsTable({
                             {formatDateTime(normalizeDate(item.createdAt))}
                           </td>
                           <td>
-                            <Link
-                              href={`/leads/${item.id}`}
-                              scroll={false}
-                              className="crm-text-link"
-                            >
-                              查看详情
-                            </Link>
-                            <button
-                              type="button"
-                              onClick={() => openRecycleDialog(item)}
-                              className="crm-text-link"
-                            >
-                              {item.recycleGuard.canMoveToRecycleBin
-                                ? "绉诲叆鍥炴敹绔?"
-                                : "鏌ョ湅闃绘柇鍏崇郴"}
-                            </button>
+                            <div className="flex flex-wrap items-center gap-3">
+                              <Link
+                                href={`/leads/${item.id}`}
+                                scroll={false}
+                                className="crm-text-link"
+                              >
+                                查看详情
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => openRecycleDialog(item)}
+                                className="crm-text-link"
+                              >
+                                {item.recycleGuard.canMoveToRecycleBin
+                                  ? "移入回收站"
+                                  : "查看阻断关系"}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
