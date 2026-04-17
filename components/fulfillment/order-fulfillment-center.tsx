@@ -21,11 +21,13 @@ import {
   type OrderFulfillmentView,
 } from "@/lib/fulfillment/navigation";
 import { formatCurrency } from "@/lib/fulfillment/metadata";
+import type { RecycleFinalizePreview } from "@/lib/recycle-bin/types";
 import {
   getShippingExportBatchesPageData,
   getShippingOperationsPageData,
 } from "@/lib/shipping/queries";
 import { getTradeOrdersPageData } from "@/lib/trade-orders/queries";
+import type { TradeOrderRecycleGuard } from "@/lib/trade-orders/recycle-guards";
 
 type TradeOrdersData = Awaited<ReturnType<typeof getTradeOrdersPageData>>;
 type ShippingData = Awaited<ReturnType<typeof getShippingOperationsPageData>>;
@@ -132,6 +134,8 @@ export function OrderFulfillmentCenter({
     status: "success" | "error";
     message: string;
     recycleStatus?: "created" | "already_in_recycle_bin" | "blocked";
+    guard?: TradeOrderRecycleGuard;
+    finalizePreview?: RecycleFinalizePreview | null;
   }>;
   createShippingExportBatchAction: (formData: FormData) => Promise<void>;
   updateShippingAction: (formData: FormData) => Promise<void>;

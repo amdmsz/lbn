@@ -6,6 +6,7 @@ import {
 } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
 import { getCustomerCenterData } from "@/lib/customers/queries";
+import { moveCustomerToRecycleBinAction } from "./[id]/actions";
 
 export default async function CustomersPage({
   searchParams,
@@ -31,5 +32,11 @@ export default async function CustomersPage({
     resolvedSearchParams,
   );
 
-  return <CustomerCenterWorkbench role={session.user.role} data={data} />;
+  return (
+    <CustomerCenterWorkbench
+      role={session.user.role}
+      data={data}
+      moveCustomerToRecycleBinAction={moveCustomerToRecycleBinAction}
+    />
+  );
 }

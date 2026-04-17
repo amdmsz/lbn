@@ -9,7 +9,7 @@ export default function RecycleBinLoading() {
           <PageHeader
             eyebrow="回收站治理工作台"
             title="回收站"
-            description="正在准备回收站条目、恢复状态与最终清理摘要，请稍候。"
+            description="正在准备回收站条目、恢复状态与最终处理摘要，请稍候。"
           />
         </div>
       }

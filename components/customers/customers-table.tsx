@@ -5,19 +5,31 @@ import { useRouter } from "next/navigation";
 import type { FormEvent, ReactNode } from "react";
 import { useEffect, useState, useTransition } from "react";
 import { LayoutGrid, Rows3 } from "lucide-react";
-import { batchAddCustomerTagAction } from "@/app/(dashboard)/customers/actions";
+import {
+  batchAddCustomerTagAction,
+  batchMoveCustomersToRecycleBinAction,
+} from "@/app/(dashboard)/customers/actions";
 import { CustomerListCard } from "@/components/customers/customer-list-card";
+import { CustomerRecycleBlockedReasonSummary } from "@/components/customers/customer-recycle-blocked-reason-summary";
+import {
+  CustomerRecycleInlineEntry,
+  type MoveCustomerToRecycleBinAction,
+} from "@/components/customers/customer-recycle-entry";
 import {
   CustomerMobileDialButton,
   MobileCallFollowUpSheet,
 } from "@/components/customers/mobile-call-followup-sheet";
-import { ActionBanner } from "@/components/shared/action-banner";
+import { BatchActionNoticeBanner } from "@/components/shared/batch-action-notice-banner";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
 import { EntityTable } from "@/components/shared/entity-table";
 import { PaginationControls } from "@/components/shared/pagination-controls";
 import { StatusBadge } from "@/components/shared/status-badge";
 import type { CallResultOption } from "@/lib/calls/metadata";
+import {
+  createInitialCustomerBatchActionNoticeState,
+  type CustomerBatchActionNoticeState,
+} from "@/lib/customers/batch-action-contract";
 import { buildCustomersHref } from "@/lib/customers/filter-url";
 import {
   formatDateTime,
@@ -26,8 +38,10 @@ import {
   getCustomerStatusLabel,
   getCustomerWorkStatusLabel,
   getCustomerWorkStatusVariant,
+  MAX_BATCH_CUSTOMER_ACTION_SIZE,
   type CustomerWorkStatusKey,
 } from "@/lib/customers/metadata";
+import { getCustomerOwnershipModeLabel } from "@/lib/customers/public-pool-metadata";
 import type {
   CustomerCenterFilters,
   CustomerListItem,
@@ -43,6 +57,7 @@ type PaginationData = {
 };
 
 type CustomerViewMode = "cards" | "table";
+type SelectionMode = "manual" | "filtered";
 
 type BatchTagOption = {
   id: string;
@@ -51,33 +66,16 @@ type BatchTagOption = {
   count: number;
 };
 
-type BatchTagBlockedReason = {
-  reason: string;
-  count: number;
-};
-
-type BatchTagNoticeState = {
-  status: "idle" | "success" | "error";
-  message: string;
-  summary?: {
-    totalCount: number;
-    successCount: number;
-    alreadyTaggedCount: number;
-    blockedCount: number;
-  };
-  blockedReasons?: BatchTagBlockedReason[];
-};
-
 type PageSelectionState = {
   pageKey: string;
   ids: string[];
 };
 
 const customerViewStorageKey = "customer-center-view-mode";
-const initialBatchTagNoticeState: BatchTagNoticeState = {
-  status: "idle",
-  message: "",
-};
+const initialBatchTagNoticeState =
+  createInitialCustomerBatchActionNoticeState("已有标签");
+const initialBatchRecycleNoticeState =
+  createInitialCustomerBatchActionNoticeState("已在回收站");
 
 function buildCustomerTradeOrderHref(customerId: string) {
   return `/customers/${customerId}?tab=orders&createTradeOrder=1`;
@@ -113,7 +111,7 @@ function getNextAction(item: CustomerListItem) {
     case "pending_first_call":
       return {
         label: "优先完成首呼",
-        note: "还没有形成首条通话记录。",
+        note: "还没有形成有效通话记录。",
       };
     case "pending_follow_up":
       return {
@@ -155,14 +153,39 @@ function getNextAction(item: CustomerListItem) {
   }
 }
 
-function buildBatchTagSummaryText(
-  summary: NonNullable<BatchTagNoticeState["summary"]>,
-) {
-  return `成功添加 ${summary.successCount} 位，已有标签 ${summary.alreadyTaggedCount} 位，被阻断 ${summary.blockedCount} 位。`;
-}
-
-function buildBatchTagBlockedReasonText(blockedReasons: BatchTagBlockedReason[]) {
-  return blockedReasons.map((item) => `${item.reason} ${item.count} 位`).join("；");
+function FilterHiddenInputs({
+  filters,
+}: Readonly<{
+  filters: CustomerCenterFilters;
+}>) {
+  return (
+    <>
+      <input type="hidden" name="queue" value={filters.queue} />
+      {filters.statuses.map((status) => (
+        <input key={status} type="hidden" name="statuses" value={status} />
+      ))}
+      {filters.search ? <input type="hidden" name="search" value={filters.search} /> : null}
+      {filters.teamId ? <input type="hidden" name="teamId" value={filters.teamId} /> : null}
+      {filters.salesId ? <input type="hidden" name="salesId" value={filters.salesId} /> : null}
+      {filters.productKeys.map((productKey) => (
+        <input key={productKey} type="hidden" name="productKeys" value={productKey} />
+      ))}
+      {filters.productKeyword ? (
+        <input type="hidden" name="productKeyword" value={filters.productKeyword} />
+      ) : null}
+      {filters.tagIds.map((tagId) => (
+        <input key={tagId} type="hidden" name="tagIds" value={tagId} />
+      ))}
+      {filters.importedFrom ? (
+        <input type="hidden" name="importedFrom" value={filters.importedFrom} />
+      ) : null}
+      {filters.importedTo ? (
+        <input type="hidden" name="importedTo" value={filters.importedTo} />
+      ) : null}
+      <input type="hidden" name="page" value={String(filters.page)} />
+      <input type="hidden" name="pageSize" value={String(filters.pageSize)} />
+    </>
+  );
 }
 
 function CustomerViewToggle({
@@ -207,6 +230,8 @@ function CustomerViewToggle({
 function BatchTagDialog({
   open,
   selectedCount,
+  selectionMode,
+  filters,
   tagOptions,
   selectedTagId,
   pending,
@@ -217,6 +242,8 @@ function BatchTagDialog({
 }: Readonly<{
   open: boolean;
   selectedCount: number;
+  selectionMode: SelectionMode;
+  filters: CustomerCenterFilters;
   tagOptions: BatchTagOption[];
   selectedTagId: string;
   pending: boolean;
@@ -246,7 +273,7 @@ function BatchTagDialog({
             <div className="space-y-1.5">
               <h3 className="text-lg font-semibold text-black/84">批量添加标签</h3>
               <p className="text-sm leading-6 text-black/58">
-                本次对已选 {selectedCount} 位客户批量添加一个标签。已有标签不会覆盖，只会记为“已有标签”。
+                本次会对已选 {selectedCount} 位客户批量添加一个标签。已有标签不会覆盖，只会计入“已有标签”。
               </p>
             </div>
             <button
@@ -260,9 +287,14 @@ function BatchTagDialog({
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4 px-5 py-4">
-          {selectedCustomerIds.map((customerId) => (
-            <input key={customerId} type="hidden" name="customerIds" value={customerId} />
-          ))}
+          <input type="hidden" name="selectionMode" value={selectionMode} />
+          {selectionMode === "filtered" ? (
+            <FilterHiddenInputs filters={filters} />
+          ) : (
+            selectedCustomerIds.map((customerId) => (
+              <input key={customerId} type="hidden" name="customerIds" value={customerId} />
+            ))
+          )}
 
           <label className="block space-y-2">
             <span className="text-sm font-medium text-black/78">选择标签</span>
@@ -283,7 +315,9 @@ function BatchTagDialog({
           </label>
 
           <div className="rounded-[0.9rem] border border-black/7 bg-[rgba(247,248,250,0.76)] px-4 py-3 text-[13px] leading-6 text-black/56">
-            这轮只支持当前页手选，不做标签移除，也不会覆盖已有标签。
+            {selectionMode === "filtered"
+              ? `这次会按当前筛选结果批量处理 ${selectedCount} 位客户，不做标签移除，也不会覆盖已有标签。`
+              : "这次会按当前页手选客户批量添加标签，不做标签移除，也不会覆盖已有标签。"}
           </div>
 
           <div className="flex flex-wrap justify-end gap-3">
@@ -308,13 +342,108 @@ function BatchTagDialog({
   );
 }
 
+function BatchRecycleDialog({
+  open,
+  selectedCount,
+  selectionMode,
+  filters,
+  pending,
+  onClose,
+  onSubmit,
+  selectedCustomerIds,
+}: Readonly<{
+  open: boolean;
+  selectedCount: number;
+  selectionMode: SelectionMode;
+  filters: CustomerCenterFilters;
+  pending: boolean;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  selectedCustomerIds: string[];
+}>) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/28 px-4 py-8 lg:pl-[var(--dashboard-sidebar-width,0px)]"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="批量移入回收站"
+        className="crm-card w-full max-w-lg overflow-hidden"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="border-b border-black/6 px-5 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-semibold text-black/84">批量移入回收站</h3>
+              <p className="text-sm leading-6 text-black/58">
+                本次会把已选 {selectedCount} 位客户按“误建轻客户”语义逐条提交到现有 recycle move
+                guard。服务端会继续阻断 public-pool、状态治理、merge 以及订单 / 支付 / 履约链客户。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="crm-button crm-button-ghost min-h-0 px-3 py-2 text-sm"
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-4 px-5 py-4">
+          <input type="hidden" name="selectionMode" value={selectionMode} />
+          {selectionMode === "filtered" ? (
+            <FilterHiddenInputs filters={filters} />
+          ) : (
+            selectedCustomerIds.map((customerId) => (
+              <input key={customerId} type="hidden" name="customerIds" value={customerId} />
+            ))
+          )}
+          <input type="hidden" name="reasonCode" value="mistaken_creation" />
+
+          <div className="rounded-[0.9rem] border border-black/7 bg-[rgba(247,248,250,0.76)] px-4 py-3 text-[13px] leading-6 text-black/56">
+            {selectionMode === "filtered"
+              ? `这次会按当前筛选结果检查 ${selectedCount} 位客户，并逐条复用现有 recycle move guard。`
+              : "这次会按当前页手选客户逐条复用现有 recycle move guard，不做批量恢复、批量永久删除或批量最终封存。"}
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="crm-button crm-button-secondary"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              disabled={pending}
+              className="crm-button crm-button-primary disabled:cursor-not-allowed disabled:opacity-55"
+            >
+              {pending ? "提交中..." : "确认移入回收站"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export function CustomersTable({
   items,
   pagination,
   callResultOptions,
   canCreateCallRecord,
   canCreateSalesOrder = false,
+  moveToRecycleBinAction,
   canBatchAddTags = false,
+  canBatchMoveToRecycleBin = false,
   batchTagOptions = [],
   emptyTitle,
   emptyDescription,
@@ -327,7 +456,9 @@ export function CustomersTable({
   callResultOptions: CallResultOption[];
   canCreateCallRecord: boolean;
   canCreateSalesOrder?: boolean;
+  moveToRecycleBinAction?: MoveCustomerToRecycleBinAction;
   canBatchAddTags?: boolean;
+  canBatchMoveToRecycleBin?: boolean;
   batchTagOptions?: BatchTagOption[];
   emptyTitle: string;
   emptyDescription: string;
@@ -336,23 +467,41 @@ export function CustomersTable({
   scrollTargetId?: string;
 }>) {
   const [viewMode, setViewMode] = useState<CustomerViewMode>("table");
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>("manual");
   const currentPageSelectionKey = `${pagination.page}:${items.map((item) => item.id).join(",")}`;
   const [pageSelection, setPageSelection] = useState<PageSelectionState>({
     pageKey: currentPageSelectionKey,
     ids: [],
   });
   const [batchTagDialogOpen, setBatchTagDialogOpen] = useState(false);
+  const [batchRecycleDialogOpen, setBatchRecycleDialogOpen] = useState(false);
   const [selectedTagId, setSelectedTagId] = useState("");
-  const [batchTagNotice, setBatchTagNotice] = useState<BatchTagNoticeState>(
+  const [batchTagNotice, setBatchTagNotice] = useState<CustomerBatchActionNoticeState>(
     initialBatchTagNoticeState,
   );
+  const [batchRecycleNotice, setBatchRecycleNotice] = useState<CustomerBatchActionNoticeState>(
+    initialBatchRecycleNoticeState,
+  );
   const [batchTagPending, startBatchTagTransition] = useTransition();
+  const [batchRecyclePending, startBatchRecycleTransition] = useTransition();
   const router = useRouter();
 
-  const selectedIds =
+  const manualSelectedIds =
     pageSelection.pageKey === currentPageSelectionKey ? pageSelection.ids : [];
-  const selectedCount = selectedIds.length;
-  const allSelected = items.length > 0 && selectedIds.length === items.length;
+  const selectedCount =
+    selectionMode === "filtered" ? pagination.totalCount : manualSelectedIds.length;
+  const allCurrentPageSelected =
+    items.length > 0 &&
+    (selectionMode === "filtered" || manualSelectedIds.length === items.length);
+  const canBatchSelect = canBatchAddTags || canBatchMoveToRecycleBin;
+  const filteredSelectionExceedsLimit =
+    canBatchSelect && pagination.totalCount > MAX_BATCH_CUSTOMER_ACTION_SIZE;
+  const canSelectFiltered =
+    canBatchSelect &&
+    pagination.totalCount > items.length &&
+    !filteredSelectionExceedsLimit;
+  const batchExecutionBlockedByLimit =
+    selectionMode === "filtered" && filteredSelectionExceedsLimit;
 
   useEffect(() => {
     const stored = window.localStorage.getItem(customerViewStorageKey);
@@ -375,23 +524,59 @@ export function CustomersTable({
     window.localStorage.setItem(customerViewStorageKey, nextValue);
   }
 
-  function toggleSelected(customerId: string) {
+  function resetSelection() {
+    setSelectionMode("manual");
     setPageSelection({
       pageKey: currentPageSelectionKey,
-      ids: selectedIds.includes(customerId)
-        ? selectedIds.filter((id) => id !== customerId)
-        : [...selectedIds, customerId],
+      ids: [],
+    });
+  }
+
+  function toggleSelected(customerId: string) {
+    if (selectionMode === "filtered") {
+      setSelectionMode("manual");
+      setPageSelection({
+        pageKey: currentPageSelectionKey,
+        ids: [customerId],
+      });
+      return;
+    }
+
+    setPageSelection({
+      pageKey: currentPageSelectionKey,
+      ids: manualSelectedIds.includes(customerId)
+        ? manualSelectedIds.filter((id) => id !== customerId)
+        : [...manualSelectedIds, customerId],
     });
   }
 
   function toggleSelectAllCurrentPage() {
+    if (selectionMode === "filtered") {
+      resetSelection();
+      return;
+    }
+
     setPageSelection({
       pageKey: currentPageSelectionKey,
-      ids: selectedIds.length === items.length ? [] : items.map((item) => item.id),
+      ids:
+        manualSelectedIds.length === items.length ? [] : items.map((item) => item.id),
+    });
+  }
+
+  function selectFilteredResults() {
+    if (!canSelectFiltered) {
+      return;
+    }
+
+    setSelectionMode("filtered");
+    setPageSelection({
+      pageKey: currentPageSelectionKey,
+      ids: [],
     });
   }
 
   function openBatchTagDialog() {
+    setBatchRecycleNotice(initialBatchRecycleNoticeState);
     setBatchTagNotice(initialBatchTagNoticeState);
     setSelectedTagId("");
     setBatchTagDialogOpen(true);
@@ -400,6 +585,16 @@ export function CustomersTable({
   function closeBatchTagDialog() {
     setBatchTagDialogOpen(false);
     setSelectedTagId("");
+  }
+
+  function openBatchRecycleDialog() {
+    setBatchTagNotice(initialBatchTagNoticeState);
+    setBatchRecycleNotice(initialBatchRecycleNoticeState);
+    setBatchRecycleDialogOpen(true);
+  }
+
+  function closeBatchRecycleDialog() {
+    setBatchRecycleDialogOpen(false);
   }
 
   function handleBatchTagSubmit(event: FormEvent<HTMLFormElement>) {
@@ -412,14 +607,44 @@ export function CustomersTable({
       setBatchTagNotice(nextState);
       closeBatchTagDialog();
 
-      if (nextState.summary && nextState.summary.successCount > 0) {
-        setPageSelection({
-          pageKey: currentPageSelectionKey,
-          ids: [],
-        });
+      if (nextState.summary.successCount > 0) {
+        resetSelection();
         router.refresh();
       }
     });
+  }
+
+  function handleBatchRecycleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+
+    startBatchRecycleTransition(async () => {
+      const nextState = await batchMoveCustomersToRecycleBinAction(formData);
+      setBatchRecycleNotice(nextState);
+      closeBatchRecycleDialog();
+
+      if (nextState.summary.successCount > 0 || nextState.summary.skippedCount > 0) {
+        resetSelection();
+        router.refresh();
+      }
+    });
+  }
+
+  function buildRecycleEntryProps(row: CustomerListItem) {
+    return {
+      customerId: row.id,
+      customerName: row.name,
+      phone: row.phone,
+      statusLabel: getCustomerStatusLabel(row.status),
+      ownershipLabel: getCustomerOwnershipModeLabel(row.ownershipMode),
+      ownerLabel: getOwnerLabel(row),
+      lastEffectiveFollowUpAt: row.lastEffectiveFollowUpAt,
+      approvedTradeOrderCount: row.approvedTradeOrderCount,
+      linkedLeadCount: row._count.leads,
+      initialGuard: row.recycleGuard,
+      initialFinalizePreview: row.recycleFinalizePreview,
+    };
   }
 
   const baseColumns = [
@@ -519,7 +744,7 @@ export function CustomersTable({
     {
       key: "actions",
       title: "动作",
-      headerClassName: "w-[10%]",
+      headerClassName: "w-[16%]",
       render: (row: CustomerListItem) => (
         <div className="flex flex-wrap items-center gap-2">
           <Link
@@ -545,12 +770,32 @@ export function CustomersTable({
               成交主单
             </Link>
           ) : null}
+          {moveToRecycleBinAction ? (
+            <CustomerRecycleInlineEntry
+              {...buildRecycleEntryProps(row)}
+              moveToRecycleBinAction={moveToRecycleBinAction}
+              renderTrigger={({ canMoveToRecycleBin, openDialog }) => (
+                <button
+                  type="button"
+                  onClick={openDialog}
+                  className={cn(
+                    "inline-flex h-8 items-center rounded-[10px] border px-3 text-[12px] font-medium transition",
+                    canMoveToRecycleBin
+                      ? "border-[rgba(141,59,51,0.16)] bg-[rgba(255,247,246,0.88)] text-[var(--color-danger)] hover:border-[rgba(141,59,51,0.22)] hover:bg-[rgba(255,243,241,0.92)]"
+                      : "border-black/8 bg-white text-black/68 hover:border-black/12 hover:text-black/84",
+                  )}
+                >
+                  {canMoveToRecycleBin ? "移入回收站" : "查看回收判断"}
+                </button>
+              )}
+            />
+          ) : null}
         </div>
       ),
     },
   ];
 
-  const columns = canBatchAddTags
+  const columns = canBatchSelect
     ? [
         {
           key: "selection",
@@ -560,7 +805,7 @@ export function CustomersTable({
             <div className="flex items-center justify-center">
               <input
                 type="checkbox"
-                checked={selectedIds.includes(row.id)}
+                checked={selectionMode === "filtered" || manualSelectedIds.includes(row.id)}
                 onChange={() => toggleSelected(row.id)}
                 aria-label={`选择客户 ${row.name}`}
                 className="h-4 w-4 rounded border border-black/18 text-black focus:ring-black/15"
@@ -602,23 +847,72 @@ export function CustomersTable({
             />
           ) : (
             <div className="space-y-4">
-              {batchTagNotice.message ? (
-                <ActionBanner tone={batchTagNotice.status === "success" ? "success" : "danger"}>
-                  <div className="space-y-1.5">
-                    <p>{batchTagNotice.message}</p>
-                    {batchTagNotice.summary && batchTagNotice.summary.totalCount > 0 ? (
-                      <p>{buildBatchTagSummaryText(batchTagNotice.summary)}</p>
-                    ) : null}
-                    {batchTagNotice.blockedReasons && batchTagNotice.blockedReasons.length > 0 ? (
-                      <p>
-                        阻断原因：{buildBatchTagBlockedReasonText(batchTagNotice.blockedReasons)}
-                      </p>
-                    ) : null}
-                  </div>
-                </ActionBanner>
+              <BatchActionNoticeBanner
+                state={batchTagNotice}
+                successLabel="成功添加"
+                entityCountLabel="位客户"
+                countUnitLabel="位"
+              />
+              <BatchActionNoticeBanner
+                state={batchRecycleNotice}
+                successLabel="成功移入回收站"
+                entityCountLabel="位客户"
+                countUnitLabel="位"
+              />
+
+              {batchRecycleNotice.blockedReasonSummary.length > 0 ? (
+                <CustomerRecycleBlockedReasonSummary
+                  items={batchRecycleNotice.blockedReasonSummary}
+                />
               ) : null}
 
-              {canBatchAddTags ? (
+              {selectionMode === "filtered" ? (
+                <div
+                  className={cn(
+                    "flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] px-3.5 py-3 text-sm",
+                    filteredSelectionExceedsLimit
+                      ? "border border-[rgba(141,59,51,0.16)] bg-[rgba(255,247,246,0.92)] text-[var(--color-danger)]"
+                      : "border border-[var(--color-accent)]/16 bg-[var(--color-accent)]/5 text-black/72",
+                  )}
+                >
+                  <span>
+                    {filteredSelectionExceedsLimit
+                      ? `当前筛选结果共 ${pagination.totalCount} 位客户，超过单次 ${MAX_BATCH_CUSTOMER_ACTION_SIZE} 位上限，请先缩小范围后再执行批量动作。`
+                      : `已选择当前筛选结果全部 ${pagination.totalCount} 位客户，可直接执行批量添加标签或批量移入回收站。`}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={resetSelection}
+                    className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                  >
+                    取消跨页选择
+                  </button>
+                </div>
+              ) : null}
+
+              {selectionMode === "manual" &&
+              allCurrentPageSelected &&
+              canBatchSelect &&
+              pagination.totalCount > items.length ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-black/8 bg-black/[0.025] px-3.5 py-3 text-sm text-black/68">
+                  <span>已选择当前页全部 {items.length} 位客户。</span>
+                  {canSelectFiltered ? (
+                    <button
+                      type="button"
+                      onClick={selectFilteredResults}
+                      className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                    >
+                      选择当前筛选结果全部 {pagination.totalCount} 位
+                    </button>
+                  ) : (
+                    <span>
+                      当前筛选结果共 {pagination.totalCount} 位，超过 {MAX_BATCH_CUSTOMER_ACTION_SIZE} 位上限，请先缩小范围。
+                    </span>
+                  )}
+                </div>
+              ) : null}
+
+              {canBatchSelect ? (
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-black/8 bg-[rgba(247,248,250,0.72)] px-3.5 py-3">
                   <div className="flex flex-wrap items-center gap-2 text-[13px] text-black/62">
                     <StatusBadge
@@ -630,34 +924,51 @@ export function CustomersTable({
                       onClick={toggleSelectAllCurrentPage}
                       className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
                     >
-                      {allSelected ? "取消当前页全选" : "全选当前页"}
+                      {selectionMode === "filtered"
+                        ? "取消跨页选择"
+                        : allCurrentPageSelected
+                          ? "取消当前页全选"
+                          : "全选当前页"}
                     </button>
                     {selectedCount > 0 ? (
                       <button
                         type="button"
-                        onClick={() =>
-                          setPageSelection({
-                            pageKey: currentPageSelectionKey,
-                            ids: [],
-                          })
-                        }
+                        onClick={resetSelection}
                         className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
                       >
                         清空选择
                       </button>
                     ) : null}
-                    {batchTagOptions.length === 0 ? (
+                    {canBatchAddTags && batchTagOptions.length === 0 ? (
                       <span className="text-[12px] text-black/45">暂无可用标签</span>
                     ) : null}
                   </div>
-                  <button
-                    type="button"
-                    onClick={openBatchTagDialog}
-                    disabled={selectedCount === 0 || batchTagOptions.length === 0}
-                    className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
-                  >
-                    批量添加标签
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {canBatchAddTags ? (
+                      <button
+                        type="button"
+                        onClick={openBatchTagDialog}
+                        disabled={
+                          selectedCount === 0 ||
+                          batchTagOptions.length === 0 ||
+                          batchExecutionBlockedByLimit
+                        }
+                        className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-55"
+                      >
+                        批量添加标签
+                      </button>
+                    ) : null}
+                    {canBatchMoveToRecycleBin ? (
+                      <button
+                        type="button"
+                        onClick={openBatchRecycleDialog}
+                        disabled={selectedCount === 0 || batchExecutionBlockedByLimit}
+                        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm text-[var(--color-danger)] hover:border-[rgba(141,59,51,0.16)] hover:bg-[rgba(255,247,246,0.88)] disabled:cursor-not-allowed disabled:text-black/42 disabled:opacity-55"
+                      >
+                        批量移入回收站
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
 
@@ -667,7 +978,7 @@ export function CustomersTable({
                   <StatusBadge label={`共 ${pagination.totalCount} 位客户`} variant="info" />
                 </div>
                 <p className="text-[12px] leading-5 text-black/48">
-                  默认把客户工作台收回到更薄的列表扫描视角，卡片视图保留给需要更强上下文时使用。
+                  默认把客户工作台收回到更偏列表扫描视角，卡片视图保留给需要更多上下文时使用。
                 </p>
               </div>
 
@@ -680,8 +991,11 @@ export function CustomersTable({
                       callResultOptions={callResultOptions}
                       canCreateCallRecord={canCreateCallRecord}
                       canCreateSalesOrder={canCreateSalesOrder}
-                      selectable={canBatchAddTags}
-                      selected={selectedIds.includes(item.id)}
+                      moveToRecycleBinAction={moveToRecycleBinAction}
+                      selectable={canBatchSelect}
+                      selected={
+                        selectionMode === "filtered" || manualSelectedIds.includes(item.id)
+                      }
                       onToggleSelected={() => toggleSelected(item.id)}
                     />
                   ))}
@@ -724,13 +1038,26 @@ export function CustomersTable({
       <BatchTagDialog
         open={batchTagDialogOpen}
         selectedCount={selectedCount}
+        selectionMode={selectionMode}
+        filters={filters}
         tagOptions={batchTagOptions}
         selectedTagId={selectedTagId}
         pending={batchTagPending}
         onClose={closeBatchTagDialog}
         onTagChange={setSelectedTagId}
         onSubmit={handleBatchTagSubmit}
-        selectedCustomerIds={selectedIds}
+        selectedCustomerIds={manualSelectedIds}
+      />
+
+      <BatchRecycleDialog
+        open={batchRecycleDialogOpen}
+        selectedCount={selectedCount}
+        selectionMode={selectionMode}
+        filters={filters}
+        pending={batchRecyclePending}
+        onClose={closeBatchRecycleDialog}
+        onSubmit={handleBatchRecycleSubmit}
+        selectedCustomerIds={manualSelectedIds}
       />
     </>
   );

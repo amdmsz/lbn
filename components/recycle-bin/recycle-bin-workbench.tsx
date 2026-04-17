@@ -8,6 +8,7 @@ import {
   restoreRecycleBinEntryAction,
   type RecycleBinActionResult,
 } from "@/app/(dashboard)/recycle-bin/actions";
+import { RecycleBinHistorySummary } from "@/components/recycle-bin/recycle-bin-history-summary";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -18,6 +19,7 @@ import {
 } from "@/components/shared/status-badge";
 import type {
   RecycleBinBlockerGroup,
+  RecycleBinEntryStatusValue,
   RecycleBinListItem,
   RecycleBinTabValue,
 } from "@/lib/recycle-bin/queries";
@@ -115,7 +117,7 @@ function getDialogMeta(state: RecycleBinDialogState): RecycleBinDialogMeta | nul
   return {
     title:
       state.item.finalActionPreview !== null ? "提前永久删除" : "永久删除对象",
-    badgeLabel: state.item.finalActionPreview !== null ? "提前永久删除" : "最终清理",
+    badgeLabel: state.item.finalActionPreview !== null ? "提前永久删除" : "最终处理",
     badgeVariant: "danger" as const,
     description:
       state.item.finalActionPreview !== null
@@ -126,11 +128,11 @@ function getDialogMeta(state: RecycleBinDialogState): RecycleBinDialogMeta | nul
     impactHint:
       state.item.finalActionPreview !== null
         ? "提前永久删除前，服务端仍会按最新真相重算，不能只依赖移入回收站时的快照。"
-        : "永久删除前会再次实时重算 purge blocker，不能只依赖删除时的快照。",
+        : "永久删除前会再次实时重算清理阻断项，不能只依赖删除时的快照。",
   };
 }
 
-function getCustomerActionBadges(item: RecycleBinListItem) {
+function getFinalizeActionBadges(item: RecycleBinListItem) {
   if (!item.finalActionPreview) {
     return null;
   }
@@ -261,7 +263,7 @@ function DetailRow({
   );
 }
 
-function renderCustomerActionButtons({
+function renderFinalizeActionButtons({
   item,
   pending,
   onOpenDialog,
@@ -369,11 +371,76 @@ function renderDefaultActionButtons({
   );
 }
 
+function getHistoryResultBadge(item: RecycleBinListItem) {
+  if (item.entryStatusLabel === "ARCHIVED") {
+    return {
+      label: item.resolutionActionLabel ?? "ARCHIVE",
+      variant: "info" as const,
+    };
+  }
+
+  if (item.entryStatusLabel === "PURGED") {
+    return {
+      label: item.resolutionActionLabel ?? "PURGE",
+      variant: "warning" as const,
+    };
+  }
+
+  return {
+    label: item.resolutionActionLabel ?? "RESTORE",
+    variant: "success" as const,
+  };
+}
+
+function getHistoryArchiveSourceBadge(item: RecycleBinListItem) {
+  const source = item.historyArchive?.source ?? "UNAVAILABLE";
+
+  if (source === "SNAPSHOT_V2") {
+    return {
+      label: source,
+      variant: "info" as const,
+    };
+  }
+
+  if (source === "LEGACY_FALLBACK") {
+    return {
+      label: source,
+      variant: "warning" as const,
+    };
+  }
+
+  return {
+    label: source,
+    variant: "neutral" as const,
+  };
+}
+
+function getHistorySnapshotVersionLabel(item: RecycleBinListItem) {
+  return item.historyArchive?.snapshotVersion !== null &&
+    item.historyArchive?.snapshotVersion !== undefined
+    ? String(item.historyArchive.snapshotVersion)
+    : "--";
+}
+
+function getHistoryAuditNote(item: RecycleBinListItem) {
+  if (item.historyArchive?.source === "LEGACY_FALLBACK") {
+    return "当前条目属于 legacy archive snapshot，仅保证基础审计字段稳定可读，不伪装成完整结构化检索结果。";
+  }
+
+  if (item.historyArchive?.source === "UNAVAILABLE" || !item.historyArchive) {
+    return "当前条目没有可解析的结构化 archive payload，仅保留删除、处理人与最终结果等基础审计信息。";
+  }
+
+  return "当前条目已接入结构化 archive contract，可稳定读取 finalAction、archive source 与 snapshotVersion。";
+}
+
 export function RecycleBinWorkbench({
   activeTab,
+  entryStatus,
   items,
 }: Readonly<{
   activeTab: RecycleBinTabValue;
+  entryStatus: RecycleBinEntryStatusValue;
   items: RecycleBinListItem[];
 }>) {
   const router = useRouter();
@@ -388,9 +455,12 @@ export function RecycleBinWorkbench({
     () => items.find((item) => item.entryId === selectedEntryId) ?? items[0] ?? null,
     [items, selectedEntryId],
   );
-  const isCustomerTab = activeTab === "customers";
+  const isHistoryView = entryStatus !== "active";
+  const isFinalizeTab =
+    !isHistoryView && (activeTab === "customers" || activeTab === "trade-orders");
   const showStatusColumns =
-    activeTab === "leads" || activeTab === "trade-orders" || activeTab === "customers";
+    !isHistoryView &&
+    (activeTab === "leads" || activeTab === "trade-orders" || activeTab === "customers");
 
   function closeDialog() {
     setDialogState(null);
@@ -435,9 +505,11 @@ export function RecycleBinWorkbench({
         <DataTableWrapper
           title={`${getTabLabel(activeTab)}回收站条目`}
           description={
-            isCustomerTab
-              ? "Customer tab 已切到 finalize 视角：左侧保留恢复，提前永久删除只对 light + ADMIN 开放，到期后统一执行最终处理。"
-              : "当前保留恢复、永久删除和 blocker 摘要；点击行即可在右侧查看更完整的治理详情。"
+            isHistoryView
+              ? `${getTabLabel(activeTab)} tab 已切到 ${entryStatus.toUpperCase()} 历史视角：左侧只读展示删除与解决结果，右侧展示对象摘要、归档载荷与最终说明。`
+              : isFinalizeTab
+              ? `${getTabLabel(activeTab)} tab 已切到 finalize 视角：左侧保留恢复，提前永久删除只对 light + ADMIN 开放，到期后统一执行最终处理。`
+              : "当前保留恢复、清理动作和 blocker 摘要；点击行即可在右侧查看更完整的治理详情。"
           }
           contentClassName="p-0"
         >
@@ -453,14 +525,15 @@ export function RecycleBinWorkbench({
                     {showStatusColumns ? <th>删除前负责人</th> : null}
                     <th>删除原因</th>
                     <th>删除时间</th>
-                    <th>删除人</th>
-                    <th>{isCustomerTab ? "Finalize 预览" : "blocker 摘要"}</th>
-                    <th>操作</th>
+                    {isHistoryView ? <th>处理时间</th> : <th>删除人</th>}
+                    <th>{isHistoryView ? "最终结果" : isFinalizeTab ? "Finalize 预览" : "blocker 摘要"}</th>
+                    <th>{isHistoryView ? "处理人" : "操作"}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item) => {
                     const selected = item.entryId === selectedItem?.entryId;
+                    const historyBadge = getHistoryResultBadge(item);
 
                     return (
                       <tr
@@ -503,17 +576,32 @@ export function RecycleBinWorkbench({
                         ) : null}
                         <td>{item.deleteReasonLabel}</td>
                         <td className="whitespace-nowrap">{item.deletedAtLabel}</td>
-                        <td>{item.deletedByLabel}</td>
+                        <td className="whitespace-nowrap">
+                          {isHistoryView ? item.resolvedAtLabel ?? "--" : item.deletedByLabel}
+                        </td>
                         <td className="min-w-[18rem]">
                           <div className="space-y-2">
                             <p className="text-sm leading-6 text-black/62">
-                              {isCustomerTab && item.finalActionPreview
-                                ? item.finalActionPreview.blockerSummary
+                              {isHistoryView
+                                ? item.resolutionSummary ?? "当前为历史终态只读记录。"
+                                : isFinalizeTab && item.finalActionPreview
+                                ? item.finalizeSummary ?? item.finalActionPreview.blockerSummary
                                 : item.blockerSummary}
                             </p>
-                            {isCustomerTab && item.finalActionPreview ? (
+                            {isHistoryView ? (
+                              <div className="flex flex-wrap gap-2">
+                                <StatusBadge
+                                  label={historyBadge.label}
+                                  variant={historyBadge.variant}
+                                />
+                                <StatusBadge
+                                  label={item.entryStatusLabel}
+                                  variant="neutral"
+                                />
+                              </div>
+                            ) : isFinalizeTab && item.finalActionPreview ? (
                               <>
-                                {getCustomerActionBadges(item)}
+                                {getFinalizeActionBadges(item)}
                                 <p className="text-xs leading-5 text-black/48">
                                   {item.remainingTimeLabel
                                     ? `剩余时间：${item.remainingTimeLabel}`
@@ -532,7 +620,7 @@ export function RecycleBinWorkbench({
                                       ? "可永久删除"
                                       : item.purgeRequiresAdmin
                                         ? "仅管理员可删除"
-                                        : "永久删除受阻"
+                                        : "清理受阻"
                                   }
                                   variant={item.canPurge ? "danger" : "neutral"}
                                 />
@@ -541,8 +629,15 @@ export function RecycleBinWorkbench({
                           </div>
                         </td>
                         <td className="align-top">
-                          {isCustomerTab
-                            ? renderCustomerActionButtons({
+                          {isHistoryView ? (
+                            <div className="space-y-2">
+                              <div className="text-sm font-medium text-black/72">
+                                {item.resolvedByLabel ?? "--"}
+                              </div>
+                              <p className="text-xs leading-5 text-black/48">只读历史</p>
+                            </div>
+                          ) : isFinalizeTab
+                            ? renderFinalizeActionButtons({
                                 item,
                                 pending,
                                 onOpenDialog: openDialog,
@@ -564,8 +659,10 @@ export function RecycleBinWorkbench({
               <EmptyState
                 title={`暂无${getTabLabel(activeTab)}回收站条目`}
                 description={
-                  isCustomerTab
-                    ? "当前范围内没有 ACTIVE 客户回收站对象。后续移入回收站的客户会在这里按 finalize 视角统一治理。"
+                  isHistoryView
+                    ? `当前范围内没有 ${entryStatus.toUpperCase()} ${getTabLabel(activeTab)}历史条目。后续处理完成的对象会在这里沉淀只读审计记录。`
+                    : isFinalizeTab
+                    ? `当前范围内没有 ACTIVE ${getTabLabel(activeTab)}回收站对象。后续移入回收站的对象会在这里按 finalize 视角统一治理。`
                     : "当前范围内没有 ACTIVE 回收站对象，后续移入回收站的对象会在这里统一治理。"
                 }
               />
@@ -574,11 +671,13 @@ export function RecycleBinWorkbench({
         </DataTableWrapper>
 
         <SectionCard
-          title={isCustomerTab ? "Finalize Preview" : "Blocker 详情"}
+          title={isHistoryView ? "历史详情" : isFinalizeTab ? "Finalize Preview" : "治理详情"}
           description={
-            isCustomerTab
-              ? "右侧只展示当前选中客户的 restore 与 finalize preview，不在这里扩复杂治理树。"
-              : "右侧只展示当前选中对象的恢复与最终清理判断，不在这里扩复杂治理流程。"
+            isHistoryView
+              ? "右侧只展示当前选中对象的删除信息、解决结果、finalAction 与 archivePayloadJson，不提供历史操作按钮。"
+              : isFinalizeTab
+              ? "右侧只展示当前选中对象的 restore 与 finalize preview，不在这里扩复杂治理树。"
+              : "右侧只展示当前选中对象的恢复与清理判断，不在这里扩复杂治理流程。"
           }
           className="xl:sticky xl:top-[var(--crm-sticky-top)] xl:self-start"
         >
@@ -601,7 +700,7 @@ export function RecycleBinWorkbench({
                 </div>
               </div>
 
-              {selectedItem.customerSummary ? (
+              {selectedItem.customerSummary && !isHistoryView ? (
                 <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
                   <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
                     客户补充信息
@@ -632,6 +731,12 @@ export function RecycleBinWorkbench({
                 </div>
               ) : null}
 
+              {isHistoryView &&
+              (selectedItem.targetType === "CUSTOMER" ||
+                selectedItem.targetType === "TRADE_ORDER") ? (
+                <RecycleBinHistorySummary item={selectedItem} />
+              ) : null}
+
               <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
                 <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
                   删除原因
@@ -646,24 +751,125 @@ export function RecycleBinWorkbench({
                 </div>
               </div>
 
-              <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
-                <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
-                  删除信息
+                <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
+                  <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                    删除信息
                 </p>
                 <div className="space-y-2">
                   <DetailRow label="删除时间" value={selectedItem.deletedAtLabel} />
                   <DetailRow label="删除人" value={selectedItem.deletedByLabel} />
+                  </div>
                 </div>
-              </div>
 
-              <GuardSection
-                title="Restore blocker"
-                emptyLabel="当前可恢复"
-                summary={selectedItem.restoreSummary}
-                groups={selectedItem.restoreBlockerGroups}
-              />
+              {isHistoryView ? (
+                <>
+                  <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                        最终结果
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <StatusBadge
+                          label={selectedItem.resolutionActionLabel ?? selectedItem.entryStatusLabel}
+                          variant={getHistoryResultBadge(selectedItem).variant}
+                        />
+                        <StatusBadge
+                          label={selectedItem.entryStatusLabel}
+                          variant="neutral"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <DetailRow
+                        label="处理时间"
+                        value={selectedItem.resolvedAtLabel ?? "--"}
+                      />
+                      <DetailRow
+                        label="处理人"
+                        value={selectedItem.resolvedByLabel ?? "--"}
+                      />
+                      <DetailRow
+                        label="finalAction"
+                        value={selectedItem.resolutionActionLabel ?? "--"}
+                      />
+                      <DetailRow
+                        label="最终说明"
+                        value={selectedItem.resolutionSummary ?? "当前为历史终态只读记录。"}
+                        multiline
+                      />
+                    </div>
+                  </div>
 
-              {isCustomerTab && selectedItem.finalActionPreview ? (
+                  <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                        审计信息
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <StatusBadge
+                          label={getHistoryArchiveSourceBadge(selectedItem).label}
+                          variant={getHistoryArchiveSourceBadge(selectedItem).variant}
+                        />
+                        <StatusBadge
+                          label={`snapshotVersion ${getHistorySnapshotVersionLabel(selectedItem)}`}
+                          variant="neutral"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <DetailRow label="deletedAt" value={selectedItem.deletedAtLabel} />
+                      <DetailRow label="deletedBy" value={selectedItem.deletedByLabel} />
+                      <DetailRow
+                        label="resolvedAt"
+                        value={selectedItem.resolvedAtLabel ?? "--"}
+                      />
+                      <DetailRow
+                        label="resolvedBy"
+                        value={selectedItem.resolvedByLabel ?? "--"}
+                      />
+                      <DetailRow
+                        label="finalAction"
+                        value={selectedItem.resolutionActionLabel ?? "--"}
+                      />
+                      <DetailRow
+                        label="historyArchive.source"
+                        value={selectedItem.historyArchive?.source ?? "UNAVAILABLE"}
+                      />
+                      <DetailRow
+                        label="archivePayload snapshotVersion"
+                        value={getHistorySnapshotVersionLabel(selectedItem)}
+                      />
+                      <DetailRow
+                        label="审计说明"
+                        value={getHistoryAuditNote(selectedItem)}
+                        multiline
+                      />
+                    </div>
+                  </div>
+
+                  {selectedItem.archivePayloadJsonText &&
+                  selectedItem.targetType !== "CUSTOMER" &&
+                  selectedItem.targetType !== "TRADE_ORDER" ? (
+                    <details className="rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
+                      <summary className="cursor-pointer list-none text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                        Archive Payload
+                      </summary>
+                      <pre className="mt-3 overflow-x-auto rounded-[0.85rem] border border-black/7 bg-white/80 p-3 text-xs leading-6 text-black/68">
+                        {selectedItem.archivePayloadJsonText}
+                      </pre>
+                    </details>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <GuardSection
+                    title="Restore blocker"
+                    emptyLabel="当前可恢复"
+                    summary={selectedItem.restoreSummary}
+                    groups={selectedItem.restoreBlockerGroups}
+                  />
+
+                  {isFinalizeTab && selectedItem.finalActionPreview ? (
                 <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
@@ -694,7 +900,10 @@ export function RecycleBinWorkbench({
                     />
                     <DetailRow
                       label="当前判断"
-                      value={selectedItem.finalActionPreview.blockerSummary}
+                      value={
+                        selectedItem.finalizeSummary ??
+                        selectedItem.finalActionPreview.blockerSummary
+                      }
                       multiline
                     />
                     <DetailRow
@@ -715,28 +924,33 @@ export function RecycleBinWorkbench({
                         ? "当前终态为 PURGE"
                         : "当前终态为 ARCHIVE"
                     }
-                    summary={selectedItem.finalActionPreview.blockerSummary}
+                    summary={
+                      selectedItem.finalizeSummary ??
+                      selectedItem.finalActionPreview.blockerSummary
+                    }
                     groups={selectedItem.finalizeBlockerGroups}
                   />
                 </div>
-              ) : (
-                <GuardSection
-                  title="Purge blocker"
-                  emptyLabel={
-                    selectedItem.canPurge
-                      ? "当前可永久删除"
-                      : selectedItem.purgeRequiresAdmin
-                        ? "当前无结构性阻断，但仅管理员可永久删除"
-                        : "当前可见 blocker 已清零"
-                  }
-                  summary={selectedItem.purgeSummary}
-                  groups={selectedItem.purgeBlockerGroups}
-                />
+                  ) : (
+                    <GuardSection
+                      title="清理判断"
+                      emptyLabel={
+                        selectedItem.canPurge
+                          ? "当前可执行永久删除"
+                          : selectedItem.purgeRequiresAdmin
+                            ? "当前无结构性阻断，但仅管理员可永久删除"
+                            : "当前清理阻断项已清零"
+                      }
+                      summary={selectedItem.purgeSummary}
+                      groups={selectedItem.purgeBlockerGroups}
+                    />
+                  )}
+                </>
               )}
 
               <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
                 <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
-                  恢复目标位置
+                  {isHistoryView ? "对象入口快照" : "恢复目标位置"}
                 </p>
                 <div className="rounded-[0.85rem] border border-black/7 bg-white/78 px-3 py-2 text-sm font-medium text-black/74">
                   {selectedItem.restoreRouteSnapshot}
@@ -746,7 +960,11 @@ export function RecycleBinWorkbench({
           ) : (
             <EmptyState
               title="暂未选中回收站对象"
-              description="从左侧表格选择一条对象后，这里会展示它的 blocker、恢复位置与最终处理判断。"
+              description={
+                isHistoryView
+                  ? "从左侧表格选择一条对象后，这里会展示它的删除信息、解决结果与 archive payload。"
+                  : "从左侧表格选择一条对象后，这里会展示它的 blocker、恢复位置与最终处理判断。"
+              }
             />
           )}
         </SectionCard>
@@ -783,7 +1001,9 @@ function RecycleBinConfirmDialog({
     state.mode === "restore"
       ? state.item.restoreSummary
       : state.mode === "finalize"
-        ? state.item.finalActionPreview?.blockerSummary ?? "当前未拿到最终处理预览。"
+        ? state.item.finalizeSummary ??
+          state.item.finalActionPreview?.blockerSummary ??
+          "当前未拿到最终处理预览。"
         : state.item.purgeSummary;
 
   const impactContent =

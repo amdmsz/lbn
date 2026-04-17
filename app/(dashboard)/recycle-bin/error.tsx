@@ -18,7 +18,7 @@ export default function RecycleBinError({
           <PageHeader
             eyebrow="回收站治理异常"
             title="回收站加载失败"
-            description="系统在准备回收站条目、恢复状态与永久删除校验时发生错误，请重新加载后再试。"
+            description="系统在准备回收站条目、恢复状态与最终处理校验时发生错误，请重新加载后再试。"
           />
         </div>
       }

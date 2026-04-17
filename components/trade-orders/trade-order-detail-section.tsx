@@ -34,6 +34,7 @@ import type {
   TradeOrderRecycleGuard,
   TradeOrderRecycleReasonCode,
 } from "@/lib/trade-orders/recycle-guards";
+import type { RecycleFinalizePreview } from "@/lib/recycle-bin/types";
 
 type TradeOrderDetailData = NonNullable<Awaited<ReturnType<typeof getTradeOrderDetail>>>;
 type TradeOrderDetail = TradeOrderDetailData["order"];
@@ -47,6 +48,7 @@ type TradeOrderRecycleActionResult = {
   message: string;
   recycleStatus?: "created" | "already_in_recycle_bin" | "blocked";
   guard?: TradeOrderRecycleGuard;
+  finalizePreview?: RecycleFinalizePreview | null;
 };
 
 type BatchReference = {
@@ -543,10 +545,10 @@ export function TradeOrderDetailSection({
   const batchHref = buildFulfillmentBatchesHref({ keyword: order.tradeNo });
   const recycleGuard =
     notice?.recycleStatus === "blocked" && notice.guard ? notice.guard : order.recycleGuard;
-  order = {
-    ...order,
-    recycleGuard,
-  };
+  const finalizePreview =
+    notice?.recycleStatus === "blocked" && notice.finalizePreview !== undefined
+      ? notice.finalizePreview ?? null
+      : order.finalizePreview;
 
   function openRecycleDialog() {
     setNotice((current) => (current?.recycleStatus === "blocked" ? current : null));
@@ -560,7 +562,7 @@ export function TradeOrderDetailSection({
   }
 
   function handleRecycleConfirm() {
-    if (!order.recycleGuard.canMoveToRecycleBin) {
+    if (!recycleGuard.canMoveToRecycleBin) {
       return;
     }
 
@@ -658,7 +660,7 @@ export function TradeOrderDetailSection({
               onClick={openRecycleDialog}
               className="crm-button crm-button-secondary"
             >
-              {order.recycleGuard.canMoveToRecycleBin ? "移入回收站" : "查看阻断关系"}
+              {recycleGuard.canMoveToRecycleBin ? "移入回收站" : "查看阻断关系"}
             </button>
           </div>
         </div>
@@ -1349,7 +1351,8 @@ export function TradeOrderDetailSection({
           reviewStatus: order.reviewStatus,
           updatedAt: order.updatedAt,
         }}
-        guard={notice?.recycleStatus === "blocked" && notice.guard ? notice.guard : order.recycleGuard}
+        guard={recycleGuard}
+        finalizePreview={finalizePreview ?? null}
         reason={recycleReason}
         onReasonChange={setRecycleReason}
         onClose={closeRecycleDialog}

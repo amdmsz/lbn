@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "worker:lead-imports": "tsx scripts/lead-import-worker.ts",
+    "worker:recycle-auto-finalize": "tsx scripts/recycle-auto-finalize.ts",
     "lint": "eslint",
     "test:lead-imports": "node --test --experimental-strip-types tests/lead-imports/customer-continuation-signals.test.mts",
     "postinstall": "prisma generate",

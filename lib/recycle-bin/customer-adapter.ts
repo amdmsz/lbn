@@ -9,6 +9,11 @@ import {
   type RecycleTargetType,
 } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import {
+  RECYCLE_ARCHIVE_SNAPSHOT_VERSION,
+  type CustomerRecycleArchiveSnapshot,
+  type RecycleArchiveMaskedValue,
+} from "@/lib/recycle-bin/archive-payload";
 import type {
   RecycleArchivePayload,
   RecycleFinalizeBlocker,
@@ -27,6 +32,12 @@ type CustomerRecycleRecord = {
   id: string;
   name: string;
   phone: string;
+  wechatId: string | null;
+  province: string | null;
+  city: string | null;
+  district: string | null;
+  address: string | null;
+  remark: string | null;
   status: CustomerStatus;
   level: "NEW" | "REGULAR" | "VIP";
   ownershipMode: CustomerOwnershipMode;
@@ -87,6 +98,76 @@ function buildOwnerLabel(
   return owner ? `${owner.name} (@${owner.username})` : "未分配负责人";
 }
 
+function getMaskedFieldValue(value: string | null | undefined): RecycleArchiveMaskedValue {
+  return value?.trim() ? "CLEARED" : "EMPTY";
+}
+
+function hasCustomerAddress(
+  customer: Pick<CustomerRecycleRecord, "province" | "city" | "district" | "address">,
+) {
+  return Boolean(
+    customer.province?.trim() ||
+      customer.city?.trim() ||
+      customer.district?.trim() ||
+      customer.address?.trim(),
+  );
+}
+
+function buildCustomerArchiveSnapshot(input: {
+  customer: CustomerRecycleRecord;
+  runtime: CustomerRecycleRuntime;
+  nameMasked: string;
+  phoneMasked: string;
+}): CustomerRecycleArchiveSnapshot {
+  const { customer, runtime, nameMasked, phoneMasked } = input;
+
+  return {
+    entity: "CUSTOMER",
+    snapshotVersion: RECYCLE_ARCHIVE_SNAPSHOT_VERSION,
+    finalAction: "ARCHIVE",
+    objectWeight: "HEAVY",
+    targetMissing: false,
+    customerId: customer.id,
+    customerStatus: customer.status,
+    ownershipMode: customer.ownershipMode,
+    nameMasked,
+    phoneMasked,
+    wechatIdMasked: getMaskedFieldValue(customer.wechatId),
+    addressMasked: hasCustomerAddress(customer) ? "CLEARED" : "EMPTY",
+    remarkMasked: getMaskedFieldValue(customer.remark),
+    owner: customer.owner
+      ? {
+          id: customer.owner.id,
+          name: customer.owner.name,
+          username: customer.owner.username,
+          teamId: customer.owner.teamId,
+          displayLabel: buildOwnerLabel(customer.owner),
+        }
+      : null,
+    governanceAnchors: {
+      approvedTradeOrderCount: runtime.approvedTradeOrderCount,
+      linkedLeadCount: customer._count.leads,
+      followUpTaskCount: customer._count.followUpTasks,
+      callRecordCount: customer._count.callRecords,
+      wechatRecordCount: customer._count.wechatRecords,
+      liveInvitationCount: customer._count.liveInvitations,
+      legacyOrderCount: customer._count.orders,
+      salesOrderCount: customer._count.salesOrders,
+      tradeOrderCount: customer._count.tradeOrders,
+      paymentPlanCount: customer._count.paymentPlans,
+      paymentRecordCount: customer._count.paymentRecords,
+      collectionTaskCount: customer._count.collectionTasks,
+      giftRecordCount: customer._count.giftRecords,
+      shippingTaskCount: customer._count.shippingTasks,
+      logisticsFollowUpCount: customer._count.logisticsFollowUpTasks,
+      codCollectionCount: customer._count.codCollectionRecords,
+      mergeLogCount: customer._count.mergeLogs,
+      customerTagCount: customer._count.customerTags,
+      ownershipEventCount: customer._count.ownershipEvents,
+    },
+  };
+}
+
 function pushMoveBlocker(
   blockers: RecycleGuardBlocker[],
   input: {
@@ -139,6 +220,12 @@ async function getCustomerRecord(
       id: true,
       name: true,
       phone: true,
+      wechatId: true,
+      province: true,
+      city: true,
+      district: true,
+      address: true,
+      remark: true,
       status: true,
       level: true,
       ownershipMode: true,
@@ -729,16 +816,10 @@ export async function archiveCustomerTarget(
     return null;
   }
 
-  const customer = await db.customer.findUnique({
-    where: {
-      id: input.targetId,
-    },
-    select: {
-      id: true,
-      status: true,
-      ownershipMode: true,
-    },
-  });
+  const [customer, runtime] = await Promise.all([
+    getCustomerRecord(db, input.targetId),
+    getCustomerRuntime(db, input.targetId),
+  ]);
 
   if (!customer) {
     return {
@@ -747,8 +828,21 @@ export async function archiveCustomerTarget(
       blockerSummary: input.preview.blockerSummary,
       blockers: input.preview.blockers,
       snapshot: {
+        entity: "CUSTOMER",
+        snapshotVersion: RECYCLE_ARCHIVE_SNAPSHOT_VERSION,
+        finalAction: "ARCHIVE",
+        objectWeight: "HEAVY",
         customerId: input.targetId,
         targetMissing: true,
+        customerStatus: null,
+        ownershipMode: null,
+        nameMasked: null,
+        phoneMasked: null,
+        wechatIdMasked: null,
+        addressMasked: null,
+        remarkMasked: null,
+        owner: null,
+        governanceAnchors: null,
       },
     };
   }
@@ -777,12 +871,11 @@ export async function archiveCustomerTarget(
     archivedAt: new Date().toISOString(),
     blockerSummary: input.preview.blockerSummary,
     blockers: input.preview.blockers,
-    snapshot: {
-      customerId: customer.id,
-      archivedName,
-      archivedPhone,
-      status: customer.status,
-      ownershipMode: customer.ownershipMode,
-    },
+    snapshot: buildCustomerArchiveSnapshot({
+      customer,
+      runtime,
+      nameMasked: archivedName,
+      phoneMasked: archivedPhone,
+    }),
   };
 }

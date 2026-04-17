@@ -9,13 +9,10 @@ import {
   batchMoveLeadsToRecycleBinAction,
   moveLeadToRecycleBinAction,
 } from "@/app/(dashboard)/leads/actions";
-import {
-  initialAssignLeadsActionState,
-  type AssignLeadsActionState,
-} from "@/components/leads/lead-actions-state";
 import { LeadRecycleDialog } from "@/components/leads/lead-recycle-dialog";
 import { LeadStatusBadge } from "@/components/leads/lead-status-badge";
 import { ActionBanner } from "@/components/shared/action-banner";
+import { BatchActionNoticeBanner as LeadBatchActionNoticeBanner } from "@/components/shared/batch-action-notice-banner";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PaginationControls } from "@/components/shared/pagination-controls";
 import { SectionCard } from "@/components/shared/section-card";
@@ -27,6 +24,10 @@ import {
   formatDateTime,
   getLeadSourceLabel,
 } from "@/lib/leads/metadata";
+import {
+  createInitialLeadBatchActionNoticeState,
+  type LeadBatchActionNoticeState,
+} from "@/lib/leads/batch-action-contract";
 import {
   LEAD_RECYCLE_REASON_OPTIONS,
   type LeadRecycleGuard,
@@ -94,26 +95,10 @@ type AssignedWorkspaceData = {
 
 type SelectionMode = "manual" | "filtered";
 
-type BatchRecycleBlockedReason = {
-  code: string;
-  label: string;
-  count: number;
-  description: string;
-  group?: string;
-  suggestedAction?: string;
-};
-
-type RecycleNoticeState = {
+type SingleRecycleNoticeState = {
   status: "idle" | "success" | "error";
   message: string;
   recycleStatus?: "created" | "already_in_recycle_bin" | "blocked";
-  summary?: {
-    totalCount: number;
-    createdCount: number;
-    alreadyInRecycleBinCount: number;
-    blockedCount: number;
-  };
-  blockedReasons?: BatchRecycleBlockedReason[];
 };
 
 type RecycleDialogState = {
@@ -126,18 +111,15 @@ type RecycleDialogState = {
   recycleGuard: LeadRecycleGuard;
 } | null;
 
-const initialRecycleNoticeState: RecycleNoticeState = {
+const initialSingleRecycleNoticeState: SingleRecycleNoticeState = {
   status: "idle",
   message: "",
 };
 
-function buildBatchRecycleSummaryText(summary: NonNullable<RecycleNoticeState["summary"]>) {
-  return `成功移入回收站 ${summary.createdCount} 条，已在回收站 ${summary.alreadyInRecycleBinCount} 条，被阻断 ${summary.blockedCount} 条。`;
-}
-
-function buildBlockedReasonText(blockedReasons: BatchRecycleBlockedReason[]) {
-  return blockedReasons.map((item) => `${item.label} ${item.count} 条`).join("；");
-}
+const initialAssignBatchNoticeState =
+  createInitialLeadBatchActionNoticeState("无需重复分配");
+const initialRecycleBatchNoticeState =
+  createInitialLeadBatchActionNoticeState("已在回收站");
 
 function normalizeDate(value: Date | string) {
   return value instanceof Date ? value : new Date(value);
@@ -277,16 +259,14 @@ function AssignmentSummaryStrip({
   unassignedCount,
   assignedCount,
   assignedByOwner,
-  feedbackMessage,
-  hasFeedbackError,
+  feedbackState,
   assignedViewHref,
   importBatchId,
 }: Readonly<{
   unassignedCount: number;
   assignedCount: number;
   assignedByOwner: LeadAssignedOwnerSummary[];
-  feedbackMessage: string;
-  hasFeedbackError: boolean;
+  feedbackState: LeadBatchActionNoticeState;
   assignedViewHref: string;
   importBatchId: string;
 }>) {
@@ -361,14 +341,14 @@ function AssignmentSummaryStrip({
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">
             最近一次分配反馈
           </p>
-          {feedbackMessage ? (
-            <ActionBanner
-              tone={hasFeedbackError ? "danger" : "success"}
+          {feedbackState.status !== "idle" && feedbackState.message ? (
+            <LeadBatchActionNoticeBanner
+              state={feedbackState}
+              successLabel="成功分配"
+              entityCountLabel="条线索"
+              countUnitLabel="条"
               className="mt-2"
-              density="compact"
-            >
-              {feedbackMessage}
-            </ActionBanner>
+            />
           ) : (
             <p className="mt-2 text-[13px] leading-5 text-black/52">
               完成一次分配后，这里会立即反馈最新结果摘要。
@@ -492,11 +472,14 @@ export function LeadsTable({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("manual");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [state, setState] = useState<AssignLeadsActionState>(
-    initialAssignLeadsActionState,
+  const [assignNotice, setAssignNotice] = useState<LeadBatchActionNoticeState>(
+    initialAssignBatchNoticeState,
   );
-  const [recycleNotice, setRecycleNotice] = useState<RecycleNoticeState>(
-    initialRecycleNoticeState,
+  const [singleRecycleNotice, setSingleRecycleNotice] = useState<SingleRecycleNoticeState>(
+    initialSingleRecycleNoticeState,
+  );
+  const [batchRecycleNotice, setBatchRecycleNotice] = useState<LeadBatchActionNoticeState>(
+    initialRecycleBatchNoticeState,
   );
   const [recycleDialogState, setRecycleDialogState] =
     useState<RecycleDialogState>(null);
@@ -567,7 +550,7 @@ export function LeadsTable({
   }
 
   function openBatchRecycleDialog() {
-    setRecycleNotice(initialRecycleNoticeState);
+    setBatchRecycleNotice(initialRecycleBatchNoticeState);
     setBatchRecycleReason("mistaken_creation");
     setBatchRecycleDialogOpen(true);
   }
@@ -579,7 +562,7 @@ export function LeadsTable({
   }
 
   function openRecycleDialog(item: LeadListItem) {
-    setRecycleNotice(initialRecycleNoticeState);
+    setSingleRecycleNotice(initialSingleRecycleNoticeState);
     setRecycleReason("mistaken_creation");
     setRecycleDialogState({
       id: item.id,
@@ -613,7 +596,7 @@ export function LeadsTable({
 
     startRecycleTransition(async () => {
       const nextState = await moveLeadToRecycleBinAction(formData);
-      setRecycleNotice(nextState);
+      setSingleRecycleNotice(nextState);
       closeRecycleDialog();
 
       if (
@@ -632,12 +615,9 @@ export function LeadsTable({
     const formData = new FormData(event.currentTarget);
 
     startTransition(async () => {
-      const nextState = await batchAssignLeadsAction(
-        initialAssignLeadsActionState,
-        formData,
-      );
+      const nextState = await batchAssignLeadsAction(initialAssignBatchNoticeState, formData);
 
-      setState(nextState);
+      setAssignNotice(nextState);
 
       if (nextState.status === "success") {
         resetSelection();
@@ -655,14 +635,10 @@ export function LeadsTable({
 
     startBatchRecycleTransition(async () => {
       const nextState = await batchMoveLeadsToRecycleBinAction(formData);
-      setRecycleNotice(nextState);
+      setBatchRecycleNotice(nextState);
       closeBatchRecycleDialog();
 
-      if (
-        nextState.summary &&
-        (nextState.summary.createdCount > 0 ||
-          nextState.summary.alreadyInRecycleBinCount > 0)
-      ) {
+      if (nextState.summary.successCount > 0 || nextState.summary.skippedCount > 0) {
         resetSelection();
         router.refresh();
       }
@@ -717,25 +693,25 @@ export function LeadsTable({
         unassignedCount={unassigned.totalCount}
         assignedCount={assigned.totalCount}
         assignedByOwner={assigned.byOwner}
-        feedbackMessage={state.message}
-        hasFeedbackError={state.status === "error"}
+        feedbackState={assignNotice}
         assignedViewHref={assignedViewHref}
         importBatchId={filters.importBatchId}
       />
 
-      {recycleNotice.message ? (
-        <ActionBanner tone={recycleNotice.status === "success" ? "success" : "danger"}>
-          <div className="space-y-1.5">
-            <p>{recycleNotice.message}</p>
-            {recycleNotice.summary && recycleNotice.summary.totalCount > 0 ? (
-              <p>{buildBatchRecycleSummaryText(recycleNotice.summary)}</p>
-            ) : null}
-            {recycleNotice.blockedReasons && recycleNotice.blockedReasons.length > 0 ? (
-              <p>阻断原因：{buildBlockedReasonText(recycleNotice.blockedReasons)}</p>
-            ) : null}
-          </div>
+      {singleRecycleNotice.message ? (
+        <ActionBanner
+          tone={singleRecycleNotice.status === "success" ? "success" : "danger"}
+        >
+          <p>{singleRecycleNotice.message}</p>
         </ActionBanner>
       ) : null}
+
+      <LeadBatchActionNoticeBanner
+        state={batchRecycleNotice}
+        successLabel="成功移入回收站"
+        entityCountLabel="条线索"
+        countUnitLabel="条"
+      />
 
       {isAssignedView ? (
         <SectionCard
@@ -816,12 +792,6 @@ export function LeadsTable({
           }
         >
           <div className="space-y-4">
-            {state.message ? (
-              <ActionBanner tone={state.status === "success" ? "success" : "danger"}>
-                {state.message}
-              </ActionBanner>
-            ) : null}
-
             {selectionMode === "filtered" ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-[var(--color-accent)]/16 bg-[var(--color-accent)]/5 px-3.5 py-3 text-sm text-black/72">
                 <span>

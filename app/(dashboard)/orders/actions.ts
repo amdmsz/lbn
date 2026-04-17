@@ -18,9 +18,11 @@ import {
   updateCollectionTask,
   upsertCollectionTask,
 } from "@/lib/payments/mutations";
+import { buildTradeOrderFinalizePreview } from "@/lib/recycle-bin/trade-order-adapter";
 import { moveToRecycleBin } from "@/lib/recycle-bin/lifecycle";
 import type {
   MoveToRecycleBinResult,
+  RecycleFinalizePreview,
   RecycleReasonInputCode,
 } from "@/lib/recycle-bin/types";
 import { reviewSalesOrder, saveSalesOrder } from "@/lib/sales-orders/mutations";
@@ -40,6 +42,7 @@ export type TradeOrderRecycleActionResult = {
   message: string;
   recycleStatus?: MoveToRecycleBinResult["status"];
   guard?: MoveToRecycleBinResult["guard"];
+  finalizePreview?: RecycleFinalizePreview | null;
 };
 
 async function getTradeOrderActionActor() {
@@ -341,7 +344,20 @@ export async function moveTradeOrderToRecycleBinAction(
       revalidatePath("/recycle-bin");
     }
 
-    return buildTradeOrderRecycleActionResult(result);
+    const actionResult = buildTradeOrderRecycleActionResult(result);
+
+    if (result.status === "blocked") {
+      return {
+        ...actionResult,
+        finalizePreview: await buildTradeOrderFinalizePreview(prisma, {
+          targetType: "TRADE_ORDER",
+          targetId: tradeOrderId,
+          domain: "TRADE_ORDER",
+        }),
+      };
+    }
+
+    return actionResult;
   } catch (error) {
     return {
       status: "error",

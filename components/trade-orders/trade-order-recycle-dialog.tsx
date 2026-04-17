@@ -3,6 +3,11 @@
 import { ActionBanner } from "@/components/shared/action-banner";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { formatDateTime } from "@/lib/customers/metadata";
+import type { RecycleFinalizePreview } from "@/lib/recycle-bin/types";
+import {
+  buildTradeOrderRecycleBlockerGroups,
+  type TradeOrderRecycleBlockerGroup,
+} from "@/lib/trade-orders/recycle-blocker-explanation";
 import {
   TRADE_ORDER_RECYCLE_REASON_OPTIONS,
   type TradeOrderRecycleGuard,
@@ -18,8 +23,6 @@ type TradeOrderRecycleDialogItem = {
   reviewStatus: string;
   updatedAt: Date | string;
 };
-
-type BlockerStage = "审核层" | "拆单层" | "支付层" | "履约层" | "其他";
 
 function normalizeDate(value: Date | string) {
   return value instanceof Date ? value : new Date(value);
@@ -57,77 +60,45 @@ function getReviewStatusLabel(value: string) {
   }
 }
 
-function resolveBlockerStage(
-  blocker: TradeOrderRecycleGuard["blockers"][number],
-): BlockerStage {
-  if (
-    blocker.name === "已取消订单" ||
-    blocker.name === "非草稿订单" ||
-    blocker.name === "订单已离开草稿态"
-  ) {
-    return "审核层";
+function getFinalizePreviewLabel(preview: RecycleFinalizePreview | null) {
+  if (!preview) {
+    return "3 天后待重算";
   }
 
-  if (blocker.name === "已生成供应商子单") {
-    return "拆单层";
-  }
-
-  if (
-    blocker.name === "已存在支付计划" ||
-    blocker.name === "已存在支付记录" ||
-    blocker.name === "已存在催收任务"
-  ) {
-    return "支付层";
-  }
-
-  if (
-    blocker.name === "已存在发货任务" ||
-    blocker.name === "已存在导出批次行" ||
-    blocker.name === "已存在物流跟进" ||
-    blocker.name === "已存在 COD 回款记录"
-  ) {
-    return "履约层";
-  }
-
-  return "其他";
+  return preview.finalAction === "PURGE" ? "3 天后可 PURGE" : "3 天后仅 ARCHIVE";
 }
 
-function buildBlockerGroups(guard: TradeOrderRecycleGuard) {
-  const groups = new Map<BlockerStage, TradeOrderRecycleGuard["blockers"]>();
-
-  for (const blocker of guard.blockers) {
-    const stage = resolveBlockerStage(blocker);
-    const current = groups.get(stage) ?? [];
-    current.push(blocker);
-    groups.set(stage, current);
+function getFinalizePreviewVariant(preview: RecycleFinalizePreview | null) {
+  if (!preview) {
+    return "neutral" as const;
   }
 
-  return [
-    "审核层",
-    "拆单层",
-    "支付层",
-    "履约层",
-    "其他",
-  ]
-    .map((stage) => {
-      const blockers = groups.get(stage as BlockerStage) ?? [];
+  return preview.finalAction === "PURGE" ? ("warning" as const) : ("info" as const);
+}
 
-      return blockers.length > 0
-        ? {
-            stage: stage as BlockerStage,
-            blockers,
-          }
-        : null;
-    })
-    .filter((group): group is { stage: BlockerStage; blockers: TradeOrderRecycleGuard["blockers"] } =>
-      Boolean(group),
-    );
+function getFinalizePreviewHint(preview: RecycleFinalizePreview | null) {
+  if (!preview) {
+    return "当前还没有拿到最终处理预览，请刷新后重试。";
+  }
+
+  if (preview.finalAction === "PURGE") {
+    return preview.canEarlyPurge
+      ? "当前最新服务端真相仍指向 light 对象。进入回收站后，冷静期内仅 ADMIN 可见“提前永久删除”。"
+      : "当前真相仍指向 PURGE，但最终处理仍以 3 天到期时重新计算的最新服务端真相为准。";
+  }
+
+  return "当前最新服务端真相已经指向 ARCHIVE。即使先移入回收站，3 天后也只会封存，不会伪装成 PURGED。";
+}
+
+function getFallbackSuggestion() {
+  return "建议改走取消 / 作废 / 订单治理链。";
 }
 
 export function TradeOrderRecycleDialog({
   open,
   item,
   guard,
+  finalizePreview,
   reason,
   onReasonChange,
   onClose,
@@ -137,6 +108,7 @@ export function TradeOrderRecycleDialog({
   open: boolean;
   item: TradeOrderRecycleDialogItem | null;
   guard: TradeOrderRecycleGuard | null;
+  finalizePreview: RecycleFinalizePreview | null;
   reason: TradeOrderRecycleReasonCode;
   onReasonChange: (value: TradeOrderRecycleReasonCode) => void;
   onClose: () => void;
@@ -147,7 +119,10 @@ export function TradeOrderRecycleDialog({
     return null;
   }
 
-  const blockerGroups = buildBlockerGroups(guard);
+  const moveBlockerGroups = buildTradeOrderRecycleBlockerGroups(guard.blockers);
+  const finalizeBlockerGroups = buildTradeOrderRecycleBlockerGroups(
+    finalizePreview?.blockers ?? [],
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/34 px-4 py-8">
@@ -156,15 +131,19 @@ export function TradeOrderRecycleDialog({
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge
-                label={guard.canMoveToRecycleBin ? "可移入回收站" : "当前存在阻断"}
+                label={guard.canMoveToRecycleBin ? "可移入回收站" : "move 已被阻断"}
                 variant={guard.canMoveToRecycleBin ? "warning" : "danger"}
+              />
+              <StatusBadge
+                label={getFinalizePreviewLabel(finalizePreview)}
+                variant={getFinalizePreviewVariant(finalizePreview)}
               />
               <StatusBadge label="TradeOrder" variant="neutral" />
             </div>
             <div>
               <h3 className="text-[1.02rem] font-semibold text-black/86">移入回收站</h3>
               <p className="mt-1 text-sm leading-6 text-black/58">
-                完全复用现有 TradeOrder recycle guard 真相，只在这里解释当前为什么能移入或不能移入。
+                这里只展示 trade-order-adapter 返回的最新 move guard 和 finalize preview，不在组件里重写 TradeOrder recycle 规则。
               </p>
             </div>
           </div>
@@ -179,17 +158,63 @@ export function TradeOrderRecycleDialog({
 
         <div className="space-y-4 px-5 py-4">
           <div className="grid gap-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.78)] p-4 sm:grid-cols-2">
-            <SummaryRow label="父单编号" value={item.tradeNo} />
+            <SummaryRow label="成交主单" value={item.tradeNo} />
             <SummaryRow label="客户" value={item.customerName} />
             <SummaryRow label="收件人" value={item.receiverName} />
             <SummaryRow label="联系电话" value={item.receiverPhone} />
-            <SummaryRow label="成交状态" value={getTradeStatusLabel(item.tradeStatus)} />
-            <SummaryRow label="审核镜像" value={getReviewStatusLabel(item.reviewStatus)} />
-            <SummaryRow
-              label="最近更新时间"
-              value={formatDateTime(normalizeDate(item.updatedAt))}
-            />
+            <SummaryRow label="订单状态" value={getTradeStatusLabel(item.tradeStatus)} />
+            <SummaryRow label="审核状态" value={getReviewStatusLabel(item.reviewStatus)} />
+            <SummaryRow label="最近更新时间" value={formatDateTime(normalizeDate(item.updatedAt))} />
             <SummaryRow label="建议动作" value={guard.fallbackActionLabel} />
+          </div>
+
+          <div className="space-y-2 rounded-[0.95rem] border border-black/7 bg-white/82 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                当前 move guard
+              </p>
+              <StatusBadge
+                label={guard.canMoveToRecycleBin ? "当前可 move" : "当前不可 move"}
+                variant={guard.canMoveToRecycleBin ? "warning" : "danger"}
+              />
+            </div>
+            <p className="text-[13px] leading-5 text-black/58">
+              {guard.canMoveToRecycleBin
+                ? "当前仍属于纯草稿误建订单，可以先进入 3 天冷静期。"
+                : guard.blockerSummary}
+            </p>
+            {!guard.canMoveToRecycleBin && moveBlockerGroups.length > 0 ? (
+              <div className="grid gap-3 pt-1">
+                {moveBlockerGroups.map((group) => (
+                  <TradeOrderBlockerGroupCard key={`move-${group.key}`} group={group} />
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="space-y-2 rounded-[0.95rem] border border-black/7 bg-white/82 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                3 天后最终处理预览
+              </p>
+              <StatusBadge
+                label={getFinalizePreviewLabel(finalizePreview)}
+                variant={getFinalizePreviewVariant(finalizePreview)}
+              />
+            </div>
+            <p className="text-[13px] leading-5 text-black/58">
+              {finalizePreview?.blockerSummary ?? "当前还没有拿到最终处理预览，请刷新后重试。"}
+            </p>
+            <p className="text-[12px] leading-5 text-black/48">
+              {getFinalizePreviewHint(finalizePreview)}
+            </p>
+            {finalizeBlockerGroups.length > 0 ? (
+              <div className="grid gap-3 pt-1">
+                {finalizeBlockerGroups.map((group) => (
+                  <TradeOrderBlockerGroupCard key={`finalize-${group.key}`} group={group} />
+                ))}
+              </div>
+            ) : null}
           </div>
 
           {guard.canMoveToRecycleBin ? (
@@ -197,10 +222,10 @@ export function TradeOrderRecycleDialog({
               <div className="space-y-2 rounded-[0.95rem] border border-black/7 bg-white/82 p-4">
                 <div>
                   <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
-                    删除原因
+                    回收原因
                   </p>
                   <p className="mt-1 text-[13px] leading-5 text-black/54">
-                    用于沉淀这张草稿父单为什么进入回收站。
+                    这里只记录为什么这张成交主单被判定为误建轻对象，不在组件里扩写额外规则。
                   </p>
                 </div>
                 <select
@@ -218,88 +243,22 @@ export function TradeOrderRecycleDialog({
                 </select>
               </div>
 
-              <ActionBanner tone="success">
-                当前父单仍是纯草稿，且没有进入拆单、支付或履约链路，确认后会从当前业务页自然消失。
-              </ActionBanner>
+              <div className="rounded-[0.95rem] border border-[rgba(155,106,29,0.18)] bg-[rgba(255,248,238,0.86)] px-4 py-3 text-[13px] leading-6 text-[rgba(92,61,30,0.92)]">
+                确认后只会进入 3 天冷静期。move 不等于将来一定能 purge，最终仍以到期时最新服务端真相重算。
+              </div>
             </>
           ) : (
-            <>
-              <div className="space-y-2 rounded-[0.95rem] border border-[rgba(141,59,51,0.14)] bg-[rgba(255,247,246,0.86)] p-4">
-                <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--color-danger)]">
-                  为什么不能移入回收站
-                </p>
-                <p className="text-[13px] leading-5 text-black/58">{guard.blockerSummary}</p>
-              </div>
-
-              <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-white/82 p-4">
-                <div>
-                  <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
-                    当前卡点层级
-                  </p>
-                  <p className="mt-1 text-[13px] leading-5 text-black/54">
-                    下列分组直接来自现有 blocker 真相，只是按业务层级做展示归类。
-                  </p>
-                </div>
-
-                <div className="grid gap-3">
-                  {blockerGroups.map((group) => (
-                    <div
-                      key={group.stage}
-                      className="rounded-[0.9rem] border border-black/8 bg-[rgba(249,250,252,0.78)] p-3.5"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm font-semibold text-black/82">{group.stage}</p>
-                        <StatusBadge
-                          label={`阻断 ${group.blockers.reduce((sum, blocker) => sum + blocker.count, 0)}`}
-                          variant="danger"
-                        />
-                      </div>
-
-                      <div className="mt-3 space-y-2">
-                        {group.blockers.map((blocker) => (
-                          <div
-                            key={`${group.stage}-${blocker.name}`}
-                            className="rounded-[0.8rem] border border-black/8 bg-white/86 px-3 py-2.5"
-                          >
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <p className="text-sm font-medium text-black/82">{blocker.name}</p>
-                              <StatusBadge label={`数量 ${blocker.count}`} variant="neutral" />
-                            </div>
-                            <p className="mt-1 text-[13px] leading-5 text-black/56">
-                              {blocker.description}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <ActionBanner tone="danger">
-                当前建议改走：{guard.fallbackActionLabel}。回收站只承接误建草稿，不承接已进入正式交易链路的父单。
-              </ActionBanner>
-            </>
+            <ActionBanner tone="danger">
+              {guard.blockerSummary} {getFallbackSuggestion()}
+            </ActionBanner>
           )}
-
-          <div className="space-y-2 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.74)] p-4">
-            <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
-              影响说明
-            </p>
-            <ul className="space-y-1.5 text-[13px] leading-5 text-black/56">
-              <li>移入回收站后，父单会从 `/fulfillment?tab=trade-orders` 和相关默认视图中隐藏。</li>
-              <li>列表页确认成功后，当前行会随刷新自然消失。</li>
-              <li>详情页确认成功后，会继续走现有安全缺省 / not found 语义。</li>
-              <li>永久删除仍只在 `/recycle-bin` 治理页中处理。</li>
-            </ul>
-          </div>
         </div>
 
         <div className="flex flex-col gap-3 border-t border-black/7 bg-[rgba(247,248,250,0.8)] px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
           <p className="text-[13px] leading-5 text-black/56">
             {guard.canMoveToRecycleBin
-              ? "确认后会沿用现有查询隐藏规则，从当前业务页自然移除。"
-              : `${guard.blockerSummary} 建议改走：${guard.fallbackActionLabel}。`}
+              ? "成功后只会 router.refresh() 当前页；列表页当前行会自然消失，详情页继续走现有安全缺省 / notFound 语义。"
+              : `${guard.blockerSummary} ${getFallbackSuggestion()}`}
           </p>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
@@ -337,6 +296,41 @@ function SummaryRow({
     <div className="space-y-1">
       <p className="text-[12px] text-black/42">{label}</p>
       <p className="text-sm font-medium leading-5 text-black/78">{value}</p>
+    </div>
+  );
+}
+
+function TradeOrderBlockerGroupCard({
+  group,
+}: Readonly<{
+  group: TradeOrderRecycleBlockerGroup;
+}>) {
+  return (
+    <div className="rounded-[0.9rem] border border-black/8 bg-[rgba(249,250,252,0.78)] p-3.5">
+      <div className="space-y-1">
+        <p className="text-sm font-semibold text-black/82">{group.title}</p>
+        <p className="text-[13px] leading-5 text-black/54">{group.description}</p>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {group.items.map((item) => (
+          <div
+            key={`${group.key}-${item.name}`}
+            className="rounded-[0.8rem] border border-black/8 bg-white/86 px-3 py-2.5"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-medium text-black/82">{item.name}</p>
+              {typeof item.count === "number" ? (
+                <StatusBadge label={`数量 ${item.count}`} variant="neutral" />
+              ) : null}
+            </div>
+            <p className="mt-1 text-[13px] leading-5 text-black/56">{item.description}</p>
+            <p className="mt-1 text-[12px] leading-5 text-black/48">
+              建议动作：{item.suggestedAction}
+            </p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

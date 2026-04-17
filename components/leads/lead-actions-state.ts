@@ -1,13 +1,9 @@
-export type AssignLeadsActionState = {
-  status: "idle" | "success" | "error";
-  message: string;
-  assignedCount: number;
-  skippedCount: number;
-};
+import {
+  createInitialLeadBatchActionNoticeState,
+  type LeadBatchActionNoticeState,
+} from "@/lib/leads/batch-action-contract";
 
-export const initialAssignLeadsActionState: AssignLeadsActionState = {
-  status: "idle",
-  message: "",
-  assignedCount: 0,
-  skippedCount: 0,
-};
+export type AssignLeadsActionState = LeadBatchActionNoticeState;
+
+export const initialAssignLeadsActionState =
+  createInitialLeadBatchActionNoticeState("无需重复分配");

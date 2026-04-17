@@ -20,6 +20,20 @@ import {
   getCustomerOwnershipActorContext,
 } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
+import {
+  buildLeadBatchActionError,
+  buildLeadBatchActionLimit,
+  buildLeadBatchActionSummary,
+  buildLeadBatchSelection,
+  type LeadBatchActionErrorCode,
+  type LeadBatchActionNoticeState,
+  type LeadBatchActionResult,
+  type LeadBatchBlockedReasonSummary,
+  type LeadBatchLimit,
+  type LeadBatchLimitExceeded,
+  type LeadBatchSelection,
+  type LeadBatchSelectionMode,
+} from "@/lib/leads/batch-action-contract";
 import { MAX_BATCH_ASSIGNMENT_SIZE } from "@/lib/leads/metadata";
 import {
   buildLeadWhereInput,
@@ -64,26 +78,24 @@ export type LeadRecycleActionResult = {
   recycleStatus?: MoveToRecycleBinResult["status"];
 };
 
-export type LeadBatchRecycleBlockedReason = {
-  code: string;
-  label: string;
-  count: number;
-  description: string;
-  group?: string;
-  suggestedAction?: string;
-};
-
-export type LeadBatchRecycleActionResult = {
-  status: "success" | "error";
-  message: string;
-  summary: {
-    totalCount: number;
-    createdCount: number;
-    alreadyInRecycleBinCount: number;
-    blockedCount: number;
+type ResolvedLeadBatchSelection =
+  {
+    status: "resolved";
+    leadIds: string[];
+    selection: LeadBatchSelection;
   };
-  blockedReasons: LeadBatchRecycleBlockedReason[];
-};
+
+type LeadActionActor = Awaited<ReturnType<typeof getLeadActionActor>>;
+
+const LEAD_BATCH_SKIPPED_LABELS = {
+  assign: "无需重复分配",
+  recycle: "已在回收站",
+} as const;
+
+const LEAD_BATCH_ACTION_LIMIT = buildLeadBatchActionLimit(MAX_BATCH_ASSIGNMENT_SIZE);
+
+export type BatchAssignLeadsActionResult = LeadBatchActionResult;
+export type BatchMoveLeadsToRecycleBinActionResult = LeadBatchActionResult;
 
 async function getLeadActionActor() {
   const session = await auth();
@@ -153,32 +165,113 @@ function getFilterParamsFromFormData(formData: FormData) {
   };
 }
 
-function buildLeadBatchRecycleErrorResult(
-  message: string,
-): LeadBatchRecycleActionResult {
+function buildLeadBatchActionResult(input: {
+  status: "success" | "error";
+  message: string;
+  skippedLabel: string;
+  error?: {
+    code: LeadBatchActionErrorCode;
+    message: string;
+  } | null;
+  limit?: LeadBatchLimit | null;
+  selection?: LeadBatchSelection | null;
+  limitExceeded?: LeadBatchLimitExceeded | null;
+  summary?: Partial<LeadBatchActionResult["summary"]>;
+  blockedReasonSummary?: LeadBatchBlockedReasonSummary[];
+}): LeadBatchActionResult {
   return {
-    status: "error",
-    message,
-    summary: {
-      totalCount: 0,
-      createdCount: 0,
-      alreadyInRecycleBinCount: 0,
-      blockedCount: 0,
-    },
-    blockedReasons: [],
+    status: input.status,
+    message: input.message,
+    error: input.error
+      ? buildLeadBatchActionError(input.error.code, input.error.message)
+      : null,
+    selection: input.selection ?? null,
+    limit: input.limit ?? LEAD_BATCH_ACTION_LIMIT,
+    limitExceeded: input.limitExceeded ?? null,
+    summary: buildLeadBatchActionSummary(input.summary),
+    skippedLabel: input.skippedLabel,
+    blockedReasonSummary: input.blockedReasonSummary ?? [],
   };
 }
 
-function buildLeadBatchRecycleMessage(summary: {
-  createdCount: number;
-  alreadyInRecycleBinCount: number;
-  blockedCount: number;
-}) {
-  if (summary.createdCount > 0 && summary.blockedCount === 0) {
+function buildLeadBatchAssignErrorResult(input: {
+  message: string;
+  code?: LeadBatchActionErrorCode;
+  selection?: LeadBatchSelection | null;
+  limitExceeded?: LeadBatchLimitExceeded | null;
+  summary?: Partial<LeadBatchActionResult["summary"]>;
+}): BatchAssignLeadsActionResult {
+  return buildLeadBatchActionResult({
+    status: "error",
+    message: input.message,
+    error: {
+      code: input.code ?? "unknown",
+      message: input.message,
+    },
+    selection: input.selection,
+    limitExceeded: input.limitExceeded,
+    summary: input.summary,
+    skippedLabel: LEAD_BATCH_SKIPPED_LABELS.assign,
+  });
+}
+
+function buildLeadBatchRecycleErrorResult(input: {
+  message: string;
+  code?: LeadBatchActionErrorCode;
+  selection?: LeadBatchSelection | null;
+  limitExceeded?: LeadBatchLimitExceeded | null;
+  summary?: Partial<LeadBatchActionResult["summary"]>;
+  blockedReasonSummary?: LeadBatchBlockedReasonSummary[];
+}): BatchMoveLeadsToRecycleBinActionResult {
+  return buildLeadBatchActionResult({
+    status: "error",
+    message: input.message,
+    error: {
+      code: input.code ?? "unknown",
+      message: input.message,
+    },
+    selection: input.selection,
+    limitExceeded: input.limitExceeded,
+    summary: input.summary,
+    skippedLabel: LEAD_BATCH_SKIPPED_LABELS.recycle,
+    blockedReasonSummary: input.blockedReasonSummary,
+  });
+}
+
+function buildLeadBatchAssignLimitExceededResult(input: {
+  selection: LeadBatchSelection;
+  limitExceeded: LeadBatchLimitExceeded;
+}): BatchAssignLeadsActionResult {
+  const message = `${input.selection.label}共 ${input.limitExceeded.actualCount} 条线索，超过单次 ${input.limitExceeded.maxCount} 条上限，请先缩小范围后再批量分配。`;
+
+  return buildLeadBatchAssignErrorResult({
+    message,
+    code: "limit_exceeded",
+    selection: input.selection,
+    limitExceeded: input.limitExceeded,
+  });
+}
+
+function buildLeadBatchRecycleLimitExceededResult(input: {
+  selection: LeadBatchSelection;
+  limitExceeded: LeadBatchLimitExceeded;
+}): BatchMoveLeadsToRecycleBinActionResult {
+  const message = `${input.selection.label}共 ${input.limitExceeded.actualCount} 条线索，超过单次 ${input.limitExceeded.maxCount} 条上限，请先缩小范围后再批量移入回收站。`;
+
+  return buildLeadBatchRecycleErrorResult({
+    message,
+    code: "limit_exceeded",
+    selection: input.selection,
+    limitExceeded: input.limitExceeded,
+  });
+}
+
+function buildLeadBatchRecycleMessage(summary: LeadBatchActionResult["summary"]) {
+  if (summary.successCount > 0 && summary.blockedCount === 0) {
     return "已完成批量移入回收站。";
   }
 
-  if (summary.createdCount > 0 || summary.alreadyInRecycleBinCount > 0) {
+  if (summary.successCount > 0 || summary.skippedCount > 0) {
     return "已部分完成批量移入回收站。";
   }
 
@@ -186,7 +279,7 @@ function buildLeadBatchRecycleMessage(summary: {
 }
 
 function groupLeadBatchRecycleBlocker(
-  groupedReasons: Map<string, LeadBatchRecycleBlockedReason>,
+  groupedReasons: Map<string, LeadBatchBlockedReasonSummary>,
   blocker: Pick<
     RecycleGuardBlocker,
     "code" | "group" | "suggestedAction" | "name" | "description"
@@ -212,8 +305,8 @@ function groupLeadBatchRecycleBlocker(
 
 function collectLeadBatchRecycleBlockedReasons(
   results: MoveToRecycleBinResult[],
-): LeadBatchRecycleBlockedReason[] {
-  const groupedReasons = new Map<string, LeadBatchRecycleBlockedReason>();
+): LeadBatchBlockedReasonSummary[] {
+  const groupedReasons = new Map<string, LeadBatchBlockedReasonSummary>();
 
   for (const result of results) {
     if (result.status !== "blocked") {
@@ -239,19 +332,104 @@ function collectLeadBatchRecycleBlockedReasons(
   );
 }
 
-async function resolveBatchRecycleLeadIds(input: {
-  actor: Awaited<ReturnType<typeof getLeadActionActor>>;
-  selectionMode: "manual" | "filtered";
+async function resolveBatchAssignLeadSelection(input: {
+  actor: LeadActionActor;
+  selectionMode: LeadBatchSelectionMode;
   formData: FormData;
   leadIds: string[];
-}): Promise<string[] | LeadBatchRecycleActionResult> {
+}): Promise<ResolvedLeadBatchSelection | BatchAssignLeadsActionResult> {
+  if (input.selectionMode === "filtered") {
+    const filters = parseLeadListFilters(getFilterParamsFromFormData(input.formData));
+    const [importedLeadIds, activeLeadIds] = await Promise.all([
+      filters.importBatchId
+        ? getLeadImportBatchLeadIds(filters.importBatchId)
+        : Promise.resolve([] as string[]),
+      findActiveTargetIds(prisma, "LEAD"),
+    ]);
+    const where = buildLeadWhereInput(
+      {
+        id: input.actor.id,
+        role: input.actor.role,
+      },
+      filters,
+      importedLeadIds,
+      activeLeadIds,
+    );
+    const matchedLeadIds = await prisma.lead.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: MAX_BATCH_ASSIGNMENT_SIZE + 1,
+      select: {
+        id: true,
+      },
+    });
+    const selection = buildLeadBatchSelection("filtered", matchedLeadIds.length);
+
+    if (matchedLeadIds.length === 0) {
+      return buildLeadBatchAssignErrorResult({
+        message: "当前筛选条件下没有可分配的线索。",
+        code: "filtered_empty",
+      });
+    }
+
+    if (matchedLeadIds.length > MAX_BATCH_ASSIGNMENT_SIZE) {
+      return buildLeadBatchAssignLimitExceededResult({
+        selection,
+        limitExceeded: {
+          maxCount: MAX_BATCH_ASSIGNMENT_SIZE,
+          actualCount: matchedLeadIds.length,
+        },
+      });
+    }
+
+    return {
+      status: "resolved",
+      leadIds: matchedLeadIds.map((lead) => lead.id),
+      selection,
+    };
+  }
+
+  const uniqueLeadIds = [...new Set(input.leadIds)];
+  const selection = buildLeadBatchSelection("manual", uniqueLeadIds.length);
+
+  if (uniqueLeadIds.length === 0) {
+    return buildLeadBatchAssignErrorResult({
+      message: "请先选择线索。",
+      code: "empty_selection",
+    });
+  }
+
+  if (uniqueLeadIds.length > MAX_BATCH_ASSIGNMENT_SIZE) {
+    return buildLeadBatchAssignLimitExceededResult({
+      selection,
+      limitExceeded: {
+        maxCount: MAX_BATCH_ASSIGNMENT_SIZE,
+        actualCount: uniqueLeadIds.length,
+      },
+    });
+  }
+
+  return {
+    status: "resolved",
+    leadIds: uniqueLeadIds,
+    selection,
+  };
+}
+
+async function resolveBatchRecycleLeadSelection(input: {
+  actor: LeadActionActor;
+  selectionMode: LeadBatchSelectionMode;
+  formData: FormData;
+  leadIds: string[];
+}): Promise<ResolvedLeadBatchSelection | BatchMoveLeadsToRecycleBinActionResult> {
   if (input.selectionMode === "filtered") {
     const filters = parseLeadListFilters(getFilterParamsFromFormData(input.formData));
 
     if (filters.view !== "unassigned") {
-      return buildLeadBatchRecycleErrorResult(
-        "当前只支持未分配视图批量移入回收站。",
-      );
+      return buildLeadBatchRecycleErrorResult({
+        message: "当前只支持未分配视图批量移入回收站。",
+        code: "invalid_view",
+      });
     }
 
     const [importedLeadIds, activeLeadIds] = await Promise.all([
@@ -281,32 +459,59 @@ async function resolveBatchRecycleLeadIds(input: {
         id: true,
       },
     });
+    const selection = buildLeadBatchSelection("filtered", matchedLeadIds.length);
 
     if (matchedLeadIds.length === 0) {
-      return buildLeadBatchRecycleErrorResult(
-        "当前筛选条件下没有可移入回收站的线索。",
-      );
+      return buildLeadBatchRecycleErrorResult({
+        message: "当前筛选条件下没有可移入回收站的线索。",
+        code: "filtered_empty",
+      });
     }
 
     if (matchedLeadIds.length > MAX_BATCH_ASSIGNMENT_SIZE) {
-      return buildLeadBatchRecycleErrorResult(
-        `当前筛选结果超过 ${MAX_BATCH_ASSIGNMENT_SIZE} 条，请先缩小范围后再批量移入回收站。`,
-      );
+      return buildLeadBatchRecycleLimitExceededResult({
+        selection,
+        limitExceeded: {
+          maxCount: MAX_BATCH_ASSIGNMENT_SIZE,
+          actualCount: matchedLeadIds.length,
+        },
+      });
     }
 
-    return matchedLeadIds.map((lead) => lead.id);
+    return {
+      status: "resolved",
+      leadIds: matchedLeadIds.map((lead) => lead.id),
+      selection,
+    };
   }
 
   const uniqueLeadIds = [...new Set(input.leadIds)];
+  const selection = buildLeadBatchSelection("manual", uniqueLeadIds.length);
 
   if (uniqueLeadIds.length === 0) {
-    return buildLeadBatchRecycleErrorResult("请先选择线索。");
+    return buildLeadBatchRecycleErrorResult({
+      message: "请先选择线索。",
+      code: "empty_selection",
+    });
+  }
+
+  if (uniqueLeadIds.length > MAX_BATCH_ASSIGNMENT_SIZE) {
+    return buildLeadBatchRecycleLimitExceededResult({
+      selection,
+      limitExceeded: {
+        maxCount: MAX_BATCH_ASSIGNMENT_SIZE,
+        actualCount: uniqueLeadIds.length,
+      },
+    });
   }
 
   const scope = getLeadScope(input.actor.role, input.actor.id);
 
   if (!scope) {
-    return buildLeadBatchRecycleErrorResult("当前角色没有访问线索数据的权限。");
+    return buildLeadBatchRecycleErrorResult({
+      message: "当前角色没有访问线索数据的权限。",
+      code: "forbidden",
+    });
   }
 
   const visibleLeadIds = await prisma.lead.findMany({
@@ -323,46 +528,38 @@ async function resolveBatchRecycleLeadIds(input: {
   });
 
   if (visibleLeadIds.length !== uniqueLeadIds.length) {
-    return buildLeadBatchRecycleErrorResult(
-      "部分线索已不在当前未分配视图，请刷新后重试。",
-    );
+    return buildLeadBatchRecycleErrorResult({
+      message: "部分线索已不在当前未分配视图，请刷新后重试。",
+      code: "stale_selection",
+      selection,
+    });
   }
 
-  return uniqueLeadIds;
+  return {
+    status: "resolved",
+    leadIds: uniqueLeadIds,
+    selection,
+  };
 }
 
 export async function batchAssignLeadsAction(
-  _previousState: {
-    status: "idle" | "success" | "error";
-    message: string;
-    assignedCount: number;
-    skippedCount: number;
-  },
+  _previousState: LeadBatchActionNoticeState,
   formData: FormData,
-): Promise<{
-  status: "idle" | "success" | "error";
-  message: string;
-  assignedCount: number;
-  skippedCount: number;
-}> {
+): Promise<BatchAssignLeadsActionResult> {
   const session = await auth();
 
   if (!session?.user) {
-    return {
-      status: "error",
+    return buildLeadBatchAssignErrorResult({
       message: "登录已失效，请重新登录后再试。",
-      assignedCount: 0,
-      skippedCount: 0,
-    };
+      code: "forbidden",
+    });
   }
 
   if (!canManageLeadAssignments(session.user.role)) {
-    return {
-      status: "error",
+    return buildLeadBatchAssignErrorResult({
       message: "当前角色没有批量分配线索的权限。",
-      assignedCount: 0,
-      skippedCount: 0,
-    };
+      code: "forbidden",
+    });
   }
 
   const parsed = assignLeadsSchema.safeParse({
@@ -373,95 +570,37 @@ export async function batchAssignLeadsAction(
   });
 
   if (!parsed.success) {
-    return {
-      status: "error",
-      message:
-        parsed.error.issues[0]?.message ?? "提交数据不完整，无法执行批量分配。",
-      assignedCount: 0,
-      skippedCount: 0,
-    };
+    return buildLeadBatchAssignErrorResult({
+      message: parsed.error.issues[0]?.message ?? "提交数据不完整，无法执行批量分配。",
+      code: "validation_error",
+    });
   }
 
   const scope = getLeadScope(session.user.role, session.user.id);
 
   if (!scope) {
-    return {
-      status: "error",
+    return buildLeadBatchAssignErrorResult({
       message: "当前角色没有访问线索数据的权限。",
-      assignedCount: 0,
-      skippedCount: 0,
-    };
-  }
-
-  let uniqueLeadIds: string[] = [];
-
-  if (parsed.data.selectionMode === "filtered") {
-    const filters = parseLeadListFilters(getFilterParamsFromFormData(formData));
-    const [importedLeadIds, activeLeadIds] = await Promise.all([
-      filters.importBatchId
-        ? getLeadImportBatchLeadIds(filters.importBatchId)
-        : Promise.resolve([] as string[]),
-      findActiveTargetIds(prisma, "LEAD"),
-    ]);
-    const where = buildLeadWhereInput(
-      {
-        id: session.user.id,
-        role: session.user.role,
-      },
-      filters,
-      importedLeadIds,
-      activeLeadIds,
-    );
-
-    const matchedLeadIds = await prisma.lead.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: MAX_BATCH_ASSIGNMENT_SIZE + 1,
-      select: {
-        id: true,
-      },
+      code: "forbidden",
     });
-
-    if (matchedLeadIds.length === 0) {
-      return {
-        status: "error",
-        message: "当前筛选条件下没有可分配的线索。",
-        assignedCount: 0,
-        skippedCount: 0,
-      };
-    }
-
-    if (matchedLeadIds.length > MAX_BATCH_ASSIGNMENT_SIZE) {
-      return {
-        status: "error",
-        message: `当前筛选结果超过 ${MAX_BATCH_ASSIGNMENT_SIZE} 条，请先缩小范围后再批量分配。`,
-        assignedCount: 0,
-        skippedCount: 0,
-      };
-    }
-
-    uniqueLeadIds = matchedLeadIds.map((lead) => lead.id);
-  } else {
-    uniqueLeadIds = [...new Set(parsed.data.leadIds)];
-
-    if (uniqueLeadIds.length === 0) {
-      return {
-        status: "error",
-        message: "请先选择线索。",
-        assignedCount: 0,
-        skippedCount: 0,
-      };
-    }
   }
 
-  if (uniqueLeadIds.length > MAX_BATCH_ASSIGNMENT_SIZE) {
-    return {
-      status: "error",
-      message: `单次最多批量分配 ${MAX_BATCH_ASSIGNMENT_SIZE} 条线索。`,
-      assignedCount: 0,
-      skippedCount: 0,
-    };
+  const resolvedSelection = await resolveBatchAssignLeadSelection({
+    actor: {
+      id: session.user.id,
+      role: session.user.role,
+      permissionCodes: session.user.permissionCodes,
+    },
+    selectionMode: parsed.data.selectionMode,
+    formData,
+    leadIds: parsed.data.leadIds,
+  });
+
+  if (resolvedSelection.status !== "resolved") {
+    return resolvedSelection;
   }
+
+  const { leadIds: uniqueLeadIds, selection } = resolvedSelection;
 
   const targetSales = await prisma.user.findFirst({
     where: {
@@ -480,12 +619,14 @@ export async function batchAssignLeadsAction(
   });
 
   if (!targetSales) {
-    return {
-      status: "error",
+    return buildLeadBatchAssignErrorResult({
       message: "目标销售不存在，或该账号当前不可用。",
-      assignedCount: 0,
-      skippedCount: 0,
-    };
+      code: "validation_error",
+      selection,
+      summary: {
+        totalCount: uniqueLeadIds.length,
+      },
+    });
   }
 
   const leads = await prisma.lead.findMany({
@@ -511,12 +652,14 @@ export async function batchAssignLeadsAction(
   });
 
   if (leads.length !== uniqueLeadIds.length) {
-    return {
-      status: "error",
+    return buildLeadBatchAssignErrorResult({
       message: "部分线索不存在，或你没有权限操作这些线索。",
-      assignedCount: 0,
-      skippedCount: 0,
-    };
+      code: "stale_selection",
+      selection,
+      summary: {
+        totalCount: uniqueLeadIds.length,
+      },
+    });
   }
 
   const activeRecycleEntries = await findActiveRecycleEntriesByTargetIds(
@@ -526,15 +669,17 @@ export async function batchAssignLeadsAction(
   );
 
   if (activeRecycleEntries.length > 0) {
-    return {
-      status: "error",
+    return buildLeadBatchAssignErrorResult({
       message:
         activeRecycleEntries.length === 1
           ? "所选线索已在回收站中，不能继续分配。"
           : `所选线索中有 ${activeRecycleEntries.length} 条已在回收站中，不能继续分配。`,
-      assignedCount: 0,
-      skippedCount: 0,
-    };
+      code: "validation_error",
+      selection,
+      summary: {
+        totalCount: uniqueLeadIds.length,
+      },
+    });
   }
 
   const updatedCustomerIds = new Set<string>();
@@ -757,21 +902,24 @@ export async function batchAssignLeadsAction(
       }
     });
   } catch (error) {
-    return {
-      status: "error",
+    return buildLeadBatchAssignErrorResult({
       message: error instanceof Error ? error.message : "批量分配失败，请稍后重试。",
-      assignedCount: 0,
-      skippedCount: 0,
-    };
+      selection,
+      summary: {
+        totalCount: uniqueLeadIds.length,
+      },
+    });
   }
 
   if (assignedCount === 0 && updatedCustomerIds.size === 0) {
-    return {
-      status: "error",
+    return buildLeadBatchAssignErrorResult({
       message: "所选线索及其关联客户当前负责人均已是目标销售，无需重复分配。",
-      assignedCount: 0,
-      skippedCount,
-    };
+      selection,
+      summary: {
+        totalCount: uniqueLeadIds.length,
+        skippedCount,
+      },
+    });
   }
 
   revalidatePath("/leads");
@@ -786,12 +934,17 @@ export async function batchAssignLeadsAction(
     revalidatePath(`/customers/${customerId}`);
   }
 
-  return {
+  return buildLeadBatchActionResult({
     status: "success",
     message: `已完成 ${assignedCount} 条线索分配，并同步 / 补建 ${updatedCustomerIds.size} 位客户承接给 ${targetSales.name}。`,
-    assignedCount,
-    skippedCount,
-  };
+    selection,
+    skippedLabel: LEAD_BATCH_SKIPPED_LABELS.assign,
+    summary: {
+      totalCount: uniqueLeadIds.length,
+      successCount: assignedCount,
+      skippedCount,
+    },
+  });
 }
 
 export async function moveLeadToRecycleBinAction(
@@ -840,14 +993,15 @@ export async function moveLeadToRecycleBinAction(
 
 export async function batchMoveLeadsToRecycleBinAction(
   formData: FormData,
-): Promise<LeadBatchRecycleActionResult> {
+): Promise<BatchMoveLeadsToRecycleBinActionResult> {
   try {
     const actor = await getLeadActionActor();
 
     if (!canAccessLeadModule(actor.role) || !canManageLeadAssignments(actor.role)) {
-      return buildLeadBatchRecycleErrorResult(
-        "当前角色没有批量移入回收站的权限。",
-      );
+      return buildLeadBatchRecycleErrorResult({
+        message: "当前角色没有批量移入回收站的权限。",
+        code: "forbidden",
+      });
     }
 
     const parsed = batchMoveLeadsToRecycleBinSchema.safeParse({
@@ -857,27 +1011,24 @@ export async function batchMoveLeadsToRecycleBinAction(
     });
 
     if (!parsed.success) {
-      return buildLeadBatchRecycleErrorResult(
-        parsed.error.issues[0]?.message ?? "提交数据不完整，无法执行批量移入回收站。",
-      );
+      return buildLeadBatchRecycleErrorResult({
+        message: parsed.error.issues[0]?.message ?? "提交数据不完整，无法执行批量移入回收站。",
+        code: "validation_error",
+      });
     }
 
-    const resolvedLeadIds = await resolveBatchRecycleLeadIds({
+    const resolvedSelection = await resolveBatchRecycleLeadSelection({
       actor,
       selectionMode: parsed.data.selectionMode,
       formData,
       leadIds: parsed.data.leadIds,
     });
 
-    if (!Array.isArray(resolvedLeadIds)) {
-      return resolvedLeadIds;
+    if (resolvedSelection.status !== "resolved") {
+      return resolvedSelection;
     }
 
-    if (resolvedLeadIds.length > MAX_BATCH_ASSIGNMENT_SIZE) {
-      return buildLeadBatchRecycleErrorResult(
-        `单次最多批量移入回收站 ${MAX_BATCH_ASSIGNMENT_SIZE} 条线索。`,
-      );
-    }
+    const { leadIds: resolvedLeadIds, selection } = resolvedSelection;
 
     const results: MoveToRecycleBinResult[] = [];
 
@@ -893,31 +1044,30 @@ export async function batchMoveLeadsToRecycleBinAction(
 
     const summary = {
       totalCount: resolvedLeadIds.length,
-      createdCount: results.filter((result) => result.status === "created").length,
-      alreadyInRecycleBinCount: results.filter(
+      successCount: results.filter((result) => result.status === "created").length,
+      skippedCount: results.filter(
         (result) => result.status === "already_in_recycle_bin",
       ).length,
       blockedCount: results.filter((result) => result.status === "blocked").length,
     };
-    const blockedReasons = collectLeadBatchRecycleBlockedReasons(results);
+    const blockedReasonSummary = collectLeadBatchRecycleBlockedReasons(results);
 
-    if (summary.createdCount > 0 || summary.alreadyInRecycleBinCount > 0) {
+    if (summary.successCount > 0 || summary.skippedCount > 0) {
       revalidatePath("/leads");
       revalidatePath("/recycle-bin");
     }
 
-    return {
-      status:
-        summary.createdCount > 0 || summary.alreadyInRecycleBinCount > 0
-          ? "success"
-          : "error",
+    return buildLeadBatchActionResult({
+      status: summary.successCount > 0 || summary.skippedCount > 0 ? "success" : "error",
       message: buildLeadBatchRecycleMessage(summary),
+      selection,
+      skippedLabel: LEAD_BATCH_SKIPPED_LABELS.recycle,
       summary,
-      blockedReasons,
-    };
+      blockedReasonSummary,
+    });
   } catch (error) {
-    return buildLeadBatchRecycleErrorResult(
-      error instanceof Error ? error.message : "批量移入回收站失败，请稍后重试。",
-    );
+    return buildLeadBatchRecycleErrorResult({
+      message: error instanceof Error ? error.message : "批量移入回收站失败，请稍后重试。",
+    });
   }
 }

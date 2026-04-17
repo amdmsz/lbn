@@ -56,6 +56,7 @@ staging 验收请看：[docs/staging-checklist.md](./staging-checklist.md)
 - 运行时文件备份脚本：[scripts/backup-runtime-assets.sh](../scripts/backup-runtime-assets.sh)
 - 单机更新脚本模板：[scripts/deploy-update.sh](../scripts/deploy-update.sh)
 - lead import worker 入口脚本：[scripts/lead-import-worker.ts](../scripts/lead-import-worker.ts)
+- recycle auto finalize runbook：[docs/recycle-auto-finalize-runbook.md](./recycle-auto-finalize-runbook.md)
 - 首个管理员初始化脚本：[scripts/bootstrap-admin.mjs](../scripts/bootstrap-admin.mjs)
 - 旧环境 migration metadata 对齐脚本：[scripts/reconcile-prisma-migration-baseline.mjs](../scripts/reconcile-prisma-migration-baseline.mjs)
 - Prisma migration rebaseline 说明：[docs/prisma-migration-rebaseline.md](./prisma-migration-rebaseline.md)
@@ -64,6 +65,7 @@ staging 验收请看：[docs/staging-checklist.md](./staging-checklist.md)
 
 - 当前仓库内**没有**现成的 worker 专用 systemd 模板
 - lead import worker 需要你在正式环境额外创建一个独立 systemd service，执行 `npm run worker:lead-imports`
+- recycle auto finalize 不推荐做成常驻 service；当前正式基线应按 one-shot 调度执行，具体命令、dry-run 演练、停用和回滚口径见 [docs/recycle-auto-finalize-runbook.md](./recycle-auto-finalize-runbook.md)
 
 当前正式 migration 链除了 baseline 外，还包含首发后新增的正式 additive migration：
 

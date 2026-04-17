@@ -43,6 +43,14 @@ import {
   withVisibleLeadWhere,
 } from "@/lib/leads/visibility";
 import { getActiveTagOptions } from "@/lib/master-data/queries";
+import {
+  buildCustomerFinalizePreview,
+  getCustomerRecycleTarget,
+} from "@/lib/recycle-bin/customer-adapter";
+import type {
+  RecycleFinalizePreview,
+  RecycleMoveGuard,
+} from "@/lib/recycle-bin/types";
 
 type SearchParamsValue = string | string[] | undefined;
 
@@ -170,14 +178,19 @@ export type CustomerListItem = {
   district: string | null;
   address: string | null;
   status: CustomerStatus;
+  ownershipMode: CustomerOwnershipMode;
   createdAt: Date;
   latestImportAt: Date | null;
   latestFollowUpAt: Date | null;
+  lastEffectiveFollowUpAt: Date | null;
   latestTradeAt: Date | null;
   lifetimeTradeAmount: string;
+  approvedTradeOrderCount: number;
   latestInterestedProduct: string | null;
   latestPurchasedProduct: string | null;
   workingStatuses: CustomerWorkStatusKey[];
+  recycleGuard: RecycleMoveGuard;
+  recycleFinalizePreview: RecycleFinalizePreview | null;
   owner: {
     id: string;
     name: string;
@@ -682,6 +695,269 @@ function parseCustomerCenterFilters(
   });
 }
 
+async function getCustomerCenterWorkspaceBase(
+  viewer: CustomerViewer,
+  rawSearchParams: Record<string, SearchParamsValue> | undefined,
+) {
+  if (!canAccessCustomerModule(viewer.role)) {
+    throw new Error("You do not have access to customers.");
+  }
+
+  const actor = await getCustomerCenterActor(viewer.id);
+  const visibleWhere = getCustomerVisibilityWhereInput(actor);
+  const recycledCustomerIds = await listActiveCustomerIds(prisma);
+  const [teams, salesUsers, customerSnapshots] = await Promise.all([
+    actor.role === "ADMIN"
+      ? prisma.team.findMany({
+          orderBy: [{ name: "asc" }, { createdAt: "asc" }],
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            description: true,
+            supervisor: {
+              select: {
+                id: true,
+                name: true,
+                username: true,
+              },
+            },
+          },
+        })
+      : actor.teamId
+        ? prisma.team.findMany({
+            where: { id: actor.teamId },
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              description: true,
+              supervisor: {
+                select: {
+                  id: true,
+                  name: true,
+                  username: true,
+                },
+              },
+            },
+          })
+        : Promise.resolve([]),
+    prisma.user.findMany({
+      where: {
+        role: {
+          code: "SALES",
+        },
+        userStatus: "ACTIVE",
+        ...(actor.role === "ADMIN"
+          ? {}
+          : actor.teamId
+            ? { teamId: actor.teamId }
+            : { id: "__missing_team_scope__" }),
+      },
+      orderBy: [{ name: "asc" }, { username: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        teamId: true,
+        team: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+        },
+      },
+    }),
+    prisma.customer.findMany({
+      where: {
+        AND: [
+          visibleWhere,
+          ...(recycledCustomerIds.length > 0
+            ? [
+                {
+                  id: {
+                    notIn: recycledCustomerIds,
+                  },
+                } satisfies Prisma.CustomerWhereInput,
+              ]
+            : []),
+        ],
+      },
+      select: customerSnapshotSelect,
+    }),
+  ]);
+  const latestCustomerImportMap = await getLatestCustomerImportMap(
+    customerSnapshots.map((snapshot) => snapshot.id),
+  );
+
+  const parsedFilters = parseCustomerCenterFilters(rawSearchParams);
+  const salesById = new Map(salesUsers.map((item) => [item.id, item]));
+  const teamsById = new Map(teams.map((item) => [item.id, item]));
+  const teamId =
+    actor.role === "ADMIN"
+      ? teamsById.has(parsedFilters.teamId)
+        ? parsedFilters.teamId
+        : salesById.get(parsedFilters.salesId)?.teamId ?? ""
+      : actor.teamId ?? "";
+  const salesId = (() => {
+    if (actor.role === "SALES") {
+      return actor.id;
+    }
+
+    const selectedSales = salesById.get(parsedFilters.salesId);
+
+    if (!selectedSales) {
+      return "";
+    }
+
+    if (teamId && selectedSales.teamId !== teamId) {
+      return "";
+    }
+
+    return selectedSales.id;
+  })();
+  const filters: CustomerCenterFilters = {
+    queue: parsedFilters.queue,
+    statuses: parsedFilters.statuses,
+    teamId,
+    salesId,
+    search: parsedFilters.search,
+    productKeys: parsedFilters.productKeys,
+    productKeyword: parsedFilters.productKeyword,
+    tagIds: parsedFilters.tagIds,
+    importedFrom: parsedFilters.importedFrom,
+    importedTo: parsedFilters.importedTo,
+    page: parsedFilters.page,
+    pageSize: parsedFilters.pageSize,
+  };
+
+  const now = new Date();
+  const todayStart = startOfDay(now);
+  const todayEnd = endOfDay(now);
+  const stateMap = new Map(
+    customerSnapshots.map((snapshot) => [
+      snapshot.id,
+      getCustomerSnapshotState(
+        snapshot,
+        latestCustomerImportMap.get(snapshot.id)?.createdAt ?? null,
+        now,
+        todayStart,
+        todayEnd,
+      ),
+    ]),
+  );
+
+  const scopeSnapshots =
+    actor.role === "ADMIN"
+      ? filters.salesId
+        ? customerSnapshots.filter((snapshot) => snapshot.ownerId === filters.salesId)
+        : filters.teamId
+          ? customerSnapshots.filter((snapshot) => snapshot.owner?.team?.id === filters.teamId)
+          : customerSnapshots
+      : actor.role === "SUPERVISOR"
+        ? filters.salesId
+          ? customerSnapshots.filter((snapshot) => snapshot.ownerId === filters.salesId)
+          : customerSnapshots
+        : customerSnapshots;
+
+  return {
+    actor,
+    filters,
+    teams,
+    salesUsers,
+    customerSnapshots,
+    stateMap,
+    scopeSnapshots,
+    todayStart,
+    todayEnd,
+  };
+}
+
+function getCustomerCenterFilteredSnapshots(input: {
+  scopeSnapshots: CustomerSnapshot[];
+  stateMap: Map<string, CustomerSnapshotState>;
+  filters: CustomerCenterFilters;
+}) {
+  return input.scopeSnapshots
+    .filter((snapshot) => matchesCustomerSearch(snapshot, input.filters.search))
+    .filter((snapshot) =>
+      matchesCustomerStatuses(input.stateMap.get(snapshot.id), input.filters.statuses),
+    )
+    .filter((snapshot) =>
+      matchesCustomerProducts(
+        snapshot,
+        input.stateMap.get(snapshot.id),
+        input.filters.productKeys,
+        input.filters.productKeyword,
+      ),
+    )
+    .filter((snapshot) => matchesCustomerTags(input.stateMap.get(snapshot.id), input.filters.tagIds))
+    .filter((snapshot) =>
+      matchesImportedDateRange(
+        input.stateMap.get(snapshot.id),
+        input.filters.importedFrom,
+        input.filters.importedTo,
+      ),
+    )
+    .sort((left, right) => compareCustomerSnapshots(left, right, input.stateMap));
+}
+
+export async function listVisibleCustomerCenterCustomerIds(
+  viewer: CustomerViewer,
+  customerIds: string[],
+) {
+  if (customerIds.length === 0) {
+    return [];
+  }
+
+  if (!canAccessCustomerModule(viewer.role)) {
+    throw new Error("You do not have access to customers.");
+  }
+
+  const actor = await getCustomerCenterActor(viewer.id);
+  const visibleWhere = getCustomerVisibilityWhereInput(actor);
+  const hiddenCustomerIds = await listActiveCustomerIds(prisma);
+  const rows = await prisma.customer.findMany({
+    where: {
+      AND: [
+        visibleWhere,
+        {
+          id: {
+            in: customerIds,
+          },
+        },
+        ...(hiddenCustomerIds.length > 0
+          ? [
+              {
+                id: {
+                  notIn: hiddenCustomerIds,
+                },
+              } satisfies Prisma.CustomerWhereInput,
+            ]
+          : []),
+      ],
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return rows.map((row) => row.id);
+}
+
+export async function listFilteredCustomerCenterCustomerIds(
+  viewer: CustomerViewer,
+  rawSearchParams: Record<string, SearchParamsValue> | undefined,
+) {
+  const workspace = await getCustomerCenterWorkspaceBase(viewer, rawSearchParams);
+  return getCustomerCenterFilteredSnapshots({
+    scopeSnapshots: workspace.scopeSnapshots,
+    stateMap: workspace.stateMap,
+    filters: workspace.filters,
+  }).map((snapshot) => snapshot.id);
+}
+
 function buildPendingFollowUpMatcher(snapshot: CustomerSnapshot, now: Date) {
   return (
     snapshot.followUpTasks.some(
@@ -1157,7 +1433,16 @@ async function fetchCustomerListItems(
     return [];
   }
 
-  const [items, tradeOrderSummaries] = await Promise.all([
+  const fallbackRecycleGuard: RecycleMoveGuard = {
+    canMoveToRecycleBin: false,
+    fallbackAction: "/customers",
+    fallbackActionLabel: "返回客户工作台",
+    blockerSummary: "当前客户回收判断暂时不可用，请刷新后重试。",
+    blockers: [],
+    futureRestoreBlockers: [],
+  };
+
+  const [items, tradeOrderSummaries, recycleSnapshots] = await Promise.all([
     prisma.customer.findMany({
       where: {
         id: {
@@ -1173,6 +1458,7 @@ async function fetchCustomerListItems(
         district: true,
         address: true,
         status: true,
+        ownershipMode: true,
         createdAt: true,
         owner: {
           select: {
@@ -1251,9 +1537,33 @@ async function fetchCustomerListItems(
       _max: {
         createdAt: true,
       },
+      _count: {
+        _all: true,
+      },
     }),
+    Promise.all(
+      customerIds.map(async (customerId) => {
+        const [target, finalizePreview] = await Promise.all([
+          getCustomerRecycleTarget(prisma, "CUSTOMER", customerId),
+          buildCustomerFinalizePreview(prisma, {
+            targetType: "CUSTOMER",
+            targetId: customerId,
+            domain: "CUSTOMER",
+          }),
+        ]);
+
+        return [
+          customerId,
+          {
+            recycleGuard: target?.guard ?? fallbackRecycleGuard,
+            recycleFinalizePreview: finalizePreview,
+          },
+        ] as const;
+      }),
+    ),
   ]);
 
+  const recycleSnapshotMap = new Map(recycleSnapshots);
   const labeledCallRecords = await hydrateCallResultLabels(
     items.flatMap((item) => item.callRecords),
   );
@@ -1266,6 +1576,7 @@ async function fetchCustomerListItems(
       {
         lifetimeTradeAmount: item._sum.finalAmount?.toString() ?? "0",
         latestTradeAt: item._max.createdAt ?? null,
+        approvedTradeOrderCount: item._count._all ?? 0,
       },
     ]),
   );
@@ -1274,6 +1585,7 @@ async function fetchCustomerListItems(
     const item = itemMap.get(id);
     const state = stateMap.get(id);
     const tradeOrderSummary = tradeOrderSummaryMap.get(id);
+    const recycleSnapshot = recycleSnapshotMap.get(id);
 
     if (item) {
       result.push({
@@ -1296,11 +1608,15 @@ async function fetchCustomerListItems(
         }),
         latestImportAt: state?.latestLeadAt ?? null,
         latestFollowUpAt: state?.latestFollowUpAt ?? null,
+        lastEffectiveFollowUpAt: state?.latestFollowUpAt ?? null,
         latestTradeAt: tradeOrderSummary?.latestTradeAt ?? null,
         lifetimeTradeAmount: tradeOrderSummary?.lifetimeTradeAmount ?? "0",
+        approvedTradeOrderCount: tradeOrderSummary?.approvedTradeOrderCount ?? 0,
         latestInterestedProduct: state?.latestInterestedProduct ?? null,
         latestPurchasedProduct: state?.latestPurchasedProduct ?? null,
         workingStatuses: state?.workingStatuses ?? [],
+        recycleGuard: recycleSnapshot?.recycleGuard ?? fallbackRecycleGuard,
+        recycleFinalizePreview: recycleSnapshot?.recycleFinalizePreview ?? null,
       });
     }
 
@@ -1426,155 +1742,21 @@ export async function getCustomerCenterData(
   viewer: CustomerViewer,
   rawSearchParams: Record<string, SearchParamsValue> | undefined,
 ) {
-  if (!canAccessCustomerModule(viewer.role)) {
-    throw new Error("You do not have access to customers.");
-  }
-
-  const actor = await getCustomerCenterActor(viewer.id);
-  const visibleWhere = getCustomerVisibilityWhereInput(actor);
-  const recycledCustomerIds = await listActiveCustomerIds(prisma);
-  const [teams, salesUsers, customerSnapshots, activeTags] = await Promise.all([
-    actor.role === "ADMIN"
-      ? prisma.team.findMany({
-          orderBy: [{ name: "asc" }, { createdAt: "asc" }],
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            description: true,
-            supervisor: {
-              select: {
-                id: true,
-                name: true,
-                username: true,
-              },
-            },
-          },
-        })
-      : actor.teamId
-        ? prisma.team.findMany({
-            where: { id: actor.teamId },
-            select: {
-              id: true,
-              code: true,
-              name: true,
-              description: true,
-              supervisor: {
-                select: {
-                  id: true,
-                  name: true,
-                  username: true,
-                },
-              },
-            },
-          })
-        : Promise.resolve([]),
-    prisma.user.findMany({
-      where: {
-        role: {
-          code: "SALES",
-        },
-        userStatus: "ACTIVE",
-        ...(actor.role === "ADMIN"
-          ? {}
-          : actor.teamId
-            ? { teamId: actor.teamId }
-            : { id: "__missing_team_scope__" }),
-      },
-      orderBy: [{ name: "asc" }, { username: "asc" }],
-      select: {
-        id: true,
-        name: true,
-        username: true,
-        teamId: true,
-        team: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-          },
-        },
-      },
-    }),
-    prisma.customer.findMany({
-      where: {
-        AND: [
-          visibleWhere,
-          ...(recycledCustomerIds.length > 0
-            ? [
-                {
-                  id: {
-                    notIn: recycledCustomerIds,
-                  },
-                } satisfies Prisma.CustomerWhereInput,
-              ]
-            : []),
-        ],
-      },
-      select: customerSnapshotSelect,
-    }),
+  const [workspace, activeTags] = await Promise.all([
+    getCustomerCenterWorkspaceBase(viewer, rawSearchParams),
     getActiveTagOptions(),
   ]);
-  const latestCustomerImportMap = await getLatestCustomerImportMap(
-    customerSnapshots.map((snapshot) => snapshot.id),
-  );
-
-  const parsedFilters = parseCustomerCenterFilters(rawSearchParams);
-  const salesById = new Map(salesUsers.map((item) => [item.id, item]));
-  const teamsById = new Map(teams.map((item) => [item.id, item]));
-  const teamId =
-    actor.role === "ADMIN"
-      ? teamsById.has(parsedFilters.teamId)
-        ? parsedFilters.teamId
-        : salesById.get(parsedFilters.salesId)?.teamId ?? ""
-      : actor.teamId ?? "";
-  const salesId = (() => {
-    if (actor.role === "SALES") {
-      return actor.id;
-    }
-
-    const selectedSales = salesById.get(parsedFilters.salesId);
-
-    if (!selectedSales) {
-      return "";
-    }
-
-    if (teamId && selectedSales.teamId !== teamId) {
-      return "";
-    }
-
-    return selectedSales.id;
-  })();
-  const filters: CustomerCenterFilters = {
-    queue: parsedFilters.queue,
-    statuses: parsedFilters.statuses,
-    teamId,
-    salesId,
-    search: parsedFilters.search,
-    productKeys: parsedFilters.productKeys,
-    productKeyword: parsedFilters.productKeyword,
-    tagIds: parsedFilters.tagIds,
-    importedFrom: parsedFilters.importedFrom,
-    importedTo: parsedFilters.importedTo,
-    page: parsedFilters.page,
-    pageSize: parsedFilters.pageSize,
-  };
-
-  const now = new Date();
-  const todayStart = startOfDay(now);
-  const todayEnd = endOfDay(now);
-  const stateMap = new Map(
-    customerSnapshots.map((snapshot) => [
-      snapshot.id,
-      getCustomerSnapshotState(
-        snapshot,
-        latestCustomerImportMap.get(snapshot.id)?.createdAt ?? null,
-        now,
-        todayStart,
-        todayEnd,
-      ),
-    ]),
-  );
+  const {
+    actor,
+    filters,
+    teams,
+    salesUsers,
+    customerSnapshots,
+    stateMap,
+    scopeSnapshots,
+    todayStart,
+    todayEnd,
+  } = workspace;
 
   const teamOverview = teams.map<TeamOverviewItem>((team) => {
     const teamSnapshots = customerSnapshots.filter(
@@ -1633,19 +1815,6 @@ export async function getCustomerCenterData(
       return left.name.localeCompare(right.name, "zh-CN");
     });
 
-  const scopeSnapshots =
-    actor.role === "ADMIN"
-      ? filters.salesId
-        ? customerSnapshots.filter((snapshot) => snapshot.ownerId === filters.salesId)
-        : filters.teamId
-          ? customerSnapshots.filter((snapshot) => snapshot.owner?.team?.id === filters.teamId)
-          : customerSnapshots
-      : actor.role === "SUPERVISOR"
-        ? filters.salesId
-          ? customerSnapshots.filter((snapshot) => snapshot.ownerId === filters.salesId)
-          : customerSnapshots
-        : customerSnapshots;
-
   const summary = buildSummaryStats(scopeSnapshots, stateMap, todayStart, todayEnd);
   const queueCounts = buildQueueCounts(scopeSnapshots, stateMap);
   const productOptions = buildProductFilterOptions(scopeSnapshots);
@@ -1662,28 +1831,11 @@ export async function getCustomerCenterData(
       : actor.role === "SALES"
         ? salesBoard.find((item) => item.id === actor.id) ?? null
         : null;
-  const filteredQueueSnapshots = scopeSnapshots
-    .filter((snapshot) => matchesCustomerSearch(snapshot, filters.search))
-    .filter((snapshot) =>
-      matchesCustomerStatuses(stateMap.get(snapshot.id), filters.statuses),
-    )
-    .filter((snapshot) =>
-      matchesCustomerProducts(
-        snapshot,
-        stateMap.get(snapshot.id),
-        filters.productKeys,
-        filters.productKeyword,
-      ),
-    )
-    .filter((snapshot) => matchesCustomerTags(stateMap.get(snapshot.id), filters.tagIds))
-    .filter((snapshot) =>
-      matchesImportedDateRange(
-        stateMap.get(snapshot.id),
-        filters.importedFrom,
-        filters.importedTo,
-      ),
-    )
-    .sort((left, right) => compareCustomerSnapshots(left, right, stateMap));
+  const filteredQueueSnapshots = getCustomerCenterFilteredSnapshots({
+    scopeSnapshots,
+    stateMap,
+    filters,
+  });
   const totalCount = filteredQueueSnapshots.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / filters.pageSize));
   const currentPage = Math.min(filters.page, totalPages);

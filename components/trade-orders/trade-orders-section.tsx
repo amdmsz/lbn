@@ -26,6 +26,7 @@ import type {
   TradeOrderRecycleGuard,
   TradeOrderRecycleReasonCode,
 } from "@/lib/trade-orders/recycle-guards";
+import type { RecycleFinalizePreview } from "@/lib/recycle-bin/types";
 import { cn } from "@/lib/utils";
 
 type TradeOrdersData = Awaited<ReturnType<typeof getTradeOrdersPageData>>;
@@ -35,6 +36,7 @@ type TradeOrderRecycleActionResult = {
   message: string;
   recycleStatus?: "created" | "already_in_recycle_bin" | "blocked";
   guard?: TradeOrderRecycleGuard;
+  finalizePreview?: RecycleFinalizePreview | null;
 };
 type RecycleDialogState = {
   id: string;
@@ -46,6 +48,7 @@ type RecycleDialogState = {
   reviewStatus: TradeOrderItem["reviewStatus"];
   updatedAt: TradeOrderItem["updatedAt"];
   guard: TradeOrderRecycleGuard;
+  finalizePreview: RecycleFinalizePreview | null;
 } | null;
 
 const DESKTOP_COLUMNS =
@@ -496,6 +499,9 @@ export function TradeOrdersSection({
   const [recycleGuardOverrides, setRecycleGuardOverrides] = useState<
     Record<string, TradeOrderRecycleGuard>
   >({});
+  const [recycleFinalizePreviewOverrides, setRecycleFinalizePreviewOverrides] = useState<
+    Record<string, RecycleFinalizePreview | null>
+  >({});
   const [recycleReason, setRecycleReason] =
     useState<TradeOrderRecycleReasonCode>("mistaken_creation");
   const [recyclePending, startRecycleTransition] = useTransition();
@@ -546,6 +552,8 @@ export function TradeOrdersSection({
       reviewStatus: item.reviewStatus,
       updatedAt: item.updatedAt,
       guard: recycleGuardOverrides[item.id] ?? item.recycleGuard,
+      finalizePreview:
+        recycleFinalizePreviewOverrides[item.id] ?? item.finalizePreview ?? null,
     });
   }
 
@@ -583,11 +591,21 @@ export function TradeOrdersSection({
           ...current,
           [recycleDialogState.id]: blockedGuard,
         }));
+        if (result.finalizePreview !== undefined) {
+          setRecycleFinalizePreviewOverrides((current) => ({
+            ...current,
+            [recycleDialogState.id]: result.finalizePreview ?? null,
+          }));
+        }
         setRecycleDialogState((current) =>
           current
             ? {
                 ...current,
                 guard: blockedGuard,
+                finalizePreview:
+                  result.finalizePreview !== undefined
+                    ? result.finalizePreview ?? null
+                    : current.finalizePreview,
               }
             : current,
         );
@@ -825,6 +843,7 @@ export function TradeOrdersSection({
             : null
         }
         guard={recycleDialogState?.guard ?? null}
+        finalizePreview={recycleDialogState?.finalizePreview ?? null}
         reason={recycleReason}
         onReasonChange={setRecycleReason}
         onClose={closeRecycleDialog}

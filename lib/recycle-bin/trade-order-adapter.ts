@@ -7,6 +7,10 @@ import {
   type RecycleTargetType,
 } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import {
+  RECYCLE_ARCHIVE_SNAPSHOT_VERSION,
+  type TradeOrderRecycleArchiveSnapshot,
+} from "@/lib/recycle-bin/archive-payload";
 import type {
   RecycleArchivePayload,
   RecycleFinalizeBlocker,
@@ -32,6 +36,7 @@ type TradeOrderRecycleRecord = {
   finalAmount: Prisma.Decimal;
   receiverNameSnapshot: string;
   receiverPhoneSnapshot: string;
+  receiverAddressSnapshot: string;
   customer: {
     id: string;
     name: string;
@@ -98,6 +103,7 @@ async function getTradeOrderRecord(
       finalAmount: true,
       receiverNameSnapshot: true,
       receiverPhoneSnapshot: true,
+      receiverAddressSnapshot: true,
       customer: {
         select: {
           id: true,
@@ -240,6 +246,74 @@ function summarizeLifecycleCounts(
       tradeOrder._count.codCollectionRecords,
       descendantCounts.codCollectionCount,
     ),
+  };
+}
+
+function maskPhoneSnapshot(value: string) {
+  const normalized = value.trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.length <= 4) {
+    return "****";
+  }
+
+  if (normalized.length <= 7) {
+    return `${normalized.slice(0, 1)}****${normalized.slice(-2)}`;
+  }
+
+  return `${normalized.slice(0, 3)}****${normalized.slice(-4)}`;
+}
+
+function buildTradeOrderArchiveSnapshot(input: {
+  tradeOrder: TradeOrderRecycleRecord;
+  ownerLabel: string;
+  counts: TradeOrderLifecycleCounts;
+  receiverNameMasked: string;
+  receiverPhoneMasked: string;
+  receiverAddressMasked: string;
+}): TradeOrderRecycleArchiveSnapshot {
+  const {
+    tradeOrder,
+    ownerLabel,
+    counts,
+    receiverNameMasked,
+    receiverPhoneMasked,
+    receiverAddressMasked,
+  } = input;
+
+  return {
+    entity: "TRADE_ORDER",
+    snapshotVersion: RECYCLE_ARCHIVE_SNAPSHOT_VERSION,
+    finalAction: "ARCHIVE",
+    objectWeight: "HEAVY",
+    targetMissing: false,
+    tradeOrderId: tradeOrder.id,
+    tradeNo: tradeOrder.tradeNo,
+    customer: {
+      id: tradeOrder.customer.id,
+      name: tradeOrder.customer.name,
+      phoneMasked: maskPhoneSnapshot(tradeOrder.customer.phone),
+      ownerLabel,
+    },
+    tradeStatus: tradeOrder.tradeStatus,
+    reviewStatus: tradeOrder.reviewStatus,
+    finalAmount: tradeOrder.finalAmount.toString(),
+    receiverNameMasked,
+    receiverPhoneMasked,
+    receiverAddressMasked,
+    downstreamAnchors: {
+      salesOrderCount: counts.salesOrderCount,
+      paymentPlanCount: counts.paymentPlanCount,
+      paymentRecordCount: counts.paymentRecordCount,
+      collectionTaskCount: counts.collectionTaskCount,
+      shippingTaskCount: counts.shippingTaskCount,
+      exportLineCount: counts.exportLineCount,
+      logisticsFollowUpCount: counts.logisticsFollowUpCount,
+      codCollectionCount: counts.codCollectionCount,
+    },
   };
 }
 
@@ -698,24 +772,7 @@ export async function archiveTradeOrderTarget(
     return null;
   }
 
-  const tradeOrder = await db.tradeOrder.findUnique({
-    where: {
-      id: input.targetId,
-    },
-    select: {
-      id: true,
-      tradeNo: true,
-      customerId: true,
-      customer: {
-        select: {
-          name: true,
-        },
-      },
-      tradeStatus: true,
-      reviewStatus: true,
-      finalAmount: true,
-    },
-  });
+  const tradeOrder = await getTradeOrderRecord(db, input.targetId);
 
   if (!tradeOrder) {
     return {
@@ -724,14 +781,30 @@ export async function archiveTradeOrderTarget(
       blockerSummary: input.preview.blockerSummary,
       blockers: input.preview.blockers,
       snapshot: {
+        entity: "TRADE_ORDER",
+        snapshotVersion: RECYCLE_ARCHIVE_SNAPSHOT_VERSION,
+        finalAction: "ARCHIVE",
+        objectWeight: "HEAVY",
         tradeOrderId: input.targetId,
         targetMissing: true,
+        tradeNo: null,
+        customer: null,
+        tradeStatus: null,
+        reviewStatus: null,
+        finalAmount: null,
+        receiverNameMasked: null,
+        receiverPhoneMasked: null,
+        receiverAddressMasked: null,
+        downstreamAnchors: null,
       },
     };
   }
 
+  const ownerLabel = await getTradeOrderOwnerLabel(db, tradeOrder);
+  const lifecycleCounts = summarizeLifecycleCounts(tradeOrder);
   const archivedReceiverName = buildArchivedReceiverName(tradeOrder.id);
   const archivedReceiverPhone = buildArchivedReceiverPhone(tradeOrder.id);
+  const archivedReceiverAddress = "已封存地址";
 
   await db.tradeOrder.update({
     where: {
@@ -740,7 +813,7 @@ export async function archiveTradeOrderTarget(
     data: {
       receiverNameSnapshot: archivedReceiverName,
       receiverPhoneSnapshot: archivedReceiverPhone,
-      receiverAddressSnapshot: "已封存地址",
+      receiverAddressSnapshot: archivedReceiverAddress,
     },
   });
 
@@ -749,16 +822,13 @@ export async function archiveTradeOrderTarget(
     archivedAt: new Date().toISOString(),
     blockerSummary: input.preview.blockerSummary,
     blockers: input.preview.blockers,
-    snapshot: {
-      tradeOrderId: tradeOrder.id,
-      tradeNo: tradeOrder.tradeNo,
-      customerId: tradeOrder.customerId,
-      customerName: tradeOrder.customer.name,
-      tradeStatus: tradeOrder.tradeStatus,
-      reviewStatus: tradeOrder.reviewStatus,
-      finalAmount: tradeOrder.finalAmount.toString(),
-      archivedReceiverName,
-      archivedReceiverPhone,
-    },
+    snapshot: buildTradeOrderArchiveSnapshot({
+      tradeOrder,
+      ownerLabel,
+      counts: lifecycleCounts,
+      receiverNameMasked: archivedReceiverName,
+      receiverPhoneMasked: archivedReceiverPhone,
+      receiverAddressMasked: archivedReceiverAddress,
+    }),
   };
 }

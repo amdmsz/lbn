@@ -430,6 +430,10 @@ export function canBatchManageCustomerTags(role: RoleCode) {
   return role === "ADMIN" || role === "SUPERVISOR";
 }
 
+export function canBatchMoveCustomersToRecycleBin(role: RoleCode) {
+  return role === "ADMIN" || role === "SUPERVISOR";
+}
+
 export function getLeadScope(role: RoleCode, userId: string) {
   if (canAccessAllData(role)) {
     return {};

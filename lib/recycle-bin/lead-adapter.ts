@@ -357,14 +357,14 @@ export async function buildLeadPurgeGuard(
   if (lead.ownerId) {
     blockers.push({
       name: "删除前负责人",
-      description: "该线索删除前仍保留负责人，已分配记录会阻断最终清理。",
+      description: "该线索删除前仍保留负责人，已分配记录会阻断永久删除。",
     });
   }
 
   if (lead._count.assignments > 0) {
     blockers.push({
       name: "已分配记录",
-      description: `该线索已产生 ${lead._count.assignments} 条分配记录，不能最终清理。`,
+      description: `该线索已产生 ${lead._count.assignments} 条分配记录，不能再永久删除。`,
     });
   }
 
@@ -413,7 +413,7 @@ export async function buildLeadPurgeGuard(
   if (lead.rolledBackAt || lead.rolledBackBatchId) {
     blockers.push({
       name: "导入回滚审计",
-      description: "该线索已进入导入回滚审计链，不能再最终清理。",
+      description: "该线索已进入导入回滚审计链，不能再永久删除。",
     });
   }
 

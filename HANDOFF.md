@@ -1,5 +1,5 @@
 # HANDOFF
-更新时间：2026-04-10
+更新时间：2026-04-18
 
 ## 当前交接结论
 
@@ -25,6 +25,7 @@
 - `UI_ENTRYPOINTS.md`
 - `STAGE_FREEZE_2026-04-03.md`
 - `docs/deployment-baseline.md`
+- `docs/recycle-auto-finalize-runbook.md`
 
 为准。
 
@@ -180,28 +181,14 @@
 - Phase 2 已完成：发货执行 supplier 工作池首版
 - Phase 3 已完成：交易单 / 批次记录收口与跨视图联动
 
-### RecycleBinEntry Schema Milestone Baseline
+### Recycle 主线
 
-- 当前商品主数据与 `LiveSession` 已完成危险动作语义、blocker 预检与确认弹层基线，但这仍然只属于 guard / dialog 层
-- 真实回收站如果继续停留在现状，将无法表达：
-  - 哪些对象当前仍在回收站中
-  - 谁删除的、为何删除、何时到期
-  - 恢复 / 永久删除的真实状态
-- 因此下一步必须作为新的 schema milestone 推进，而不是继续以 UI 小尾项方式延后
-- 当前确认采用统一 `RecycleBinEntry` 中心表方案，不再并行讨论“各模型自带 deletedAt”方案
-- 该 milestone 第一批只覆盖：
-  - `Product`
-  - `ProductSku`
-  - `Supplier`
-  - `LiveSession`
-- 第一批实施顺序固定为：
-  1. schema
-  2. repository + adapter
-  3. moveToRecycleBin
-  4. restore
-  5. purge
-  6. 最后再做 `/recycle-bin` 页面
-- 不要先做回收站页面，也不要把 `enabled / disabled`、`取消 / 归档`、现有 guard / dialog 误当作真实回收站状态
+- `RecycleBinEntry` 已经是当前已接入域的真实持久化回收站基线，不再停留在 guard / dialog 层
+- `/recycle-bin` 已支持 `ACTIVE / ARCHIVED / PURGED / RESTORED`、结构化详情、导出与审计检索
+- `Customer / TradeOrder` 已完成双终态 lifecycle、业务页 finalize 视角、grouped blocker explanation 与 archive snapshotVersion=2
+- `Lead` 与商品主数据 / 直播场次等已接入域继续按现有 restore / purge 语义进入统一回收站
+- auto-finalize 已具备真实执行入口、dry-run、stdout summary、alert code、runbook 与 deployment / staging 文档
+- 当前 recycle 主线不再缺研发基建，剩余重点是 staging 演练、生产调度接线和人工核对
 
 ---
 
@@ -410,271 +397,62 @@
 
 ---
 
-## 14. Customer RecycleBinEntry Planning Addendum
+## 14. Recycle 主线最终交接结论
 
-当前对 `Customer recycle` 的交接结论已经固定如下：
+当前这条线已经进入“研发收尾完成，剩余运维执行”的状态。
 
-- `Customer recycle` 只删除误建轻客户。
-- `Customer recycle` 不替代 `/customers/public-pool` ownership lifecycle。
-- `Customer recycle` 不替代 `DORMANT / LOST / BLACKLISTED`。
-- `Customer recycle` 不替代 merge / merge release。
-- 当前这一步只确认 `Customer` 的 planning 与 service contract，不展开 `Lead / TradeOrder / SalesOrder`。
+已完成内容：
 
-轻客户 / 重客户固定边界：
+- 真实持久化回收站已经覆盖当前已接入域，并统一汇入 `/recycle-bin`
+- `/recycle-bin` 已支持 `ACTIVE / ARCHIVED / PURGED / RESTORED`、结构化历史详情、导出与审计检索
+- `Customer / TradeOrder` 已完成双终态 lifecycle、业务页 finalize 视角、grouped blocker explanation 与 archive snapshotVersion=2
+- `Customer` 的详情页、列表 inline、批量回收、批量标签、跨页选择已经收口
+- `TradeOrder` 的业务页 recycle 入口与 `/recycle-bin?tab=trade-orders` finalize 视角已经收口
+- `Lead` 与商品主数据 / 直播场次等已接入域继续使用现有 restore / purge 语义纳入统一回收站
+- auto-finalize 已具备真实执行入口、dry-run、stdout summary、alert code、runbook 与 deployment / staging 文档
 
-- 轻客户：仅有基础识别信息，最多带当前 `ownerId`，仍处于 `ACTIVE + PRIVATE`，尚未进入 ownership、公海、跟进、成交、支付、履约、物流、归并链。
-- 重客户：只要进入以下任一链路，就不能再按误建客户删除：
-  - ownership lifecycle / public-pool / claim-lock
-  - 销售跟进执行链
-  - 成交 / 资金 / 履约 / 物流链
-  - merge / import 审计链
-- `ownerId` 单独存在不阻断 move；否则手工误建客户缺少纠错空间。
+当前有效规则：
 
-move guard 固定返回口径：
-
-- 返回：
-  - `mode = move`
-  - `decision = movable | blocked`
-  - `summary`
-  - `targetSnapshot`
-  - `blockers`
-  - `blockerGroups`
-- `targetSnapshot` 至少包括：
-  - `targetType = CUSTOMER`
-  - `targetId`
-  - `name`
-  - `phone`
-  - `status`
-  - `ownershipMode`
-  - `ownerLabel`
-- `blockers[]` 至少包括：
-  - `code`
-  - `name`
-  - `group`
-  - `description`
-  - `suggestedAction`
-- move 允许范围固定为：
-  - `status = ACTIVE`
-  - `ownershipMode = PRIVATE`
-  - 无公海字段
-  - 无 ownership event
-  - 无跟进痕迹
-  - 无订单 / 资金 / 履约 / 物流链
-  - 无 merge 审计链
-- `DORMANT / LOST / BLACKLISTED` 必须阻断 move。
-
-restore guard 固定返回口径：
-
-- 返回：
-  - `mode = restore`
-  - `decision = restorable | blocked`
-  - `summary`
-  - `targetSnapshot`
-  - `blockers`
-  - `blockerGroups`
-- restore 固定规则：
-  - `DORMANT / LOST / BLACKLISTED` 阻断 move，但不阻断 restore。
-  - 跟进、成交、支付、履约、物流痕迹不阻断 restore。
-  - restore 仅保留最小硬阻断：
-    - `对象缺失`
-    - `已完成归并且当前对象不应恢复为独立客户`
-
-purge blocker 固定返回口径：
-
-- 返回：
-  - `mode = purge`
-  - `decision = purgeable | blocked`
-  - `summary`
-  - `targetSnapshot`
-  - `blockers`
-  - `blockerGroups`
-- purge 固定规则：
-  - `purge` 是最严 guard。
-  - move blocker 中的阻断项默认同时阻断 purge。
-  - `关联线索`、`客户标签` 额外阻断 purge。
-
-blocker 分组与建议动作固定为：
-
-- `对象状态`
-  - blocker：`对象缺失`
-  - suggestedAction：确认原始客户记录是否仍存在。
-- `客户生命周期`
-  - blocker：`非 ACTIVE 客户`
-  - suggestedAction：改走 `DORMANT / LOST / BLACKLISTED` 状态治理。
-- `公海与归属链`
-  - blocker：`公海客户`、`锁定客户`、`已有归属历史`
-  - suggestedAction：改走 `/customers/public-pool` ownership lifecycle。
-- `销售跟进痕迹`
-  - blocker：`已有有效跟进时间`、`跟进任务`、`通话记录`、`微信记录`、`直播邀请`
-  - suggestedAction：改走跟进终止、冻结、失效或公海治理。
-- `成交与资金链`
-  - blocker：`历史订单`、`成交主单`、`礼品记录`、`支付计划`、`支付记录`、`催收任务`
-  - suggestedAction：在订单 / 支付域继续治理，不删除客户。
-- `履约与物流链`
-  - blocker：`发货任务`、`物流跟进`、`COD 回款记录`
-  - suggestedAction：在履约 / 物流链继续治理，不删除客户。
-- `归并与导入审计`
-  - blocker：`归并审计链`、`关联线索`、`客户标签`
-  - suggestedAction：保留 merge / import 审计上下文，不做 recycle 清理。
-- `其他阻断`
-  - suggestedAction：保留服务端原始返回，不做前端重写。
-
-`/recycle-bin?tab=customers` 固定规划口径：
-
-- tab：`customers`
-- targetType：`customer`
-- 列表字段至少包括：
-  - `name`
-  - `phone`
-  - `status`
-  - `level`
-  - `ownershipMode`
-  - `ownerLabel`
-  - `deletedAt`
-  - `deletedBy`
-  - `deleteReason`
-  - `blockerSummary`
-- 风险补充字段至少包括：
-  - `lastEffectiveFollowUpAt`
-  - `tradeOrderSummary.approvedCount`
-  - `importSummary.linkedLeadCount`
-
-交接提醒：
-
-- 服务端 guard 继续是唯一真相来源；前端只消费 `decision / blockers / blockerGroups`，不在组件里重写客户可删规则。
-- 当前只进入实现前评审，不在这一步重开 schema、旧 migration 或页面接线。
-
----
-
-## 15. Customer / TradeOrder Dual-Terminal Recycle Lifecycle Addendum
-
-本节为当前有效交接口径，覆盖上一节仅面向 `Customer` 的单对象 recycle planning。
-
-交接结论：
-
-- `move` 与 `finalize` 解耦。
-- `move` 的新语义是进入 `3` 天冷静期，不等于将来一定可以 `PURGE`。
-- `finalize` 固定拆成两个终态：
-  - `PURGE`
-  - `ARCHIVE`
-- `Customer` 与 `TradeOrder` 的 heavy 对象允许先进入 recycle，但最终只允许封存 / 脱敏归档，不允许物理删除。
-- `Customer recycle` 不替代 `/customers/public-pool` ownership lifecycle，不替代 `DORMANT / LOST / BLACKLISTED`，不替代 merge / merge release。
-- `TradeOrder recycle` 不替代取消 / 作废 / 关单，也不替代审核、拆单、支付、履约、物流链治理。
-
-为什么不能“有关联也直接硬删”：
-
-- `Customer` 一旦进入 ownership、公海、跟进、成交、支付、履约、物流、merge、import 审计链，硬删会破坏这些业务链的主锚点。
-- `TradeOrder` 一旦进入审核、拆单、支付、催收、履约、导出、物流、COD 链，硬删会破坏成交主单与执行子链的真相链。
-- 最终只会出现两种错误：
-  - 级联删掉仍需保留的业务真相
-  - 留下没有主锚点的孤儿记录
-- 因此 move 可以放宽，但 finalize 必须拆成 `PURGE / ARCHIVE` 两条终态。
-
-为什么 `ARCHIVE` 不能伪装成 `PURGED`：
-
-- `PURGED` 表示对象与其可删上下文已经被真实清除。
-- `ARCHIVE` 表示对象退出主工作台，但仍保留审计锚点、业务摘要或脱敏历史壳。
-- 如果把 `ARCHIVE` 伪装成 `PURGED`，后续无法区分“真的删掉了”与“只是不再作为活跃对象返回”，会污染审计和生命周期语义。
-
-Customer 规则：
-
-- light Customer：
-  - 误建轻客户。
-  - 仅有基础识别信息，最多带当前 `ownerId`、客户标签等弱关联。
-  - 仍处于 `ACTIVE + PRIVATE`。
-  - 尚未进入 ownership、公海、claim lock、跟进、成交、支付、履约、物流、merge、import 审计链。
-- heavy Customer：
-  - 只要进入以下任一链路即视为 heavy：
-  - `ownership lifecycle / public-pool / claim-lock / lastOwner`
-  - `followUp / call / wechat / live invitation`
-  - `tradeOrder / paymentPlan / paymentRecord / collectionTask`
-  - `shippingTask / logisticsFollowUp / COD`
-  - `merge / import audit / linked lead`
-- 仍应阻断 move 的 Customer：
-  - `DORMANT / LOST / BLACKLISTED`
-  - `PUBLIC / LOCKED`
-  - 已进入 `/customers/public-pool`
-  - 已进入 merge 主流程
-- `Customer move` 成功后的语义：
-  - 对象进入 `3` 天冷静期。
-  - 不代表 `3` 天后一定能 purge。
-  - 到期后必须以最新服务端真相重算 `PURGE` 或 `ARCHIVE`。
-- `Customer finalize`：
+- `Customer recycle` 只删误建 light Customer，不替代 public-pool、`DORMANT / LOST / BLACKLISTED`、merge
+- `TradeOrder recycle` 只删误建草稿单，不替代取消 / 作废 / 关单，也不替代审核、支付、履约、物流治理
+- `move` 的语义是进入 `3` 天冷静期，不等于未来一定能 `PURGE`
+- `finalize` 必须按最新服务端真相重算：
   - light：`PURGE`
   - heavy：`ARCHIVE`
-- `Customer ARCHIVE`：
-  - 保留 customer id 与下游锚点。
-  - 不再回到 `/customers` 主工作台。
-  - 对 `phone / wechatId / address / remark` 做脱敏或清空。
-  - `name` 仅保留最小可读掩码。
+- `restore` 只允许发生在冷静期内；一旦进入 `ARCHIVED / PURGED`，不再恢复回 active 对象
+- `ARCHIVE` 与 `PURGED` 保持严格分离；前者保留审计锚点、结构化摘要与脱敏快照，后者代表真实物理删除
+- `historyArchive.source = SNAPSHOT_V2 | LEGACY_FALLBACK | UNAVAILABLE` 已是查询层稳定 contract；`Customer / TradeOrder` 历史详情优先读取 `snapshotVersion=2`
+- `ACTIVE | ARCHIVED` 已统一视为主工作台不可见，并作为相关 stale write 的写入互斥条件
 
-TradeOrder 规则：
+已冻结边界：
 
-- light TradeOrder：
-  - 纯误建草稿单。
-  - `tradeStatus = DRAFT`。
-  - 尚未生成 `SalesOrder`。
-  - 尚未进入审核、支付、催收、履约、导出、物流、COD 链。
-- heavy TradeOrder：
-  - 满足以下任一条件即视为 heavy：
-  - 非 `DRAFT`
-  - 已生成 `SalesOrder`
-  - 已有 `paymentPlan / paymentRecord / collectionTask`
-  - 已有 `shippingTask / exportLine / logisticsFollowUp / COD`
-  - 已进入审核、驳回、取消、作废、关闭等正式业务语义
-- TradeOrder move 放宽边界：
-  - “有关联”本身不再自动等于不能 move。
-  - 但仍不应把正在活跃支付、履约、物流执行中的订单直接放进 recycle，否则会破坏 `/fulfillment` 的当前执行真相。
-  - move 放宽只适用于存在历史关联但已不再承担活跃执行主视图职责的对象。
-- `TradeOrder finalize`：
-  - light：`PURGE`
-  - heavy：`ARCHIVE`
-- `TradeOrder ARCHIVE`：
-  - 保留 `tradeNo / customer snapshot / tradeStatus / reviewStatus / finalAmount` 及对子单、支付、催收、履约、导出、物流、COD 的锚点。
-  - 对 `receiverName / receiverPhone / 地址快照` 做脱敏。
-  - 不再作为主工作台活跃对象返回。
+- 不再为 recycle 主线扩新域、新页面或新业务功能
+- 不再改 schema，除非出现阻断级错误
+- 不再改双终态 lifecycle 顶层语义，除非发现实现与当前规则不一致
+- 不重开旧 migration 语义，不回退到单终态回收站口径
+- 前端继续只消费 guard / preview / history contract，不在组件里重写规则
 
-双终态 lifecycle contract：
+仍然是人工 / 运维步骤的部分：
 
-- `move`
-  - 新语义：进入 `3` 天冷静期。
-  - 不等于将来一定能 `PURGE`。
-- `restore`
-  - 只允许在对象仍处于回收站冷静期、且尚未完成最终 `PURGE` 或 `ARCHIVE` 前执行。
-  - 到达最终 `PURGE` 或最终 `ARCHIVE` 后，不再恢复回 active 对象。
-  - `Customer` 补充：`DORMANT / LOST / BLACKLISTED` 阻断 move，但不阻断冷静期内 restore。
-  - `TradeOrder` 补充：restore 不回滚原有取消 / 驳回 / 关闭等业务真相，只撤销 recycle 态。
-- `finalize`
-  - 触发点：进入回收站满 `3` 天。
-  - 判断源：必须基于“最新服务端真相”重算。
-  - 禁止只看 move 当时快照。
-  - 固定终态：
-    - `PURGE`
-    - `ARCHIVE`
-  - 判断规则：
-    - 最新真相仍为 light：`PURGE`
-    - 最新真相已为 heavy：`ARCHIVE`
-- “提前永久删除”
-  - 只对 light 对象开放。
-  - 仅管理员可见。
-  - heavy 对象不显示“永久删除”。
+- staging 按 `docs/recycle-auto-finalize-runbook.md` 做一次真实 dry-run 演练并留档
+- production 配置 `RECYCLE_AUTO_FINALIZE_ACTOR_ID`、batch limit、failed/backlog 告警阈值与日志落盘
+- 把 `npm run worker:recycle-auto-finalize` 接到真实调度器
+- 按 `docs/staging-checklist.md` 与 `docs/deployment-baseline.md` 做首次上线前人工核对
 
-`/recycle-bin` 展示 contract：
+生产上线前最后人工动作：
 
-- `customers` 与 `trade-orders` tab 都需要展示：
-  - `可 purge`
-  - `仅封存`
-  - `剩余时间`
-- 剩余时间固定用“距最终处理”口径展示。
-- heavy 对象只显示：
-  - `3 天后仅封存`
-- blocker / summary 不再只回答“能不能删”，而要明确回答：
-  - 为什么最终可 purge
-  - 为什么最终仅封存
+1. 确认 `DATABASE_URL`、`NEXTAUTH_URL`、`RECYCLE_AUTO_FINALIZE_ACTOR_ID` 指向正确环境与专用 `ACTIVE ADMIN`
+2. 在 staging 先跑一次 `npm run worker:recycle-auto-finalize -- --dry-run`，确认 `stdout_summary.dryRun = true` 且未落库
+3. 配置 production 调度模板、非零退出码告警与 backlog 告警
+4. 首次真实执行后人工核对最近一次 `OperationLog` 与 `/recycle-bin` 终态变化
 
-交接提醒：
+以后如果再接这条线，应该从这里继续：
 
-- 这一步只固定规则和 contract，不重开 schema，不改旧 migration，不顺手改现有 recycle 实现。
-- 后续实现必须先统一 lifecycle 语义，再做页面接线、按钮语义和最终处理执行。
-- 服务端 guard 与 finalize 判定继续是唯一真相来源，前端只消费结果，不在组件里重写轻重对象判断。
-- 当前只覆盖 `Customer / TradeOrder`，不顺手展开 `Lead / SalesOrder`。
+- 先读：
+  - `PLANS.md`
+  - `docs/recycle-auto-finalize-runbook.md`
+  - `docs/staging-checklist.md`
+  - `app/(dashboard)/recycle-bin/*`
+  - `lib/recycle-bin/*`
+  - `scripts/recycle-auto-finalize.ts`
+- 默认不要重做 schema / lifecycle 规划；除非有新的明确 milestone，否则这条线只需要继续运维落地和小范围一致性维护

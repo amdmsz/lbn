@@ -1,4 +1,9 @@
-import type { LeadStatus, RecycleDomain, RecycleTargetType } from "@prisma/client";
+import {
+  RecycleEntryStatus,
+  type LeadStatus,
+  type RecycleDomain,
+  type RecycleTargetType,
+} from "@prisma/client";
 import { getParamValue } from "@/lib/action-notice";
 import {
   canAccessCustomerModule,
@@ -18,11 +23,20 @@ import {
   listVisibleCustomerRecycleTargetIds,
   parseCustomerRecycleSnapshot,
 } from "@/lib/customers/recycle";
+import { buildCustomerRecycleBlockerGroups } from "@/lib/customers/recycle-blocker-explanation";
 import { prisma } from "@/lib/db/prisma";
 import {
   buildCustomerPurgeGuard,
   buildCustomerRestoreGuard,
 } from "@/lib/recycle-bin/customer-adapter";
+import {
+  RECYCLE_ARCHIVE_SNAPSHOT_VERSION,
+  parseCustomerRecycleArchiveSnapshot,
+  parseRecycleArchivePayload,
+  parseTradeOrderRecycleArchiveSnapshot,
+  type CustomerRecycleArchiveSnapshot,
+  type TradeOrderRecycleArchiveSnapshot,
+} from "@/lib/recycle-bin/archive-payload";
 import {
   buildLeadPurgeGuard,
   buildLeadRestoreGuard,
@@ -40,11 +54,13 @@ import {
   buildTradeOrderRestoreGuard,
 } from "@/lib/recycle-bin/trade-order-adapter";
 import {
-  countActiveRecycleEntries,
-  listActiveRecycleEntries,
+  countRecycleEntries,
+  listRecycleEntries,
 } from "@/lib/recycle-bin/repository";
 import { previewRecycleBinFinalize } from "@/lib/recycle-bin/lifecycle";
+import { buildTradeOrderRecycleBlockerGroups } from "@/lib/trade-orders/recycle-blocker-explanation";
 import type {
+  RecycleArchivePayload,
   RecycleFinalizePreview,
   RecycleLifecycleActor,
   RecyclePurgeGuard,
@@ -59,6 +75,12 @@ export type RecycleBinTabValue =
   | "trade-orders"
   | "customers";
 export type RecycleBinDeletedRangeValue = "all" | "today" | "last_7d" | "last_30d";
+export type RecycleBinResolvedRangeValue = RecycleBinDeletedRangeValue;
+export type RecycleBinEntryStatusValue =
+  | "active"
+  | "archived"
+  | "purged"
+  | "restored";
 export type RecycleBinFilterStateValue =
   | "all"
   | "restorable"
@@ -73,9 +95,19 @@ export type RecycleBinTargetFilterValue =
   | "lead"
   | "trade_order"
   | "customer";
+export type RecycleBinHistoryFinalActionFilterValue =
+  | "all"
+  | "archive"
+  | "purge"
+  | "restore";
+export type RecycleBinHistoryArchiveSourceFilterValue =
+  | "all"
+  | "snapshot_v2"
+  | "legacy_fallback"
+  | "unavailable";
 
 type RecycleBinListEntry = Awaited<
-  ReturnType<typeof listActiveRecycleEntries>
+  ReturnType<typeof listRecycleEntries>
 >[number];
 
 type RecycleBinTab = {
@@ -85,10 +117,20 @@ type RecycleBinTab = {
   count: number;
 };
 
+type RecycleBinStatusTab = {
+  value: RecycleBinEntryStatusValue;
+  label: string;
+  href: string;
+  count: number;
+};
+
 type RecycleBinSummary = {
   totalCount: number;
   restorableCount: number;
   purgeBlockedCount: number;
+  resolvedCount: number;
+  resolvedActorCount: number;
+  archivePayloadCount: number;
 };
 
 export type RecycleBinFilterOption = {
@@ -98,10 +140,15 @@ export type RecycleBinFilterOption = {
 };
 
 export type RecycleBinFilters = {
+  entryStatus: RecycleBinEntryStatusValue;
   deletedRange: RecycleBinDeletedRangeValue;
   deletedById: string;
   state: RecycleBinFilterStateValue;
   targetType: RecycleBinTargetFilterValue;
+  resolvedRange: RecycleBinResolvedRangeValue;
+  resolvedById: string;
+  finalAction: RecycleBinHistoryFinalActionFilterValue;
+  historyArchiveSource: RecycleBinHistoryArchiveSourceFilterValue;
 };
 
 export type RecycleBinBlockerGroup = {
@@ -114,8 +161,23 @@ export type RecycleBinBlockerGroup = {
   }>;
 };
 
+export type RecycleBinHistoryArchiveSource =
+  | "SNAPSHOT_V2"
+  | "LEGACY_FALLBACK"
+  | "UNAVAILABLE";
+
+export type RecycleBinHistoryArchiveContract = {
+  source: RecycleBinHistoryArchiveSource;
+  snapshotVersion: number | null;
+  archivePayload: RecycleArchivePayload | null;
+  customerSnapshot: CustomerRecycleArchiveSnapshot | null;
+  tradeOrderSnapshot: TradeOrderRecycleArchiveSnapshot | null;
+};
+
 export type RecycleBinListItem = {
   entryId: string;
+  entryStatus: RecycleEntryStatus;
+  entryStatusLabel: string;
   targetType: RecycleBinListEntry["targetType"];
   targetTypeLabel: string;
   name: string;
@@ -126,6 +188,12 @@ export type RecycleBinListItem = {
   deleteReasonText: string | null;
   deletedAtLabel: string;
   deletedByLabel: string;
+  resolvedAtLabel: string | null;
+  resolvedByLabel: string | null;
+  resolutionActionLabel: string | null;
+  resolutionSummary: string | null;
+  archivePayloadJsonText: string | null;
+  historyArchive: RecycleBinHistoryArchiveContract | null;
   blockerSummary: string;
   restoreSummary: string;
   purgeSummary: string;
@@ -136,6 +204,7 @@ export type RecycleBinListItem = {
   canPurge: boolean;
   purgeRequiresAdmin: boolean;
   finalActionPreview: RecycleFinalizePreview | null;
+  finalizeSummary: string | null;
   finalActionLabel: string | null;
   remainingTimeLabel: string | null;
   finalizeBlockerGroups: RecycleBinBlockerGroup[];
@@ -173,11 +242,15 @@ function getSnapshotString(entry: RecycleBinListEntry, key: string) {
 export type RecycleBinPageData = {
   activeTab: RecycleBinTabValue;
   tabs: RecycleBinTab[];
+  statusTabs: RecycleBinStatusTab[];
   summary: RecycleBinSummary;
   items: RecycleBinListItem[];
   filters: RecycleBinFilters;
   deletedByOptions: RecycleBinFilterOption[];
+  resolvedByOptions: RecycleBinFilterOption[];
   targetTypeOptions: RecycleBinFilterOption[];
+  finalActionOptions: RecycleBinFilterOption[];
+  historyArchiveSourceOptions: RecycleBinFilterOption[];
   hasActiveFilters: boolean;
   resetHref: string;
 };
@@ -253,9 +326,37 @@ function getDeletedByLabel(entry: RecycleBinListEntry) {
   return `@${entry.deletedBy.username}`;
 }
 
+function getResolvedByLabel(entry: RecycleBinListEntry) {
+  if (!entry.resolvedBy) {
+    return null;
+  }
+
+  if (entry.resolvedBy.name?.trim()) {
+    return entry.resolvedBy.name.trim();
+  }
+
+  return `@${entry.resolvedBy.username}`;
+}
+
+function getEntryStatusLabel(status: RecycleEntryStatus) {
+  switch (status) {
+    case RecycleEntryStatus.ACTIVE:
+      return "ACTIVE";
+    case RecycleEntryStatus.ARCHIVED:
+      return "ARCHIVED";
+    case RecycleEntryStatus.PURGED:
+      return "PURGED";
+    case RecycleEntryStatus.RESTORED:
+      return "RESTORED";
+    default:
+      return "UNKNOWN";
+  }
+}
+
 function buildRecycleBinHref(tab: RecycleBinTabValue, filters: RecycleBinFilters) {
   const params = new URLSearchParams();
   params.set("tab", tab);
+  params.set("entryStatus", filters.entryStatus);
 
   if (filters.deletedRange !== "all") {
     params.set("deletedRange", filters.deletedRange);
@@ -296,7 +397,42 @@ function buildRecycleBinHref(tab: RecycleBinTabValue, filters: RecycleBinFilters
     params.set("targetType", targetTypeValue);
   }
 
+  if (filters.entryStatus !== "active") {
+    if (filters.resolvedRange !== "all") {
+      params.set("resolvedRange", filters.resolvedRange);
+    }
+
+    if (filters.resolvedById) {
+      params.set("resolvedById", filters.resolvedById);
+    }
+
+    if (filters.finalAction !== "all") {
+      params.set("finalAction", filters.finalAction);
+    }
+
+    if (filters.historyArchiveSource !== "all") {
+      params.set("historyArchiveSource", filters.historyArchiveSource);
+    }
+  }
+
   return `/recycle-bin?${params.toString()}`;
+}
+
+function buildRecycleBinStatusHref(
+  tab: RecycleBinTabValue,
+  filters: RecycleBinFilters,
+  entryStatus: RecycleBinEntryStatusValue,
+) {
+  return buildRecycleBinHref(tab, {
+    ...filters,
+    entryStatus,
+    state: entryStatus === "active" ? filters.state : "all",
+    resolvedRange: entryStatus === "active" ? "all" : filters.resolvedRange,
+    resolvedById: entryStatus === "active" ? "" : filters.resolvedById,
+    finalAction: entryStatus === "active" ? "all" : filters.finalAction,
+    historyArchiveSource:
+      entryStatus === "active" ? "all" : filters.historyArchiveSource,
+  });
 }
 
 function buildTabs(input: {
@@ -362,6 +498,42 @@ function buildTabs(input: {
   return tabs;
 }
 
+function buildStatusTabs(input: {
+  activeTab: RecycleBinTabValue;
+  filters: RecycleBinFilters;
+  activeCount: number;
+  archivedCount: number;
+  purgedCount: number;
+  restoredCount: number;
+}) {
+  return [
+    {
+      value: "active" as const,
+      label: "ACTIVE",
+      href: buildRecycleBinStatusHref(input.activeTab, input.filters, "active"),
+      count: input.activeCount,
+    },
+    {
+      value: "archived" as const,
+      label: "ARCHIVED",
+      href: buildRecycleBinStatusHref(input.activeTab, input.filters, "archived"),
+      count: input.archivedCount,
+    },
+    {
+      value: "purged" as const,
+      label: "PURGED",
+      href: buildRecycleBinStatusHref(input.activeTab, input.filters, "purged"),
+      count: input.purgedCount,
+    },
+    {
+      value: "restored" as const,
+      label: "RESTORED",
+      href: buildRecycleBinStatusHref(input.activeTab, input.filters, "restored"),
+      count: input.restoredCount,
+    },
+  ];
+}
+
 function getDomainFromTab(tab: RecycleBinTabValue): RecycleDomain {
   if (tab === "master-data") {
     return "PRODUCT_MASTER_DATA";
@@ -386,10 +558,36 @@ function normalizeDeletedRange(value: string): RecycleBinDeletedRangeValue {
   return value === "today" || value === "last_7d" || value === "last_30d" ? value : "all";
 }
 
+function normalizeEntryStatus(value: string): RecycleBinEntryStatusValue {
+  return value === "archived" ||
+    value === "purged" ||
+    value === "restored"
+    ? value
+    : "active";
+}
+
 function normalizeFilterState(value: string): RecycleBinFilterStateValue {
   return value === "restorable" ||
     value === "restore_blocked" ||
     value === "purge_blocked"
+    ? value
+    : "all";
+}
+
+function normalizeHistoryFinalAction(
+  value: string,
+): RecycleBinHistoryFinalActionFilterValue {
+  return value === "archive" || value === "purge" || value === "restore"
+    ? value
+    : "all";
+}
+
+function normalizeHistoryArchiveSource(
+  value: string,
+): RecycleBinHistoryArchiveSourceFilterValue {
+  return value === "snapshot_v2" ||
+    value === "legacy_fallback" ||
+    value === "unavailable"
     ? value
     : "all";
 }
@@ -423,12 +621,52 @@ function parseFilters(
   activeTab: RecycleBinTabValue,
   searchParams?: Record<string, string | string[] | undefined>,
 ): RecycleBinFilters {
+  const entryStatus = normalizeEntryStatus(getParamValue(searchParams?.entryStatus));
+
   return {
+    entryStatus,
     deletedRange: normalizeDeletedRange(getParamValue(searchParams?.deletedRange)),
     deletedById: getParamValue(searchParams?.deletedById),
-    state: normalizeFilterState(getParamValue(searchParams?.state)),
+    state:
+      entryStatus === "active"
+        ? normalizeFilterState(getParamValue(searchParams?.state))
+        : "all",
     targetType: normalizeTargetType(getParamValue(searchParams?.targetType), activeTab),
+    resolvedRange:
+      entryStatus === "active"
+        ? "all"
+        : normalizeDeletedRange(getParamValue(searchParams?.resolvedRange)),
+    resolvedById:
+      entryStatus === "active" ? "" : getParamValue(searchParams?.resolvedById),
+    finalAction:
+      entryStatus === "active"
+        ? "all"
+        : normalizeHistoryFinalAction(getParamValue(searchParams?.finalAction)),
+    historyArchiveSource:
+      entryStatus === "active"
+        ? "all"
+        : normalizeHistoryArchiveSource(
+            getParamValue(searchParams?.historyArchiveSource),
+          ),
   };
+}
+
+function getEntryStatusStatuses(
+  entryStatus: RecycleBinEntryStatusValue,
+): readonly RecycleEntryStatus[] {
+  if (entryStatus === "archived") {
+    return [RecycleEntryStatus.ARCHIVED];
+  }
+
+  if (entryStatus === "purged") {
+    return [RecycleEntryStatus.PURGED];
+  }
+
+  if (entryStatus === "restored") {
+    return [RecycleEntryStatus.RESTORED];
+  }
+
+  return [RecycleEntryStatus.ACTIVE];
 }
 
 function matchesDeletedRange(
@@ -452,6 +690,21 @@ function matchesDeletedRange(
   threshold.setDate(threshold.getDate() - days);
 
   return deletedAt >= threshold;
+}
+
+function matchesResolvedRange(
+  resolvedAt: Date | null,
+  resolvedRange: RecycleBinResolvedRangeValue,
+) {
+  if (resolvedRange === "all") {
+    return true;
+  }
+
+  if (!resolvedAt) {
+    return false;
+  }
+
+  return matchesDeletedRange(resolvedAt, resolvedRange);
 }
 
 function getTargetFilterValue(targetType: RecycleTargetType): RecycleBinTargetFilterValue {
@@ -486,6 +739,10 @@ function matchesStateFilter(
   item: RecycleBinListItem,
   state: RecycleBinFilterStateValue,
 ) {
+  if (item.entryStatus !== RecycleEntryStatus.ACTIVE) {
+    return true;
+  }
+
   switch (state) {
     case "restorable":
       return item.canRestore;
@@ -509,6 +766,31 @@ function matchesStateFilter(
     default:
       return true;
   }
+}
+
+function matchesFinalActionFilter(
+  item: RecycleBinListItem,
+  finalAction: RecycleBinHistoryFinalActionFilterValue,
+) {
+  if (finalAction === "all") {
+    return true;
+  }
+
+  return getHistoryFinalActionFilterValue(item.resolutionActionLabel) === finalAction;
+}
+
+function matchesHistoryArchiveSourceFilter(
+  item: RecycleBinListItem,
+  historyArchiveSource: RecycleBinHistoryArchiveSourceFilterValue,
+) {
+  if (historyArchiveSource === "all") {
+    return true;
+  }
+
+  return (
+    getHistoryArchiveSourceFilterValue(item.historyArchive?.source ?? "UNAVAILABLE") ===
+    historyArchiveSource
+  );
 }
 
 async function buildRestoreGuard(
@@ -621,20 +903,20 @@ function buildBlockerSummary(input: {
   canActorPurge: boolean;
 }) {
   if (!input.restoreGuard.canRestore && !input.purgeGuard.canPurge) {
-    return `恢复受阻：${input.restoreGuard.blockerSummary}；永久删除受阻：${input.purgeGuard.blockerSummary}`;
+    return `恢复受阻：${input.restoreGuard.blockerSummary}；清理受阻：${input.purgeGuard.blockerSummary}`;
   }
 
   if (!input.restoreGuard.canRestore) {
     return input.canActorPurge
-      ? `恢复受阻：${input.restoreGuard.blockerSummary}；当前允许永久删除`
-      : `恢复受阻：${input.restoreGuard.blockerSummary}；永久删除仅管理员可执行`;
+      ? `恢复受阻：${input.restoreGuard.blockerSummary}；当前可执行永久删除`
+      : `恢复受阻：${input.restoreGuard.blockerSummary}；当前清理动作仅管理员可执行`;
   }
 
   if (!input.purgeGuard.canPurge) {
-    return `可恢复；永久删除受阻：${input.purgeGuard.blockerSummary}`;
+    return `可恢复；清理受阻：${input.purgeGuard.blockerSummary}`;
   }
 
-  return input.canActorPurge ? "可恢复，且可永久删除" : "可恢复；永久删除仅管理员可执行";
+  return input.canActorPurge ? "可恢复，且可执行永久删除" : "可恢复；清理动作仅管理员可执行";
 }
 
 function formatRemainingTimeLabel(expiresAt: string, isExpired: boolean) {
@@ -707,6 +989,177 @@ function buildCustomerEarlyPurgeSummary(input: {
   return input.canEarlyPurge ? "当前可提前永久删除。" : "仅管理员可提前永久删除。";
 }
 
+function supportsFinalizePreview(targetType: RecycleBinListEntry["targetType"]) {
+  return targetType === "CUSTOMER" || targetType === "TRADE_ORDER";
+}
+
+function buildTradeOrderRecycleBlockerSummary(input: {
+  restoreGuard: RecycleRestoreGuard;
+  preview: RecycleFinalizePreview;
+  isExpired: boolean;
+  canFinalizeNow: boolean;
+}) {
+  const restoreSummary = input.restoreGuard.canRestore
+    ? "可恢复"
+    : `恢复受阻：${input.restoreGuard.blockerSummary}`;
+
+  if (input.isExpired) {
+    return `${restoreSummary}；${
+      input.canFinalizeNow
+        ? `已到最终处理窗口：${input.preview.finalAction}`
+        : `已到最终处理窗口：仅管理员可执行 ${input.preview.finalAction}`
+    }`;
+  }
+
+  if (input.preview.finalAction === "ARCHIVE") {
+    return `${restoreSummary}；3 天后仅 ARCHIVE`;
+  }
+
+  return `${restoreSummary}；3 天后可 PURGE`;
+}
+
+function buildTradeOrderEarlyPurgeSummary(input: {
+  preview: RecycleFinalizePreview;
+  isExpired: boolean;
+  canEarlyPurge: boolean;
+  canFinalizeNow: boolean;
+}) {
+  if (input.isExpired) {
+    return input.canFinalizeNow
+      ? `冷静期已到期，请执行最终处理：${input.preview.finalAction}`
+      : `冷静期已到期，最终处理仅管理员可执行：${input.preview.finalAction}`;
+  }
+
+  if (input.preview.finalAction === "ARCHIVE") {
+    return "当前不提供提前永久删除，3 天后仅 ARCHIVE。";
+  }
+
+  return input.canEarlyPurge ? "当前可提前永久删除。" : "仅管理员可提前永久删除。";
+}
+
+function parseArchivePayload(
+  value: unknown,
+): RecycleArchivePayload | null {
+  return parseRecycleArchivePayload(value);
+}
+
+function buildHistoryArchiveContract(
+  entry: RecycleBinListEntry,
+): RecycleBinHistoryArchiveContract | null {
+  const archivePayload = parseArchivePayload(entry.archivePayloadJson);
+
+  if (!archivePayload) {
+    return null;
+  }
+
+  const customerSnapshot =
+    entry.targetType === "CUSTOMER"
+      ? parseCustomerRecycleArchiveSnapshot(archivePayload)
+      : null;
+  const tradeOrderSnapshot =
+    entry.targetType === "TRADE_ORDER"
+      ? parseTradeOrderRecycleArchiveSnapshot(archivePayload)
+      : null;
+  const snapshotVersion =
+    customerSnapshot?.snapshotVersion ?? tradeOrderSnapshot?.snapshotVersion ?? null;
+
+  return {
+    source:
+      snapshotVersion !== null
+        ? snapshotVersion >= RECYCLE_ARCHIVE_SNAPSHOT_VERSION
+          ? "SNAPSHOT_V2"
+          : "LEGACY_FALLBACK"
+        : "UNAVAILABLE",
+    snapshotVersion,
+    archivePayload,
+    customerSnapshot,
+    tradeOrderSnapshot,
+  };
+}
+
+function buildHistoryResolutionSummary(
+  entry: RecycleBinListEntry,
+  archivePayload: RecycleArchivePayload | null,
+) {
+  if (entry.status === RecycleEntryStatus.RESTORED) {
+    return "该对象已通过 RESTORE 退出回收站，当前只保留删除与恢复审计记录。";
+  }
+
+  if (entry.status === RecycleEntryStatus.PURGED) {
+    return "该对象已执行 PURGE，源对象已物理删除；当前列表只保留回收站历史审计。";
+  }
+
+  if (entry.status === RecycleEntryStatus.ARCHIVED) {
+    return (
+      archivePayload?.blockerSummary ??
+      "该对象已执行 ARCHIVE，按封存/脱敏归档终态保留，不会伪装成 PURGED。"
+    );
+  }
+
+  return null;
+}
+
+function getResolutionActionLabel(
+  entry: RecycleBinListEntry,
+  archivePayload: RecycleArchivePayload | null,
+) {
+  if (entry.status === RecycleEntryStatus.RESTORED) {
+    return "RESTORE";
+  }
+
+  if (entry.status === RecycleEntryStatus.PURGED) {
+    return "PURGE";
+  }
+
+  if (entry.status === RecycleEntryStatus.ARCHIVED) {
+    return archivePayload?.finalAction ?? "ARCHIVE";
+  }
+
+  return null;
+}
+
+function getHistoryFinalActionFilterValue(
+  value: string | null,
+): RecycleBinHistoryFinalActionFilterValue {
+  if (value === "ARCHIVE") {
+    return "archive";
+  }
+
+  if (value === "PURGE") {
+    return "purge";
+  }
+
+  if (value === "RESTORE") {
+    return "restore";
+  }
+
+  return "all";
+}
+
+function getHistoryArchiveSourceFilterValue(
+  value: RecycleBinHistoryArchiveSource | null | undefined,
+): RecycleBinHistoryArchiveSourceFilterValue {
+  if (value === "SNAPSHOT_V2") {
+    return "snapshot_v2";
+  }
+
+  if (value === "LEGACY_FALLBACK") {
+    return "legacy_fallback";
+  }
+
+  if (value === "UNAVAILABLE") {
+    return "unavailable";
+  }
+
+  return "all";
+}
+
+function getHistoryArchiveSourceLabel(
+  value: RecycleBinHistoryArchiveSource | null | undefined,
+) {
+  return value ?? "UNAVAILABLE";
+}
+
 function buildDeletedByOptions(entries: RecycleBinListEntry[]): RecycleBinFilterOption[] {
   const counts = new Map<string, RecycleBinFilterOption>();
 
@@ -721,6 +1174,98 @@ function buildDeletedByOptions(entries: RecycleBinListEntry[]): RecycleBinFilter
     counts.set(entry.deletedById, {
       value: entry.deletedById,
       label: getDeletedByLabel(entry),
+      count: 1,
+    });
+  }
+
+  return Array.from(counts.values()).sort((left, right) =>
+    left.label.localeCompare(right.label, "zh-CN"),
+  );
+}
+
+function buildResolvedByOptions(entries: RecycleBinListEntry[]): RecycleBinFilterOption[] {
+  const counts = new Map<string, RecycleBinFilterOption>();
+
+  for (const entry of entries) {
+    if (!entry.resolvedById || !entry.resolvedBy) {
+      continue;
+    }
+
+    const existing = counts.get(entry.resolvedById);
+
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+
+    counts.set(entry.resolvedById, {
+      value: entry.resolvedById,
+      label: getResolvedByLabel(entry) ?? "--",
+      count: 1,
+    });
+  }
+
+  return Array.from(counts.values()).sort((left, right) =>
+    left.label.localeCompare(right.label, "zh-CN"),
+  );
+}
+
+function buildFinalActionOptions(items: RecycleBinListItem[]): RecycleBinFilterOption[] {
+  const counts = new Map<RecycleBinHistoryFinalActionFilterValue, RecycleBinFilterOption>();
+
+  for (const item of items) {
+    const filterValue = getHistoryFinalActionFilterValue(item.resolutionActionLabel);
+
+    if (filterValue === "all") {
+      continue;
+    }
+
+    const existing = counts.get(filterValue);
+
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+
+    counts.set(filterValue, {
+      value: filterValue,
+      label: item.resolutionActionLabel ?? filterValue.toUpperCase(),
+      count: 1,
+    });
+  }
+
+  return Array.from(counts.values()).sort((left, right) =>
+    left.label.localeCompare(right.label, "zh-CN"),
+  );
+}
+
+function buildHistoryArchiveSourceOptions(
+  items: RecycleBinListItem[],
+): RecycleBinFilterOption[] {
+  const counts = new Map<
+    RecycleBinHistoryArchiveSourceFilterValue,
+    RecycleBinFilterOption
+  >();
+
+  for (const item of items) {
+    const filterValue = getHistoryArchiveSourceFilterValue(
+      item.historyArchive?.source ?? "UNAVAILABLE",
+    );
+
+    if (filterValue === "all") {
+      continue;
+    }
+
+    const existing = counts.get(filterValue);
+
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+
+    counts.set(filterValue, {
+      value: filterValue,
+      label: getHistoryArchiveSourceLabel(item.historyArchive?.source ?? "UNAVAILABLE"),
       count: 1,
     });
   }
@@ -807,6 +1352,45 @@ function buildTargetTypeOptions(
   ];
 }
 
+async function listEntriesForTabByStatus(input: {
+  activeTab: RecycleBinTabValue;
+  viewer: RecycleLifecycleActor;
+  statuses: readonly RecycleEntryStatus[];
+}) {
+  const entries = await listRecycleEntries(prisma, {
+    domain: getDomainFromTab(input.activeTab),
+    statuses: input.statuses,
+  });
+
+  if (input.activeTab !== "customers") {
+    return entries;
+  }
+
+  const visibleCustomerEntryIds = await listVisibleCustomerRecycleTargetIds(
+    prisma,
+    input.viewer,
+    entries,
+  );
+
+  return entries.filter((entry) => visibleCustomerEntryIds.has(entry.targetId));
+}
+
+async function countEntriesForTabByStatus(input: {
+  activeTab: RecycleBinTabValue;
+  viewer: RecycleLifecycleActor;
+  statuses: readonly RecycleEntryStatus[];
+}) {
+  if (input.activeTab !== "customers") {
+    return countRecycleEntries(prisma, {
+      domain: getDomainFromTab(input.activeTab),
+      statuses: input.statuses,
+    });
+  }
+
+  const entries = await listEntriesForTabByStatus(input);
+  return entries.length;
+}
+
 function appendBlockerGroup(
   groups: Map<string, RecycleBinBlockerGroup>,
   title: string,
@@ -876,7 +1460,7 @@ function buildLeadBlockerGroups(
       appendBlockerGroup(
         groups,
         "销售执行痕迹",
-        "这条线索已经产生分配或跟进痕迹，可回收治理，但不适合最终清理。",
+        "这条线索已经产生分配或跟进痕迹，可回收治理，但不适合直接永久删除。",
         blocker,
       );
       continue;
@@ -1018,7 +1602,7 @@ function buildMasterDataBlockerGroups(
         "对象状态",
         mode === "restore"
           ? "先确认原始对象仍存在，当前条目才有恢复意义。"
-          : "先确认原始对象仍存在，当前条目才有最终清理意义。",
+          : "先确认原始对象仍存在，当前条目才有最终处理意义。",
         blocker,
       );
       continue;
@@ -1038,6 +1622,20 @@ function buildMasterDataBlockerGroups(
 function buildTradeOrderBlockerGroups(
   blockers: Array<{ name: string; description: string }>,
 ) {
+  const unifiedGroups = buildTradeOrderRecycleBlockerGroups(blockers);
+
+  if (unifiedGroups.length > 0) {
+    return unifiedGroups.map((group) => ({
+      title: group.title,
+      description: group.description,
+      items: group.items.map((item) => ({
+        name: item.name,
+        description: item.description,
+        suggestedAction: item.suggestedAction,
+      })),
+    }));
+  }
+
   const groups = new Map<string, RecycleBinBlockerGroup>();
 
   for (const blocker of blockers) {
@@ -1123,6 +1721,20 @@ function buildCustomerBlockerGroups(
     suggestedAction?: string;
   }>,
 ) {
+  const unifiedGroups = buildCustomerRecycleBlockerGroups(blockers);
+
+  if (unifiedGroups.length > 0) {
+    return unifiedGroups.map((group) => ({
+      title: group.title,
+      description: group.description,
+      items: group.items.map((item) => ({
+        name: item.name,
+        description: item.description,
+        suggestedAction: item.suggestedAction,
+      })),
+    }));
+  }
+
   const groupMeta = new Map<
     string,
     {
@@ -1338,27 +1950,36 @@ async function buildListItems(
 
   return Promise.all(
     entries.map(async (entry) => {
-      const restoreGuard = await buildRestoreGuard(entry);
-      const purgeGuard = await buildPurgeGuard(entry);
+      const isActiveEntry = entry.status === RecycleEntryStatus.ACTIVE;
+      const restoreGuard = isActiveEntry ? await buildRestoreGuard(entry) : null;
+      const purgeGuard = isActiveEntry ? await buildPurgeGuard(entry) : null;
       const finalizePreviewResult =
-        entry.targetType === "CUSTOMER"
+        isActiveEntry && supportsFinalizePreview(entry.targetType)
           ? await previewRecycleBinFinalize(viewer, {
               entryId: entry.id,
             })
           : null;
       const finalActionPreview = finalizePreviewResult?.preview ?? null;
       const isExpired = finalizePreviewResult?.isExpired ?? false;
-      const canFinalizeNow = Boolean(finalizePreviewResult && isExpired && canActorPurge);
+      const canFinalizeNow = Boolean(
+        finalizePreviewResult &&
+          finalActionPreview?.canFinalize &&
+          isExpired &&
+          canActorPurge,
+      );
       const canEarlyPurge = Boolean(
         finalActionPreview &&
           !isExpired &&
           canActorPurge &&
           finalActionPreview.canEarlyPurge,
       );
+      const isFinalizeTarget = supportsFinalizePreview(entry.targetType);
       const leadMetadata =
         entry.targetType === "LEAD" ? leadRuntimeMetadata.get(entry.targetId) : null;
       const customerSummary =
         entry.targetType === "CUSTOMER" ? getCustomerListSummary(entry) : null;
+      const historyArchive = buildHistoryArchiveContract(entry);
+      const archivePayload = historyArchive?.archivePayload ?? null;
       const ownerLabel =
         entry.targetType === "LEAD"
           ? leadMetadata?.ownerLabel ?? "未分配"
@@ -1367,9 +1988,10 @@ async function buildListItems(
             : entry.targetType === "CUSTOMER"
               ? customerSummary?.ownerLabel ?? "--"
               : null;
-
-      return {
+      const baseItem = {
         entryId: entry.id,
+        entryStatus: entry.status,
+        entryStatusLabel: getEntryStatusLabel(entry.status),
         targetType: entry.targetType,
         targetTypeLabel: getResolvedTargetTypeLabel(entry.targetType),
         name: entry.titleSnapshot,
@@ -1391,20 +2013,62 @@ async function buildListItems(
         deleteReasonText: entry.deleteReasonText,
         deletedAtLabel: formatDateTime(entry.deletedAt),
         deletedByLabel: getDeletedByLabel(entry),
+        resolvedAtLabel: entry.resolvedAt ? formatDateTime(entry.resolvedAt) : null,
+        resolvedByLabel: getResolvedByLabel(entry),
+        resolutionActionLabel: getResolutionActionLabel(entry, archivePayload),
+        resolutionSummary: buildHistoryResolutionSummary(entry, archivePayload),
+        archivePayloadJsonText: archivePayload
+          ? JSON.stringify(archivePayload, null, 2)
+          : null,
+        historyArchive,
+      };
+
+      if (!isActiveEntry) {
+        return {
+          ...baseItem,
+          blockerSummary:
+            buildHistoryResolutionSummary(entry, archivePayload) ?? "当前为历史终态只读记录。",
+          restoreSummary: "当前条目已离开 ACTIVE，不提供历史恢复操作。",
+          purgeSummary: "当前条目已离开 ACTIVE，不提供历史永久删除操作。",
+          restoreBlockerGroups: [],
+          purgeBlockerGroups: [],
+          restoreRouteSnapshot: entry.restoreRouteSnapshot,
+          canRestore: false,
+          canPurge: false,
+          purgeRequiresAdmin: false,
+          finalActionPreview: null,
+          finalizeSummary: null,
+          finalActionLabel: null,
+          remainingTimeLabel: null,
+          finalizeBlockerGroups: [],
+          canFinalizeNow: false,
+          isExpired: true,
+        } satisfies RecycleBinListItem;
+      }
+
+      return {
+        ...baseItem,
         blockerSummary:
           finalActionPreview && entry.targetType === "CUSTOMER"
             ? buildCustomerRecycleBlockerSummary({
-                restoreGuard,
+                restoreGuard: restoreGuard!,
                 preview: finalActionPreview,
                 isExpired,
                 canFinalizeNow,
               })
+            : finalActionPreview && entry.targetType === "TRADE_ORDER"
+              ? buildTradeOrderRecycleBlockerSummary({
+                  restoreGuard: restoreGuard!,
+                  preview: finalActionPreview,
+                  isExpired,
+                  canFinalizeNow,
+                })
             : buildBlockerSummary({
-                restoreGuard,
-                purgeGuard,
+                restoreGuard: restoreGuard!,
+                purgeGuard: purgeGuard!,
                 canActorPurge,
               }),
-        restoreSummary: restoreGuard.blockerSummary,
+        restoreSummary: restoreGuard!.blockerSummary,
         purgeSummary:
           finalActionPreview && entry.targetType === "CUSTOMER"
             ? buildCustomerEarlyPurgeSummary({
@@ -1413,30 +2077,38 @@ async function buildListItems(
                 canEarlyPurge,
                 canFinalizeNow,
               })
-            : purgeGuard.blockerSummary,
+            : finalActionPreview && entry.targetType === "TRADE_ORDER"
+              ? buildTradeOrderEarlyPurgeSummary({
+                  preview: finalActionPreview,
+                  isExpired,
+                  canEarlyPurge,
+                  canFinalizeNow,
+              })
+            : purgeGuard!.blockerSummary,
         restoreBlockerGroups: buildBlockerGroups({
           targetType: entry.targetType,
-          blockers: restoreGuard.blockers,
+          blockers: restoreGuard!.blockers,
           mode: "restore",
         }),
         purgeBlockerGroups: buildBlockerGroups({
           targetType: entry.targetType,
-          blockers: purgeGuard.blockers,
+          blockers: purgeGuard!.blockers,
           mode: "purge",
         }),
-        restoreRouteSnapshot: restoreGuard.restoreRouteSnapshot,
-        canRestore: restoreGuard.canRestore,
+        restoreRouteSnapshot: restoreGuard!.restoreRouteSnapshot,
+        canRestore: restoreGuard!.canRestore,
         canPurge:
-          finalActionPreview && entry.targetType === "CUSTOMER"
+          finalActionPreview && isFinalizeTarget
             ? canEarlyPurge
-            : canActorPurge && purgeGuard.canPurge,
+            : canActorPurge && purgeGuard!.canPurge,
         purgeRequiresAdmin:
-          finalActionPreview && entry.targetType === "CUSTOMER"
+          finalActionPreview && isFinalizeTarget
             ? Boolean(
                 finalActionPreview.canEarlyPurge && !isExpired && !canActorPurge,
               )
             : !canActorPurge,
         finalActionPreview,
+        finalizeSummary: finalActionPreview?.blockerSummary ?? null,
         finalActionLabel: finalActionPreview?.finalActionLabel ?? null,
         remainingTimeLabel: finalizePreviewResult
           ? formatRemainingTimeLabel(
@@ -1473,34 +2145,6 @@ export async function getRecycleBinPageData(
   const canAccessTradeOrders = canAccessSalesOrderModule(viewer.role);
   const canAccessCustomers = canAccessCustomerModule(viewer.role);
 
-  const [
-    masterDataCount,
-    liveSessionCount,
-    leadCount,
-    tradeOrderCount,
-    customerEntries,
-  ] = await Promise.all([
-    canAccessMasterData
-      ? countActiveRecycleEntries(prisma, { domain: "PRODUCT_MASTER_DATA" })
-      : Promise.resolve(0),
-    canAccessLiveSessions
-      ? countActiveRecycleEntries(prisma, { domain: "LIVE_SESSION" })
-      : Promise.resolve(0),
-    canAccessLeads
-      ? countActiveRecycleEntries(prisma, { domain: "LEAD" })
-      : Promise.resolve(0),
-    canAccessTradeOrders
-      ? countActiveRecycleEntries(prisma, { domain: "TRADE_ORDER" })
-      : Promise.resolve(0),
-    canAccessCustomers
-      ? listActiveRecycleEntries(prisma, { domain: "CUSTOMER" })
-      : Promise.resolve([]),
-  ]);
-  const visibleCustomerEntryIds = canAccessCustomers
-    ? await listVisibleCustomerRecycleTargetIds(prisma, viewer, customerEntries)
-    : new Set<string>();
-  const customerCount = visibleCustomerEntryIds.size;
-
   const requestedTab = getParamValue(searchParams?.tab);
   const defaultTab: RecycleBinTabValue = canAccessMasterData
     ? "master-data"
@@ -1525,6 +2169,80 @@ export async function getRecycleBinPageData(
               : defaultTab;
 
   const filters = parseFilters(activeTab, searchParams);
+  const selectedStatuses = getEntryStatusStatuses(filters.entryStatus);
+  const [
+    masterDataCount,
+    liveSessionCount,
+    leadCount,
+    tradeOrderCount,
+    customerCount,
+    activeCount,
+    archivedCount,
+    purgedCount,
+    restoredCount,
+    scopedEntries,
+  ] = await Promise.all([
+    canAccessMasterData
+      ? countEntriesForTabByStatus({
+          activeTab: "master-data",
+          viewer,
+          statuses: selectedStatuses,
+        })
+      : Promise.resolve(0),
+    canAccessLiveSessions
+      ? countEntriesForTabByStatus({
+          activeTab: "live-sessions",
+          viewer,
+          statuses: selectedStatuses,
+        })
+      : Promise.resolve(0),
+    canAccessLeads
+      ? countEntriesForTabByStatus({
+          activeTab: "leads",
+          viewer,
+          statuses: selectedStatuses,
+        })
+      : Promise.resolve(0),
+    canAccessTradeOrders
+      ? countEntriesForTabByStatus({
+          activeTab: "trade-orders",
+          viewer,
+          statuses: selectedStatuses,
+        })
+      : Promise.resolve(0),
+    canAccessCustomers
+      ? countEntriesForTabByStatus({
+          activeTab: "customers",
+          viewer,
+          statuses: selectedStatuses,
+        })
+      : Promise.resolve(0),
+    countEntriesForTabByStatus({
+      activeTab,
+      viewer,
+      statuses: [RecycleEntryStatus.ACTIVE],
+    }),
+    countEntriesForTabByStatus({
+      activeTab,
+      viewer,
+      statuses: [RecycleEntryStatus.ARCHIVED],
+    }),
+    countEntriesForTabByStatus({
+      activeTab,
+      viewer,
+      statuses: [RecycleEntryStatus.PURGED],
+    }),
+    countEntriesForTabByStatus({
+      activeTab,
+      viewer,
+      statuses: [RecycleEntryStatus.RESTORED],
+    }),
+    listEntriesForTabByStatus({
+      activeTab,
+      viewer,
+      statuses: selectedStatuses,
+    }),
+  ]);
   const tabs = buildTabs({
     canAccessMasterData,
     canAccessLiveSessions,
@@ -1538,18 +2256,20 @@ export async function getRecycleBinPageData(
     customerCount,
     filters,
   });
+  const statusTabs = buildStatusTabs({
+    activeTab,
+    filters,
+    activeCount,
+    archivedCount,
+    purgedCount,
+    restoredCount,
+  });
 
-  const activeEntries =
-    activeTab === "customers"
-      ? customerEntries.filter((entry) => visibleCustomerEntryIds.has(entry.targetId))
-      : await listActiveRecycleEntries(prisma, {
-          domain: getDomainFromTab(activeTab),
-        });
+  const deletedByOptions = buildDeletedByOptions(scopedEntries);
+  const targetTypeOptions = buildTargetTypeOptions(activeTab, scopedEntries);
+  const isHistoryView = filters.entryStatus !== "active";
 
-  const deletedByOptions = buildDeletedByOptions(activeEntries);
-  const targetTypeOptions = buildTargetTypeOptions(activeTab, activeEntries);
-
-  const preliminarilyFilteredEntries = activeEntries.filter((entry) => {
+  const baseFilteredEntries = scopedEntries.filter((entry) => {
     if (filters.deletedById && entry.deletedById !== filters.deletedById) {
       return false;
     }
@@ -1565,28 +2285,91 @@ export async function getRecycleBinPageData(
     return true;
   });
 
-  const allVisibleItems = await buildListItems(preliminarilyFilteredEntries, viewer);
-  const items = allVisibleItems.filter((item) => matchesStateFilter(item, filters.state));
+  const resolvedByOptions = isHistoryView ? buildResolvedByOptions(baseFilteredEntries) : [];
+  const resolvedFilteredEntries = isHistoryView
+    ? baseFilteredEntries.filter((entry) => {
+        if (filters.resolvedById && entry.resolvedById !== filters.resolvedById) {
+          return false;
+        }
+
+        if (!matchesResolvedRange(entry.resolvedAt, filters.resolvedRange)) {
+          return false;
+        }
+
+        return true;
+      })
+    : baseFilteredEntries;
+
+  const allVisibleItems = await buildListItems(resolvedFilteredEntries, viewer);
+  const finalActionOptions = isHistoryView ? buildFinalActionOptions(allVisibleItems) : [];
+  const historyArchiveSourceOptions = isHistoryView
+    ? buildHistoryArchiveSourceOptions(allVisibleItems)
+    : [];
+  const items = allVisibleItems.filter((item) => {
+    if (!matchesStateFilter(item, filters.state)) {
+      return false;
+    }
+
+    if (isHistoryView && !matchesFinalActionFilter(item, filters.finalAction)) {
+      return false;
+    }
+
+    if (
+      isHistoryView &&
+      !matchesHistoryArchiveSourceFilter(item, filters.historyArchiveSource)
+    ) {
+      return false;
+    }
+
+    return true;
+  });
 
   return {
     activeTab,
     tabs,
+    statusTabs,
     summary: {
       totalCount: items.length,
       restorableCount: items.filter((item) => item.canRestore).length,
       purgeBlockedCount: items.filter(
         (item) => item.purgeRequiresAdmin || !item.canPurge,
       ).length,
+      resolvedCount: items.filter(
+        (item) => item.entryStatus !== RecycleEntryStatus.ACTIVE,
+      ).length,
+      resolvedActorCount: new Set(
+        items
+          .map((item) => item.resolvedByLabel)
+          .filter((value): value is string => Boolean(value)),
+      ).size,
+      archivePayloadCount: items.filter((item) => item.archivePayloadJsonText).length,
     },
     items,
     filters,
     deletedByOptions,
+    resolvedByOptions,
     targetTypeOptions,
+    finalActionOptions,
+    historyArchiveSourceOptions,
     hasActiveFilters:
       filters.deletedRange !== "all" ||
       filters.deletedById.length > 0 ||
       filters.state !== "all" ||
-      filters.targetType !== "all",
-    resetHref: `/recycle-bin?tab=${activeTab}`,
+      filters.targetType !== "all" ||
+      filters.resolvedRange !== "all" ||
+      filters.resolvedById.length > 0 ||
+      filters.finalAction !== "all" ||
+      filters.historyArchiveSource !== "all",
+    resetHref: buildRecycleBinHref(activeTab, {
+      ...filters,
+      deletedRange: "all",
+      deletedById: "",
+      state: "all",
+      targetType: "all",
+      resolvedRange: "all",
+      resolvedById: "",
+      finalAction: "all",
+      historyArchiveSource: "all",
+    }),
   };
 }

@@ -167,11 +167,9 @@ export async function countActiveRecycleEntries(
     domain?: RecycleDomain;
   },
 ) {
-  return db.recycleBinEntry.count({
-    where: {
-      status: RecycleEntryStatus.ACTIVE,
-      domain: input?.domain,
-    },
+  return countRecycleEntries(db, {
+    domain: input?.domain,
+    statuses: [RecycleEntryStatus.ACTIVE],
   });
 }
 
@@ -181,10 +179,46 @@ export async function listActiveRecycleEntries(
     domain?: RecycleDomain;
   },
 ) {
+  return listRecycleEntries(db, {
+    domain: input?.domain,
+    statuses: [RecycleEntryStatus.ACTIVE],
+  });
+}
+
+export async function countRecycleEntries(
+  db: RecycleDbClient,
+  input?: {
+    domain?: RecycleDomain;
+    statuses?: readonly RecycleEntryStatus[];
+  },
+) {
+  return db.recycleBinEntry.count({
+    where: {
+      domain: input?.domain,
+      status: input?.statuses?.length
+        ? {
+            in: [...input.statuses],
+          }
+        : undefined,
+    },
+  });
+}
+
+export async function listRecycleEntries(
+  db: RecycleDbClient,
+  input?: {
+    domain?: RecycleDomain;
+    statuses?: readonly RecycleEntryStatus[];
+  },
+) {
   return db.recycleBinEntry.findMany({
     where: {
-      status: RecycleEntryStatus.ACTIVE,
       domain: input?.domain,
+      status: input?.statuses?.length
+        ? {
+            in: [...input.statuses],
+          }
+        : undefined,
     },
     include: {
       deletedBy: {
@@ -193,10 +227,21 @@ export async function listActiveRecycleEntries(
           username: true,
         },
       },
+      resolvedBy: {
+        select: {
+          name: true,
+          username: true,
+        },
+      },
     },
-    orderBy: {
-      deletedAt: "desc",
-    },
+    orderBy: [
+      {
+        resolvedAt: "desc",
+      },
+      {
+        deletedAt: "desc",
+      },
+    ],
   });
 }
 
@@ -225,6 +270,24 @@ export async function listExpiredActiveRecycleEntries(
       },
     ],
     take: input?.limit,
+  });
+}
+
+export async function countExpiredActiveRecycleEntries(
+  db: RecycleDbClient,
+  input?: {
+    domain?: RecycleDomain;
+    now?: Date;
+  },
+) {
+  return db.recycleBinEntry.count({
+    where: {
+      status: RecycleEntryStatus.ACTIVE,
+      domain: input?.domain,
+      recycleExpiresAt: {
+        lte: input?.now ?? new Date(),
+      },
+    },
   });
 }
 

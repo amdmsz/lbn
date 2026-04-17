@@ -12,12 +12,16 @@ import { getParamValue, parseActionNotice } from "@/lib/action-notice";
 import { canAccessSalesOrderModule, canCreateSalesOrder } from "@/lib/auth/access";
 import { findActiveCustomerRecycleEntry } from "@/lib/customers/recycle";
 import { prisma } from "@/lib/db/prisma";
-import { getTradeOrderRecycleTarget } from "@/lib/recycle-bin/trade-order-adapter";
+import {
+  buildTradeOrderFinalizePreview,
+  getTradeOrderRecycleTarget,
+} from "@/lib/recycle-bin/trade-order-adapter";
 import {
   findActiveTradeOrderRecycleEntry,
   listActiveTradeOrderIds,
 } from "@/lib/trade-orders/recycle";
 import type { TradeOrderRecycleGuard } from "@/lib/trade-orders/recycle-guards";
+import type { RecycleFinalizePreview } from "@/lib/recycle-bin/types";
 import { getSalesOrderCreateFormOptions } from "@/lib/sales-orders/queries";
 import { getTradeOrderExecutionSummaryMap } from "@/lib/trade-orders/execution-summary";
 
@@ -80,6 +84,19 @@ function getRequiredTradeOrderRecycleGuard(
   }
 
   return recycleGuard;
+}
+
+function getRequiredTradeOrderFinalizePreview(
+  finalizePreviewByTradeOrderId: Map<string, RecycleFinalizePreview>,
+  tradeOrderId: string,
+) {
+  const finalizePreview = finalizePreviewByTradeOrderId.get(tradeOrderId);
+
+  if (!finalizePreview) {
+    throw new Error("Trade-order finalize preview is missing.");
+  }
+
+  return finalizePreview;
 }
 
 async function getViewerTeamId(viewer: TradeOrderViewer) {
@@ -997,10 +1014,25 @@ export async function getTradeOrdersPageData(
       getTradeOrderRecycleTarget(prisma, "TRADE_ORDER", tradeOrderId),
     ),
   );
+  const finalizePreviews = await Promise.all(
+    pageTradeOrderIds.map((tradeOrderId) =>
+      buildTradeOrderFinalizePreview(prisma, {
+        targetType: "TRADE_ORDER",
+        targetId: tradeOrderId,
+        domain: "TRADE_ORDER",
+      }),
+    ),
+  );
   const recycleGuardByTradeOrderId = new Map(
     recycleTargets
       .filter((target): target is NonNullable<(typeof recycleTargets)[number]> => Boolean(target))
       .map((target) => [target.targetId, target.guard]),
+  );
+  const finalizePreviewByTradeOrderId = new Map(
+    pageTradeOrderIds.flatMap((tradeOrderId, index) => {
+      const preview = finalizePreviews[index];
+      return preview ? [[tradeOrderId, preview] as const] : [];
+    }),
   );
 
   return {
@@ -1051,6 +1083,10 @@ export async function getTradeOrdersPageData(
       executionSummary: executionSummaryMap.get(item.id) ?? null,
       latestExportBatch: latestExportBatchByTradeOrderId.get(item.id) ?? null,
       recycleGuard: getRequiredTradeOrderRecycleGuard(recycleGuardByTradeOrderId, item.id),
+      finalizePreview: getRequiredTradeOrderFinalizePreview(
+        finalizePreviewByTradeOrderId,
+        item.id,
+      ),
     })),
     pagination: {
       page,
@@ -1322,9 +1358,18 @@ export async function getTradeOrderDetail(
 
   const executionSummaryMap = await getTradeOrderExecutionSummaryMap([tradeOrder.id]);
   const recycleTarget = await getTradeOrderRecycleTarget(prisma, "TRADE_ORDER", tradeOrder.id);
+  const finalizePreview = await buildTradeOrderFinalizePreview(prisma, {
+    targetType: "TRADE_ORDER",
+    targetId: tradeOrder.id,
+    domain: "TRADE_ORDER",
+  });
 
   if (!recycleTarget) {
     throw new Error("Trade-order recycle target is missing.");
+  }
+
+  if (!finalizePreview) {
+    throw new Error("Trade-order finalize preview is missing.");
   }
 
   const operationLogs = await prisma.operationLog.findMany({
@@ -1416,6 +1461,7 @@ export async function getTradeOrderDetail(
       collectionTasks: tradeOrder.collectionTasks,
       executionSummary: executionSummaryMap.get(tradeOrder.id) ?? null,
       recycleGuard: recycleTarget.guard,
+      finalizePreview,
     },
     operationLogs,
   };

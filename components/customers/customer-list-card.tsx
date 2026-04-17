@@ -4,9 +4,20 @@ import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent, ReactNode } from 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { FilePlus2, FileText, MoreHorizontal, Phone, SquarePen } from "lucide-react";
+import {
+  FilePlus2,
+  FileText,
+  MoreHorizontal,
+  Phone,
+  SquarePen,
+  Trash2,
+} from "lucide-react";
 import { CustomerCallRecordForm } from "@/components/customers/customer-call-record-form";
 import { CustomerCallRecordHistory } from "@/components/customers/customer-call-record-history";
+import {
+  CustomerRecycleInlineEntry,
+  type MoveCustomerToRecycleBinAction,
+} from "@/components/customers/customer-recycle-entry";
 import { StatusBadge } from "@/components/shared/status-badge";
 import type { CallResultOption } from "@/lib/calls/metadata";
 import { startMobileCallFollowUpDial } from "@/lib/calls/mobile-call-followup";
@@ -19,6 +30,7 @@ import {
   getCustomerWorkStatusVariant,
   type CustomerWorkStatusKey,
 } from "@/lib/customers/metadata";
+import { getCustomerOwnershipModeLabel } from "@/lib/customers/public-pool-metadata";
 import type { CustomerListItem } from "@/lib/customers/queries";
 import { formatCurrency } from "@/lib/fulfillment/metadata";
 import { cn } from "@/lib/utils";
@@ -169,6 +181,7 @@ export function CustomerListCard({
   callResultOptions,
   canCreateCallRecord,
   canCreateSalesOrder = false,
+  moveToRecycleBinAction,
   selectable = false,
   selected = false,
   onToggleSelected,
@@ -177,6 +190,7 @@ export function CustomerListCard({
   callResultOptions: CallResultOption[];
   canCreateCallRecord: boolean;
   canCreateSalesOrder?: boolean;
+  moveToRecycleBinAction?: MoveCustomerToRecycleBinAction;
   selectable?: boolean;
   selected?: boolean;
   onToggleSelected?: () => void;
@@ -195,6 +209,20 @@ export function CustomerListCard({
   const primaryStatus = getPrimaryWorkStatus(item);
   const recentInterest = getRecentInterest(item);
   const phoneText = item.phone?.trim() || "暂无电话";
+  const recycleEntryProps = {
+    customerId: item.id,
+    customerName: item.name,
+    phone: phoneText,
+    statusLabel: getCustomerStatusLabel(item.status),
+    ownershipLabel: getCustomerOwnershipModeLabel(item.ownershipMode),
+    ownerLabel: getOwnerLabel(item),
+    lastEffectiveFollowUpAt: item.lastEffectiveFollowUpAt,
+    approvedTradeOrderCount: item.approvedTradeOrderCount,
+    linkedLeadCount: item._count.leads,
+    initialGuard: item.recycleGuard,
+    initialFinalizePreview: item.recycleFinalizePreview,
+    moveToRecycleBinAction,
+  };
 
   useEffect(() => {
     if (!mobileActionsOpen) {
@@ -360,42 +388,60 @@ export function CustomerListCard({
               <MoreHorizontal className="h-4 w-4" />
             </button>
 
-            {mobileActionsOpen ? (
-              <div
-                className="absolute right-0 top-10 z-30 w-[11rem] rounded-[14px] border border-black/8 bg-[rgba(255,255,255,0.98)] p-1.5 shadow-[0_10px_24px_rgba(15,23,42,0.08)] min-[960px]:hidden"
-                onClick={stopCardNavigation}
-              >
-                <div className="space-y-1">
-                  <CustomerActionButton
-                    icon={Phone}
-                    label="拨打"
-                    onClick={startPhoneDial}
-                    disabled={!canCreateCallRecord}
-                    fullWidth
+            <div
+              className={cn(
+                "absolute right-0 top-10 z-30 w-[11rem] rounded-[14px] border border-black/8 bg-[rgba(255,255,255,0.98)] p-1.5 shadow-[0_10px_24px_rgba(15,23,42,0.08)] min-[960px]:hidden",
+                mobileActionsOpen ? "block" : "hidden",
+              )}
+              onClick={stopCardNavigation}
+            >
+              <div className="space-y-1">
+                <CustomerActionButton
+                  icon={Phone}
+                  label="拨打"
+                  onClick={startPhoneDial}
+                  disabled={!canCreateCallRecord}
+                  fullWidth
+                />
+                <CustomerActionButton
+                  icon={SquarePen}
+                  label="记录通话"
+                  onClick={openCallDialog}
+                  disabled={!canCreateCallRecord}
+                  fullWidth
+                />
+                <CustomerActionButton
+                  icon={FileText}
+                  label="通话历史"
+                  onClick={openCallHistoryDialog}
+                  fullWidth
+                />
+                <CustomerActionButton
+                  icon={FilePlus2}
+                  label="创建成交主单"
+                  onClick={openCreateTradeOrder}
+                  disabled={!canCreateSalesOrder}
+                  fullWidth
+                />
+                {moveToRecycleBinAction ? (
+                  <CustomerRecycleInlineEntry
+                    {...recycleEntryProps}
+                    moveToRecycleBinAction={moveToRecycleBinAction}
+                    renderTrigger={({ canMoveToRecycleBin, openDialog }) => (
+                      <CustomerActionButton
+                        icon={Trash2}
+                        label={canMoveToRecycleBin ? "移入回收站" : "查看回收判断"}
+                        onClick={() => {
+                          setMobileActionsOpen(false);
+                          openDialog();
+                        }}
+                        fullWidth
+                      />
+                    )}
                   />
-                  <CustomerActionButton
-                    icon={SquarePen}
-                    label="记录通话"
-                    onClick={openCallDialog}
-                    disabled={!canCreateCallRecord}
-                    fullWidth
-                  />
-                  <CustomerActionButton
-                    icon={FileText}
-                    label="通话历史"
-                    onClick={openCallHistoryDialog}
-                    fullWidth
-                  />
-                  <CustomerActionButton
-                    icon={FilePlus2}
-                    label="创建成交主单"
-                    onClick={openCreateTradeOrder}
-                    disabled={!canCreateSalesOrder}
-                    fullWidth
-                  />
-                </div>
+                ) : null}
               </div>
-            ) : null}
+            </div>
           </div>
         </div>
 
@@ -436,17 +482,26 @@ export function CustomerListCard({
               onClick={openCallDialog}
               disabled={!canCreateCallRecord}
             />
-            <CustomerActionButton
-              icon={FileText}
-              label="历史"
-              onClick={openCallHistoryDialog}
-            />
+            <CustomerActionButton icon={FileText} label="历史" onClick={openCallHistoryDialog} />
             {canCreateSalesOrder ? (
               <CustomerActionButton
                 icon={FilePlus2}
                 label="成交主单"
                 onClick={openCreateTradeOrder}
                 disabled={!canCreateSalesOrder}
+              />
+            ) : null}
+            {moveToRecycleBinAction ? (
+              <CustomerRecycleInlineEntry
+                {...recycleEntryProps}
+                moveToRecycleBinAction={moveToRecycleBinAction}
+                renderTrigger={({ canMoveToRecycleBin, openDialog }) => (
+                  <CustomerActionButton
+                    icon={Trash2}
+                    label={canMoveToRecycleBin ? "移入回收站" : "查看回收判断"}
+                    onClick={openDialog}
+                  />
+                )}
               />
             ) : null}
           </div>

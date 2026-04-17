@@ -91,7 +91,7 @@ const navigationItems = {
   recycleBin: createItem({
     title: "回收站",
     href: "/recycle-bin",
-    description: "统一查看商品主数据与直播场次的回收站对象，并执行恢复或最终清理。",
+    description: "统一查看已接入域的回收站对象，并执行恢复或最终处理。",
     iconName: "recycleBin",
     activePrefixes: ["/recycle-bin"],
   }),
@@ -442,7 +442,7 @@ export function getNavigationGroupsForRole(
           {
             key: "governance-tools",
             title: "治理工具",
-            description: "统一承接删除治理、恢复与最终清理等低频系统动作。",
+            description: "统一承接删除治理、恢复与最终处理等低频系统动作。",
             sections: [{ items: [navigationItems.recycleBin] }],
           },
         ]

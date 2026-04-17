@@ -3,9 +3,11 @@ import type { RoleCode } from "@prisma/client";
 import {
   canAccessCustomerPublicPool,
   canBatchManageCustomerTags,
+  canBatchMoveCustomersToRecycleBin,
   canCreateCallRecord,
   canCreateSalesOrder,
 } from "@/lib/auth/access";
+import type { MoveCustomerToRecycleBinAction } from "@/components/customers/customer-recycle-entry";
 import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { CustomerFilterToolbar } from "@/components/customers/customer-filter-toolbar";
 import { CustomerPageSizeSelect } from "@/components/customers/customer-page-size-select";
@@ -317,9 +319,11 @@ function RoleLensStrip({
 export function CustomerCenterWorkbench({
   role,
   data,
+  moveCustomerToRecycleBinAction,
 }: Readonly<{
   role: RoleCode;
   data: CustomerCenterData;
+  moveCustomerToRecycleBinAction?: MoveCustomerToRecycleBinAction;
 }>) {
   const headerMeta = getHeaderMeta(role);
   const scopeLabel = getScopeLabel(data);
@@ -413,7 +417,9 @@ export function CustomerCenterWorkbench({
           callResultOptions={data.callResultOptions}
           canCreateCallRecord={canCreateCallRecord(role)}
           canCreateSalesOrder={canCreateSalesOrder(role)}
+          moveToRecycleBinAction={moveCustomerToRecycleBinAction}
           canBatchAddTags={canBatchManageCustomerTags(role)}
+          canBatchMoveToRecycleBin={canBatchMoveCustomersToRecycleBin(role)}
           batchTagOptions={data.tagOptions}
           emptyTitle="当前筛选条件下没有客户"
           emptyDescription="试试调整筛选条件或重置工作台范围。"

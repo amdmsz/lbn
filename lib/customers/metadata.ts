@@ -9,6 +9,7 @@ import { getLeadSourceLabel } from "@/lib/leads/metadata";
 
 export const CUSTOMERS_PAGE_SIZE = 12;
 export const customerPageSizeOptions = [12, 20, 30, 50, 100] as const;
+export const MAX_BATCH_CUSTOMER_ACTION_SIZE = 1000;
 
 export const customerStatusMeta: Record<
   CustomerStatus,

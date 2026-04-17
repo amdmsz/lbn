@@ -65,6 +65,23 @@
 - [ ] 首次改密链路正常
 - [ ] 登出后再次访问受保护页面会被拦截
 
+### 自动 finalize staging 演练
+
+- [ ] 已确认 staging 使用独立 `DATABASE_URL`
+- [ ] 已确认 `RECYCLE_AUTO_FINALIZE_ACTOR_ID` 指向 staging 专用 `ACTIVE ADMIN`
+- [ ] 已明确 `RECYCLE_AUTO_FINALIZE_BATCH_LIMIT`
+- [ ] 已明确 `RECYCLE_AUTO_FINALIZE_FAILED_ALERT_THRESHOLD`
+- [ ] 已明确 `RECYCLE_AUTO_FINALIZE_BACKLOG_ALERT_THRESHOLD`
+- [ ] 已执行 `npm run worker:recycle-auto-finalize -- --dry-run`
+- [ ] 已看到 `recycle_auto_finalize.stdout_summary`
+- [ ] 已确认 `stdout_summary.dryRun = true`
+- [ ] 已确认 `blocked` 不导致非零退出
+- [ ] 已确认只有 `failed / fatal` 才导致非零退出
+- [ ] 已确认 dry-run 没有新增真实 finalize 的 `OperationLog`
+- [ ] 如准备继续推进，已在 staging 再执行一次真实 `npm run worker:recycle-auto-finalize`
+- [ ] 已人工核对 staging 真实执行后的 `OperationLog` 与 `/recycle-bin` 终态变化
+- [ ] 详细步骤与命令已按 [docs/recycle-auto-finalize-runbook.md](./recycle-auto-finalize-runbook.md) 留档
+
 ### 客户主线
 
 - [ ] `/customers` 正常加载
