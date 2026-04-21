@@ -19,7 +19,7 @@ function printUsage() {
       "  - When --apply is provided, clears _prisma_migrations and marks the new baseline migration as applied.",
       "",
       "Important:",
-      "  - Run `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code` first.",
+      "  - Run `npm run prisma:diff:schema` first.",
       "  - Only use --apply after confirming the current database schema already matches prisma/schema.prisma.",
     ].join("\n"),
   );

@@ -5,8 +5,10 @@ import {
   canBatchManageCustomerTags,
   canBatchMoveCustomersToRecycleBin,
   canCreateCallRecord,
+  canCreateCustomer,
   canCreateSalesOrder,
 } from "@/lib/auth/access";
+import { CustomerCreateEntry } from "@/components/customers/customer-create-entry";
 import type { MoveCustomerToRecycleBinAction } from "@/components/customers/customer-recycle-entry";
 import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { CustomerFilterToolbar } from "@/components/customers/customer-filter-toolbar";
@@ -359,6 +361,7 @@ export function CustomerCenterWorkbench({
             }
             actions={
               <div className="flex flex-wrap gap-2 lg:justify-end">
+                {canCreateCustomer(role) ? <CustomerCreateEntry /> : null}
                 {canAccessCustomerPublicPool(role) ? (
                   <HeaderActionLink href="/customers/public-pool" label="公海池" />
                 ) : null}

@@ -42,6 +42,9 @@ export function MasterDataRecycleDialog({
     return null;
   }
 
+  const hasBlockingBlockers = guard.blockers.some((blocker) => blocker.blocksMoveToRecycleBin);
+  const hasReferenceSnapshots = guard.blockers.length > 0 && !hasBlockingBlockers;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/34 px-4 py-8">
       <div className="w-full max-w-2xl overflow-hidden rounded-[1.1rem] border border-black/10 bg-[rgba(255,255,255,0.98)] shadow-[0_24px_60px_rgba(18,24,31,0.18)]">
@@ -50,11 +53,13 @@ export function MasterDataRecycleDialog({
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge
                 label={
-                  guard.canMoveToRecycleBin
-                    ? "\u53ef\u6062\u590d\u5220\u9664"
-                    : "\u5f15\u7528\u963b\u65ad"
+                  hasBlockingBlockers
+                    ? "\u5f15\u7528\u963b\u65ad"
+                    : hasReferenceSnapshots
+                      ? "\u5f15\u7528\u4fdd\u7559"
+                      : "\u53ef\u6062\u590d\u5220\u9664"
                 }
-                variant={guard.canMoveToRecycleBin ? "warning" : "danger"}
+                variant={hasBlockingBlockers ? "danger" : "warning"}
               />
               <StatusBadge label={objectTypeLabel} variant="neutral" />
             </div>
@@ -63,9 +68,11 @@ export function MasterDataRecycleDialog({
                 {"\u79fb\u5165\u56de\u6536\u7ad9"}
               </h3>
               <p className="mt-1 text-sm leading-6 text-black/58">
-                {
-                  "\u5148\u786e\u8ba4\u5f53\u524d\u5bf9\u8c61\u7684\u5f15\u7528\u5173\u7cfb\uff0c\u518d\u51b3\u5b9a\u662f\u5426\u5141\u8bb8\u8fdb\u5165\u56de\u6536\u7ad9\u3002"
-                }
+                {hasBlockingBlockers
+                  ? "\u5148\u786e\u8ba4\u5f53\u524d\u5bf9\u8c61\u7684\u5f15\u7528\u5173\u7cfb\uff0c\u518d\u51b3\u5b9a\u662f\u5426\u5141\u8bb8\u8fdb\u5165\u56de\u6536\u7ad9\u3002"
+                  : hasReferenceSnapshots
+                    ? "\u5f53\u524d\u5bf9\u8c61\u5df2\u8fdb\u5165\u5386\u53f2\u4f7f\u7528\u94fe\uff0c\u4f46 M2 \u5141\u8bb8\u79fb\u5165\u56de\u6536\u7ad9\uff0c\u8fd9\u4e9b\u5f15\u7528\u4f1a\u4f5c\u4e3a\u540e\u7eed finalize \u7684\u5224\u65ad\u4f9d\u636e\u4fdd\u7559\u3002"
+                    : "\u5f53\u524d\u5bf9\u8c61\u53ef\u76f4\u63a5\u79fb\u5165\u56de\u6536\u7ad9\uff0c\u4ece\u73b0\u884c\u4e1a\u52a1\u89c6\u56fe\u4e2d\u9690\u85cf\u3002"}
               </p>
             </div>
           </div>
@@ -120,7 +127,7 @@ export function MasterDataRecycleDialog({
           {guard.blockers.length > 0 ? (
             <div className="space-y-2 rounded-[0.95rem] border border-[rgba(141,59,51,0.14)] bg-[rgba(255,247,246,0.86)] p-4">
               <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--color-danger)]">
-                {"\u5f15\u7528\u5173\u7cfb"}
+                {hasBlockingBlockers ? "\u5f15\u7528\u5173\u7cfb" : "\u5386\u53f2\u5f15\u7528"}
               </p>
               <div className="space-y-2">
                 {guard.blockers.map((blocker) => (
@@ -135,8 +142,10 @@ export function MasterDataRecycleDialog({
                       </p>
                     </div>
                     <StatusBadge
-                      label={`\u963b\u65ad ${blocker.count}`}
-                      variant="danger"
+                      label={`${
+                        blocker.blocksMoveToRecycleBin ? "\u963b\u65ad" : "\u4fdd\u7559"
+                      } ${blocker.count}`}
+                      variant={blocker.blocksMoveToRecycleBin ? "danger" : "warning"}
                     />
                   </div>
                 ))}
@@ -182,7 +191,9 @@ export function MasterDataRecycleDialog({
         <div className="flex flex-col gap-3 border-t border-black/7 bg-[rgba(247,248,250,0.8)] px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
           <p className="text-[13px] leading-5 text-black/56">
             {guard.canMoveToRecycleBin
-              ? "\u786e\u8ba4\u540e\u5bf9\u8c61\u4f1a\u4ece\u5f53\u524d\u4e1a\u52a1\u89c6\u56fe\u4e2d\u9690\u85cf\uff0c\u540e\u7eed\u53ef\u901a\u8fc7\u56de\u6536\u7ad9\u6cbb\u7406\u5165\u53e3\u5904\u7406\u6062\u590d\u4e0e\u6c38\u4e45\u5220\u9664\u3002"
+              ? hasReferenceSnapshots
+                ? "\u786e\u8ba4\u540e\u5bf9\u8c61\u4f1a\u4ece\u5f53\u524d\u4e1a\u52a1\u89c6\u56fe\u4e0e\u65b0\u5efa\u9009\u62e9\u5668\u4e2d\u9690\u85cf\uff0c\u5df2\u6709\u5386\u53f2\u5f15\u7528\u4f1a\u7ee7\u7eed\u4fdd\u7559\uff0c\u540e\u7eed finalize \u518d\u6309\u6700\u65b0\u771f\u76f8\u5224\u65ad purge / archive\u3002"
+                : "\u786e\u8ba4\u540e\u5bf9\u8c61\u4f1a\u4ece\u5f53\u524d\u4e1a\u52a1\u89c6\u56fe\u4e2d\u9690\u85cf\uff0c\u540e\u7eed\u53ef\u901a\u8fc7\u56de\u6536\u7ad9\u6cbb\u7406\u5165\u53e3\u5904\u7406\u6062\u590d\u4e0e\u6c38\u4e45\u5220\u9664\u3002"
               : "\u5f53\u524d\u5bf9\u8c61\u5df2\u8fdb\u5165\u4e1a\u52a1\u5f15\u7528\u94fe\uff0c\u672c\u8f6e\u4e0d\u5141\u8bb8\u79fb\u5165\u56de\u6536\u7ad9\uff0c\u8bf7\u6539\u4e3a\u505c\u7528\u3002"}
           </p>
           <div className="flex flex-wrap items-center justify-end gap-2">

@@ -186,6 +186,10 @@ export function canAccessCustomerModule(role: RoleCode) {
   return role === "ADMIN" || role === "SUPERVISOR" || role === "SALES";
 }
 
+export function canCreateCustomer(role: RoleCode) {
+  return role === "SALES";
+}
+
 export function canAccessCustomerPublicPool(role: RoleCode) {
   return canAccessCustomerModule(role);
 }
@@ -280,7 +284,11 @@ export function canManageSuppliers(
   role: RoleCode,
   permissionCodes: readonly ExtraPermissionCode[] = [],
 ) {
-  return canAccessSupplierModule(role, permissionCodes);
+  return (
+    role === "ADMIN" ||
+    role === "SUPERVISOR" ||
+    hasExtraPermission(permissionCodes, "PRODUCT_MANAGE")
+  );
 }
 
 export function canAccessProductModule(
@@ -310,7 +318,41 @@ export function canManageProducts(
   return (
     role === "ADMIN" ||
     role === "SUPERVISOR" ||
+    hasExtraPermission(permissionCodes, "PRODUCT_MANAGE")
+  );
+}
+
+export function canViewProductSupplyIdentity(
+  role: RoleCode,
+  permissionCodes: readonly ExtraPermissionCode[] = [],
+) {
+  return (
+    role === "ADMIN" ||
+    role === "SUPERVISOR" ||
     role === "SHIPPER" ||
+    hasExtraPermission(permissionCodes, "PRODUCT_MANAGE")
+  );
+}
+
+export function canViewProductSupplyGroup(
+  role: RoleCode,
+  permissionCodes: readonly ExtraPermissionCode[] = [],
+) {
+  return (
+    role === "ADMIN" ||
+    role === "SUPERVISOR" ||
+    role === "SHIPPER" ||
+    hasExtraPermission(permissionCodes, "PRODUCT_MANAGE")
+  );
+}
+
+export function canViewProductFinanceCategory(
+  role: RoleCode,
+  permissionCodes: readonly ExtraPermissionCode[] = [],
+) {
+  return (
+    role === "ADMIN" ||
+    role === "SUPERVISOR" ||
     hasExtraPermission(permissionCodes, "PRODUCT_MANAGE")
   );
 }

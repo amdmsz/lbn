@@ -190,7 +190,39 @@
 - auto-finalize 已具备真实执行入口、dry-run、stdout summary、alert code、runbook 与 deployment / staging 文档
 - 当前 recycle 主线不再缺研发基建，剩余重点是 staging 演练、生产调度接线和人工核对
 
+### 商品域删除 M2 交接
+
+- 商品域删除已经改为：允许 `Product / ProductSku` 进入回收站，即使存在历史引用。
+- 当前 M2 真相：
+  - 删除不是硬删
+  - `Product` 删除默认级联当前未隐藏 SKU
+  - `/products` 与新建业务选择器当前统一按商品域 `ACTIVE` 回收条目隐藏
+  - 历史订单 / 成交单 / 履约单继续依赖既有 snapshot 字段展示
+- 当前 M2 还没有完成：
+  - 商品域 `ARCHIVE` finalize
+  - 商品域 `ACTIVE + ARCHIVED` hidden 全链切换
+  - 商品域 history archive payload
+- 后续如果继续这条线，不要重做删除语义讨论，直接从商品域 archive finalize 和 hidden filter 升级继续。
+
 ---
+
+### 商品域删除 M3 交接
+
+- 商品域 M3 已完成：
+  - `Product / ProductSku` finalize preview 与执行
+  - 商品域 `ARCHIVE | PURGE` 双终态
+  - 商品域 `historyArchive` payload 解析
+  - 商品域 `ACTIVE + ARCHIVED` hidden 全链切换
+- 当前 M3 真相：
+  - `ProductSku` 有历史引用时只 `ARCHIVE`
+  - `Product` 只要有历史引用，或删除前仍有 SKU 聚合保留意义，就只 `ARCHIVE`
+  - archived 商品对象不会再回到 `/products`、兼容详情页和新建业务选择器
+  - 历史订单 / 成交 / 履约详情继续依赖既有 snapshot，不读商品 live record
+- 当前仍未做：
+  - 商品域 live record 的额外脱敏改写
+  - 新 schema
+  - 新的商品域删除系统
+- 后续如果继续这条线，优先从更细的 archive 摘要增强或运营治理继续，不要回头重开 M2 / M3 语义讨论。
 
 ## 5. 当前页面定位
 
@@ -455,4 +487,24 @@
   - `app/(dashboard)/recycle-bin/*`
   - `lib/recycle-bin/*`
   - `scripts/recycle-auto-finalize.ts`
+- Default rule: do not reopen schema / lifecycle redesign for recycle unless a new explicit milestone says so.
+
+---
+
+## 16. ProductSku Field Removal Addendum
+
+- Current `ProductSku` schema no longer keeps `minUnitPrice`, `isLiveCommon`, or `shippingRemark`.
+- The removal is full-chain rather than UI-only:
+  - Prisma schema
+  - product mutations / actions
+  - product list + detail view-models
+  - quick-create and advanced SKU forms
+  - product advanced filters and saved-view payloads
+  - seed / verify scripts and related docs
+- `defaultUnitPrice`, `codSupported`, `insuranceSupported`, and `defaultInsuranceAmount` remain the active SKU commercial / fulfillment fields.
+- This addendum does not change:
+  - `Product / ProductSku` core semantics
+  - `supplierId` execution truth
+  - order split semantics
+  - recycle / archive / hidden baseline
 - 默认不要重做 schema / lifecycle 规划；除非有新的明确 milestone，否则这条线只需要继续运维落地和小范围一致性维护

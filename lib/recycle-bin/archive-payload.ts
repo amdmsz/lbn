@@ -87,6 +87,48 @@ export type TradeOrderRecycleArchiveSnapshot = {
   downstreamAnchors: TradeOrderRecycleArchiveDownstreamAnchors | null;
 };
 
+export type ProductRecycleArchiveCascadeSkuSnapshot = {
+  id: string;
+  skuName: string | null;
+  enabled: boolean;
+  salesOrderItemCount: number;
+  hasHistoricalReferences: boolean;
+};
+
+export type ProductRecycleArchiveSnapshot = {
+  entity: "PRODUCT";
+  snapshotVersion: number;
+  finalAction: "ARCHIVE";
+  objectWeight: RecycleArchiveObjectWeight;
+  targetMissing: boolean;
+  productId: string;
+  supplierId: string | null;
+  productCode: string | null;
+  productName: string | null;
+  enabled: boolean;
+  hasHistoricalReferences: boolean;
+  salesOrderItemCount: number;
+  preDeleteProductSnapshot: Record<string, unknown> | null;
+  cascadeSkuSnapshot: ProductRecycleArchiveCascadeSkuSnapshot[];
+};
+
+export type ProductSkuRecycleArchiveSnapshot = {
+  entity: "PRODUCT_SKU";
+  snapshotVersion: number;
+  finalAction: "ARCHIVE";
+  objectWeight: RecycleArchiveObjectWeight;
+  targetMissing: boolean;
+  productSkuId: string;
+  productId: string | null;
+  supplierId: string | null;
+  skuName: string | null;
+  enabled: boolean;
+  hasHistoricalReferences: boolean;
+  salesOrderItemCount: number;
+  parentProductSnapshot: Record<string, unknown> | null;
+  preDeleteSkuSnapshot: Record<string, unknown> | null;
+};
+
 export const RECYCLE_ARCHIVE_SNAPSHOT_VERSION = 2;
 
 function getRecord(value: unknown): Record<string, unknown> | null {
@@ -115,6 +157,10 @@ function getMaskedValue(value: unknown): RecycleArchiveMaskedValue | null {
 
 function getObjectWeight(value: unknown): RecycleArchiveObjectWeight {
   return value === "LIGHT" ? "LIGHT" : "HEAVY";
+}
+
+function getArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
 }
 
 function getSnapshot(payload: RecycleArchivePayload | null) {
@@ -216,6 +262,30 @@ function parseTradeOrderDownstreamAnchors(
     exportLineCount: getNumber(record.exportLineCount),
     logisticsFollowUpCount: getNumber(record.logisticsFollowUpCount),
     codCollectionCount: getNumber(record.codCollectionCount),
+  };
+}
+
+function parseProductCascadeSkuSnapshot(
+  value: unknown,
+): ProductRecycleArchiveCascadeSkuSnapshot | null {
+  const record = getRecord(value);
+
+  if (!record) {
+    return null;
+  }
+
+  const id = getString(record.id);
+
+  if (!id) {
+    return null;
+  }
+
+  return {
+    id,
+    skuName: getString(record.skuName),
+    enabled: getBoolean(record.enabled),
+    salesOrderItemCount: getNumber(record.salesOrderItemCount),
+    hasHistoricalReferences: getBoolean(record.hasHistoricalReferences),
   };
 }
 
@@ -381,5 +451,77 @@ export function parseTradeOrderRecycleArchiveSnapshot(
     receiverPhoneMasked: getString(snapshot.archivedReceiverPhone),
     receiverAddressMasked: null,
     downstreamAnchors: null,
+  };
+}
+
+export function parseProductRecycleArchiveSnapshot(
+  value: unknown,
+): ProductRecycleArchiveSnapshot | null {
+  const payload = coerceArchivePayload(value);
+  const snapshot = getSnapshot(payload);
+
+  if (!payload || !snapshot || snapshot.entity !== "PRODUCT") {
+    return null;
+  }
+
+  const productId = getString(snapshot.productId);
+
+  if (!productId) {
+    return null;
+  }
+
+  return {
+    entity: "PRODUCT",
+    snapshotVersion: getNumber(snapshot.snapshotVersion) || 1,
+    finalAction: "ARCHIVE",
+    objectWeight: getObjectWeight(snapshot.objectWeight),
+    targetMissing: getBoolean(snapshot.targetMissing),
+    productId,
+    supplierId: getString(snapshot.supplierId),
+    productCode: getString(snapshot.productCode),
+    productName: getString(snapshot.productName),
+    enabled: getBoolean(snapshot.enabled),
+    hasHistoricalReferences: getBoolean(snapshot.hasHistoricalReferences),
+    salesOrderItemCount: getNumber(snapshot.salesOrderItemCount),
+    preDeleteProductSnapshot: getRecord(snapshot.preDeleteProductSnapshot),
+    cascadeSkuSnapshot: getArray(snapshot.cascadeSkuSnapshot)
+      .map((item) => parseProductCascadeSkuSnapshot(item))
+      .filter(
+        (item): item is ProductRecycleArchiveCascadeSkuSnapshot => Boolean(item),
+      ),
+  };
+}
+
+export function parseProductSkuRecycleArchiveSnapshot(
+  value: unknown,
+): ProductSkuRecycleArchiveSnapshot | null {
+  const payload = coerceArchivePayload(value);
+  const snapshot = getSnapshot(payload);
+
+  if (!payload || !snapshot || snapshot.entity !== "PRODUCT_SKU") {
+    return null;
+  }
+
+  const productSkuId = getString(snapshot.productSkuId);
+
+  if (!productSkuId) {
+    return null;
+  }
+
+  return {
+    entity: "PRODUCT_SKU",
+    snapshotVersion: getNumber(snapshot.snapshotVersion) || 1,
+    finalAction: "ARCHIVE",
+    objectWeight: getObjectWeight(snapshot.objectWeight),
+    targetMissing: getBoolean(snapshot.targetMissing),
+    productSkuId,
+    productId: getString(snapshot.productId),
+    supplierId: getString(snapshot.supplierId),
+    skuName: getString(snapshot.skuName),
+    enabled: getBoolean(snapshot.enabled),
+    hasHistoricalReferences: getBoolean(snapshot.hasHistoricalReferences),
+    salesOrderItemCount: getNumber(snapshot.salesOrderItemCount),
+    parentProductSnapshot: getRecord(snapshot.parentProductSnapshot),
+    preDeleteSkuSnapshot: getRecord(snapshot.preDeleteSkuSnapshot),
   };
 }

@@ -10,6 +10,7 @@ import { canAccessSalesOrderModule } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
 import { salesOrderPaymentSchemeOptions } from "@/lib/fulfillment/metadata";
 import { getPaymentOwnerOptions } from "@/lib/payments/queries";
+import { findProductDomainCurrentlyHiddenTargetIds } from "@/lib/products/recycle";
 
 type SearchParamsValue = string | string[] | undefined;
 
@@ -39,6 +40,31 @@ const filtersSchema = z.object({
 });
 
 const PAGE_SIZE = 10;
+
+export type VisibleSkuOption = {
+  id: string;
+  skuName: string;
+  defaultUnitPrice: Prisma.Decimal;
+  codSupported: boolean;
+  insuranceSupported: boolean;
+  defaultInsuranceAmount: Prisma.Decimal;
+  product: {
+    id: string;
+    name: string;
+    supplier: {
+      id: string;
+      name: string;
+    };
+  };
+};
+
+export type SerializedVisibleSkuOption = Omit<
+  VisibleSkuOption,
+  "defaultUnitPrice" | "defaultInsuranceAmount"
+> & {
+  defaultUnitPrice: string;
+  defaultInsuranceAmount: string;
+};
 
 async function getViewerTeamId(viewer: SalesOrderViewer) {
   if (viewer.role !== "SUPERVISOR") {
@@ -165,14 +191,49 @@ async function getCreateCustomer(
   });
 }
 
-async function getVisibleSkuOptions() {
+function serializeVisibleSkuOptions(items: VisibleSkuOption[]): SerializedVisibleSkuOption[] {
+  return items.map((sku) => ({
+    ...sku,
+    defaultUnitPrice: sku.defaultUnitPrice.toString(),
+    defaultInsuranceAmount: sku.defaultInsuranceAmount.toString(),
+  }));
+}
+
+async function getVisibleSkuOptions(limit = 200) {
+  const [hiddenProductSkuIds, hiddenProductIds, hiddenSupplierIds] = await Promise.all([
+    findProductDomainCurrentlyHiddenTargetIds(prisma, "PRODUCT_SKU"),
+    findProductDomainCurrentlyHiddenTargetIds(prisma, "PRODUCT"),
+    findProductDomainCurrentlyHiddenTargetIds(prisma, "SUPPLIER"),
+  ]);
+
   return prisma.productSku.findMany({
     where: {
       enabled: true,
+      ...(hiddenProductSkuIds.length > 0
+        ? {
+            id: {
+              notIn: hiddenProductSkuIds,
+            },
+          }
+        : {}),
       product: {
         enabled: true,
+        ...(hiddenProductIds.length > 0
+          ? {
+              id: {
+                notIn: hiddenProductIds,
+              },
+            }
+          : {}),
         supplier: {
           enabled: true,
+          ...(hiddenSupplierIds.length > 0
+            ? {
+                id: {
+                  notIn: hiddenSupplierIds,
+                },
+              }
+            : {}),
         },
       },
     },
@@ -181,13 +242,10 @@ async function getVisibleSkuOptions() {
       { product: { name: "asc" } },
       { skuName: "asc" },
     ],
-    take: 200,
+    take: limit,
     select: {
       id: true,
-      skuCode: true,
       skuName: true,
-      specText: true,
-      unit: true,
       defaultUnitPrice: true,
       codSupported: true,
       insuranceSupported: true,
@@ -205,20 +263,104 @@ async function getVisibleSkuOptions() {
         },
       },
     },
-  });
+  }) as Promise<VisibleSkuOption[]>;
 }
 
 export async function getSalesOrderCreateFormOptions() {
   const skuOptions = await getVisibleSkuOptions();
 
   return {
-    skuOptions: skuOptions.map((sku) => ({
-      ...sku,
-      defaultUnitPrice: sku.defaultUnitPrice.toString(),
-      defaultInsuranceAmount: sku.defaultInsuranceAmount.toString(),
-    })),
+    skuOptions: serializeVisibleSkuOptions(skuOptions),
     paymentSchemeOptions: salesOrderPaymentSchemeOptions,
   };
+}
+
+export async function searchVisibleSkuOptions(
+  viewer: SalesOrderViewer,
+  keyword: string,
+  limit = 12,
+) {
+  if (!canAccessSalesOrderModule(viewer.role)) {
+    throw new Error("当前角色无权搜索商品规格。");
+  }
+
+  const normalizedKeyword = keyword.trim();
+  if (!normalizedKeyword) {
+    return [] as SerializedVisibleSkuOption[];
+  }
+
+  const [hiddenProductSkuIds, hiddenProductIds, hiddenSupplierIds] = await Promise.all([
+    findProductDomainCurrentlyHiddenTargetIds(prisma, "PRODUCT_SKU"),
+    findProductDomainCurrentlyHiddenTargetIds(prisma, "PRODUCT"),
+    findProductDomainCurrentlyHiddenTargetIds(prisma, "SUPPLIER"),
+  ]);
+
+  const items = (await prisma.productSku.findMany({
+    where: {
+      enabled: true,
+      ...(hiddenProductSkuIds.length > 0
+        ? {
+            id: {
+              notIn: hiddenProductSkuIds,
+            },
+          }
+        : {}),
+      product: {
+        enabled: true,
+        ...(hiddenProductIds.length > 0
+          ? {
+              id: {
+                notIn: hiddenProductIds,
+              },
+            }
+          : {}),
+        supplier: {
+          enabled: true,
+          ...(hiddenSupplierIds.length > 0
+            ? {
+                id: {
+                  notIn: hiddenSupplierIds,
+                },
+              }
+            : {}),
+        },
+      },
+      OR: [
+        { skuName: { contains: normalizedKeyword } },
+        { product: { name: { contains: normalizedKeyword } } },
+        { product: { code: { contains: normalizedKeyword } } },
+        { product: { supplier: { name: { contains: normalizedKeyword } } } },
+      ],
+    },
+    orderBy: [
+      { product: { supplier: { name: "asc" } } },
+      { product: { name: "asc" } },
+      { skuName: "asc" },
+    ],
+    take: Math.min(Math.max(limit, 1), 20),
+    select: {
+      id: true,
+      skuName: true,
+      defaultUnitPrice: true,
+      codSupported: true,
+      insuranceSupported: true,
+      defaultInsuranceAmount: true,
+      product: {
+        select: {
+          id: true,
+          name: true,
+          supplier: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  })) as VisibleSkuOption[];
+
+  return serializeVisibleSkuOptions(items);
 }
 
 export async function searchSalesOrderCustomers(
@@ -481,11 +623,7 @@ export async function getSalesOrdersPageData(
     })),
     createCustomer,
     suppliers,
-    skuOptions: skuOptions.map((sku) => ({
-      ...sku,
-      defaultUnitPrice: sku.defaultUnitPrice.toString(),
-      defaultInsuranceAmount: sku.defaultInsuranceAmount.toString(),
-    })),
+    skuOptions: serializeVisibleSkuOptions(skuOptions),
     pagination: {
       page,
       pageSize: PAGE_SIZE,
@@ -900,11 +1038,7 @@ export async function getSalesOrderDetail(
           }
         : null,
     },
-    skuOptions: skuOptions.map((sku) => ({
-      ...sku,
-      defaultUnitPrice: sku.defaultUnitPrice.toString(),
-      defaultInsuranceAmount: sku.defaultInsuranceAmount.toString(),
-    })),
+    skuOptions: serializeVisibleSkuOptions(skuOptions),
     paymentOwnerOptions,
     operationLogs,
   };

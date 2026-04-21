@@ -21,6 +21,7 @@ import {
 } from "@/lib/calls/settings";
 import {
   CUSTOMERS_PAGE_SIZE,
+  customerManualCreateOperationAction,
   customerPageSizeOptions,
   type CustomerDetailTab,
   type CustomerPageSize,
@@ -70,6 +71,7 @@ type CustomerSnapshotState = {
   latestLeadAt: Date | null;
   latestFollowUpAt: Date | null;
   latestCustomerImportAt: Date | null;
+  assignedAt: Date | null;
   newImported: boolean;
   pendingFirstCall: boolean;
   pendingFollowUp: boolean;
@@ -115,6 +117,8 @@ export type CustomerCenterFilters = {
   tagIds: string[];
   importedFrom: string;
   importedTo: string;
+  assignedFrom: string;
+  assignedTo: string;
   page: number;
   pageSize: CustomerPageSize;
 };
@@ -316,6 +320,8 @@ const customerCenterFiltersSchema = z.object({
   tagIds: z.array(z.string().trim().min(1)).default([]),
   importedFrom: z.string().trim().default(""),
   importedTo: z.string().trim().default(""),
+  assignedFrom: z.string().trim().default(""),
+  assignedTo: z.string().trim().default(""),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z
     .coerce
@@ -532,6 +538,136 @@ async function getLatestCustomerImportMap(customerIds: string[]) {
   return latestMap;
 }
 
+async function getLatestCustomerAssignmentMap(customerSnapshots: CustomerSnapshot[]) {
+  if (customerSnapshots.length === 0) {
+    return new Map<string, Date>();
+  }
+
+  const customerIds = customerSnapshots.map((snapshot) => snapshot.id);
+  const leadIds = [...new Set(customerSnapshots.flatMap((snapshot) => snapshot.leads.map((lead) => lead.id)))];
+  const currentOwnerByCustomerId = new Map(
+    customerSnapshots.map((snapshot) => [snapshot.id, snapshot.ownerId] as const),
+  );
+
+  const [ownershipEvents, leadAssignments, manualCreateLogs] = await Promise.all([
+    prisma.customerOwnershipEvent.findMany({
+      where: {
+        customerId: {
+          in: customerIds,
+        },
+        toOwnerId: {
+          not: null,
+        },
+        toOwnershipMode: CustomerOwnershipMode.PRIVATE,
+      },
+      orderBy: [{ createdAt: "desc" }],
+      select: {
+        customerId: true,
+        toOwnerId: true,
+        createdAt: true,
+      },
+    }),
+    leadIds.length > 0
+      ? prisma.leadAssignment.findMany({
+          where: {
+            leadId: {
+              in: leadIds,
+            },
+          },
+          orderBy: [{ createdAt: "desc" }],
+          select: {
+            createdAt: true,
+            toUserId: true,
+            lead: {
+              select: {
+                customerId: true,
+              },
+            },
+          },
+        })
+      : Promise.resolve(
+          [] as Array<{
+            createdAt: Date;
+            toUserId: string;
+            lead: {
+              customerId: string | null;
+            };
+          }>,
+        ),
+    prisma.operationLog.findMany({
+      where: {
+        targetType: "CUSTOMER",
+        targetId: {
+          in: customerIds,
+        },
+        action: customerManualCreateOperationAction,
+      },
+      orderBy: [{ createdAt: "desc" }],
+      select: {
+        targetId: true,
+        createdAt: true,
+        afterData: true,
+      },
+    }),
+  ]);
+
+  const latestMap = new Map<string, Date>();
+
+  for (const event of ownershipEvents) {
+    const expectedOwnerId = currentOwnerByCustomerId.get(event.customerId);
+
+    if (!expectedOwnerId || event.toOwnerId !== expectedOwnerId || latestMap.has(event.customerId)) {
+      continue;
+    }
+
+    latestMap.set(event.customerId, event.createdAt);
+  }
+
+  for (const assignment of leadAssignments) {
+    const customerId = assignment.lead.customerId;
+
+    if (!customerId || latestMap.has(customerId)) {
+      continue;
+    }
+
+    const expectedOwnerId = currentOwnerByCustomerId.get(customerId);
+
+    if (!expectedOwnerId || assignment.toUserId !== expectedOwnerId) {
+      continue;
+    }
+
+    latestMap.set(customerId, assignment.createdAt);
+  }
+
+  for (const log of manualCreateLogs) {
+    if (latestMap.has(log.targetId)) {
+      continue;
+    }
+
+    const expectedOwnerId = currentOwnerByCustomerId.get(log.targetId);
+
+    if (!expectedOwnerId) {
+      continue;
+    }
+
+    const ownerId =
+      log.afterData &&
+      typeof log.afterData === "object" &&
+      "ownerId" in log.afterData &&
+      typeof log.afterData.ownerId === "string"
+        ? log.afterData.ownerId
+        : null;
+
+    if (ownerId !== expectedOwnerId) {
+      continue;
+    }
+
+    latestMap.set(log.targetId, log.createdAt);
+  }
+
+  return latestMap;
+}
+
 function parseDateOnly(value: string, boundary: "start" | "end") {
   if (!value) {
     return null;
@@ -690,6 +826,8 @@ function parseCustomerCenterFilters(
     tagIds: getParamValues(rawSearchParams?.tagIds),
     importedFrom: getParamValue(rawSearchParams?.importedFrom),
     importedTo: getParamValue(rawSearchParams?.importedTo),
+    assignedFrom: getParamValue(rawSearchParams?.assignedFrom),
+    assignedTo: getParamValue(rawSearchParams?.assignedTo),
     page: getParamValue(rawSearchParams?.page) || "1",
     pageSize: getParamValue(rawSearchParams?.pageSize) || String(CUSTOMERS_PAGE_SIZE),
   });
@@ -787,9 +925,10 @@ async function getCustomerCenterWorkspaceBase(
       select: customerSnapshotSelect,
     }),
   ]);
-  const latestCustomerImportMap = await getLatestCustomerImportMap(
-    customerSnapshots.map((snapshot) => snapshot.id),
-  );
+  const [latestCustomerImportMap, latestCustomerAssignmentMap] = await Promise.all([
+    getLatestCustomerImportMap(customerSnapshots.map((snapshot) => snapshot.id)),
+    getLatestCustomerAssignmentMap(customerSnapshots),
+  ]);
 
   const parsedFilters = parseCustomerCenterFilters(rawSearchParams);
   const salesById = new Map(salesUsers.map((item) => [item.id, item]));
@@ -828,6 +967,8 @@ async function getCustomerCenterWorkspaceBase(
     tagIds: parsedFilters.tagIds,
     importedFrom: parsedFilters.importedFrom,
     importedTo: parsedFilters.importedTo,
+    assignedFrom: parsedFilters.assignedFrom,
+    assignedTo: parsedFilters.assignedTo,
     page: parsedFilters.page,
     pageSize: parsedFilters.pageSize,
   };
@@ -841,6 +982,7 @@ async function getCustomerCenterWorkspaceBase(
       getCustomerSnapshotState(
         snapshot,
         latestCustomerImportMap.get(snapshot.id)?.createdAt ?? null,
+        latestCustomerAssignmentMap.get(snapshot.id) ?? null,
         now,
         todayStart,
         todayEnd,
@@ -898,6 +1040,13 @@ function getCustomerCenterFilteredSnapshots(input: {
         input.stateMap.get(snapshot.id),
         input.filters.importedFrom,
         input.filters.importedTo,
+      ),
+    )
+    .filter((snapshot) =>
+      matchesAssignedDateRange(
+        input.stateMap.get(snapshot.id),
+        input.filters.assignedFrom,
+        input.filters.assignedTo,
       ),
     )
     .sort((left, right) => compareCustomerSnapshots(left, right, input.stateMap));
@@ -1078,6 +1227,7 @@ function getSnapshotProductEntries(snapshot: CustomerSnapshot) {
 function getCustomerSnapshotState(
   snapshot: CustomerSnapshot,
   latestCustomerImportAt: Date | null,
+  assignedAt: Date | null,
   now: Date,
   todayStart: Date,
   todayEnd: Date,
@@ -1144,6 +1294,7 @@ function getCustomerSnapshotState(
     latestLeadAt,
     latestFollowUpAt,
     latestCustomerImportAt,
+    assignedAt,
     newImported,
     pendingFirstCall,
     pendingFollowUp,
@@ -1307,6 +1458,35 @@ function matchesImportedDateRange(
   }
 
   if (to && importedAt.getTime() > to.getTime()) {
+    return false;
+  }
+
+  return true;
+}
+
+function matchesAssignedDateRange(
+  state: CustomerSnapshotState | undefined,
+  assignedFrom: string,
+  assignedTo: string,
+) {
+  if (!assignedFrom && !assignedTo) {
+    return true;
+  }
+
+  const assignedAt = state?.assignedAt ?? null;
+
+  if (!assignedAt) {
+    return false;
+  }
+
+  const from = parseDateOnly(assignedFrom, "start");
+  const to = parseDateOnly(assignedTo, "end");
+
+  if (from && assignedAt.getTime() < from.getTime()) {
+    return false;
+  }
+
+  if (to && assignedAt.getTime() > to.getTime()) {
     return false;
   }
 

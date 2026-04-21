@@ -1,10 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
+import { ZodError, z } from "zod";
 import {
   canBatchManageCustomerTags,
   canBatchMoveCustomersToRecycleBin,
+  canCreateCustomer,
 } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
 import {
@@ -34,6 +35,7 @@ import {
   listFilteredCustomerCenterCustomerIds,
   listVisibleCustomerCenterCustomerIds,
 } from "@/lib/customers/queries";
+import { createOwnedCustomer } from "@/lib/customers/mutations";
 import { assignCustomerTag } from "@/lib/master-data/mutations";
 import { moveToRecycleBin } from "@/lib/recycle-bin/lifecycle";
 import type { MoveToRecycleBinResult } from "@/lib/recycle-bin/types";
@@ -48,6 +50,16 @@ const batchMoveCustomersToRecycleBinSchema = z.object({
   selectionMode: z.enum(["manual", "filtered"]).default("manual"),
   customerIds: z.array(z.string().trim().min(1)).default([]),
   reasonCode: z.string().trim().default("mistaken_creation"),
+});
+
+const createOwnedCustomerActionSchema = z.object({
+  name: z.string().trim().default(""),
+  phone: z.string().trim().default(""),
+  province: z.string().trim().default(""),
+  city: z.string().trim().default(""),
+  district: z.string().trim().default(""),
+  address: z.string().trim().default(""),
+  remark: z.string().trim().default(""),
 });
 
 type ResolvedBatchCustomerSelection =
@@ -74,10 +86,35 @@ export type BatchMoveCustomersToRecycleBinBlockedReason =
   CustomerBatchBlockedReasonSummary;
 export type BatchAddCustomerTagActionResult = CustomerBatchActionResult;
 export type BatchMoveCustomersToRecycleBinActionResult = CustomerBatchActionResult;
+export type CreateOwnedCustomerField = keyof z.output<typeof createOwnedCustomerActionSchema>;
+export type CreateOwnedCustomerActionResult = {
+  status: "success" | "error";
+  message: string;
+  customerId: string | null;
+  fieldErrors: Partial<Record<CreateOwnedCustomerField, string>>;
+};
 
 const CUSTOMER_BATCH_ACTION_LIMIT = buildCustomerBatchActionLimit(
   MAX_BATCH_CUSTOMER_ACTION_SIZE,
 );
+
+function buildCreateOwnedCustomerFieldErrors(error: ZodError) {
+  const fieldErrors: Partial<Record<CreateOwnedCustomerField, string>> = {};
+
+  for (const issue of error.issues) {
+    const field = issue.path[0];
+
+    if (
+      typeof field === "string" &&
+      field in createOwnedCustomerActionSchema.shape &&
+      !fieldErrors[field as CreateOwnedCustomerField]
+    ) {
+      fieldErrors[field as CreateOwnedCustomerField] = issue.message;
+    }
+  }
+
+  return fieldErrors;
+}
 
 function buildBatchCustomerActionResult(input: {
   status: "success" | "error";
@@ -360,6 +397,8 @@ function getCustomerFilterParamsFromFormData(formData: FormData) {
     tagIds: formData.getAll("tagIds").map((value) => String(value).trim()),
     importedFrom: String(formData.get("importedFrom") ?? "").trim(),
     importedTo: String(formData.get("importedTo") ?? "").trim(),
+    assignedFrom: String(formData.get("assignedFrom") ?? "").trim(),
+    assignedTo: String(formData.get("assignedTo") ?? "").trim(),
     page: String(formData.get("page") ?? "1").trim(),
     pageSize: String(formData.get("pageSize") ?? "").trim(),
   };
@@ -442,6 +481,76 @@ async function getBatchCustomerActor() {
     role: session.user.role,
     permissionCodes: session.user.permissionCodes,
   };
+}
+
+export async function createOwnedCustomerAction(
+  formData: FormData,
+): Promise<CreateOwnedCustomerActionResult> {
+  try {
+    const session = await auth();
+
+    if (!session?.user) {
+      return {
+        status: "error",
+        message: "登录已失效，请重新登录后再试。",
+        customerId: null,
+        fieldErrors: {},
+      };
+    }
+
+    if (!canCreateCustomer(session.user.role)) {
+      return {
+        status: "error",
+        message: "当前角色没有手动新增客户的权限。",
+        customerId: null,
+        fieldErrors: {},
+      };
+    }
+
+    const parsed = createOwnedCustomerActionSchema.parse({
+      name: String(formData.get("name") ?? "").trim(),
+      phone: String(formData.get("phone") ?? "").trim(),
+      province: String(formData.get("province") ?? "").trim(),
+      city: String(formData.get("city") ?? "").trim(),
+      district: String(formData.get("district") ?? "").trim(),
+      address: String(formData.get("address") ?? "").trim(),
+      remark: String(formData.get("remark") ?? "").trim(),
+    });
+
+    const result = await createOwnedCustomer(
+      {
+        id: session.user.id,
+        role: session.user.role,
+      },
+      parsed,
+    );
+
+    revalidatePath("/customers");
+    revalidatePath(`/customers/${result.customerId}`);
+
+    return {
+      status: "success",
+      message: result.description,
+      customerId: result.customerId,
+      fieldErrors: {},
+    };
+  } catch (error) {
+    if (error instanceof ZodError) {
+      return {
+        status: "error",
+        message: error.issues[0]?.message ?? "提交数据不完整，请检查后重试。",
+        customerId: null,
+        fieldErrors: buildCreateOwnedCustomerFieldErrors(error),
+      };
+    }
+
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "新增客户失败，请稍后重试。",
+      customerId: null,
+      fieldErrors: {},
+    };
+  }
 }
 
 export async function batchAddCustomerTagAction(

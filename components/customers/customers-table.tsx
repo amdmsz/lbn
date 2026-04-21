@@ -182,6 +182,12 @@ function FilterHiddenInputs({
       {filters.importedTo ? (
         <input type="hidden" name="importedTo" value={filters.importedTo} />
       ) : null}
+      {filters.assignedFrom ? (
+        <input type="hidden" name="assignedFrom" value={filters.assignedFrom} />
+      ) : null}
+      {filters.assignedTo ? (
+        <input type="hidden" name="assignedTo" value={filters.assignedTo} />
+      ) : null}
       <input type="hidden" name="page" value={String(filters.page)} />
       <input type="hidden" name="pageSize" value={String(filters.pageSize)} />
     </>

@@ -484,6 +484,44 @@ Compatibility routes currently still in use:
 
 ---
 
+### 11. Create Customer
+
+**唯一主链（当前真实主入口）**
+
+- `/customers` page-header CTA for sales manual customer creation
+
+**主入口列表**
+
+- Header CTA in `components/customers/customer-center-workbench.tsx`
+- Modal form in `components/customers/customer-create-entry.tsx`
+
+**已废弃 / 应废弃入口**
+
+- Any attempt to rebuild manual customer creation under `/leads`
+- Any order-first shortcut that creates a customer without entering the customer mainline
+
+**涉及的关键文件**
+
+- `app/(dashboard)/customers/actions.ts`
+- `lib/customers/mutations.ts`
+- `lib/customers/queries.ts`
+- `components/customers/customer-center-workbench.tsx`
+- `components/customers/customer-create-entry.tsx`
+
+**每次改该能力时必须同步检查的入口**
+
+- Customer center header CTA
+- Duplicate-phone guard against existing customer / public-pool / recycle records
+- Redirect target after successful creation
+- Assignment-time filter behavior for newly created customers
+
+**当前风险说明**
+
+- The current manual-create path is intentionally SALES-only and creates a private customer directly in the customer mainline
+- This path must not bypass existing customer dedup, public-pool ownership, or recycle governance
+
+---
+
 ## Customer-Center Entry Audit
 
 ### Customer Card Quick Actions
@@ -614,3 +652,104 @@ When changing any workflow, always answer these before shipping:
 6. Did any parent-detail, child-detail, shipping, payment, or batch cross-link silently keep the old route alive?
 7. Did the empty-state CTA reopen an old workflow?
 8. Did contextual shortcuts remain aligned with the same mainline instead of growing a second implementation?
+
+---
+
+## Product Center M1 Addendum (2026-04-18)
+
+This addendum supersedes the old "in-page create form / product cards" wording for Product Center.
+
+### Current Product-Center Mainlines
+
+- Product master-data workbench: `/products`
+- SKU operating workbench: `/products?tab=skus`
+- Supplier lightweight directory: `/products?tab=suppliers`
+- Product deep-link detail compatibility page: `/products/[id]`
+
+### Current Product-Center Interaction Truth
+
+- Daily mainline is now `table -> right detail drawer -> inline edit drawer`
+- `Product` and `SKU` views both use dense tables as the first screen
+- `/products/[id]` remains valid, but is compatibility/deep-link detail rather than the default daily workbench
+- Supplier management remains inside Product Center and must not be re-expanded into a parallel first-level domain
+- Current active `ProductSku` write-path no longer includes `minUnitPrice`, `isLiveCommon`, or `shippingRemark`; SKU editing keeps `defaultUnitPrice` plus existing fulfillment toggles.
+
+### Create Product
+
+**Current mainline**
+
+- `/products` product tab with right-side `ProductFormDrawer`
+
+**Entry surfaces**
+
+- Page-header CTA in `app/(dashboard)/products/page.tsx`
+- Product empty-state CTA in `components/products/products-section.tsx`
+
+**Compatibility / residual**
+
+- `components/products/product-create-form.tsx` is no longer the real mainline entrypoint
+
+### View Product / SKU Detail
+
+**Current mainline**
+
+- Product table row -> right detail drawer in `components/products/products-section.tsx`
+- SKU table row -> right detail drawer in `components/products/product-skus-section.tsx`
+
+**Compatibility entry**
+
+- `/products/[id]`
+
+**Risk check**
+
+- Product list CTA, SKU list CTA, empty-state CTA, and deep-link detail page must all stay aligned to the same `/products` domain mainline
+
+### Delete Product / SKU (M2)
+
+**Current mainline**
+
+- Product row / detail drawer recycle action in `components/products/products-section.tsx`
+- SKU row / detail drawer recycle action in `components/products/product-skus-section.tsx`
+- Product deep-link detail recycle action in `components/products/product-detail-section.tsx`
+
+**Behavior truth**
+
+- Product master-data delete now means `moveToRecycleBin`, not hard delete.
+- Product delete cascades currently unhidden SKU records into recycle-bin by default.
+- Deleted product master data must disappear from current `/products` views and from new-business pickers.
+- Historical order / trade-order / fulfillment detail pages keep rendering existing snapshot fields and do not depend on the current active visibility of `Product / ProductSku`.
+
+**High-risk files to check together**
+
+- `app/(dashboard)/products/actions.ts`
+- `lib/recycle-bin/lifecycle.ts`
+- `lib/recycle-bin/master-data-adapter.ts`
+- `lib/products/queries.ts`
+- `lib/sales-orders/queries.ts`
+- `lib/trade-orders/queries.ts`
+- `lib/trade-orders/mutations.ts`
+- `lib/sales-orders/mutations.ts`
+
+**M2 boundary**
+
+- Current hidden filtering is `ACTIVE`-only by design.
+- M3 must widen the product-domain hidden filter to `ACTIVE + ARCHIVED` when archive finalize is wired for product master data.
+
+### Delete Product / SKU (M3)
+
+**Current behavior truth**
+
+- Product-domain finalize now supports:
+  - `ProductSku` with historical references -> `ARCHIVE`
+  - light `ProductSku` -> `PURGE`
+  - `Product` with historical references -> `ARCHIVE`
+  - `Product` with retained SKU aggregation meaning -> `ARCHIVE`
+  - only light `Product` without historical references and without retained SKU aggregation meaning -> `PURGE`
+- Product-domain hidden filtering is now `ACTIVE + ARCHIVED`.
+- Archived `Product / ProductSku` must remain hidden from:
+  - `/products`
+  - `/products/[id]`
+  - new sales-order SKU pickers
+  - new trade-order SKU pickers
+  - new trade-order bundle pickers
+- Recycle-bin history detail for product master data now reads the existing `historyArchive` contract instead of a product-specific archive system.

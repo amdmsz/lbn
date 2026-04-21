@@ -11,8 +11,17 @@ import {
   buildProductSkuRecycleGuard,
   buildSupplierRecycleGuard,
 } from "@/lib/products/recycle-guards";
+import { findProductDomainCurrentlyHiddenTargetIds } from "@/lib/products/recycle";
+import {
+  RECYCLE_ARCHIVE_SNAPSHOT_VERSION,
+  type ProductRecycleArchiveSnapshot,
+  type ProductSkuRecycleArchiveSnapshot,
+} from "@/lib/recycle-bin/archive-payload";
 import { findActiveRecycleEntry } from "@/lib/recycle-bin/repository";
 import type {
+  RecycleArchivePayload,
+  RecycleFinalizeBlocker,
+  RecycleFinalizePreview,
   RecyclePurgeBlocker,
   RecyclePurgeGuard,
   RecycleRestoreBlocker,
@@ -22,32 +31,249 @@ import type {
 
 type RecycleDbClient = typeof prisma | Prisma.TransactionClient;
 
-async function getProductTarget(
+export type ProductCascadeSkuSnapshot = {
+  id: string;
+  skuName: string;
+  enabled: boolean;
+  salesOrderItemCount: number;
+  hasHistoricalReferences: boolean;
+};
+
+type ParsedProductFinalizeSnapshot = {
+  hasHistoricalReferences: boolean;
+  salesOrderItemCount: number;
+  preDeleteProductSnapshot: Record<string, unknown> | null;
+  cascadeSkuSnapshot: ProductCascadeSkuSnapshot[];
+};
+
+type ParsedProductSkuFinalizeSnapshot = {
+  hasHistoricalReferences: boolean;
+  salesOrderItemCount: number;
+  parentProductSnapshot: Record<string, unknown> | null;
+  preDeleteSkuSnapshot: Record<string, unknown> | null;
+};
+
+function getRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function getString(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function getBoolean(value: unknown) {
+  return value === true;
+}
+
+function getNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function getArray(value: unknown) {
+  return Array.isArray(value) ? value : [];
+}
+
+function parseCascadeSkuSnapshot(value: unknown): ProductCascadeSkuSnapshot | null {
+  const record = getRecord(value);
+
+  if (!record) {
+    return null;
+  }
+
+  const id = getString(record.id);
+  const skuName = getString(record.skuName);
+
+  if (!id || !skuName) {
+    return null;
+  }
+
+  return {
+    id,
+    skuName,
+    enabled: getBoolean(record.enabled),
+    salesOrderItemCount: getNumber(record.salesOrderItemCount),
+    hasHistoricalReferences: getBoolean(record.hasHistoricalReferences),
+  };
+}
+
+function parseProductFinalizeSnapshot(value: unknown): ParsedProductFinalizeSnapshot {
+  const record = getRecord(value);
+
+  if (!record) {
+    return {
+      hasHistoricalReferences: false,
+      salesOrderItemCount: 0,
+      preDeleteProductSnapshot: null,
+      cascadeSkuSnapshot: [],
+    };
+  }
+
+  return {
+    hasHistoricalReferences: getBoolean(record.hasHistoricalReferences),
+    salesOrderItemCount: getNumber(record.salesOrderItemCount),
+    preDeleteProductSnapshot: getRecord(record.preDeleteProductSnapshot),
+    cascadeSkuSnapshot: getArray(record.cascadeSkuSnapshot)
+      .map((item) => parseCascadeSkuSnapshot(item))
+      .filter((item): item is ProductCascadeSkuSnapshot => Boolean(item)),
+  };
+}
+
+function parseProductSkuFinalizeSnapshot(value: unknown): ParsedProductSkuFinalizeSnapshot {
+  const record = getRecord(value);
+
+  if (!record) {
+    return {
+      hasHistoricalReferences: false,
+      salesOrderItemCount: 0,
+      parentProductSnapshot: null,
+      preDeleteSkuSnapshot: null,
+    };
+  }
+
+  return {
+    hasHistoricalReferences: getBoolean(record.hasHistoricalReferences),
+    salesOrderItemCount: getNumber(record.salesOrderItemCount),
+    parentProductSnapshot: getRecord(record.parentProductSnapshot),
+    preDeleteSkuSnapshot: getRecord(record.preDeleteSkuSnapshot),
+  };
+}
+
+function buildProductPreDeleteSnapshot(product: {
+  id: string;
+  supplierId: string;
+  code: string;
+  name: string;
+  description: string | null;
+  enabled: boolean;
+  totalSkuCount?: number;
+}) {
+  return {
+    id: product.id,
+    supplierId: product.supplierId,
+    code: product.code,
+    name: product.name,
+    description: product.description,
+    enabled: product.enabled,
+    totalSkuCount: product.totalSkuCount ?? null,
+  };
+}
+
+function buildProductSkuPreDeleteSnapshot(sku: {
+  id: string;
+  productId: string;
+  skuName: string;
+  defaultUnitPrice: Prisma.Decimal;
+  codSupported: boolean;
+  insuranceSupported: boolean;
+  defaultInsuranceAmount: Prisma.Decimal;
+  enabled: boolean;
+}) {
+  return {
+    id: sku.id,
+    productId: sku.productId,
+    skuName: sku.skuName,
+    defaultUnitPrice: sku.defaultUnitPrice.toString(),
+    codSupported: sku.codSupported,
+    insuranceSupported: sku.insuranceSupported,
+    defaultInsuranceAmount: sku.defaultInsuranceAmount.toString(),
+    enabled: sku.enabled,
+  };
+}
+
+function buildParentProductSnapshot(product: {
+  id: string;
+  supplierId: string;
+  code: string;
+  name: string;
+}) {
+  return {
+    id: product.id,
+    supplierId: product.supplierId,
+    code: product.code,
+    name: product.name,
+  };
+}
+
+export async function listProductCascadeSkuSnapshot(
   db: RecycleDbClient,
   productId: string,
-): Promise<RecycleTargetSnapshot | null> {
-  const product = await db.product.findUnique({
-    where: { id: productId },
+): Promise<ProductCascadeSkuSnapshot[]> {
+  const hiddenProductSkuIds = await findProductDomainCurrentlyHiddenTargetIds(
+    db,
+    "PRODUCT_SKU",
+  );
+
+  const skus = await db.productSku.findMany({
+    where: {
+      productId,
+      ...(hiddenProductSkuIds.length > 0
+        ? {
+            id: {
+              notIn: hiddenProductSkuIds,
+            },
+          }
+        : {}),
+    },
+    orderBy: [{ enabled: "desc" }, { updatedAt: "desc" }, { createdAt: "desc" }],
     select: {
       id: true,
-      code: true,
-      name: true,
+      skuName: true,
       enabled: true,
       _count: {
         select: {
-          skus: true,
           salesOrderItems: true,
         },
       },
     },
   });
 
+  return skus.map((sku) => ({
+    id: sku.id,
+    skuName: sku.skuName,
+    enabled: sku.enabled,
+    salesOrderItemCount: sku._count.salesOrderItems,
+    hasHistoricalReferences: sku._count.salesOrderItems > 0,
+  }));
+}
+
+async function getProductTarget(
+  db: RecycleDbClient,
+  productId: string,
+): Promise<RecycleTargetSnapshot | null> {
+  const [product, cascadeSkuSnapshot] = await Promise.all([
+    db.product.findUnique({
+      where: { id: productId },
+      select: {
+        id: true,
+        supplierId: true,
+        code: true,
+        name: true,
+        description: true,
+        enabled: true,
+        _count: {
+          select: {
+            skus: true,
+            salesOrderItems: true,
+          },
+        },
+      },
+    }),
+    listProductCascadeSkuSnapshot(db, productId),
+  ]);
+
   if (!product) {
     return null;
   }
 
+  const hasHistoricalReferences =
+    product._count.salesOrderItems > 0 ||
+    cascadeSkuSnapshot.some((sku) => sku.hasHistoricalReferences);
   const guard = buildProductRecycleGuard({
-    skuCount: product._count.skus,
+    skuCount: cascadeSkuSnapshot.length,
     salesOrderItemCount: product._count.salesOrderItems,
   });
 
@@ -65,6 +291,13 @@ async function getProductTarget(
     operationDescription: `Moved product to recycle bin: ${product.name}`,
     guard,
     blockerSnapshotJson: {
+      hasHistoricalReferences,
+      salesOrderItemCount: product._count.salesOrderItems,
+      preDeleteProductSnapshot: buildProductPreDeleteSnapshot({
+        ...product,
+        totalSkuCount: product._count.skus,
+      }),
+      cascadeSkuSnapshot,
       blockers: guard.blockers,
       blockerSummary: guard.blockerSummary,
     },
@@ -79,12 +312,18 @@ async function getProductSkuTarget(
     where: { id: productSkuId },
     select: {
       id: true,
-      skuCode: true,
+      productId: true,
       skuName: true,
+      defaultUnitPrice: true,
+      codSupported: true,
+      insuranceSupported: true,
+      defaultInsuranceAmount: true,
       enabled: true,
       product: {
         select: {
           id: true,
+          supplierId: true,
+          code: true,
           name: true,
         },
       },
@@ -103,13 +342,14 @@ async function getProductSkuTarget(
   const guard = buildProductSkuRecycleGuard({
     salesOrderItemCount: sku._count.salesOrderItems,
   });
+  const hasHistoricalReferences = sku._count.salesOrderItems > 0;
 
   return {
     targetType: "PRODUCT_SKU",
     targetId: sku.id,
     domain: "PRODUCT_MASTER_DATA",
     titleSnapshot: sku.skuName,
-    secondarySnapshot: sku.skuCode,
+    secondarySnapshot: sku.skuName,
     originalStatusSnapshot: sku.enabled ? "ENABLED" : "DISABLED",
     restoreRouteSnapshot: `/products/${sku.product.id}`,
     operationModule: OperationModule.PRODUCT,
@@ -118,7 +358,10 @@ async function getProductSkuTarget(
     operationDescription: `Moved product SKU to recycle bin: ${sku.skuName}`,
     guard,
     blockerSnapshotJson: {
-      parentProductName: sku.product.name,
+      hasHistoricalReferences,
+      salesOrderItemCount: sku._count.salesOrderItems,
+      parentProductSnapshot: buildParentProductSnapshot(sku.product),
+      preDeleteSkuSnapshot: buildProductSkuPreDeleteSnapshot(sku),
       blockers: guard.blockers,
       blockerSummary: guard.blockerSummary,
     },
@@ -230,6 +473,50 @@ function buildPurgeGuard(blockers: RecyclePurgeBlocker[]): RecyclePurgeGuard {
         ? "当前对象可从回收站中永久删除。"
         : blockers[0]?.description ?? "当前对象暂时不能永久删除。",
     blockers,
+  };
+}
+
+function buildFinalizePreview(input: {
+  targetExists: boolean;
+  blockers: RecycleFinalizeBlocker[];
+  purgeSummary: string;
+  archiveSummary: string;
+}): RecycleFinalizePreview {
+  if (!input.targetExists) {
+    return {
+      canFinalize: true,
+      targetExists: false,
+      finalAction: "PURGE",
+      finalActionLabel: "可 purge",
+      blockerSummary: "原始对象已不存在，回收站条目会按 PURGE 终态收口。",
+      blockers: [],
+      canEarlyPurge: true,
+      earlyPurgeRequiresAdmin: true,
+    };
+  }
+
+  if (input.blockers.length === 0) {
+    return {
+      canFinalize: true,
+      targetExists: true,
+      finalAction: "PURGE",
+      finalActionLabel: "可 purge",
+      blockerSummary: input.purgeSummary,
+      blockers: [],
+      canEarlyPurge: true,
+      earlyPurgeRequiresAdmin: true,
+    };
+  }
+
+  return {
+    canFinalize: true,
+    targetExists: true,
+    finalAction: "ARCHIVE",
+    finalActionLabel: "仅封存",
+    blockerSummary: input.blockers[0]?.description ?? input.archiveSummary,
+    blockers: input.blockers,
+    canEarlyPurge: false,
+    earlyPurgeRequiresAdmin: true,
   };
 }
 
@@ -535,6 +822,361 @@ export async function buildMasterDataPurgeGuard(
 
   if (input.targetType === "SUPPLIER") {
     return buildSupplierPurgeGuard(db, input.targetId);
+  }
+
+  return null;
+}
+
+export async function buildProductFinalizePreview(
+  db: RecycleDbClient,
+  input: {
+    targetType: RecycleTargetType;
+    targetId: string;
+    domain: RecycleDomain;
+  },
+) {
+  if (input.domain !== "PRODUCT_MASTER_DATA" || input.targetType !== "PRODUCT") {
+    return null;
+  }
+
+  const [product, activeEntry] = await Promise.all([
+    db.product.findUnique({
+      where: { id: input.targetId },
+      select: {
+        id: true,
+        _count: {
+          select: {
+            skus: true,
+            salesOrderItems: true,
+          },
+        },
+      },
+    }),
+    findActiveRecycleEntry(db, "PRODUCT", input.targetId),
+  ]);
+
+  const snapshot = parseProductFinalizeSnapshot(activeEntry?.blockerSnapshotJson);
+
+  if (!product) {
+    return buildFinalizePreview({
+      targetExists: false,
+      blockers: [],
+      purgeSummary: "",
+      archiveSummary: "",
+    });
+  }
+
+  const hasHistoricalReferences =
+    snapshot.hasHistoricalReferences || product._count.salesOrderItems > 0;
+  const cascadeSkuCount = Math.max(
+    snapshot.cascadeSkuSnapshot.length,
+    product._count.skus,
+  );
+  const blockers: RecycleFinalizeBlocker[] = [];
+
+  if (hasHistoricalReferences) {
+    blockers.push({
+      code: "product_historical_references",
+      name: "销售明细引用",
+      description: `删除前商品已被销售明细引用 ${Math.max(snapshot.salesOrderItemCount, product._count.salesOrderItems)} 次，finalize 只能 ARCHIVE 保留历史锚点。`,
+      suggestedAction: "保留 archive 结果，不改历史订单、成交单和履约单快照。",
+    });
+  }
+
+  if (cascadeSkuCount > 0) {
+    blockers.push({
+      code: "product_aggregate_retention",
+      name: "SKU 挂载",
+      description: `删除前商品下存在 ${cascadeSkuCount} 个 SKU，商品作为聚合根仍有保留意义，本轮 finalize 只 ARCHIVE，不做复杂级联 purge。`,
+      suggestedAction: "如需清理轻对象，优先在 SKU 层分别完成 finalize。",
+    });
+  }
+
+  return buildFinalizePreview({
+    targetExists: true,
+    blockers,
+    purgeSummary: "当前商品满足轻对象条件，3 天冷静期结束后会执行 PURGE。",
+    archiveSummary: "当前商品存在历史引用或商品聚合保留意义，3 天冷静期结束后仅 ARCHIVE。",
+  });
+}
+
+export async function buildProductSkuFinalizePreview(
+  db: RecycleDbClient,
+  input: {
+    targetType: RecycleTargetType;
+    targetId: string;
+    domain: RecycleDomain;
+  },
+) {
+  if (input.domain !== "PRODUCT_MASTER_DATA" || input.targetType !== "PRODUCT_SKU") {
+    return null;
+  }
+
+  const [sku, activeEntry] = await Promise.all([
+    db.productSku.findUnique({
+      where: { id: input.targetId },
+      select: {
+        id: true,
+        _count: {
+          select: {
+            salesOrderItems: true,
+          },
+        },
+      },
+    }),
+    findActiveRecycleEntry(db, "PRODUCT_SKU", input.targetId),
+  ]);
+
+  const snapshot = parseProductSkuFinalizeSnapshot(activeEntry?.blockerSnapshotJson);
+
+  if (!sku) {
+    return buildFinalizePreview({
+      targetExists: false,
+      blockers: [],
+      purgeSummary: "",
+      archiveSummary: "",
+    });
+  }
+
+  const salesOrderItemCount = Math.max(
+    snapshot.salesOrderItemCount,
+    sku._count.salesOrderItems,
+  );
+  const blockers: RecycleFinalizeBlocker[] =
+    snapshot.hasHistoricalReferences || sku._count.salesOrderItems > 0
+      ? [
+          {
+            code: "product_sku_historical_references",
+            name: "销售明细引用",
+            description: `删除前 SKU 已被销售明细引用 ${salesOrderItemCount} 次，finalize 只能 ARCHIVE 保留历史锚点。`,
+            suggestedAction: "保留 archive 结果，不改历史订单、成交单和履约单快照。",
+          },
+        ]
+      : [];
+
+  return buildFinalizePreview({
+    targetExists: true,
+    blockers,
+    purgeSummary: "当前 SKU 满足轻对象条件，3 天冷静期结束后会执行 PURGE。",
+    archiveSummary: "当前 SKU 已进入历史业务引用链，3 天冷静期结束后仅 ARCHIVE。",
+  });
+}
+
+export async function buildMasterDataFinalizePreview(
+  db: RecycleDbClient,
+  input: {
+    targetType: RecycleTargetType;
+    targetId: string;
+    domain: RecycleDomain;
+  },
+) {
+  if (input.domain !== "PRODUCT_MASTER_DATA") {
+    return null;
+  }
+
+  if (input.targetType === "PRODUCT") {
+    return buildProductFinalizePreview(db, input);
+  }
+
+  if (input.targetType === "PRODUCT_SKU") {
+    return buildProductSkuFinalizePreview(db, input);
+  }
+
+  return null;
+}
+
+function buildProductArchiveSnapshot(input: {
+  targetId: string;
+  targetMissing: boolean;
+  product: {
+    id: string;
+    supplierId: string;
+    code: string;
+    name: string;
+    enabled: boolean;
+  } | null;
+  snapshot: ParsedProductFinalizeSnapshot;
+}): ProductRecycleArchiveSnapshot {
+  const preDeleteProductSnapshot = input.snapshot.preDeleteProductSnapshot;
+
+  return {
+    entity: "PRODUCT",
+    snapshotVersion: RECYCLE_ARCHIVE_SNAPSHOT_VERSION,
+    finalAction: "ARCHIVE",
+    objectWeight: "HEAVY",
+    targetMissing: input.targetMissing,
+    productId:
+      getString(preDeleteProductSnapshot?.id) ?? input.product?.id ?? input.targetId,
+    supplierId:
+      getString(preDeleteProductSnapshot?.supplierId) ?? input.product?.supplierId ?? null,
+    productCode:
+      getString(preDeleteProductSnapshot?.code) ?? input.product?.code ?? null,
+    productName:
+      getString(preDeleteProductSnapshot?.name) ?? input.product?.name ?? null,
+    enabled:
+      preDeleteProductSnapshot?.enabled === undefined
+        ? (input.product?.enabled ?? false)
+        : getBoolean(preDeleteProductSnapshot.enabled),
+    hasHistoricalReferences: input.snapshot.hasHistoricalReferences,
+    salesOrderItemCount: input.snapshot.salesOrderItemCount,
+    preDeleteProductSnapshot,
+    cascadeSkuSnapshot: input.snapshot.cascadeSkuSnapshot.map((sku) => ({
+      id: sku.id,
+      skuName: sku.skuName,
+      enabled: sku.enabled,
+      salesOrderItemCount: sku.salesOrderItemCount,
+      hasHistoricalReferences: sku.hasHistoricalReferences,
+    })),
+  };
+}
+
+function buildProductSkuArchiveSnapshot(input: {
+  targetId: string;
+  targetMissing: boolean;
+  sku: {
+    id: string;
+    productId: string;
+    skuName: string;
+    enabled: boolean;
+    product: {
+      supplierId: string;
+    };
+  } | null;
+  snapshot: ParsedProductSkuFinalizeSnapshot;
+}): ProductSkuRecycleArchiveSnapshot {
+  const parentProductSnapshot = input.snapshot.parentProductSnapshot;
+  const preDeleteSkuSnapshot = input.snapshot.preDeleteSkuSnapshot;
+
+  return {
+    entity: "PRODUCT_SKU",
+    snapshotVersion: RECYCLE_ARCHIVE_SNAPSHOT_VERSION,
+    finalAction: "ARCHIVE",
+    objectWeight: "HEAVY",
+    targetMissing: input.targetMissing,
+    productSkuId: getString(preDeleteSkuSnapshot?.id) ?? input.sku?.id ?? input.targetId,
+    productId:
+      getString(preDeleteSkuSnapshot?.productId) ??
+      getString(parentProductSnapshot?.id) ??
+      input.sku?.productId ??
+      null,
+    supplierId:
+      getString(parentProductSnapshot?.supplierId) ??
+      input.sku?.product.supplierId ??
+      null,
+    skuName: getString(preDeleteSkuSnapshot?.skuName) ?? input.sku?.skuName ?? null,
+    enabled:
+      preDeleteSkuSnapshot?.enabled === undefined
+        ? (input.sku?.enabled ?? false)
+        : getBoolean(preDeleteSkuSnapshot.enabled),
+    hasHistoricalReferences: input.snapshot.hasHistoricalReferences,
+    salesOrderItemCount: input.snapshot.salesOrderItemCount,
+    parentProductSnapshot,
+    preDeleteSkuSnapshot,
+  };
+}
+
+export async function archiveProductTarget(
+  db: RecycleDbClient,
+  input: {
+    targetType: RecycleTargetType;
+    targetId: string;
+    preview: RecycleFinalizePreview;
+  },
+): Promise<RecycleArchivePayload | null> {
+  if (input.targetType !== "PRODUCT") {
+    return null;
+  }
+
+  const [product, activeEntry] = await Promise.all([
+    db.product.findUnique({
+      where: { id: input.targetId },
+      select: {
+        id: true,
+        supplierId: true,
+        code: true,
+        name: true,
+        enabled: true,
+      },
+    }),
+    findActiveRecycleEntry(db, "PRODUCT", input.targetId),
+  ]);
+
+  const snapshot = parseProductFinalizeSnapshot(activeEntry?.blockerSnapshotJson);
+
+  return {
+    finalAction: "ARCHIVE",
+    archivedAt: new Date().toISOString(),
+    blockerSummary: input.preview.blockerSummary,
+    blockers: input.preview.blockers,
+    snapshot: buildProductArchiveSnapshot({
+      targetId: input.targetId,
+      targetMissing: !product,
+      product,
+      snapshot,
+    }),
+  };
+}
+
+export async function archiveProductSkuTarget(
+  db: RecycleDbClient,
+  input: {
+    targetType: RecycleTargetType;
+    targetId: string;
+    preview: RecycleFinalizePreview;
+  },
+): Promise<RecycleArchivePayload | null> {
+  if (input.targetType !== "PRODUCT_SKU") {
+    return null;
+  }
+
+  const [sku, activeEntry] = await Promise.all([
+    db.productSku.findUnique({
+      where: { id: input.targetId },
+      select: {
+        id: true,
+        productId: true,
+        skuName: true,
+        enabled: true,
+        product: {
+          select: {
+            supplierId: true,
+          },
+        },
+      },
+    }),
+    findActiveRecycleEntry(db, "PRODUCT_SKU", input.targetId),
+  ]);
+
+  const snapshot = parseProductSkuFinalizeSnapshot(activeEntry?.blockerSnapshotJson);
+
+  return {
+    finalAction: "ARCHIVE",
+    archivedAt: new Date().toISOString(),
+    blockerSummary: input.preview.blockerSummary,
+    blockers: input.preview.blockers,
+    snapshot: buildProductSkuArchiveSnapshot({
+      targetId: input.targetId,
+      targetMissing: !sku,
+      sku,
+      snapshot,
+    }),
+  };
+}
+
+export async function archiveMasterDataTarget(
+  db: RecycleDbClient,
+  input: {
+    targetType: RecycleTargetType;
+    targetId: string;
+    preview: RecycleFinalizePreview;
+  },
+): Promise<RecycleArchivePayload | null> {
+  if (input.targetType === "PRODUCT") {
+    return archiveProductTarget(db, input);
+  }
+
+  if (input.targetType === "PRODUCT_SKU") {
+    return archiveProductSkuTarget(db, input);
   }
 
   return null;

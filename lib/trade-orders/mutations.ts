@@ -23,6 +23,7 @@ import { assertCustomerNotInActiveRecycleBin } from "@/lib/customers/recycle";
 import { touchCustomerEffectiveFollowUpFromTradeOrderTx } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
 import { syncSalesOrderPaymentArtifacts } from "@/lib/payments/mutations";
+import { findProductDomainCurrentlyHiddenTargetIds } from "@/lib/products/recycle";
 import { assertTradeOrderNotInActiveRecycleBin } from "@/lib/trade-orders/recycle";
 import {
   buildTradeOrderDraftComputation,
@@ -222,6 +223,12 @@ function extractBundleLinesSummary(lines: TradeOrderBundleLineInput[]) {
 }
 
 async function getVisibleBundleOptions() {
+  const [hiddenProductSkuIds, hiddenProductIds, hiddenSupplierIds] = await Promise.all([
+    findProductDomainCurrentlyHiddenTargetIds(prisma, "PRODUCT_SKU"),
+    findProductDomainCurrentlyHiddenTargetIds(prisma, "PRODUCT"),
+    findProductDomainCurrentlyHiddenTargetIds(prisma, "SUPPLIER"),
+  ]);
+
   const bundles = await prisma.productBundle.findMany({
     where: {
       enabled: true,
@@ -266,19 +273,37 @@ async function getVisibleBundleOptions() {
         in: skuIds,
       },
       enabled: true,
+      ...(hiddenProductSkuIds.length > 0
+        ? {
+            id: {
+              in: skuIds.filter((skuId) => !hiddenProductSkuIds.includes(skuId)),
+            },
+          }
+        : {}),
       product: {
         enabled: true,
+        ...(hiddenProductIds.length > 0
+          ? {
+              id: {
+                notIn: hiddenProductIds,
+              },
+            }
+          : {}),
         supplier: {
           enabled: true,
+          ...(hiddenSupplierIds.length > 0
+            ? {
+                id: {
+                  notIn: hiddenSupplierIds,
+                },
+              }
+            : {}),
         },
       },
     },
     select: {
       id: true,
-      skuCode: true,
       skuName: true,
-      specText: true,
-      unit: true,
       defaultUnitPrice: true,
       codSupported: true,
       insuranceSupported: true,
@@ -325,8 +350,6 @@ async function getVisibleBundleOptions() {
             productName: sku.product.name,
             skuId: item.skuId,
             skuName: sku.skuName,
-            specText: sku.specText,
-            unit: sku.unit,
             qty: item.qty,
             sortOrder: item.sortOrder,
             enabled: item.enabled,
@@ -358,6 +381,20 @@ async function resolveDraftContext(
   const teamId = await getActorTeamId(actor);
   const customerWhere = buildActorCustomerWhere(actor, teamId);
   const tradeOrderWhere = buildActorTradeOrderWhere(actor, teamId);
+  const [hiddenProductSkuIds, hiddenProductIds, hiddenSupplierIds] = await Promise.all([
+    findProductDomainCurrentlyHiddenTargetIds(prisma, "PRODUCT_SKU"),
+    findProductDomainCurrentlyHiddenTargetIds(prisma, "PRODUCT"),
+    findProductDomainCurrentlyHiddenTargetIds(prisma, "SUPPLIER"),
+  ]);
+  const requestedSkuIds = [
+    ...new Set([
+      ...input.lines.map((line) => line.skuId),
+      ...input.giftLines.map((line) => line.skuId),
+    ]),
+  ];
+  const visibleRequestedSkuIds = requestedSkuIds.filter(
+    (skuId) => !hiddenProductSkuIds.includes(skuId),
+  );
 
   const [customer, existingTradeOrder, skuRecords, bundleOptions] = await Promise.all([
     prisma.customer.findFirst({
@@ -424,27 +461,33 @@ async function resolveDraftContext(
     prisma.productSku.findMany({
       where: {
         id: {
-          in: [
-            ...new Set([
-              ...input.lines.map((line) => line.skuId),
-              ...input.giftLines.map((line) => line.skuId),
-            ]),
-          ],
+          in: visibleRequestedSkuIds,
         },
         enabled: true,
         product: {
           enabled: true,
+          ...(hiddenProductIds.length > 0
+            ? {
+                id: {
+                  notIn: hiddenProductIds,
+                },
+              }
+            : {}),
           supplier: {
             enabled: true,
+            ...(hiddenSupplierIds.length > 0
+              ? {
+                  id: {
+                    notIn: hiddenSupplierIds,
+                  },
+                }
+              : {}),
           },
         },
       },
       select: {
         id: true,
-        skuCode: true,
         skuName: true,
-        specText: true,
-        unit: true,
         defaultUnitPrice: true,
         codSupported: true,
         insuranceSupported: true,
@@ -581,8 +624,8 @@ async function replaceTradeOrderItems(
         titleSnapshot: parentItem.title,
         productNameSnapshot: parentItem.productName ?? null,
         skuNameSnapshot: parentItem.skuName ?? null,
-        specSnapshot: parentItem.specText ?? null,
-        unitSnapshot: parentItem.unit ?? null,
+        specSnapshot: parentItem.skuName ?? null,
+        unitSnapshot: "",
         bundleCodeSnapshot: parentItem.bundleCode ?? null,
         bundleNameSnapshot: parentItem.bundleName ?? null,
         bundleVersionSnapshot: parentItem.bundleVersion ?? null,
@@ -620,8 +663,8 @@ async function replaceTradeOrderItems(
           supplierNameSnapshot: component.supplierName,
           productNameSnapshot: component.productName,
           skuNameSnapshot: component.skuName,
-          specSnapshot: component.specText,
-          unitSnapshot: component.unit,
+          specSnapshot: component.skuName ?? null,
+          unitSnapshot: "",
           exportDisplayNameSnapshot: component.exportDisplayName,
           qty: component.qty,
           allocatedListUnitPriceSnapshot: component.listUnitPrice,
@@ -1037,8 +1080,8 @@ export async function submitTradeOrderForReview(
             skuId: component.skuId,
             productNameSnapshot: component.productName,
             skuNameSnapshot: component.skuName,
-            specSnapshot: component.specText,
-            unitSnapshot: component.unit,
+            specSnapshot: component.skuName,
+            unitSnapshot: "",
             listPriceSnapshot: component.listUnitPrice,
             dealPriceSnapshot: component.dealUnitPrice,
             qty: component.qty,

@@ -62,7 +62,36 @@ RBAC 必须落在服务端，不能只靠菜单隐藏或前端禁用按钮。
 
 页面改动要保留 loading / empty / error 状态。
 
-## 5. 交付标准
+## 5. Prisma migration 与生产数据库操作守则
+
+生产与预发禁止使用 `prisma migrate dev`、`prisma migrate reset`，也不要把 `prisma db push` 当成正式发布手段。
+
+生产与预发只允许使用 `prisma migrate deploy`、`prisma migrate status`、`prisma migrate resolve`，并且要先确认 `DATABASE_URL` 指向目标环境。
+
+发布前至少执行：
+
+```bash
+npm run prisma:predeploy:check
+```
+
+如果要核对 migration 历史是否仍能代表真实数据库结构，再执行：
+
+```bash
+npm run prisma:diff:migrations
+```
+
+任何手工 SQL 热修都不能直接成为长期真相；必须在同日补回：
+
+- `prisma/schema.prisma`
+- 对应 `prisma/migrations/*`
+- `migrate resolve --applied / --rolled-back` 或等价的人工执行说明
+- 变更背景、执行时间、影响范围
+
+遇到 legacy 表名、列名、索引名与 Prisma 逻辑命名不一致时，优先评估 `@map`、`@@map`、`map:` 是否能吸收命名债，不要先假设可以直接重命名真实生产表。
+
+涉及权限、删除、批量动作、支付、履约、导入、回收站等高风险改动时，除了 schema / migration 记录，还要确认 `OperationLog` 或现有审计链没有被破坏。
+
+## 6. 交付标准
 
 完成前至少确认：代码能编译、权限正确、审计不丢、当前销售主线不回退。
 
@@ -79,7 +108,7 @@ npm run build
 
 Done 标准是：与 [PRD.md](./PRD.md) 和 [PLANS.md](./PLANS.md) 对齐；不破坏 `Customer` 主线和 `TradeOrder` 主单基线；不把 payment / fulfillment 真相重新混用；重要动作仍可追踪。
 
-## 6. 文档分工
+## 7. 文档分工
 
 [README.md](./README.md) 负责仓库入口、启动方式、常用命令。
 

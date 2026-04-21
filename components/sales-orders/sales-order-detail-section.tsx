@@ -38,10 +38,7 @@ type CustomerOption = {
 
 type SkuOption = {
   id: string;
-  skuCode: string;
   skuName: string;
-  specText: string;
-  unit: string;
   defaultUnitPrice: string;
   codSupported: boolean;
   insuranceSupported: boolean;

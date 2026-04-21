@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { StatusBadge } from "@/components/shared/status-badge";
 import {
   type CustomerRecycleArchiveGovernanceAnchors,
+  type ProductRecycleArchiveSnapshot,
+  type ProductSkuRecycleArchiveSnapshot,
   type RecycleArchiveMaskedValue,
   type RecycleArchiveObjectWeight,
   type TradeOrderRecycleArchiveDownstreamAnchors,
@@ -347,6 +349,124 @@ function buildTradeOrderSearchFields(
           : "当前条目没有可用的 TradeOrder 结构化 archive snapshot。",
       multiline: true,
     },
+  ];
+}
+
+function buildMasterDataSearchFields(
+  item: RecycleBinListItem,
+  historyArchive: RecycleBinHistoryArchiveContract | null,
+): HistoryField[] {
+  const productSnapshot = historyArchive?.productSnapshot ?? null;
+  const productSkuSnapshot = historyArchive?.productSkuSnapshot ?? null;
+  const snapshot = productSnapshot ?? productSkuSnapshot;
+
+  if (historyArchive?.source === "SNAPSHOT_V2" && snapshot) {
+    if (snapshot.entity === "PRODUCT") {
+      return [
+        {
+          label: "archive source / version",
+          value: `${historyArchive.source} / ${snapshot.snapshotVersion}`,
+        },
+        {
+          label: "productCode",
+          value: snapshot.productCode ?? item.secondaryLabel,
+        },
+        {
+          label: "supplierId",
+          value: snapshot.supplierId ?? "--",
+        },
+        {
+          label: "历史保留锚点",
+          value: [
+            `销售引用 ${formatCount(snapshot.salesOrderItemCount)}`,
+            `级联 SKU ${formatCount(snapshot.cascadeSkuSnapshot.length)}`,
+          ].join(" / "),
+          multiline: true,
+        },
+      ];
+    }
+
+    return [
+      {
+        label: "archive source / version",
+        value: `${historyArchive.source} / ${snapshot.snapshotVersion}`,
+      },
+      {
+        label: "skuName",
+        value: snapshot.skuName ?? item.secondaryLabel,
+      },
+      {
+        label: "parentProductId",
+        value: snapshot.productId ?? "--",
+      },
+      {
+        label: "历史保留锚点",
+        value: `销售引用 ${formatCount(snapshot.salesOrderItemCount)}`,
+      },
+    ];
+  }
+
+  return [
+    {
+      label: "结构化检索入口",
+      value:
+        historyArchive?.source === "LEGACY_FALLBACK"
+          ? "legacy fallback 条目只保留兼容快照，不伪装成完整结构化检索结果。"
+          : "当前条目没有可用的商品主数据结构化 archive snapshot。",
+      multiline: true,
+    },
+  ];
+}
+
+function buildProductArchiveFields(
+  item: RecycleBinListItem,
+  snapshot: ProductRecycleArchiveSnapshot | null,
+  archivedAt: string | null,
+): HistoryField[] {
+  if (!snapshot) {
+    return [
+      {
+        label: "归档载荷",
+        value: "当前历史终态没有可解析的 archive payload。",
+        multiline: true,
+      },
+    ];
+  }
+
+  return [
+    { label: "productId", value: snapshot.productId },
+    { label: "productCode", value: snapshot.productCode ?? item.secondaryLabel },
+    { label: "productName", value: snapshot.productName ?? item.name },
+    { label: "supplierId", value: snapshot.supplierId ?? "--" },
+    { label: "salesOrderItemCount", value: formatCount(snapshot.salesOrderItemCount) },
+    { label: "cascadeSkuCount", value: formatCount(snapshot.cascadeSkuSnapshot.length) },
+    { label: "archivedAt", value: archivedAt ?? "--" },
+  ];
+}
+
+function buildProductSkuArchiveFields(
+  item: RecycleBinListItem,
+  snapshot: ProductSkuRecycleArchiveSnapshot | null,
+  archivedAt: string | null,
+): HistoryField[] {
+  if (!snapshot) {
+    return [
+      {
+        label: "归档载荷",
+        value: "当前历史终态没有可解析的 archive payload。",
+        multiline: true,
+      },
+    ];
+  }
+
+  return [
+    { label: "productSkuId", value: snapshot.productSkuId },
+    { label: "skuName", value: snapshot.skuName ?? item.secondaryLabel },
+    { label: "skuName", value: snapshot.skuName ?? item.name },
+    { label: "parentProductId", value: snapshot.productId ?? "--" },
+    { label: "supplierId", value: snapshot.supplierId ?? "--" },
+    { label: "salesOrderItemCount", value: formatCount(snapshot.salesOrderItemCount) },
+    { label: "archivedAt", value: archivedAt ?? "--" },
   ];
 }
 
@@ -749,6 +869,70 @@ function TradeOrderHistorySummary({
   );
 }
 
+function MasterDataHistorySummary({
+  item,
+}: Readonly<{
+  item: RecycleBinListItem;
+}>) {
+  const historyArchive = item.historyArchive;
+  const archivePayload = historyArchive?.archivePayload ?? null;
+  const productSnapshot = historyArchive?.productSnapshot ?? null;
+  const productSkuSnapshot = historyArchive?.productSkuSnapshot ?? null;
+  const objectWeight = productSnapshot?.objectWeight ?? productSkuSnapshot?.objectWeight;
+  const targetMissing =
+    productSnapshot?.targetMissing ?? productSkuSnapshot?.targetMissing ?? false;
+  const archivedAt = archivePayload?.archivedAt || item.resolvedAtLabel || "--";
+
+  return (
+    <>
+      <HistorySummaryCard
+        eyebrow="历史终态摘要"
+        title={item.targetType === "PRODUCT" ? "Product 最终处理" : "ProductSku 最终处理"}
+        badges={
+          <div className="flex flex-wrap gap-2">
+            <StatusBadge label={item.entryStatusLabel} variant="neutral" />
+            <StatusBadge
+              label={item.resolutionActionLabel ?? item.entryStatusLabel}
+              variant={getHistoryResultVariant(item)}
+            />
+          </div>
+        }
+        fields={buildHistoryResultFields(item, objectWeight)}
+      />
+
+      <HistorySummaryCard
+        eyebrow="审计检索线索"
+        title={item.targetType === "PRODUCT" ? "Product 结构化检索" : "ProductSku 结构化检索"}
+        badges={
+          <div className="flex flex-wrap gap-2">
+            <StatusBadge label={historyArchive?.source ?? "UNAVAILABLE"} variant="neutral" />
+          </div>
+        }
+        fields={buildMasterDataSearchFields(item, historyArchive)}
+        note={buildHistorySearchNote(historyArchive, item.targetType === "PRODUCT" ? "Product" : "ProductSku")}
+      />
+
+      <HistorySummaryCard
+        eyebrow="归档后关键信息"
+        title={item.targetType === "PRODUCT" ? "Product 归档摘要" : "ProductSku 归档摘要"}
+        fields={
+          item.targetType === "PRODUCT"
+            ? buildProductArchiveFields(item, productSnapshot, archivedAt)
+            : buildProductSkuArchiveFields(item, productSkuSnapshot, archivedAt)
+        }
+        note={buildArchiveNote({
+          targetMissing,
+          blockerSummary: archivePayload?.blockerSummary ?? null,
+          historyArchive,
+          structuredLabel: item.targetType === "PRODUCT" ? "Product 归档摘要" : "ProductSku 归档摘要",
+        })}
+      />
+
+      {item.archivePayloadJsonText ? <RawArchivePayload value={item.archivePayloadJsonText} /> : null}
+    </>
+  );
+}
+
 export function RecycleBinHistorySummary({
   item,
 }: Readonly<{
@@ -760,6 +944,10 @@ export function RecycleBinHistorySummary({
 
   if (item.targetType === "TRADE_ORDER") {
     return <TradeOrderHistorySummary item={item} />;
+  }
+
+  if (item.targetType === "PRODUCT" || item.targetType === "PRODUCT_SKU") {
+    return <MasterDataHistorySummary item={item} />;
   }
 
   return null;

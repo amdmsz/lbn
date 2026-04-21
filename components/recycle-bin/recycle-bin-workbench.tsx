@@ -731,11 +731,7 @@ export function RecycleBinWorkbench({
                 </div>
               ) : null}
 
-              {isHistoryView &&
-              (selectedItem.targetType === "CUSTOMER" ||
-                selectedItem.targetType === "TRADE_ORDER") ? (
-                <RecycleBinHistorySummary item={selectedItem} />
-              ) : null}
+              {isHistoryView ? <RecycleBinHistorySummary item={selectedItem} /> : null}
 
               <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
                 <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">

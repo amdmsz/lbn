@@ -68,23 +68,13 @@ if [[ "$REQUIRE_REDIS" == "1" && -z "${REDIS_URL:-}" ]]; then
   fail "REDIS_URL is required for the lead import worker baseline."
 fi
 
-info "Running prisma validate."
-npx prisma validate
-
-info "Checking prisma migrate status."
-migrate_status_output="$(npx prisma migrate status 2>&1)" || {
-  printf '%s\n' "$migrate_status_output"
-  fail "prisma migrate status failed."
-}
-printf '%s\n' "$migrate_status_output"
-
-if grep -Fq "failed migrations" <<<"$migrate_status_output"; then
-  fail "Detected failed migrations in the target database."
+predeploy_args=()
+if [[ "$ALLOW_PENDING_MIGRATIONS" == "1" ]]; then
+  predeploy_args+=(--allow-pending-migrations --allow-schema-diff)
 fi
 
-if grep -Fq "not yet been applied" <<<"$migrate_status_output" && [[ "$ALLOW_PENDING_MIGRATIONS" != "1" ]]; then
-  fail "Detected pending migrations. Run deploy with RUN_MIGRATE_DEPLOY=1 or apply migrations manually first."
-fi
+info "Running Prisma predeploy guardrails."
+node "$PROJECT_ROOT/scripts/prisma-guardrails.mjs" predeploy-check "${predeploy_args[@]}"
 
 if [[ "$SKIP_BUILD" != "1" ]]; then
   info "Running production build."

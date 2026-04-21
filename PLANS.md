@@ -326,7 +326,42 @@
   searchable supplier selection plus inline supplier creation with automatic backfill.
 - No schema change, procurement, inventory, or settlement scope is included in this baseline.
 
+### Product Delete M2 Closeout
+
+状态：进行中，本轮实现闭环
+
+- M2 目标固定为：允许 `Product / ProductSku` 进入回收站、立即从现行业务隐藏、保留历史快照、历史单据不坏。
+- M2 已完成边界应包括：
+  - 商品域 delete 不再因为历史引用或 SKU 挂载而阻塞 `moveToRecycleBin`
+  - `Product` 删除默认级联当前未隐藏的 `ProductSku`
+  - 删除前快照与历史引用摘要进入 `blockerSnapshotJson`
+  - `/products`、新建销售单 SKU 选择器、新建成交单 SKU / bundle 选择器统一排除商品域 `ACTIVE` 回收条目
+- M2 明确不做：
+  - 商品域 `ARCHIVE` finalize
+  - `ACTIVE + ARCHIVED` hidden filter 全链切换
+  - 商品域 history archive payload
+- M3 的直接前置是真正接入商品域 `archive finalize`，届时再把当前隐藏态从 `ACTIVE` 扩成 `ACTIVE + ARCHIVED`
+
 ---
+
+### Product Delete M3 Closeout
+
+- M3 已完成边界：
+  - `Product / ProductSku` 已接入商品域 finalize preview 与执行
+  - 商品域 finalize 已支持 `ARCHIVE | PURGE` 双终态
+  - 商品域 `historyArchive` 已接入 `PRODUCT / PRODUCT_SKU` archive payload
+  - 商品域当前隐藏态已从 `ACTIVE` 升级为 `ACTIVE + ARCHIVED`
+  - `/products` 当前 `Product / SKU` 列表、详情查询、新建销售单 SKU 选择器、新建成交单 SKU / bundle 选择器均已统一排除 archived 商品对象
+- 当前 finalize 真相固定为：
+  - `ProductSku` 有历史引用时只 `ARCHIVE`
+  - `ProductSku` 无历史引用时可 `PURGE`
+  - `Product` 只要有历史引用，或删除前仍有 SKU 聚合保留意义，就只 `ARCHIVE`
+  - 只有轻量 `Product` 才允许 `PURGE`
+- M3 明确仍不做：
+  - 商品域 live record 的额外脱敏改写
+  - 新 schema
+  - 订单 / 成交 / 履约历史快照重构
+  - 新的商品域删除系统
 
 ## 9. Fulfillment Center Baseline Addendum
 
@@ -458,3 +493,80 @@
   - `lib/recycle-bin/*`
   - `scripts/recycle-auto-finalize.ts`
 - 只有在出现新的明确 milestone 时，才允许在这条线之上继续扩能力
+
+---
+
+## 13. 商品中心企业级重构里程碑
+
+状态：M1 已开始并进入页面骨架落地
+
+### M1. 信息架构与页面骨架收口
+
+状态：进行中
+
+范围：
+
+- `/products` 固定为商品域唯一一级入口
+- 域内固定 3 视图：`Product / SKU / Supplier`
+- `Product` 与 `SKU` 两个视图统一改为高密度企业表格骨架
+- 列表主链改为右侧详情抽屉；`/products/[id]` 保留兼容深链接详情页
+- 清理未生效的 `category` 占位逻辑
+- 不改 schema
+- 不改订单建单页
+- 不做复杂批量编辑
+- 不做保存视图
+
+冻结决策：
+
+- `supplierId` 继续保留为执行真相，不被供货辅助字段替代
+- `Product` 字段固定为：
+  - `brandName`
+  - `seriesName`
+  - `categoryCode`
+  - `primarySalesSceneCode`
+  - `supplyGroupCode`
+  - `financeCategoryCode`
+  - `internalSupplyRemark`
+当前验收口径：
+
+- `/products` 有 `Product / SKU / Supplier` 三视图
+- `Product` 与 `SKU` 首屏都以表格为主，不再使用商品卡片流
+- 商品与 SKU 都能从列表进入右侧详情抽屉
+- `SHIPPER` 不再维护商品 / SKU / Supplier 主数据
+- `OPS` 在商品视图下不再默认看到 supplier identity
+
+### M2. 字段补齐与筛选体系
+
+状态：待开始
+
+范围：
+
+- additive schema 增量补齐商品经营字段
+- 建立品牌 / 系列 / 类目 / 场景 / 供货归类 / 财务归类 / 包装形式等筛选体系
+- 补字段级服务端可见性裁剪
+
+明确不做：
+
+- 不把 Supplier 扩成采购系统
+- 不改 `TradeOrder / SalesOrder` 拆单真相
+
+### M3. 详情抽屉增强与批量维护
+
+状态：待开始
+
+范围：
+
+- 批量编辑核心字段
+- 详情抽屉内的分区编辑与快捷动作增强
+- 待整理标记与资料完整度提示
+
+### M4. 保存视图与治理机制
+
+状态：待开始
+
+范围：
+
+- 保存筛选视图
+- 待整理商品治理
+- 重复商品识别辅助
+- 列表噪音控制和经营整理台增强

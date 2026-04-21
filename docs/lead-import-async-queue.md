@@ -225,8 +225,8 @@ This script will:
 - pull the latest code
 - ensure `runtime/imports/lead-imports` exists
 - run `npm ci`
-- run `npx prisma validate`
-- run `npx prisma migrate deploy`
+- run `npm run prisma:predeploy:check`
+- run `npm run prisma:deploy:safe -- --skip-generate`
 - run `npx prisma generate`
 - run `npm run build`
 - restart `jiuzhuang-crm`

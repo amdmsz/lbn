@@ -32,9 +32,13 @@ import {
 import {
   RECYCLE_ARCHIVE_SNAPSHOT_VERSION,
   parseCustomerRecycleArchiveSnapshot,
+  parseProductRecycleArchiveSnapshot,
+  parseProductSkuRecycleArchiveSnapshot,
   parseRecycleArchivePayload,
   parseTradeOrderRecycleArchiveSnapshot,
   type CustomerRecycleArchiveSnapshot,
+  type ProductRecycleArchiveSnapshot,
+  type ProductSkuRecycleArchiveSnapshot,
   type TradeOrderRecycleArchiveSnapshot,
 } from "@/lib/recycle-bin/archive-payload";
 import {
@@ -172,6 +176,8 @@ export type RecycleBinHistoryArchiveContract = {
   archivePayload: RecycleArchivePayload | null;
   customerSnapshot: CustomerRecycleArchiveSnapshot | null;
   tradeOrderSnapshot: TradeOrderRecycleArchiveSnapshot | null;
+  productSnapshot: ProductRecycleArchiveSnapshot | null;
+  productSkuSnapshot: ProductSkuRecycleArchiveSnapshot | null;
 };
 
 export type RecycleBinListItem = {
@@ -990,7 +996,12 @@ function buildCustomerEarlyPurgeSummary(input: {
 }
 
 function supportsFinalizePreview(targetType: RecycleBinListEntry["targetType"]) {
-  return targetType === "CUSTOMER" || targetType === "TRADE_ORDER";
+  return (
+    targetType === "PRODUCT" ||
+    targetType === "PRODUCT_SKU" ||
+    targetType === "CUSTOMER" ||
+    targetType === "TRADE_ORDER"
+  );
 }
 
 function buildTradeOrderRecycleBlockerSummary(input: {
@@ -1060,8 +1071,20 @@ function buildHistoryArchiveContract(
     entry.targetType === "TRADE_ORDER"
       ? parseTradeOrderRecycleArchiveSnapshot(archivePayload)
       : null;
+  const productSnapshot =
+    entry.targetType === "PRODUCT"
+      ? parseProductRecycleArchiveSnapshot(archivePayload)
+      : null;
+  const productSkuSnapshot =
+    entry.targetType === "PRODUCT_SKU"
+      ? parseProductSkuRecycleArchiveSnapshot(archivePayload)
+      : null;
   const snapshotVersion =
-    customerSnapshot?.snapshotVersion ?? tradeOrderSnapshot?.snapshotVersion ?? null;
+    customerSnapshot?.snapshotVersion ??
+    tradeOrderSnapshot?.snapshotVersion ??
+    productSnapshot?.snapshotVersion ??
+    productSkuSnapshot?.snapshotVersion ??
+    null;
 
   return {
     source:
@@ -1074,6 +1097,8 @@ function buildHistoryArchiveContract(
     archivePayload,
     customerSnapshot,
     tradeOrderSnapshot,
+    productSnapshot,
+    productSkuSnapshot,
   };
 }
 

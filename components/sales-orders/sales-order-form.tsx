@@ -1,6 +1,8 @@
 "use client";
 
 import { useDeferredValue, useEffect, useState } from "react";
+import { ProductSkuSearchField } from "@/components/products/product-sku-search-field";
+import type { SerializedVisibleSkuOption } from "@/lib/sales-orders/queries";
 
 type CustomerOption = {
   id: string;
@@ -14,25 +16,7 @@ type CustomerOption = {
   } | null;
 };
 
-type SkuOption = {
-  id: string;
-  skuCode: string;
-  skuName: string;
-  specText: string;
-  unit: string;
-  defaultUnitPrice: string;
-  codSupported: boolean;
-  insuranceSupported: boolean;
-  defaultInsuranceAmount: string;
-  product: {
-    id: string;
-    name: string;
-    supplier: {
-      id: string;
-      name: string;
-    };
-  };
-};
+type SkuOption = SerializedVisibleSkuOption;
 
 type PaymentSchemeOption = {
   value:
@@ -171,6 +155,7 @@ export function SalesOrderForm({
   const [customerResults, setCustomerResults] = useState<CustomerOption[]>([]);
   const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
   const [customerSearchError, setCustomerSearchError] = useState("");
+  const [availableSkuOptions, setAvailableSkuOptions] = useState<SkuOption[]>(skuOptions);
   const [skuId, setSkuId] = useState(initialValues?.skuId ?? "");
   const [qty, setQty] = useState(String(initialValues?.qty ?? 1));
   const [dealPrice, setDealPrice] = useState(initialValues?.dealPrice ?? "0");
@@ -196,7 +181,7 @@ export function SalesOrderForm({
     initialValues?.insuranceAmount ?? "0",
   );
 
-  const selectedSku = skuOptions.find((item) => item.id === skuId) ?? null;
+  const selectedSku = availableSkuOptions.find((item) => item.id === skuId) ?? null;
   const listUnitPrice = toNumber(selectedSku?.defaultUnitPrice);
   const dealUnitPrice = toNumber(dealPrice);
   const qtyValue = Math.max(1, toNumber(qty));
@@ -211,6 +196,17 @@ export function SalesOrderForm({
   const selectedPaymentSchemeMeta =
     paymentSchemeOptions.find((item) => item.value === paymentScheme) ??
     paymentSchemeOptions[0];
+
+  function upsertSkuOption(option: SkuOption) {
+    setAvailableSkuOptions((current) => {
+      const existingIndex = current.findIndex((item) => item.id === option.id);
+      if (existingIndex >= 0) {
+        return current.map((item) => (item.id === option.id ? option : item));
+      }
+
+      return [...current, option];
+    });
+  }
 
   useEffect(() => {
     if (fixedCustomer || selectedCustomer || !deferredCustomerKeyword) {
@@ -288,6 +284,7 @@ export function SalesOrderForm({
       <input type="hidden" name="id" value={initialValues?.id ?? ""} />
       <input type="hidden" name="customerId" value={selectedCustomer?.id ?? ""} />
       <input type="hidden" name="redirectTo" value={redirectTo} />
+      <input type="hidden" name="skuId" value={skuId} />
 
       <div className="space-y-2">
         <h3 className="text-lg font-semibold text-black/85">{submitLabel}</h3>
@@ -400,24 +397,28 @@ export function SalesOrderForm({
       </section>
 
       <section className="crm-subtle-panel grid gap-4 xl:grid-cols-2">
-        <label className="space-y-2">
-          <span className="crm-label">商品 SKU</span>
-          <select
-            name="skuId"
-            required
-            value={skuId}
-            onChange={(event) => setSkuId(event.target.value)}
-            className="crm-select"
-          >
-            <option value="">选择商品 SKU</option>
-            {skuOptions.map((sku) => (
-              <option key={sku.id} value={sku.id}>
-                {sku.product.supplier.name} / {sku.product.name} / {sku.skuName} /{" "}
-                {sku.specText}
-              </option>
-            ))}
-          </select>
-        </label>
+        <ProductSkuSearchField
+          label="商品 SKU"
+          placeholder="搜索商品名、SKU、规格或供应商"
+          value={skuId}
+          selectedOption={selectedSku}
+          onSelect={(option) => {
+            if (!option) {
+              setSkuId("");
+              return;
+            }
+
+            upsertSkuOption(option);
+            setSkuId(option.id);
+          }}
+          helper={
+            <div className="text-xs text-black/50">
+              {selectedSku
+                ? `${selectedSku.product.name} / ${selectedSku.skuName} / 列表价 ${formatCurrency(listUnitPrice)}`
+                : "输入关键词后远程搜索 SKU。"}
+            </div>
+          }
+        />
 
         <label className="space-y-2">
           <span className="crm-label">数量</span>
@@ -439,7 +440,7 @@ export function SalesOrderForm({
             readOnly
             value={
               selectedSku
-                ? `${formatCurrency(listUnitPrice)} / ${selectedSku.unit}`
+                ? formatCurrency(listUnitPrice)
                 : "请选择 SKU"
             }
             className="crm-input bg-black/[0.03]"

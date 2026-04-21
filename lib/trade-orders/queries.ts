@@ -12,6 +12,7 @@ import { getParamValue, parseActionNotice } from "@/lib/action-notice";
 import { canAccessSalesOrderModule, canCreateSalesOrder } from "@/lib/auth/access";
 import { findActiveCustomerRecycleEntry } from "@/lib/customers/recycle";
 import { prisma } from "@/lib/db/prisma";
+import { findProductDomainCurrentlyHiddenTargetIds } from "@/lib/products/recycle";
 import {
   buildTradeOrderFinalizePreview,
   getTradeOrderRecycleTarget,
@@ -165,6 +166,12 @@ function buildActorTradeOrderWhere(
 }
 
 async function getVisibleBundleOptions() {
+  const [hiddenProductSkuIds, hiddenProductIds, hiddenSupplierIds] = await Promise.all([
+    findProductDomainCurrentlyHiddenTargetIds(prisma, "PRODUCT_SKU"),
+    findProductDomainCurrentlyHiddenTargetIds(prisma, "PRODUCT"),
+    findProductDomainCurrentlyHiddenTargetIds(prisma, "SUPPLIER"),
+  ]);
+
   const bundles = await prisma.productBundle.findMany({
     where: {
       enabled: true,
@@ -209,19 +216,37 @@ async function getVisibleBundleOptions() {
         in: skuIds,
       },
       enabled: true,
+      ...(hiddenProductSkuIds.length > 0
+        ? {
+            id: {
+              in: skuIds.filter((skuId) => !hiddenProductSkuIds.includes(skuId)),
+            },
+          }
+        : {}),
       product: {
         enabled: true,
+        ...(hiddenProductIds.length > 0
+          ? {
+              id: {
+                notIn: hiddenProductIds,
+              },
+            }
+          : {}),
         supplier: {
           enabled: true,
+          ...(hiddenSupplierIds.length > 0
+            ? {
+                id: {
+                  notIn: hiddenSupplierIds,
+                },
+              }
+            : {}),
         },
       },
     },
     select: {
       id: true,
-      skuCode: true,
       skuName: true,
-      specText: true,
-      unit: true,
       defaultUnitPrice: true,
       codSupported: true,
       insuranceSupported: true,
@@ -268,8 +293,6 @@ async function getVisibleBundleOptions() {
             productName: sku.product.name,
             skuId: item.skuId,
             skuName: sku.skuName,
-            specText: sku.specText,
-            unit: sku.unit,
             qty: item.qty,
             sortOrder: item.sortOrder,
             enabled: item.enabled,

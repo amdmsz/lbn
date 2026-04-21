@@ -26,9 +26,9 @@
 
 ### Prisma、构建与运行
 
-- [ ] 执行 `npx prisma validate`
-- [ ] 执行 `npx prisma generate`
-- [ ] 首发到空库时，执行 `npx prisma migrate deploy`
+- [ ] 执行 `npm run prisma:predeploy:check`
+- [ ] 若 staging 是空库首发，执行 `npm run prisma:deploy:safe`
+- [ ] 若 staging 不是本次执行 migration 的窗口，确认 Prisma Client 已通过 `npm ci` 的 `postinstall` 或手动 `npx prisma generate` 更新
 - [ ] 确认当前本地 `prisma/migrations` 就是准备上线的正式 source of truth
 - [ ] 若当前 staging 是 rebaseline 之前创建的旧环境，先完成 migration metadata reconcile
 - [ ] 执行 `npm run build`
@@ -53,9 +53,9 @@
 
 ### 旧环境 migration metadata 对齐
 
-- [ ] 先执行 `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code`
+- [ ] 先执行 `npm run prisma:diff:schema`
 - [ ] 若返回 `0` 且环境属于 rebaseline 之前建立的旧库，执行 `npm run db:migration-baseline:reconcile -- --apply`
-- [ ] 执行 `npx prisma migrate status`
+- [ ] 执行 `npm run prisma:status`
 
 ## B. 核心业务 Smoke
 

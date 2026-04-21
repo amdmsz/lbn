@@ -170,14 +170,14 @@ prisma/migrations_pre_rebaseline_20260407
 
 空库首发现在使用正式 migration 工作流：
 
-npx prisma migrate deploy
+npm run prisma:deploy:safe
 已有旧环境
 
 如果环境是在 rebaseline 之前建立的，且当前数据库结构已经和 schema.prisma 一致，那么需要做一次 migration metadata 对齐。
 
 先确认：
 
-npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+npm run prisma:diff:schema
 
 确认返回 0 之后，再执行：
 
@@ -187,9 +187,7 @@ npm run db:migration-baseline:reconcile -- --apply
 当前首发空库的正式顺序明确写死为：
 
 npm ci --include=dev
-npx prisma validate
-npx prisma migrate deploy
-npx prisma generate
+npm run prisma:deploy:safe
 npm run admin:bootstrap -- --username admin --name "Platform Admin" --password "replace-with-strong-password"
 npm run build
 npm run start -- --hostname 127.0.0.1 --port 3000
@@ -209,7 +207,7 @@ A. staging 预演
 按 docs/staging-checklist.md
  完成 smoke
 执行：
-npx prisma migrate status
+npm run prisma:status
 
 只有 staging 验收通过后，再进入 production。
 
@@ -422,8 +420,8 @@ bash scripts/deploy-update.sh
 可选数据库备份
 可选运行时文件备份
 npm ci --include=dev
-npx prisma validate
-可选 npx prisma migrate deploy
+npm run prisma:predeploy:check
+可选 npm run prisma:deploy:safe -- --skip-generate
 npx prisma generate
 npm run build
 systemctl restart <service>
@@ -542,7 +540,7 @@ LEAD_IMPORT_WORKER_CONCURRENCY、LEAD_IMPORT_CHUNK_SIZE 是否配置异常
 访问 /customers
 访问 /fulfillment
 访问 /products
-执行 npx prisma migrate status
+执行 npm run prisma:status
 手动确认 public/exports/shipping 和 public/uploads/avatars 可写
 手动确认 Redis 可连通
 确认 jiuzhuang-crm-import-worker 正常启动

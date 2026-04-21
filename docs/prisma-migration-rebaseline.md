@@ -42,7 +42,7 @@ prisma/migrations_pre_rebaseline_20260407
 新环境现在应直接使用：
 
 ```bash
-npx prisma migrate deploy
+npm run prisma:deploy:safe
 ```
 
 然后再继续：
@@ -62,7 +62,7 @@ npm run admin:bootstrap -- --username admin --name "Platform Admin" --password "
 ### 第一步：先确认当前数据库和 schema 一致
 
 ```bash
-npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+npm run prisma:diff:schema
 ```
 
 只有当这条命令返回 `0` 时，才可以继续做 baseline reconcile。
@@ -95,7 +95,7 @@ npm run db:migration-baseline:reconcile -- --apply
 ### 第四步：确认状态
 
 ```bash
-npx prisma migrate status
+npm run prisma:status
 ```
 
 预期结果应该是：
@@ -122,7 +122,7 @@ npx prisma migrate status
 
 完成 rebaseline 之后：
 
-- 空库 / 新环境：优先用 `npx prisma migrate deploy`
+- 空库 / 新环境：优先用 `npm run prisma:deploy:safe`
 - 后续 schema 变更：重新回到正常 Prisma migration 工作流
 
 推荐命令：
@@ -136,5 +136,5 @@ npx prisma migrate dev --name <descriptive_name>
 正式发布时：
 
 ```bash
-npx prisma migrate deploy
+npm run prisma:deploy:safe
 ```

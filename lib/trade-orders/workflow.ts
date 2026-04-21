@@ -31,10 +31,7 @@ export type TradeOrderBundleLineInput = {
 
 export type TradeOrderSkuOption = {
   id: string;
-  skuCode: string;
   skuName: string;
-  specText: string;
-  unit: string;
   defaultUnitPrice: string | number;
   codSupported: boolean;
   insuranceSupported: boolean;
@@ -58,8 +55,6 @@ export type TradeOrderBundleOptionItem = {
   productName: string;
   skuId: string;
   skuName: string;
-  specText: string;
-  unit: string;
   qty: number;
   sortOrder: number;
   enabled: boolean;
@@ -124,8 +119,6 @@ export type TradeOrderResolvedComponent = {
   supplierName: string;
   productName: string;
   skuName: string;
-  specText: string;
-  unit: string;
   codSupported: boolean;
   insuranceSupported: boolean;
   defaultInsuranceAmount: number;
@@ -162,8 +155,6 @@ export type TradeOrderResolvedItem = {
   title: string;
   productName?: string;
   skuName?: string;
-  specText?: string;
-  unit?: string;
   listUnitPrice: number;
   dealUnitPrice: number;
   qty: number;
@@ -313,8 +304,6 @@ function buildDirectSkuItem(line: TradeOrderLineInput, sku: TradeOrderSkuOption)
     supplierName: sku.product.supplier.name,
     productName: sku.product.name,
     skuName: sku.skuName,
-    specText: sku.specText,
-    unit: sku.unit,
     codSupported: sku.codSupported,
     insuranceSupported: sku.insuranceSupported,
     defaultInsuranceAmount: toNumber(sku.defaultInsuranceAmount),
@@ -342,8 +331,6 @@ function buildDirectSkuItem(line: TradeOrderLineInput, sku: TradeOrderSkuOption)
     title,
     productName: sku.product.name,
     skuName: sku.skuName,
-    specText: sku.specText,
-    unit: sku.unit,
     listUnitPrice: pricing.listUnitPrice,
     dealUnitPrice: pricing.dealUnitPrice,
     qty: pricing.qty,
@@ -377,8 +364,6 @@ function buildGiftItem(line: TradeOrderGiftLineInput, sku: TradeOrderSkuOption) 
     supplierName: sku.product.supplier.name,
     productName: sku.product.name,
     skuName: sku.skuName,
-    specText: sku.specText,
-    unit: sku.unit,
     codSupported: false,
     insuranceSupported: false,
     defaultInsuranceAmount: 0,
@@ -406,8 +391,6 @@ function buildGiftItem(line: TradeOrderGiftLineInput, sku: TradeOrderSkuOption) 
     title,
     productName: sku.product.name,
     skuName: sku.skuName,
-    specText: sku.specText,
-    unit: sku.unit,
     listUnitPrice: 0,
     dealUnitPrice: 0,
     qty: Math.max(0, Number(line.qty)),
@@ -474,8 +457,6 @@ function buildBundleItem(
       supplierName: item.supplierName,
       productName: item.productName,
       skuName: item.skuName,
-      specText: item.specText,
-      unit: item.unit,
       codSupported: item.codSupported,
       insuranceSupported: item.insuranceSupported,
       defaultInsuranceAmount: toNumber(item.defaultInsuranceAmount),

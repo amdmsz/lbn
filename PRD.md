@@ -247,6 +247,56 @@
 - Product create and product detail editing should use the same supplier interaction pattern: searchable supplier selection plus inline supplier creation with automatic backfill.
 - This baseline does not introduce procurement, inventory, settlement, or schema changes.
 
+### Product Master-Data Delete Baseline (M2)
+
+- `Product / ProductSku` delete means entering the existing `recycle-bin` lifecycle, not hard delete.
+- Deleting product master data must not change:
+  - `supplierId` execution truth
+  - trade-order split semantics
+  - historical order / trade-order / fulfillment snapshot rendering
+- Historical documents continue to read existing snapshot fields such as:
+  - `productNameSnapshot`
+  - `skuNameSnapshot`
+  - `specSnapshot`
+  - `supplierNameSnapshot`
+- Product deletion cascades the currently unhidden `ProductSku` records into recycle-bin by default.
+- Deleted product master data must disappear immediately from:
+  - `/products` active `Product / SKU` views
+  - new sales-order SKU pickers
+  - new trade-order SKU and bundle pickers
+- M2 only completes:
+  - allow move-to-recycle even when historically referenced
+  - keep delete snapshot in `blockerSnapshotJson`
+  - hide deleted master data from current business selection
+- M3 is still required for:
+  - product-domain `ARCHIVE` finalize
+  - `ACTIVE + ARCHIVED` hidden filter cutover
+  - product-domain history archive payload contract
+
+### Product Master-Data Finalize Baseline (M3)
+
+- `Product / ProductSku` now use the same recycle finalization contract as the rest of the recycle-bin domain:
+  - light objects -> `PURGE`
+  - historically referenced or aggregation-meaningful objects -> `ARCHIVE`
+- Product-domain hidden filtering is now `ACTIVE + ARCHIVED`, not `ACTIVE` only.
+- `ARCHIVED` product master data must stay out of:
+  - `/products` current `Product / SKU` views
+  - product detail compatibility reads
+  - new sales-order SKU pickers
+  - new trade-order SKU and bundle pickers
+- Current product finalize truth:
+  - `ProductSku` with historical references -> `ARCHIVE`
+  - `ProductSku` without historical references -> `PURGE`
+  - `Product` with historical references -> `ARCHIVE`
+  - `Product` with delete-time SKU aggregation meaning -> `ARCHIVE`
+  - only light `Product` objects without historical references and without retained SKU aggregation meaning may `PURGE`
+- Product-domain `ARCHIVE` keeps the existing live `Product / ProductSku` records and uses recycle-bin hidden filtering plus archive payload as the audit truth.
+- Product-domain archive payload is now part of the existing `historyArchive` contract and must not fork a new archive system.
+- This baseline still does not change:
+  - `supplierId` execution truth
+  - trade-order split semantics
+  - historical order / trade-order / fulfillment snapshot rendering
+
 ---
 
 ## 11. Order Fulfillment Center Baseline Addendum
@@ -324,3 +374,56 @@
   - `LOAD_BALANCING`
   - round-robin cursor persistence
 - This baseline does not reopen lead schema redesign and must not be interpreted as a return to Lead-centric sales execution.
+
+---
+
+## 14. 商品中心企业级重构补充基线
+
+- `/products` 继续是商品域唯一一级入口。
+- 商品中心域内固定为 3 个视图：
+  - `Product` 主数据视图：`/products`
+  - `SKU` 经营视图：`/products?tab=skus`
+  - `Supplier` 轻量辅助目录：`/products?tab=suppliers`
+- `/products/[id]` 保留为兼容深链接详情页，不再作为日常主维护入口。
+- 商品中心 M1 主维护路径固定为：高密度表格 + 右侧详情抽屉。
+- 本轮不把 `Supplier` 扩成采购系统；`supplierId` 继续保留为订单拆单与履约执行真相。
+
+### 14.1 字段归属冻结
+
+以下字段在后续 schema milestone 中固定按此落层，不再反复给备选：
+
+| 层级 | 字段 | 冻结原因 |
+| --- | --- | --- |
+| `Product` | `brandName` | 品牌属于同款商品身份，不应随销售规格变化 |
+| `Product` | `seriesName` | 系列是同款商品的经营归属，不应被 SKU 拆散 |
+| `Product` | `categoryCode` | 类目用于主数据归档和统一筛选，天然属于商品主档 |
+| `Product` | `primarySalesSceneCode` | 销售场景标签优先描述“这款酒主要怎么卖”，不是规格能力 |
+| `Product` | `supplyGroupCode` | 供货归类用于内部筛选和分组，不能覆盖 `supplierId` 执行真相 |
+| `Product` | `financeCategoryCode` | 财务辅助归类主要服务主档区分，不应随 SKU 波动 |
+| `Product` | `internalSupplyRemark` | 供货内部备注通常描述同款商品整体供货背景，放 SKU 会碎片化 |
+
+字段冻结原则：
+
+- `Product` 只承载“同款商品身份”和跨 SKU 共享的经营归类。
+- `supplierId` 继续是执行真相，不被 `supplyGroupCode`、`internalSupplyRemark` 等辅助字段替代。
+- 所有新增字段都走 additive 方式，不改旧字段语义，不改拆单真相。
+
+### 14.2 角色可见性冻结
+
+当前字段真相先冻结如下；是否开放 `/products` 给 `SALES` 属于后续单独 RBAC 决策，不在 M1 扩权：
+
+| 字段 / 能力 | ADMIN | SUPERVISOR | SALES | SHIPPER | OPS |
+| --- | --- | --- | --- | --- | --- |
+| `supplier identity` | 可见可编辑 | 可见可编辑 | 默认隐藏 | 可见只读 | 默认隐藏 |
+| `supplyGroupCode` | 可见可编辑 | 可见可编辑 | 默认隐藏 | 可见只读 | 默认隐藏 |
+| `financeCategoryCode` | 可见可编辑 | 可见可编辑 | 默认隐藏 | 默认隐藏 | 默认隐藏 |
+| `internalSupplyRemark` | 可见可编辑 | 可见可编辑 | 默认隐藏 | 可见只读 | 默认隐藏 |
+| `defaultUnitPrice` / 默认售价 | 可见可编辑 | 可见可编辑 | 可见只读 | 可见只读 | 可见只读 |
+
+角色收口原则：
+
+- `ADMIN`：商品中心全量可见可改。
+- `SUPERVISOR`：商品、SKU、类目和供货辅助字段主维护角色。
+- `SALES`：即使未来开放 `/products`，也默认隐藏供货/财务敏感字段，只看销售需要的信息。
+- `SHIPPER`：可见 supplier identity 与供货归类，但不再维护会影响订单拆单真相的主字段。
+- `OPS`：维持只读商品工作台，不自动继承供货/财务敏感可见性。

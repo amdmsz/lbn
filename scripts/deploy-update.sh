@@ -86,9 +86,8 @@ SKIP_BUILD=1 \
 bash "$PROJECT_ROOT/scripts/release-preflight.sh"
 
 if [[ "$RUN_MIGRATE_DEPLOY" == "1" ]]; then
-  info "RUN_MIGRATE_DEPLOY=1 detected. Running prisma migrate deploy."
-  npx prisma migrate deploy
-  ENV_FILE="$ENV_FILE" SKIP_BUILD=1 bash "$PROJECT_ROOT/scripts/release-preflight.sh"
+  info "RUN_MIGRATE_DEPLOY=1 detected. Running safe Prisma deploy sequence."
+  npm run prisma:deploy:safe -- --skip-generate
 fi
 
 npx prisma generate

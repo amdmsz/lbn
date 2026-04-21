@@ -676,6 +676,7 @@ model User {
   updatedSuppliers        Supplier[]       @relation("SupplierUpdatedBy")
   createdProducts         Product[]        @relation("ProductCreatedBy")
   updatedProducts         Product[]        @relation("ProductUpdatedBy")
+  productSavedViews       ProductSavedView[]
   exportedShippingBatches ShippingExportBatch[] @relation("ShippingExportBatchExporter")
   logisticsFollowUpTasks  LogisticsFollowUpTask[] @relation("LogisticsFollowUpTaskOwner")
   codCollectionRecords    CodCollectionRecord[]   @relation("CodCollectionRecordOwner")
@@ -1067,7 +1068,15 @@ model Product {
   supplier    Supplier @relation(fields: [supplierId], references: [id])
   code        String   @unique
   name        String
+  mainImagePath String?
+  brandName   String?
+  seriesName  String?
+  categoryCode String?
+  primarySalesSceneCode String?
+  supplyGroupCode String?
+  financeCategoryCode String?
   description String?  @db.Text
+  internalSupplyRemark String? @db.Text
   enabled     Boolean  @default(true)
   createdById String?
   createdBy   User?    @relation("ProductCreatedBy", fields: [createdById], references: [id])
@@ -1085,10 +1094,7 @@ model ProductSku {
   id                     String   @id @default(cuid())
   productId              String
   product                Product  @relation(fields: [productId], references: [id])
-  skuCode                String   @unique
   skuName                String
-  specText               String
-  unit                   String
   defaultUnitPrice       Decimal  @db.Decimal(10, 2)
   codSupported           Boolean  @default(false)
   insuranceSupported     Boolean  @default(false)
@@ -1099,6 +1105,19 @@ model ProductSku {
   updatedAt              DateTime @updatedAt
 
   @@index([productId, enabled, createdAt])
+}
+
+model ProductSavedView {
+  id          String   @id @default(cuid())
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id])
+  name        String
+  tab         String
+  filtersJson Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([ownerId, tab, updatedAt])
 }
 
 model ProductBundle {

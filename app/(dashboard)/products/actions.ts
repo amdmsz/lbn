@@ -10,12 +10,24 @@ import {
   rethrowRedirectError,
   sanitizeRedirectTarget,
 } from "@/lib/action-notice";
+import { prisma } from "@/lib/db/prisma";
 import {
+  commitProductMainImagePlan,
+  rollbackProductMainImagePlan,
+  saveUploadedProductMainImage,
+  type ProductMainImagePlan,
+} from "@/lib/products/image-server";
+import {
+  createProductWithInitialSku,
   toggleProduct,
   toggleProductSku,
   upsertProduct,
   upsertProductSku,
 } from "@/lib/products/mutations";
+import {
+  deleteProductSavedView,
+  saveProductSavedView,
+} from "@/lib/products/views";
 import { moveToRecycleBin } from "@/lib/recycle-bin/lifecycle";
 import type { MoveToRecycleBinResult, RecycleReasonInputCode } from "@/lib/recycle-bin/types";
 import { upsertSupplier } from "@/lib/suppliers/mutations";
@@ -58,6 +70,40 @@ function getRecycleReasonCode(formData: FormData): RecycleReasonInputCode {
   }
 
   return "mistaken_creation";
+}
+
+async function buildProductMainImagePlan(
+  formData: FormData,
+  productId: string,
+): Promise<ProductMainImagePlan> {
+  const removeMainImage = getFormValue(formData, "removeMainImage") === "true";
+  const existingProduct = productId
+    ? await prisma.product.findUnique({
+        where: { id: productId },
+        select: {
+          id: true,
+          mainImagePath: true,
+        },
+      })
+    : null;
+
+  if (productId && !existingProduct) {
+    throw new Error("Product not found.");
+  }
+
+  const uploadedFile = formData.get("mainImage");
+  const uploadedMainImagePath =
+    uploadedFile instanceof File && uploadedFile.size > 0
+      ? await saveUploadedProductMainImage(uploadedFile)
+      : null;
+
+  return {
+    previousMainImagePath: existingProduct?.mainImagePath ?? null,
+    nextMainImagePath:
+      uploadedMainImagePath ??
+      (removeMainImage ? null : existingProduct?.mainImagePath ?? null),
+    uploadedMainImagePath,
+  };
 }
 
 function buildRecycleActionResult(
@@ -168,13 +214,30 @@ async function runMoveToRecycleBinInlineAction(
 
 export async function upsertProductAction(formData: FormData) {
   return runProductAction(formData, "/products", async (actor) => {
-    await upsertProduct(actor, {
-      id: getFormValue(formData, "id"),
-      supplierId: getFormValue(formData, "supplierId"),
-      code: getFormValue(formData, "code"),
-      name: getFormValue(formData, "name"),
-      description: getFormValue(formData, "description"),
-    });
+    const productId = getFormValue(formData, "id");
+    const mainImagePlan = await buildProductMainImagePlan(formData, productId);
+
+    try {
+      await upsertProduct(actor, {
+        id: productId,
+        supplierId: getFormValue(formData, "supplierId"),
+        code: getFormValue(formData, "code"),
+        name: getFormValue(formData, "name"),
+        mainImagePath: mainImagePlan.nextMainImagePath ?? "",
+        brandName: getFormValue(formData, "brandName"),
+        seriesName: getFormValue(formData, "seriesName"),
+        categoryCode: getFormValue(formData, "categoryCode"),
+        primarySalesSceneCode: getFormValue(formData, "primarySalesSceneCode"),
+        supplyGroupCode: getFormValue(formData, "supplyGroupCode"),
+        financeCategoryCode: getFormValue(formData, "financeCategoryCode"),
+        description: getFormValue(formData, "description"),
+        internalSupplyRemark: getFormValue(formData, "internalSupplyRemark"),
+      });
+      await commitProductMainImagePlan(mainImagePlan);
+    } catch (error) {
+      await rollbackProductMainImagePlan(mainImagePlan);
+      throw error;
+    }
   });
 }
 
@@ -182,13 +245,70 @@ export async function upsertProductInlineAction(
   formData: FormData,
 ): Promise<ProductActionResult> {
   return runProductInlineAction(formData, "/products", async (actor) => {
-    await upsertProduct(actor, {
-      id: getFormValue(formData, "id"),
-      supplierId: getFormValue(formData, "supplierId"),
-      code: getFormValue(formData, "code"),
-      name: getFormValue(formData, "name"),
-      description: getFormValue(formData, "description"),
-    });
+    const productId = getFormValue(formData, "id");
+    const mainImagePlan = await buildProductMainImagePlan(formData, productId);
+
+    try {
+      await upsertProduct(actor, {
+        id: productId,
+        supplierId: getFormValue(formData, "supplierId"),
+        code: getFormValue(formData, "code"),
+        name: getFormValue(formData, "name"),
+        mainImagePath: mainImagePlan.nextMainImagePath ?? "",
+        brandName: getFormValue(formData, "brandName"),
+        seriesName: getFormValue(formData, "seriesName"),
+        categoryCode: getFormValue(formData, "categoryCode"),
+        primarySalesSceneCode: getFormValue(formData, "primarySalesSceneCode"),
+        supplyGroupCode: getFormValue(formData, "supplyGroupCode"),
+        financeCategoryCode: getFormValue(formData, "financeCategoryCode"),
+        description: getFormValue(formData, "description"),
+        internalSupplyRemark: getFormValue(formData, "internalSupplyRemark"),
+      });
+      await commitProductMainImagePlan(mainImagePlan);
+    } catch (error) {
+      await rollbackProductMainImagePlan(mainImagePlan);
+      throw error;
+    }
+  });
+}
+
+export async function createProductWithInitialSkuInlineAction(
+  formData: FormData,
+): Promise<ProductActionResult> {
+  return runProductInlineAction(formData, "/products", async (actor) => {
+    const mainImagePlan = await buildProductMainImagePlan(formData, "");
+
+    try {
+      await createProductWithInitialSku(actor, {
+        supplierId: getFormValue(formData, "supplierId"),
+        code: getFormValue(formData, "code"),
+        name: getFormValue(formData, "name"),
+        mainImagePath: mainImagePlan.nextMainImagePath ?? "",
+        brandName: getFormValue(formData, "brandName"),
+        seriesName: getFormValue(formData, "seriesName"),
+        categoryCode: getFormValue(formData, "categoryCode"),
+        primarySalesSceneCode: getFormValue(formData, "primarySalesSceneCode"),
+        supplyGroupCode: getFormValue(formData, "supplyGroupCode"),
+        financeCategoryCode: getFormValue(formData, "financeCategoryCode"),
+        description: getFormValue(formData, "description"),
+        internalSupplyRemark: getFormValue(formData, "internalSupplyRemark"),
+        initialSku: {
+          skuName: getFormValue(formData, "skuName"),
+          defaultUnitPrice: getFormValue(formData, "defaultUnitPrice"),
+          codSupported: (getFormValue(formData, "codSupported") || "false") as
+            | "true"
+            | "false",
+          insuranceSupported: (getFormValue(formData, "insuranceSupported") || "false") as
+            | "true"
+            | "false",
+          defaultInsuranceAmount: getFormValue(formData, "defaultInsuranceAmount") || "0",
+        },
+      });
+      await commitProductMainImagePlan(mainImagePlan);
+    } catch (error) {
+      await rollbackProductMainImagePlan(mainImagePlan);
+      throw error;
+    }
   });
 }
 
@@ -241,10 +361,7 @@ export async function upsertProductSkuAction(formData: FormData) {
     await upsertProductSku(actor, {
       id: getFormValue(formData, "id"),
       productId: getFormValue(formData, "productId"),
-      skuCode: getFormValue(formData, "skuCode"),
       skuName: getFormValue(formData, "skuName"),
-      specText: getFormValue(formData, "specText"),
-      unit: getFormValue(formData, "unit"),
       defaultUnitPrice: getFormValue(formData, "defaultUnitPrice"),
       codSupported: (getFormValue(formData, "codSupported") || "false") as "true" | "false",
       insuranceSupported: (getFormValue(formData, "insuranceSupported") || "false") as
@@ -262,10 +379,7 @@ export async function upsertProductSkuInlineAction(
     await upsertProductSku(actor, {
       id: getFormValue(formData, "id"),
       productId: getFormValue(formData, "productId"),
-      skuCode: getFormValue(formData, "skuCode"),
       skuName: getFormValue(formData, "skuName"),
-      specText: getFormValue(formData, "specText"),
-      unit: getFormValue(formData, "unit"),
       defaultUnitPrice: getFormValue(formData, "defaultUnitPrice"),
       codSupported: (getFormValue(formData, "codSupported") || "false") as "true" | "false",
       insuranceSupported: (getFormValue(formData, "insuranceSupported") || "false") as
@@ -300,4 +414,66 @@ export async function moveProductSkuToRecycleBinInlineAction(
   formData: FormData,
 ): Promise<ProductActionResult> {
   return runMoveToRecycleBinInlineAction(formData, "/products", "PRODUCT_SKU", "SKU");
+}
+
+export async function saveProductSavedViewInlineAction(
+  formData: FormData,
+): Promise<ProductActionResult> {
+  const actor = await getActor();
+
+  try {
+    await saveProductSavedView(actor, {
+      name: getFormValue(formData, "name"),
+      tab: (getFormValue(formData, "tab") || "products") as "products" | "skus",
+      filters: {
+        q: getFormValue(formData, "q"),
+        status: getFormValue(formData, "status"),
+        supplierId: getFormValue(formData, "supplierId"),
+        brandName: getFormValue(formData, "brandName"),
+        seriesName: getFormValue(formData, "seriesName"),
+        categoryCode: getFormValue(formData, "categoryCode"),
+        primarySalesSceneCode: getFormValue(formData, "primarySalesSceneCode"),
+        supplyGroupCode: getFormValue(formData, "supplyGroupCode"),
+        financeCategoryCode: getFormValue(formData, "financeCategoryCode"),
+        preset: getFormValue(formData, "preset"),
+      },
+    });
+
+    revalidatePath("/products");
+
+    return {
+      status: "success",
+      message: "当前视图已保存。",
+    };
+  } catch (error) {
+    rethrowRedirectError(error);
+
+    return {
+      status: "error",
+      message: getErrorMessage(error),
+    };
+  }
+}
+
+export async function deleteProductSavedViewInlineAction(
+  formData: FormData,
+): Promise<ProductActionResult> {
+  const actor = await getActor();
+
+  try {
+    await deleteProductSavedView(actor, getFormValue(formData, "viewId"));
+    revalidatePath("/products");
+
+    return {
+      status: "success",
+      message: "已删除当前视图。",
+    };
+  } catch (error) {
+    rethrowRedirectError(error);
+
+    return {
+      status: "error",
+      message: getErrorMessage(error),
+    };
+  }
 }

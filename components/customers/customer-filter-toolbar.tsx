@@ -95,6 +95,24 @@ function formatRangeLabel(from: string, to: string) {
   return "";
 }
 
+function buildTimeFilterSummary(input: {
+  importedFrom: string;
+  importedTo: string;
+  assignedFrom: string;
+  assignedTo: string;
+}) {
+  const summaryParts = [
+    input.importedFrom || input.importedTo
+      ? `导入 ${formatRangeLabel(input.importedFrom, input.importedTo)}`
+      : "",
+    input.assignedFrom || input.assignedTo
+      ? `分配 ${formatRangeLabel(input.assignedFrom, input.assignedTo)}`
+      : "",
+  ].filter(Boolean);
+
+  return summaryParts.join(" · ");
+}
+
 function sortByCountDesc<T extends { count: number; label?: string; name?: string }>(items: T[]) {
   return [...items].sort((left, right) => {
     if (right.count !== left.count) {
@@ -225,6 +243,84 @@ function OptionRow({
         </span>
       </div>
     </button>
+  );
+}
+
+function TimeFilterSection({
+  title,
+  description,
+  from,
+  to,
+  onApplyPreset,
+  onChange,
+  onClear,
+}: Readonly<{
+  title: string;
+  description: string;
+  from: string;
+  to: string;
+  onApplyPreset: (preset: TimePresetKey) => void;
+  onChange: (nextValue: { from: string; to: string }) => void;
+  onClear: () => void;
+}>) {
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1">
+        <p className="text-[13px] font-semibold text-black/84">{title}</p>
+        <p className="text-xs leading-5 text-black/46">{description}</p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {([
+          ["today", "今天"],
+          ["last7", "近 7 天"],
+          ["last30", "近 30 天"],
+          ["thisMonth", "本月"],
+        ] as Array<[TimePresetKey, string]>).map(([preset, label]) => (
+          <button
+            key={`${title}-${preset}`}
+            type="button"
+            onClick={() => onApplyPreset(preset)}
+            className="rounded-full border border-black/8 bg-[rgba(248,250,252,0.82)] px-3 py-1.5 text-[12px] text-black/62 transition hover:border-black/12 hover:bg-white hover:text-black/82"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid gap-2">
+        <input
+          type="date"
+          value={from}
+          onChange={(event) =>
+            onChange({
+              from: event.target.value,
+              to,
+            })
+          }
+          className="h-10 rounded-[12px] border border-black/8 bg-[rgba(248,250,252,0.82)] px-3 text-[13px] text-black/78 outline-none transition focus:border-black/14 focus:ring-2 focus:ring-black/5"
+        />
+        <input
+          type="date"
+          value={to}
+          onChange={(event) =>
+            onChange({
+              from,
+              to: event.target.value,
+            })
+          }
+          className="h-10 rounded-[12px] border border-black/8 bg-[rgba(248,250,252,0.82)] px-3 text-[13px] text-black/78 outline-none transition focus:border-black/14 focus:ring-2 focus:ring-black/5"
+        />
+      </div>
+
+      <button
+        type="button"
+        onClick={onClear}
+        className="text-xs text-black/46 transition hover:text-black/70"
+      >
+        清空 {title}
+      </button>
+    </div>
   );
 }
 
@@ -410,12 +506,24 @@ export function CustomerFilterToolbar({
   const activeFilterCount = [
     Boolean(filters.search),
     Boolean(filters.importedFrom || filters.importedTo),
+    Boolean(filters.assignedFrom || filters.assignedTo),
     filters.statuses.length > 0,
     filters.productKeys.length > 0 || Boolean(filters.productKeyword),
     filters.tagIds.length > 0,
     Boolean(filters.teamId),
     Boolean(filters.salesId),
   ].filter(Boolean).length;
+
+  const timeFilterSummary = useMemo(
+    () =>
+      buildTimeFilterSummary({
+        importedFrom: filters.importedFrom,
+        importedTo: filters.importedTo,
+        assignedFrom: filters.assignedFrom,
+        assignedTo: filters.assignedTo,
+      }),
+    [filters.assignedFrom, filters.assignedTo, filters.importedFrom, filters.importedTo],
+  );
 
   const scopeHint = useMemo(() => {
     const teamLabel = teamOptions.find((item) => item.id === filters.teamId)?.name;
@@ -609,71 +717,63 @@ export function CustomerFilterToolbar({
               <FilterButton
                 label="时间"
                 icon={<CalendarRange className="h-3.5 w-3.5 shrink-0 text-black/44" />}
-                value={formatRangeLabel(filters.importedFrom, filters.importedTo)}
-                active={Boolean(filters.importedFrom || filters.importedTo)}
+                value={timeFilterSummary}
+                active={Boolean(
+                  filters.importedFrom ||
+                    filters.importedTo ||
+                    filters.assignedFrom ||
+                    filters.assignedTo,
+                )}
                 open={openPanel === "time"}
                 onClick={() => setOpenPanel((current) => (current === "time" ? null : "time"))}
               />
-              <FilterPanel open={openPanel === "time"} widthClassName="w-[19rem]">
-                <div className="space-y-3">
-                  <p className="text-[13px] font-semibold text-black/84">导入时间</p>
-                  <div className="flex flex-wrap gap-2">
-                    {([
-                      ["today", "今天"],
-                      ["last7", "近 7 天"],
-                      ["last30", "近 30 天"],
-                      ["thisMonth", "本月"],
-                    ] as Array<[TimePresetKey, string]>).map(([preset, label]) => (
-                      <button
-                        key={preset}
-                        type="button"
-                        onClick={() => {
-                          const range = getPresetRange(preset);
-                          applyFilters({
-                            importedFrom: range.from,
-                            importedTo: range.to,
-                          });
-                        }}
-                        className="rounded-full border border-black/8 bg-[rgba(248,250,252,0.82)] px-3 py-1.5 text-[12px] text-black/62 transition hover:border-black/12 hover:bg-white hover:text-black/82"
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+              <FilterPanel open={openPanel === "time"} widthClassName="w-[20rem]">
+                <div className="space-y-4">
+                  <TimeFilterSection
+                    title="导入时间"
+                    description="保留现有导入时间筛选，继续服务导入承接与首呼检查。"
+                    from={filters.importedFrom}
+                    to={filters.importedTo}
+                    onApplyPreset={(preset) => {
+                      const range = getPresetRange(preset);
+                      applyFilters({
+                        importedFrom: range.from,
+                        importedTo: range.to,
+                      });
+                    }}
+                    onChange={(nextValue) =>
+                      applyFilters({
+                        importedFrom: nextValue.from,
+                        importedTo: nextValue.to,
+                      })
+                    }
+                    onClear={() => applyFilters({ importedFrom: "", importedTo: "" })}
+                  />
 
-                  <div className="grid gap-2">
-                    <input
-                      type="date"
-                      value={filters.importedFrom}
-                      onChange={(event) =>
+                  <div className="border-t border-black/6 pt-4">
+                    <TimeFilterSection
+                      title="分配时间"
+                      description="按客户承接给当前负责人的时间筛选，不再混用客户创建时间。"
+                      from={filters.assignedFrom}
+                      to={filters.assignedTo}
+                      onApplyPreset={(preset) => {
+                        const range = getPresetRange(preset);
                         applyFilters({
-                          importedFrom: event.target.value,
-                          importedTo: filters.importedTo,
+                          assignedFrom: range.from,
+                          assignedTo: range.to,
+                        });
+                      }}
+                      onChange={(nextValue) =>
+                        applyFilters({
+                          assignedFrom: nextValue.from,
+                          assignedTo: nextValue.to,
                         })
                       }
-                      className="h-10 rounded-[12px] border border-black/8 bg-[rgba(248,250,252,0.82)] px-3 text-[13px] text-black/78 outline-none transition focus:border-black/14 focus:ring-2 focus:ring-black/5"
-                    />
-                    <input
-                      type="date"
-                      value={filters.importedTo}
-                      onChange={(event) =>
-                        applyFilters({
-                          importedFrom: filters.importedFrom,
-                          importedTo: event.target.value,
-                        })
-                      }
-                      className="h-10 rounded-[12px] border border-black/8 bg-[rgba(248,250,252,0.82)] px-3 text-[13px] text-black/78 outline-none transition focus:border-black/14 focus:ring-2 focus:ring-black/5"
+                      onClear={() => applyFilters({ assignedFrom: "", assignedTo: "" })}
                     />
                   </div>
 
-                  <div className="flex items-center justify-between border-t border-black/6 pt-3">
-                    <button
-                      type="button"
-                      onClick={() => applyFilters({ importedFrom: "", importedTo: "" })}
-                      className="text-xs text-black/46 transition hover:text-black/70"
-                    >
-                      清空
-                    </button>
+                  <div className="flex items-center justify-end border-t border-black/6 pt-3">
                     <button
                       type="button"
                       onClick={() => setOpenPanel(null)}
@@ -929,6 +1029,8 @@ export function CustomerFilterToolbar({
                     tagIds: [],
                     importedFrom: "",
                     importedTo: "",
+                    assignedFrom: "",
+                    assignedTo: "",
                     teamId: "",
                     salesId: "",
                   })

@@ -295,11 +295,29 @@ const tagSeeds = [
 const categorySeeds = [
   ["CUSTOMER_STAGE", "Customer Stage", "Reusable customer stage categories", 10],
   ["FOLLOW_UP_REASON", "Follow-up Reason", "Reusable follow-up reason categories", 20],
+  ["PRODUCT_CENTER", "Product Center", "Reusable product-center dictionaries", 30],
 ];
 
 const dictionaryTypeSeeds = [
   ["CUSTOMER_STAGE", "CUSTOMER_STAGE", "Customer Stage", "Reusable customer stage dictionary", 10],
   ["FOLLOW_UP_REASON", "FOLLOW_UP_REASON", "Follow-up Reason", "Reusable follow-up reason dictionary", 20],
+  ["PRODUCT_CATEGORY", "PRODUCT_CENTER", "Product Category", "Product category dictionary", 30],
+  [
+    "PRODUCT_PRIMARY_SALES_SCENE",
+    "PRODUCT_CENTER",
+    "Primary Sales Scene",
+    "Primary sales-scene dictionary for products",
+    40,
+  ],
+  ["PRODUCT_SUPPLY_GROUP", "PRODUCT_CENTER", "Supply Group", "Internal supply-group dictionary", 50],
+  [
+    "PRODUCT_FINANCE_CATEGORY",
+    "PRODUCT_CENTER",
+    "Finance Category",
+    "Finance category dictionary for products",
+    60,
+  ],
+  ["PRODUCT_PACKAGE_FORM", "PRODUCT_CENTER", "Package Form", "Package-form dictionary for SKUs", 70],
 ];
 
 const dictionaryItemSeeds = [
@@ -309,6 +327,39 @@ const dictionaryItemSeeds = [
   ["FOLLOW_UP_REASON", "PRICE_CONCERN", "Price Concern", "price_concern", "Customer hesitates because of pricing", 10],
   ["FOLLOW_UP_REASON", "WAITING_CALLBACK", "Waiting Callback", "waiting_callback", "Waiting for scheduled callback", 20],
   ["FOLLOW_UP_REASON", "LIVE_FOLLOW_UP", "Live Follow-up", "live_follow_up", "Post-live-session follow-up reason", 30],
+  ["PRODUCT_CATEGORY", "BAIJIU", "\u767d\u9152", "baijiu", "Baijiu product category", 10],
+  [
+    "PRODUCT_PRIMARY_SALES_SCENE",
+    "PRIVATE_LIVE",
+    "\u79c1\u57df\u76f4\u64ad",
+    "private_live",
+    "Primary sales scene for private live sessions",
+    10,
+  ],
+  [
+    "PRODUCT_SUPPLY_GROUP",
+    "CORE_SUPPLY",
+    "\u6838\u5fc3\u4f9b\u8d27",
+    "core_supply",
+    "Core internal supply group",
+    10,
+  ],
+  [
+    "PRODUCT_FINANCE_CATEGORY",
+    "DOMESTIC_SPIRIT",
+    "\u56fd\u4ea7\u767d\u9152",
+    "domestic_spirit",
+    "Finance category for domestic baijiu",
+    10,
+  ],
+  [
+    "PRODUCT_PACKAGE_FORM",
+    "BOTTLE",
+    "\u74f6\u88c5",
+    "bottle",
+    "Bottle package form",
+    10,
+  ],
 ];
 
 const customerTagAssignments = {

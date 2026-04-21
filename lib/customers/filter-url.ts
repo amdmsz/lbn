@@ -42,6 +42,14 @@ export function buildCustomersHref(
     params.set("importedTo", next.importedTo);
   }
 
+  if (next.assignedFrom) {
+    params.set("assignedFrom", next.assignedFrom);
+  }
+
+  if (next.assignedTo) {
+    params.set("assignedTo", next.assignedTo);
+  }
+
   if (next.teamId) {
     params.set("teamId", next.teamId);
   }

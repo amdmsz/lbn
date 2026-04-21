@@ -30,9 +30,12 @@ import {
   purgeLiveSessionTarget,
 } from "@/lib/recycle-bin/live-session-adapter";
 import {
+  archiveMasterDataTarget,
+  buildMasterDataFinalizePreview,
   buildMasterDataPurgeGuard,
   buildMasterDataRestoreGuard,
   getMasterDataRecycleTarget,
+  listProductCascadeSkuSnapshot,
   purgeMasterDataTarget,
 } from "@/lib/recycle-bin/master-data-adapter";
 import {
@@ -64,6 +67,7 @@ import {
   type PurgeFromRecycleBinResult,
   type RecycleFinalizePreview,
   type RecyclePurgeGuard,
+  type RecycleReasonInputCode,
   type RecycleRestoreGuard,
   type RecycleLifecycleActor,
   type RestoreFromRecycleBinInput,
@@ -257,6 +261,88 @@ async function loadRecycleTarget(
   return getLeadRecycleTarget(tx, targetType, targetId);
 }
 
+async function loadCascadeRecycleTargets(
+  tx: RecycleTx,
+  target: RecycleTargetSnapshot,
+) {
+  if (target.targetType !== "PRODUCT") {
+    return [] as RecycleTargetSnapshot[];
+  }
+
+  const cascadeSkuSnapshot = await listProductCascadeSkuSnapshot(tx, target.targetId);
+  const cascadeTargets = await Promise.all(
+    cascadeSkuSnapshot.map((sku) => loadRecycleTarget(tx, "PRODUCT_SKU", sku.id)),
+  );
+
+  return cascadeTargets.filter(
+    (cascadeTarget): cascadeTarget is RecycleTargetSnapshot => Boolean(cascadeTarget),
+  );
+}
+
+function buildRecycleEntryAfterData(input: {
+  entryId: string;
+  recycleExpiresAt: Date;
+  reasonCode: RecycleReasonInputCode;
+  reasonText: string | null;
+  extra?: Record<string, unknown>;
+}) {
+  return {
+    recycleEntryId: input.entryId,
+    recycleStatus: RecycleEntryStatus.ACTIVE,
+    recycleExpiresAt: input.recycleExpiresAt,
+    deleteReasonCode: input.reasonCode,
+    deleteReasonText: input.reasonText,
+    ...(input.extra ?? {}),
+  };
+}
+
+async function createRecycleEntryWithAudit(
+  tx: RecycleTx,
+  input: {
+    actor: RecycleLifecycleActor;
+    target: RecycleTargetSnapshot;
+    reasonCode: RecycleReasonInputCode;
+    reasonText: string | null;
+    recycleExpiresAt: Date;
+    extraAfterData?: Record<string, unknown>;
+  },
+) {
+  const entry = await createActiveRecycleEntry(tx, {
+    targetType: input.target.targetType,
+    targetId: input.target.targetId,
+    domain: input.target.domain,
+    titleSnapshot: input.target.titleSnapshot,
+    secondarySnapshot: input.target.secondarySnapshot,
+    originalStatusSnapshot: input.target.originalStatusSnapshot,
+    restoreRouteSnapshot: input.target.restoreRouteSnapshot,
+    deleteReasonCode: RECYCLE_REASON_CODE_MAP[input.reasonCode],
+    deleteReasonText: input.reasonText,
+    deletedById: input.actor.id,
+    recycleExpiresAt: input.recycleExpiresAt,
+    blockerSnapshotJson: input.target.blockerSnapshotJson,
+  });
+
+  await tx.operationLog.create({
+    data: {
+      actorId: input.actor.id,
+      module: input.target.operationModule,
+      action: input.target.operationAction,
+      targetType: input.target.operationTargetType,
+      targetId: input.target.targetId,
+      description: input.target.operationDescription,
+      afterData: buildRecycleEntryAfterData({
+        entryId: entry.id,
+        recycleExpiresAt: input.recycleExpiresAt,
+        reasonCode: input.reasonCode,
+        reasonText: input.reasonText,
+        extra: input.extraAfterData,
+      }),
+    },
+  });
+
+  return entry;
+}
+
 async function buildRestoreGuard(
   tx: RecycleTx,
   input: {
@@ -367,6 +453,12 @@ async function buildFinalizePreview(
     domain: "PRODUCT_MASTER_DATA" | "LIVE_SESSION" | "LEAD" | "TRADE_ORDER" | "CUSTOMER";
   },
 ): Promise<RecycleFinalizePreview> {
+  const masterDataPreview = await buildMasterDataFinalizePreview(tx, input);
+
+  if (masterDataPreview) {
+    return masterDataPreview;
+  }
+
   const customerPreview = await buildCustomerFinalizePreview(tx, input);
 
   if (customerPreview) {
@@ -431,6 +523,12 @@ async function archiveRecycleTarget(
     preview: RecycleFinalizePreview;
   },
 ) {
+  const archivedMasterData = await archiveMasterDataTarget(tx, input);
+
+  if (archivedMasterData) {
+    return archivedMasterData;
+  }
+
   const archivedTradeOrder = await archiveTradeOrderTarget(tx, input);
 
   if (archivedTradeOrder) {
@@ -610,6 +708,24 @@ function getArchiveOperationMeta(input: {
   targetType: RecycleTargetType;
   titleSnapshot: string;
 }) {
+  if (input.targetType === "PRODUCT") {
+    return {
+      module: "PRODUCT" as const,
+      targetType: "PRODUCT" as const,
+      action: "product.archived_from_recycle_bin",
+      description: `Archived product from recycle bin: ${input.titleSnapshot}`,
+    };
+  }
+
+  if (input.targetType === "PRODUCT_SKU") {
+    return {
+      module: "PRODUCT" as const,
+      targetType: "PRODUCT_SKU" as const,
+      action: "product_sku.archived_from_recycle_bin",
+      description: `Archived product SKU from recycle bin: ${input.titleSnapshot}`,
+    };
+  }
+
   if (input.targetType === "TRADE_ORDER") {
     return {
       module: "SALES_ORDER" as const,
@@ -696,40 +812,42 @@ export async function moveToRecycleBin(
 
     const recycleExpiresAt = new Date();
     recycleExpiresAt.setDate(recycleExpiresAt.getDate() + RECYCLE_RETENTION_DAYS);
+    const reasonText = input.reasonText?.trim() || null;
 
     try {
-      const entry = await createActiveRecycleEntry(tx, {
-        targetType: target.targetType,
-        targetId: target.targetId,
-        domain: target.domain,
-        titleSnapshot: target.titleSnapshot,
-        secondarySnapshot: target.secondarySnapshot,
-        originalStatusSnapshot: target.originalStatusSnapshot,
-        restoreRouteSnapshot: target.restoreRouteSnapshot,
-        deleteReasonCode: RECYCLE_REASON_CODE_MAP[input.reasonCode],
-        deleteReasonText: input.reasonText?.trim() || null,
-        deletedById: actor.id,
+      const entry = await createRecycleEntryWithAudit(tx, {
+        actor,
+        target,
+        reasonCode: input.reasonCode,
+        reasonText,
         recycleExpiresAt,
-        blockerSnapshotJson: target.blockerSnapshotJson,
       });
 
-      await tx.operationLog.create({
-        data: {
-          actorId: actor.id,
-          module: target.operationModule,
-          action: target.operationAction,
-          targetType: target.operationTargetType,
-          targetId: target.targetId,
-          description: target.operationDescription,
-          afterData: {
-            recycleEntryId: entry.id,
-            recycleStatus: RecycleEntryStatus.ACTIVE,
+      const cascadeTargets = await loadCascadeRecycleTargets(tx, target);
+
+      for (const cascadeTarget of cascadeTargets) {
+        if (!cascadeTarget.guard.canMoveToRecycleBin) {
+          continue;
+        }
+
+        try {
+          await createRecycleEntryWithAudit(tx, {
+            actor,
+            target: cascadeTarget,
+            reasonCode: input.reasonCode,
+            reasonText,
             recycleExpiresAt,
-            deleteReasonCode: input.reasonCode,
-            deleteReasonText: input.reasonText?.trim() || null,
-          },
-        },
-      });
+            extraAfterData: {
+              cascadeSourceTargetType: target.targetType,
+              cascadeSourceTargetId: target.targetId,
+            },
+          });
+        } catch (error) {
+          if (!isRecycleEntryUniqueConflict(error)) {
+            throw error;
+          }
+        }
+      }
 
       return {
         status: "created",

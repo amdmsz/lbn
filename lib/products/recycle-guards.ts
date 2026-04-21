@@ -38,9 +38,10 @@ function buildGuard(
   emptySummary: string,
 ) {
   const activeBlockers = blockers.filter((item) => item.count > 0);
+  const moveBlockers = activeBlockers.filter((item) => item.blocksMoveToRecycleBin);
 
   return {
-    canMoveToRecycleBin: activeBlockers.length === 0,
+    canMoveToRecycleBin: moveBlockers.length === 0,
     fallbackActionLabel,
     blockerSummary:
       activeBlockers.length === 0
@@ -60,20 +61,20 @@ export function buildProductRecycleGuard(input: {
       {
         name: "\u5546\u54c1\u6302\u8f7d\u4e2d\u7684 SKU",
         count: input.skuCount,
-        blocksMoveToRecycleBin: true,
+        blocksMoveToRecycleBin: false,
         blocksPermanentDelete: true,
-        description: `\u4ecd\u6709 ${input.skuCount} \u4e2a SKU \u6302\u8f7d\u5728\u8be5\u5546\u54c1\u4e0b`,
+        description: `\u5f53\u524d\u5546\u54c1\u4e0b\u4ecd\u6709 ${input.skuCount} \u4e2a SKU\uff0c\u79fb\u5165\u56de\u6536\u7ad9\u65f6\u5e94\u8054\u52a8\u5904\u7406\u672a\u9690\u85cf SKU`,
       },
       {
         name: "\u9500\u552e\u660e\u7ec6\u5f15\u7528",
         count: input.salesOrderItemCount,
-        blocksMoveToRecycleBin: true,
+        blocksMoveToRecycleBin: false,
         blocksPermanentDelete: true,
-        description: `\u5df2\u88ab\u9500\u552e\u660e\u7ec6\u5f15\u7528 ${input.salesOrderItemCount} \u6b21\uff0c\u8bf4\u660e\u8be5\u5546\u54c1\u5df2\u8fdb\u5165\u4ea4\u6613\u94fe`,
+        description: `\u5df2\u88ab\u9500\u552e\u660e\u7ec6\u5f15\u7528 ${input.salesOrderItemCount} \u6b21\uff0c\u79fb\u5165\u56de\u6536\u7ad9\u540e\u4ecd\u9700\u4fdd\u7559\u5386\u53f2\u5f15\u7528\u94fe`,
       },
     ],
     "\u6539\u4e3a\u505c\u7528\u5546\u54c1",
-    "\u5f53\u524d\u672a\u53d1\u73b0 SKU \u6216\u9500\u552e\u5f15\u7528\uff0c\u6ee1\u8db3\u5546\u54c1\u79fb\u5165\u56de\u6536\u7ad9\u7684\u57fa\u7840\u6761\u4ef6\u3002",
+    "\u5f53\u524d\u5546\u54c1\u53ef\u79fb\u5165\u56de\u6536\u7ad9\uff0c\u540e\u7eed finalize \u662f purge \u8fd8\u662f archive \u53d6\u51b3\u4e8e\u6700\u7ec8\u5f15\u7528\u771f\u76f8\u3002",
   );
 }
 
@@ -85,13 +86,13 @@ export function buildProductSkuRecycleGuard(input: {
       {
         name: "\u9500\u552e\u660e\u7ec6\u5f15\u7528",
         count: input.salesOrderItemCount,
-        blocksMoveToRecycleBin: true,
+        blocksMoveToRecycleBin: false,
         blocksPermanentDelete: true,
-        description: `\u5df2\u88ab\u9500\u552e\u660e\u7ec6\u5f15\u7528 ${input.salesOrderItemCount} \u6b21\uff0c\u8bf4\u660e\u8be5 SKU \u5df2\u8fdb\u5165\u6b63\u5f0f\u4f7f\u7528`,
+        description: `\u5df2\u88ab\u9500\u552e\u660e\u7ec6\u5f15\u7528 ${input.salesOrderItemCount} \u6b21\uff0c\u79fb\u5165\u56de\u6536\u7ad9\u540e\u4ecd\u9700\u4fdd\u7559\u5386\u53f2\u5f15\u7528\u94fe`,
       },
     ],
     "\u6539\u4e3a\u505c\u7528 SKU",
-    "\u5f53\u524d\u672a\u53d1\u73b0\u9500\u552e\u660e\u7ec6\u5f15\u7528\uff0c\u6ee1\u8db3\u8bef\u5efa SKU \u79fb\u5165\u56de\u6536\u7ad9\u7684\u57fa\u7840\u6761\u4ef6\u3002",
+    "\u5f53\u524d SKU \u53ef\u79fb\u5165\u56de\u6536\u7ad9\uff0c\u540e\u7eed finalize \u662f purge \u8fd8\u662f archive \u53d6\u51b3\u4e8e\u6700\u7ec8\u5f15\u7528\u771f\u76f8\u3002",
   );
 }
 

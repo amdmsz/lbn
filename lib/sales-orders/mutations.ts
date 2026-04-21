@@ -27,6 +27,7 @@ import {
   mapPaymentSchemeToLegacyPaymentMode,
   paymentSchemeRequiresDeposit,
 } from "@/lib/sales-orders/workflow";
+import { findProductDomainCurrentlyHiddenTargetIds } from "@/lib/products/recycle";
 
 export type SalesOrderActor = {
   id: string;
@@ -192,6 +193,11 @@ export async function saveSalesOrder(
   const teamId = await getActorTeamId(actor);
   const customerWhere = buildActorCustomerWhere(actor, teamId);
   const salesOrderWhere = buildActorSalesOrderWhere(actor, teamId);
+  const [hiddenProductSkuIds, hiddenProductIds, hiddenSupplierIds] = await Promise.all([
+    findProductDomainCurrentlyHiddenTargetIds(prisma, "PRODUCT_SKU"),
+    findProductDomainCurrentlyHiddenTargetIds(prisma, "PRODUCT"),
+    findProductDomainCurrentlyHiddenTargetIds(prisma, "SUPPLIER"),
+  ]);
 
   const [customer, sku, existing] = await Promise.all([
     prisma.customer.findFirst({
@@ -211,18 +217,35 @@ export async function saveSalesOrder(
       where: {
         id: input.skuId,
         enabled: true,
+        ...(hiddenProductSkuIds.includes(input.skuId)
+          ? {
+              id: "__recycled_product_sku__",
+            }
+          : {}),
         product: {
           enabled: true,
+          ...(hiddenProductIds.length > 0
+            ? {
+                id: {
+                  notIn: hiddenProductIds,
+                },
+              }
+            : {}),
           supplier: {
             enabled: true,
+            ...(hiddenSupplierIds.length > 0
+              ? {
+                  id: {
+                    notIn: hiddenSupplierIds,
+                  },
+                }
+              : {}),
           },
         },
       },
       select: {
         id: true,
         skuName: true,
-        specText: true,
-        unit: true,
         defaultUnitPrice: true,
         codSupported: true,
         insuranceSupported: true,
@@ -415,8 +438,8 @@ export async function saveSalesOrder(
         skuId: sku.id,
         productNameSnapshot: sku.product.name,
         skuNameSnapshot: sku.skuName,
-        specSnapshot: sku.specText,
-        unitSnapshot: sku.unit,
+        specSnapshot: sku.skuName,
+        unitSnapshot: "",
         listPriceSnapshot: sku.defaultUnitPrice,
         dealPriceSnapshot: pricing.dealUnitPrice,
         qty: input.qty,

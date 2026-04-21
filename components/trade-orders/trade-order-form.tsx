@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ProductSkuSearchField } from "@/components/products/product-sku-search-field";
 import {
   buildTradeOrderDraftComputation,
   isTradeOrderDraftReadyForSubmit,
@@ -8,6 +9,7 @@ import {
   type TradeOrderDraftComputation,
   type TradeOrderSkuOption,
 } from "@/lib/trade-orders/workflow";
+import type { SerializedVisibleSkuOption } from "@/lib/sales-orders/queries";
 import { TradeOrderSplitPreview } from "@/components/trade-orders/trade-order-split-preview";
 
 type CustomerContext = {
@@ -18,7 +20,7 @@ type CustomerContext = {
   owner: { id: string; name: string; username: string } | null;
 };
 
-type SkuOption = TradeOrderSkuOption;
+type SkuOption = SerializedVisibleSkuOption & TradeOrderSkuOption;
 type BundleOption = TradeOrderBundleOption;
 
 type PaymentSchemeOption = {
@@ -184,11 +186,14 @@ export function TradeOrderForm({
   saveDraftAction: (formData: FormData) => Promise<void>;
   submitForReviewAction: (formData: FormData) => Promise<void>;
 }>) {
+  const [availableSkuOptions, setAvailableSkuOptions] = useState<SkuOption[]>(skuOptions);
   const [lines, setLines] = useState<DraftLineState[]>(() => buildInitialLines(draft));
   const [giftLines, setGiftLines] = useState<DraftGiftLineState[]>(() =>
     buildInitialGiftLines(draft),
   );
-  const [bundleLines] = useState<DraftBundleLineState[]>(() => buildInitialBundleLines(draft));
+  const [bundleLines, setBundleLines] = useState<DraftBundleLineState[]>(() =>
+    buildInitialBundleLines(draft),
+  );
   const [paymentScheme, setPaymentScheme] = useState<PaymentSchemeOption["value"]>(
     draft?.paymentScheme ?? "FULL_PREPAID",
   );
@@ -235,7 +240,7 @@ export function TradeOrderForm({
       dealPrice: toNumber(line.dealPrice),
       remark: line.remark,
     })),
-    skuOptions,
+    skuOptions: availableSkuOptions,
     bundleOptions,
     paymentScheme,
     depositAmount: toNumber(effectiveDepositAmount),
@@ -250,6 +255,19 @@ export function TradeOrderForm({
   const canRemoveSkuLine = lines.length > 1 || giftLines.length > 0 || bundleLines.length > 0;
   const canRemoveGiftLine =
     giftLines.length > 1 || lines.length > 0 || bundleLines.length > 0;
+  const canRemoveBundleLine =
+    bundleLines.length > 1 || lines.length > 0 || giftLines.length > 0;
+
+  function upsertSkuOption(option: SkuOption) {
+    setAvailableSkuOptions((current) => {
+      const existingIndex = current.findIndex((item) => item.id === option.id);
+      if (existingIndex >= 0) {
+        return current.map((item) => (item.id === option.id ? option : item));
+      }
+
+      return [...current, option];
+    });
+  }
 
   return (
     <form className="space-y-5">
@@ -486,7 +504,8 @@ export function TradeOrderForm({
         <div className="space-y-3">
           {lines.length > 0 ? (
             lines.map((line, index) => {
-              const selectedSku = skuOptions.find((option) => option.id === line.skuId) ?? null;
+              const selectedSku =
+                availableSkuOptions.find((option) => option.id === line.skuId) ?? null;
 
               return (
                 <div key={line.lineId} className="rounded-2xl border border-black/8 bg-white/80 px-4 py-4">
@@ -508,56 +527,55 @@ export function TradeOrderForm({
                     </button>
                   </div>
                   <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_120px_140px]">
-                    <label className="space-y-2">
-                      <span className="crm-label">SKU</span>
-                      <select
-                        value={line.skuId}
-                        onChange={(event) => {
-                          const nextSkuId = event.target.value;
-                          const nextSku =
-                            skuOptions.find((option) => option.id === nextSkuId) ?? null;
-
+                    <ProductSkuSearchField
+                      label="SKU"
+                      placeholder="搜索商品名、SKU、规格或供应商"
+                      value={line.skuId}
+                      selectedOption={selectedSku}
+                      onSelect={(option) => {
+                        if (!option) {
                           setLines((current) =>
                             current.map((item) =>
-                              item.lineId === line.lineId
-                                ? {
-                                    ...item,
-                                    skuId: nextSkuId,
-                                    dealPrice:
-                                      nextSku && !item.dealPrice
-                                        ? String(nextSku.defaultUnitPrice)
-                                        : item.dealPrice,
-                                  }
-                                : item,
+                              item.lineId === line.lineId ? { ...item, skuId: "" } : item,
                             ),
                           );
+                          return;
+                        }
 
-                          if (
-                            nextSku &&
-                            nextSku.insuranceSupported &&
-                            insuranceRequired &&
-                            (!insuranceAmount || toNumber(insuranceAmount) <= 0)
-                          ) {
-                            setInsuranceAmount(String(nextSku.defaultInsuranceAmount));
-                          }
-                        }}
-                        className="crm-select"
-                      >
-                        <option value="">选择 SKU</option>
-                        {skuOptions.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.product.supplier.name} / {option.product.name} / {option.skuName}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="text-xs text-black/50">
-                        {selectedSku
-                          ? `${selectedSku.product.name} / ${selectedSku.specText} / 列表价 ${formatCurrency(
-                              toNumber(selectedSku.defaultUnitPrice),
-                            )}`
-                          : "请选择标准 SKU。"}
-                      </div>
-                    </label>
+                        upsertSkuOption(option);
+                        setLines((current) =>
+                          current.map((item) =>
+                            item.lineId === line.lineId
+                              ? {
+                                  ...item,
+                                  skuId: option.id,
+                                  dealPrice:
+                                    option && !item.dealPrice
+                                      ? String(option.defaultUnitPrice)
+                                      : item.dealPrice,
+                                }
+                              : item,
+                          ),
+                        );
+
+                        if (
+                          option.insuranceSupported &&
+                          insuranceRequired &&
+                          (!insuranceAmount || toNumber(insuranceAmount) <= 0)
+                        ) {
+                          setInsuranceAmount(String(option.defaultInsuranceAmount));
+                        }
+                      }}
+                      helper={
+                        <div className="text-xs text-black/50">
+                          {selectedSku
+                            ? `${selectedSku.product.name} / ${selectedSku.skuName} / 列表价 ${formatCurrency(
+                                toNumber(selectedSku.defaultUnitPrice),
+                              )}`
+                            : "多个独立酒必须分别选成多条商品行。"}
+                        </div>
+                      }
+                    />
                     <label className="space-y-2">
                       <span className="crm-label">数量</span>
                       <input
@@ -629,6 +647,174 @@ export function TradeOrderForm({
       <section className="crm-subtle-panel space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
+            <div className="text-sm font-medium text-black/82">套餐行</div>
+            <p className="mt-1 text-xs leading-6 text-black/55">
+              只有明确套餐/组合装时才走 bundle 行；多个独立酒不要压成一条套餐。
+            </p>
+          </div>
+          <button
+            type="button"
+            className="crm-button crm-button-secondary"
+            onClick={() =>
+              setBundleLines((current) => [
+                ...current,
+                {
+                  lineId: createLineId("bundle"),
+                  bundleId: "",
+                  qty: "1",
+                  dealPrice: "",
+                  remark: "",
+                },
+              ])
+            }
+          >
+            新增套餐行
+          </button>
+        </div>
+        <div className="space-y-3">
+          {bundleLines.length > 0 ? (
+            bundleLines.map((line, index) => {
+              const selectedBundle =
+                bundleOptions.find((option) => option.id === line.bundleId) ?? null;
+              const supplierCount = selectedBundle
+                ? new Set(selectedBundle.items.map((item) => item.supplierId)).size
+                : 0;
+
+              return (
+                <div
+                  key={line.lineId}
+                  className="rounded-2xl border border-black/8 bg-white/80 px-4 py-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-sm font-medium text-black/82">套餐行 {index + 1}</div>
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-black/52 transition hover:text-black/72 disabled:cursor-not-allowed disabled:text-black/28"
+                      disabled={!canRemoveBundleLine}
+                      onClick={() =>
+                        setBundleLines((current) =>
+                          canRemoveBundleLine
+                            ? current.filter((item) => item.lineId !== line.lineId)
+                            : current,
+                        )
+                      }
+                    >
+                      删除
+                    </button>
+                  </div>
+                  <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_120px_140px]">
+                    <label className="space-y-2">
+                      <span className="crm-label">套餐</span>
+                      <select
+                        value={line.bundleId}
+                        onChange={(event) => {
+                          const nextBundleId = event.target.value;
+                          const nextBundle =
+                            bundleOptions.find((option) => option.id === nextBundleId) ?? null;
+
+                          setBundleLines((current) =>
+                            current.map((item) =>
+                              item.lineId === line.lineId
+                                ? {
+                                    ...item,
+                                    bundleId: nextBundleId,
+                                    dealPrice:
+                                      nextBundle && !item.dealPrice
+                                        ? String(nextBundle.defaultBundlePrice)
+                                        : item.dealPrice,
+                                  }
+                                : item,
+                            ),
+                          );
+                        }}
+                        className="crm-select"
+                      >
+                        <option value="">选择套餐</option>
+                        {bundleOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.name} / {option.code}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="text-xs text-black/50">
+                        {selectedBundle
+                          ? `${selectedBundle.items.length} 个组件 / ${supplierCount} 个供应商 / 默认套餐价 ${formatCurrency(
+                              toNumber(selectedBundle.defaultBundlePrice),
+                            )}`
+                          : "只有明确套餐时才选择 bundle。"}
+                      </div>
+                    </label>
+                    <label className="space-y-2">
+                      <span className="crm-label">数量</span>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={line.qty}
+                        onChange={(event) =>
+                          setBundleLines((current) =>
+                            current.map((item) =>
+                              item.lineId === line.lineId
+                                ? { ...item, qty: event.target.value }
+                                : item,
+                            ),
+                          )
+                        }
+                        className="crm-input"
+                      />
+                    </label>
+                    <label className="space-y-2">
+                      <span className="crm-label">成交单价</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={line.dealPrice}
+                        onChange={(event) =>
+                          setBundleLines((current) =>
+                            current.map((item) =>
+                              item.lineId === line.lineId
+                                ? { ...item, dealPrice: event.target.value }
+                                : item,
+                            ),
+                          )
+                        }
+                        className="crm-input"
+                      />
+                    </label>
+                  </div>
+                  <label className="mt-3 block space-y-2">
+                    <span className="crm-label">套餐备注</span>
+                    <textarea
+                      rows={2}
+                      value={line.remark}
+                      onChange={(event) =>
+                        setBundleLines((current) =>
+                          current.map((item) =>
+                            item.lineId === line.lineId
+                              ? { ...item, remark: event.target.value }
+                              : item,
+                          ),
+                        )
+                      }
+                      placeholder="用于说明套餐口径、活动说明或组合备注"
+                      className="crm-textarea"
+                    />
+                  </label>
+                </div>
+              );
+            })
+          ) : (
+            <div className="rounded-2xl border border-dashed border-black/10 bg-white/55 px-4 py-4 text-sm leading-7 text-black/55">
+              当前没有套餐行。没有明确套餐时，保持上方多条独立商品行即可。
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="crm-subtle-panel space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
             <div className="text-sm font-medium text-black/82">赠品行</div>
             <p className="mt-1 text-xs leading-6 text-black/55">
               赠品必须选择标准 SKU，supplier 和 SKU 信息自动继承。
@@ -650,7 +836,8 @@ export function TradeOrderForm({
         <div className="space-y-3">
           {giftLines.length > 0 ? (
             giftLines.map((line, index) => {
-              const selectedSku = skuOptions.find((option) => option.id === line.skuId) ?? null;
+              const selectedSku =
+                availableSkuOptions.find((option) => option.id === line.skuId) ?? null;
 
               return (
                 <div key={line.lineId} className="rounded-2xl border border-black/8 bg-white/80 px-4 py-4">
@@ -672,34 +859,38 @@ export function TradeOrderForm({
                     </button>
                   </div>
                   <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_120px]">
-                    <label className="space-y-2">
-                      <span className="crm-label">赠品 SKU</span>
-                      <select
-                        value={line.skuId}
-                        onChange={(event) =>
+                    <ProductSkuSearchField
+                      label="赠品 SKU"
+                      placeholder="搜索赠品 SKU"
+                      value={line.skuId}
+                      selectedOption={selectedSku}
+                      onSelect={(option) => {
+                        if (!option) {
                           setGiftLines((current) =>
                             current.map((item) =>
-                              item.lineId === line.lineId
-                                ? { ...item, skuId: event.target.value }
-                                : item,
+                              item.lineId === line.lineId ? { ...item, skuId: "" } : item,
                             ),
-                          )
+                          );
+                          return;
                         }
-                        className="crm-select"
-                      >
-                        <option value="">选择标准 SKU</option>
-                        {skuOptions.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.product.supplier.name} / {option.product.name} / {option.skuName}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="text-xs text-black/50">
-                        {selectedSku
-                          ? `供应商：${selectedSku.product.supplier.name} / ${selectedSku.product.name} / ${selectedSku.specText}`
-                          : "赠品新写路径只支持标准 SKU，不支持自由文本。"}
-                      </div>
-                    </label>
+
+                        upsertSkuOption(option);
+                        setGiftLines((current) =>
+                          current.map((item) =>
+                            item.lineId === line.lineId
+                              ? { ...item, skuId: option.id }
+                              : item,
+                          ),
+                        );
+                      }}
+                      helper={
+                        <div className="text-xs text-black/50">
+                          {selectedSku
+                            ? `${selectedSku.product.name} / ${selectedSku.skuName}`
+                            : "赠品也必须对应标准 SKU，不能把多酒写成自由文本。"}
+                        </div>
+                      }
+                    />
                     <label className="space-y-2">
                       <span className="crm-label">数量</span>
                       <input
