@@ -50,10 +50,14 @@ staging 验收请看：[docs/staging-checklist.md](./staging-checklist.md)
 
 - 环境变量模板：[.env.example](../.env.example)
 - systemd 模板：[deploy/systemd/jiuzhuang-crm.service](../deploy/systemd/jiuzhuang-crm.service)
+- lead import worker systemd 模板：[deploy/systemd/jiuzhuang-crm-import-worker.service](../deploy/systemd/jiuzhuang-crm-import-worker.service)
 - Nginx 模板：[deploy/nginx/jiuzhuang-crm.conf](../deploy/nginx/jiuzhuang-crm.conf)
 - MySQL 初始化 SQL 模板：[deploy/mysql/init-database.sql](../deploy/mysql/init-database.sql)
 - MySQL 备份脚本：[scripts/backup-mysql.sh](../scripts/backup-mysql.sh)
 - 运行时文件备份脚本：[scripts/backup-runtime-assets.sh](../scripts/backup-runtime-assets.sh)
+- 发布前检查脚本：[scripts/release-preflight.sh](../scripts/release-preflight.sh)
+- 发布后冒烟脚本：[scripts/release-smoke.sh](../scripts/release-smoke.sh)
+- GitHub Actions 发布护栏工作流：[.github/workflows/release-guardrails.yml](../.github/workflows/release-guardrails.yml)
 - 单机更新脚本模板：[scripts/deploy-update.sh](../scripts/deploy-update.sh)
 - lead import worker 入口脚本：[scripts/lead-import-worker.ts](../scripts/lead-import-worker.ts)
 - recycle auto finalize runbook：[docs/recycle-auto-finalize-runbook.md](./recycle-auto-finalize-runbook.md)
@@ -63,14 +67,16 @@ staging 验收请看：[docs/staging-checklist.md](./staging-checklist.md)
 
 注意：
 
-- 当前仓库内**没有**现成的 worker 专用 systemd 模板
-- lead import worker 需要你在正式环境额外创建一个独立 systemd service，执行 `npm run worker:lead-imports`
+- 当前仓库已经内置 Web 与 lead import worker 两份 systemd 模板
+- lead import worker 仍然需要以独立 systemd service 运行，执行 `npm run worker:lead-imports`
 - recycle auto finalize 不推荐做成常驻 service；当前正式基线应按 one-shot 调度执行，具体命令、dry-run 演练、停用和回滚口径见 [docs/recycle-auto-finalize-runbook.md](./recycle-auto-finalize-runbook.md)
 
 当前正式 migration 链除了 baseline 外，还包含首发后新增的正式 additive migration：
 
 ```text
 20260408153000_add_user_permission_grants
+```
+
 2. 正式部署前提
 
 在服务器上准备：
@@ -182,32 +188,43 @@ npm run prisma:diff:schema
 确认返回 0 之后，再执行：
 
 npm run db:migration-baseline:reconcile -- --apply
-6. 首发空库部署步骤
+6. 统一发布顺序
 
-当前首发空库的正式顺序明确写死为：
+当前 staging / production 的正式顺序明确写死为：
 
-npm ci --include=dev
-npm run prisma:deploy:safe
-npm run admin:bootstrap -- --username admin --name "Platform Admin" --password "replace-with-strong-password"
-npm run build
-npm run start -- --hostname 127.0.0.1 --port 3000
-npm run worker:lead-imports
+1. `git status --short` 必须为空
+2. `bash scripts/release-preflight.sh`
+3. `npm run prisma:deploy:safe`
+4. 空库首发时再执行 `npm run admin:bootstrap -- --username admin --name "Platform Admin" --password "replace-with-strong-password"`
+5. 启动或重启 Web service 与 worker service
+6. `bash scripts/release-smoke.sh <base-url>`
+
+其中 `release-preflight.sh` 已固定包含：
+
+- `npm ci --include=dev`
+- `npx prisma validate`
+- `npx prisma generate`
+- `npm run lint`
+- `npm run build`
+- `npx prisma migrate status`
 
 注意：
 
-npm ci 必须显式使用 --include=dev，因为当前仓库在服务器上执行构建时仍依赖 devDependencies 中的 Next/Tailwind/PostCSS 构建链
-npm run build 当前固定走 webpack：package.json 中已将 build 脚本收口为 next build --webpack，避免服务器默认 Turbopack 构建不稳定导致没有 .next/BUILD_ID
-npm run start 与 npm run worker:lead-imports 是两个独立进程
-正式环境不能只起 Web，不起 worker
-如果通过 systemd 启动，则这两个进程应由两个独立 service 托管
+- `npm ci` 必须显式使用 `--include=dev`，因为当前仓库在服务器上执行构建时仍依赖 `devDependencies` 中的构建期链路
+- `postcss.config.mjs` 会在 `npm run build` 时加载 `@tailwindcss/postcss`；如果服务器按 `NODE_ENV=production` 或 `omit=dev` 只装 production dependencies，构建会在 PostCSS/Tailwind 阶段直接失败
+- `npm run build` 当前固定走 webpack：`package.json` 中已将 build 脚本收口为 `next build --webpack`，避免服务器默认 Turbopack 构建不稳定导致没有 `.next/BUILD_ID`
+- 正式发布时不允许跳过 `prisma migrate status` 或 `prisma migrate deploy`
+- build 未通过时，不允许执行 `prisma migrate deploy`
+- `npm run start` 与 `npm run worker:lead-imports` 是两个独立进程
+- 正式环境不能只起 Web，不起 worker
+- 如果通过 systemd 启动，则这两个进程应由两个独立 service 托管
+
 staging -> production 推荐执行顺序
 A. staging 预演
 准备 staging MySQL、Redis、环境文件、systemd service、Nginx 反代和运行时目录
-执行首发空库部署步骤
+执行统一发布顺序
 按 docs/staging-checklist.md
  完成 smoke
-执行：
-npm run prisma:status
 
 只有 staging 验收通过后，再进入 production。
 
@@ -216,7 +233,7 @@ B. production 首发
 准备 production 独立环境文件和空库
 对空库或初始化状态先做一次备份留档
 准备 Redis 并验证 REDIS_URL 可达
-按与 staging 相同的顺序执行首发空库部署步骤
+按与 staging 相同的顺序执行统一发布顺序
 启动 Web service 与 worker service
 执行正式上线后最低自检
 7. seed 与 admin:bootstrap 的边界
@@ -274,30 +291,20 @@ sudo systemctl status jiuzhuang-crm --no-pager
 sudo journalctl -u jiuzhuang-crm -f
 Lead Import Worker 进程
 
-当前仓库未内置 worker 专用 service 模板，推荐你额外创建：
+模板文件：
 
-[Unit]
-Description=Jiuzhuang CRM Lead Import Worker
-After=network.target redis.service
+deploy/systemd/jiuzhuang-crm-import-worker.service
 
-[Service]
-Type=simple
-User=crm
-Group=crm
-WorkingDirectory=/srv/jiuzhuang-crm/current
-EnvironmentFile=/etc/jiuzhuang-crm/jiuzhuang-crm.env
-ExecStart=/usr/bin/npm run worker:lead-imports
-Restart=always
-RestartSec=3
+使用方式：
 
-[Install]
-WantedBy=multi-user.target
-
-推荐保存为：
-
-/etc/systemd/system/jiuzhuang-crm-import-worker.service
-
-然后执行：
+复制模板到系统目录
+sudo cp deploy/systemd/jiuzhuang-crm-import-worker.service /etc/systemd/system/jiuzhuang-crm-import-worker.service
+替换这些占位值
+__APP_USER__
+__APP_GROUP__
+__APP_ROOT__
+__ENV_FILE__
+重新加载并启用
 
 sudo systemctl daemon-reload
 sudo systemctl enable jiuzhuang-crm-import-worker
@@ -394,41 +401,59 @@ scripts/deploy-update.sh
 
 基础用法：
 
-sudo ENV_FILE=/etc/jiuzhuang-crm/jiuzhuang-crm.env SERVICE_NAME=jiuzhuang-crm bash scripts/deploy-update.sh
+sudo ENV_FILE=/etc/jiuzhuang-crm/jiuzhuang-crm.env \
+SERVICE_NAME=jiuzhuang-crm \
+WORKER_SERVICE_NAME=jiuzhuang-crm-import-worker \
+APP_USER=crm \
+APP_GROUP=crm \
+bash scripts/deploy-update.sh
 
 如果要切到指定 tag 或 commit：
 
-sudo ENV_FILE=/etc/jiuzhuang-crm/jiuzhuang-crm.env SERVICE_NAME=jiuzhuang-crm bash scripts/deploy-update.sh v0.1.0
+sudo ENV_FILE=/etc/jiuzhuang-crm/jiuzhuang-crm.env \
+SERVICE_NAME=jiuzhuang-crm \
+WORKER_SERVICE_NAME=jiuzhuang-crm-import-worker \
+APP_USER=crm \
+APP_GROUP=crm \
+bash scripts/deploy-update.sh v0.1.0
 
 注意：
 
-脚本默认不会自动执行 schema 变更或数据库备份
-脚本也不会自动替你创建或重启 lead import worker service
-如果某次发布包含新的 migration，推荐使用：
+脚本会固定执行：
+
+- 工作区干净检查
+- `bash scripts/release-preflight.sh`
+- `npm run prisma:deploy:safe -- --skip-generate`
+- 重启 Web service
+- 若 worker service 已安装，则一并重启
+
+脚本默认不会自动执行数据库备份；如需备份，推荐使用：
 sudo ENV_FILE=/etc/jiuzhuang-crm/jiuzhuang-crm.env \
 SERVICE_NAME=jiuzhuang-crm \
+WORKER_SERVICE_NAME=jiuzhuang-crm-import-worker \
 APP_USER=crm \
 APP_GROUP=crm \
 RUN_DB_BACKUP=1 \
 RUN_RUNTIME_BACKUP=1 \
-RUN_MIGRATE_DEPLOY=1 \
 DB_BACKUP_DIR=/srv/backups/jiuzhuang-crm/mysql \
 RUNTIME_BACKUP_DIR=/srv/backups/jiuzhuang-crm/runtime-assets \
 bash scripts/deploy-update.sh
+
+如果发布后要自动跑 smoke，可再加：
+
+```bash
+SMOKE_BASE_URL=https://crm.example.com
+```
+
 上面这条命令会按顺序执行：
+
 运行时目录准备
 可选数据库备份
 可选运行时文件备份
-npm ci --include=dev
-npm run prisma:predeploy:check
-可选 npm run prisma:deploy:safe -- --skip-generate
-npx prisma generate
-npm run build
+release preflight（含 npm ci --include=dev / prisma validate / prisma generate / lint / build / migrate status）
+npm run prisma:deploy:safe -- --skip-generate
 systemctl restart <service>
-
-如果部署里包含 lead import 相关链路，还要额外：
-
-sudo systemctl restart jiuzhuang-crm-import-worker
+可选 release smoke
 13. 日志与最低回滚方案
 日志
 

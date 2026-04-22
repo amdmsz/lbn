@@ -11,9 +11,9 @@ APP_USER="${APP_USER:-}"
 APP_GROUP="${APP_GROUP:-}"
 RUN_DB_BACKUP="${RUN_DB_BACKUP:-0}"
 RUN_RUNTIME_BACKUP="${RUN_RUNTIME_BACKUP:-0}"
-RUN_MIGRATE_DEPLOY="${RUN_MIGRATE_DEPLOY:-0}"
 DB_BACKUP_DIR="${DB_BACKUP_DIR:-$PROJECT_ROOT/backups/mysql}"
 RUNTIME_BACKUP_DIR="${RUNTIME_BACKUP_DIR:-$PROJECT_ROOT/backups/runtime-assets}"
+SMOKE_BASE_URL="${SMOKE_BASE_URL:-}"
 
 info() {
   echo "[deploy-update] $*"
@@ -48,6 +48,10 @@ if [[ "${RUN_DB_PUSH:-0}" == "1" ]]; then
   fail "RUN_DB_PUSH is disabled in the hardened release pipeline. Use Prisma migrations or a manual reviewed operation."
 fi
 
+if [[ -n "${RUN_MIGRATE_DEPLOY:-}" ]]; then
+  fail "RUN_MIGRATE_DEPLOY is deprecated. Prisma migrate deploy is now mandatory in deploy-update.sh and can no longer be skipped."
+fi
+
 mkdir -p "$PROJECT_ROOT/public/exports/shipping"
 mkdir -p "$PROJECT_ROOT/public/uploads/avatars"
 mkdir -p "$PROJECT_ROOT/runtime/imports/lead-imports"
@@ -78,25 +82,15 @@ if [[ "$RUN_RUNTIME_BACKUP" == "1" ]]; then
   BACKUP_DIR="$RUNTIME_BACKUP_DIR" bash "$PROJECT_ROOT/scripts/backup-runtime-assets.sh"
 fi
 
-npm ci --include=dev
-
-ENV_FILE="$ENV_FILE" \
-ALLOW_PENDING_MIGRATIONS="$RUN_MIGRATE_DEPLOY" \
-SKIP_BUILD=1 \
-bash "$PROJECT_ROOT/scripts/release-preflight.sh"
-
-if [[ "$RUN_MIGRATE_DEPLOY" == "1" ]]; then
-  info "RUN_MIGRATE_DEPLOY=1 detected. Running safe Prisma deploy sequence."
-  npm run prisma:deploy:safe -- --skip-generate
-fi
-
-npx prisma generate
-
-npm run build
+info "Running release preflight gate."
+ENV_FILE="$ENV_FILE" bash "$PROJECT_ROOT/scripts/release-preflight.sh"
 
 if [[ ! -f "$PROJECT_ROOT/.next/BUILD_ID" ]]; then
   fail "Build completed without .next/BUILD_ID."
 fi
+
+info "Build gate passed. Running mandatory safe Prisma deploy sequence."
+npm run prisma:deploy:safe -- --skip-generate
 
 "$SYSTEMCTL_BIN" restart "$SERVICE_NAME"
 "$SYSTEMCTL_BIN" --no-pager --full status "$SERVICE_NAME"
@@ -109,4 +103,11 @@ if [[ -n "$WORKER_SERVICE_NAME" ]]; then
   else
     echo "Worker service '$WORKER_SERVICE_NAME' not installed yet. Skipping worker restart."
   fi
+fi
+
+if [[ -n "$SMOKE_BASE_URL" ]]; then
+  info "Running post-deploy smoke checks against $SMOKE_BASE_URL"
+  bash "$PROJECT_ROOT/scripts/release-smoke.sh" "$SMOKE_BASE_URL"
+else
+  info "SMOKE_BASE_URL not set. Skipping post-deploy smoke script."
 fi

@@ -26,15 +26,18 @@
 
 ### Prisma、构建与运行
 
-- [ ] 执行 `npm run prisma:predeploy:check`
-- [ ] 若 staging 是空库首发，执行 `npm run prisma:deploy:safe`
-- [ ] 若 staging 不是本次执行 migration 的窗口，确认 Prisma Client 已通过 `npm ci` 的 `postinstall` 或手动 `npx prisma generate` 更新
+- [ ] 执行 `bash scripts/release-preflight.sh`
+- [ ] 确认 preflight 内部已实际执行 `npm ci --include=dev`
+- [ ] 确认没有使用裸 `npm install`、`--omit=dev` 或只装 production dependencies 的方式构建
+- [ ] 确认 `npx prisma migrate status` 已在 preflight 内执行
+- [ ] 执行 `npm run prisma:deploy:safe`
 - [ ] 确认当前本地 `prisma/migrations` 就是准备上线的正式 source of truth
 - [ ] 若当前 staging 是 rebaseline 之前创建的旧环境，先完成 migration metadata reconcile
-- [ ] 执行 `npm run build`
+- [ ] 确认 `npm run build` 已在 preflight 内通过
 - [ ] 执行 `npm run start`
 - [ ] 执行 `npm run worker:lead-imports`
 - [ ] 确认 Web 与 worker 是两个独立可运行进程
+- [ ] 执行 `bash scripts/release-smoke.sh <staging-base-url>`
 
 ### 管理员初始化
 
@@ -56,6 +59,7 @@
 - [ ] 先执行 `npm run prisma:diff:schema`
 - [ ] 若返回 `0` 且环境属于 rebaseline 之前建立的旧库，执行 `npm run db:migration-baseline:reconcile -- --apply`
 - [ ] 执行 `npm run prisma:status`
+- [ ] 若 `prisma migrate status` 或 `prisma:predeploy:check` 异常，停止上线，不进入重启环节
 
 ## B. 核心业务 Smoke
 

@@ -74,6 +74,14 @@ RBAC 必须落在服务端，不能只靠菜单隐藏或前端禁用按钮。
 npm run prisma:predeploy:check
 ```
 
+正式发布或预发更新前，统一先执行：
+
+```bash
+bash scripts/release-preflight.sh
+```
+
+不要用裸 `npm install`、`--omit=dev` 或只装 production dependencies 的方式代替正式构建安装；当前仓库的 build 依赖 `devDependencies` 中的 Tailwind/PostCSS/TypeScript/ESLint 链路。
+
 如果要核对 migration 历史是否仍能代表真实数据库结构，再执行：
 
 ```bash
