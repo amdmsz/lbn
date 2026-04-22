@@ -23,11 +23,12 @@
 - `PRD.md`
 - `PLANS.md`
 - `UI_ENTRYPOINTS.md`
-- `STAGE_FREEZE_2026-04-03.md`
 - `docs/deployment-baseline.md`
 - `docs/recycle-auto-finalize-runbook.md`
 
 为准。
+
+历史 freeze / 旧阶段交接记录已经移入 `docs/archive/`，只用于追溯，不再作为当前第一真相。
 
 ---
 
@@ -327,18 +328,17 @@
 6. `UI_ENTRYPOINTS.md`
 7. `docs/deployment-baseline.md`
 8. `docs/staging-checklist.md`
-9. `scripts/lead-import-worker.ts`
-10. `lib/lead-imports/*`
-11. `STAGE_FREEZE_2026-04-03.md`
-12. `docs/deployment-baseline.md`
-13. `app/(dashboard)/fulfillment/page.tsx`
-14. `components/fulfillment/order-fulfillment-center.tsx`
-15. `app/(dashboard)/customers/public-pool/*`
-16. `components/customers/public-pool-*`
-17. `components/trade-orders/*`
-18. `components/shipping/*`
-19. `lib/trade-orders/*`
-20. `lib/shipping/*`
+9. `docs/archive/README.md`（仅在追溯历史 freeze / handoff 时阅读）
+10. `scripts/lead-import-worker.ts`
+11. `lib/lead-imports/*`
+12. `app/(dashboard)/fulfillment/page.tsx`
+13. `components/fulfillment/order-fulfillment-center.tsx`
+14. `app/(dashboard)/customers/public-pool/*`
+15. `components/customers/public-pool-*`
+16. `components/trade-orders/*`
+17. `components/shipping/*`
+18. `lib/trade-orders/*`
+19. `lib/shipping/*`
 
 ---
 

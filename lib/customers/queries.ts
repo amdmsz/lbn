@@ -1526,13 +1526,14 @@ function compareCustomerSnapshots(
 ) {
   const leftState = stateMap.get(left.id);
   const rightState = stateMap.get(right.id);
+  // Keep the customer center stable after follow-up actions; sort by assignment/entry time instead.
   const leftAnchor =
-    leftState?.latestFollowUpAt ??
+    leftState?.assignedAt ??
     leftState?.latestCustomerImportAt ??
     leftState?.latestLeadAt ??
     left.createdAt;
   const rightAnchor =
-    rightState?.latestFollowUpAt ??
+    rightState?.assignedAt ??
     rightState?.latestCustomerImportAt ??
     rightState?.latestLeadAt ??
     right.createdAt;
@@ -1541,7 +1542,11 @@ function compareCustomerSnapshots(
     return rightAnchor.getTime() - leftAnchor.getTime();
   }
 
-  return right.createdAt.getTime() - left.createdAt.getTime();
+  if (right.createdAt.getTime() !== left.createdAt.getTime()) {
+    return right.createdAt.getTime() - left.createdAt.getTime();
+  }
+
+  return left.id.localeCompare(right.id);
 }
 
 function buildProductFilterOptions(snapshots: CustomerSnapshot[]) {

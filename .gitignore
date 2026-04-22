@@ -28,6 +28,7 @@
 /runtime/
 /backups/
 /reports/*.json
+/reports/**/*.json
 /prisma/_prisma_migrations_backup_*.json
 
 # debug

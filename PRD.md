@@ -324,7 +324,7 @@
 - No schema change is required for this baseline.
 - Do not reopen the old `SalesOrder`-as-master-order direction.
 - Do not collapse transaction / payment / fulfillment layers back into one mixed workflow.
-- For the current frozen baseline and handoff-safe summary, see `STAGE_FREEZE_2026-04-03.md`.
+- For the archived freeze snapshot only, see `docs/archive/STAGE_FREEZE_2026-04-03.md`.
 
 ---
 
