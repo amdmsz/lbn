@@ -13,20 +13,19 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { FiltersPanel } from "@/components/shared/filters-panel";
 import {
-  customerWorkStatusOptions,
-  type CustomerWorkStatusKey,
+  customerExecutionClassOptions,
+  type CustomerExecutionClass,
 } from "@/lib/customers/metadata";
 import { buildCustomersHref } from "@/lib/customers/filter-url";
 import type { CustomerCenterData } from "@/lib/customers/queries";
 import { cn } from "@/lib/utils";
 
 type CustomerFilters = CustomerCenterData["filters"];
-type QueueCounts = CustomerCenterData["queueCounts"];
 type ProductOption = CustomerCenterData["productOptions"][number];
 type TagOption = CustomerCenterData["tagOptions"][number];
 type TeamOption = CustomerCenterData["teamOverview"][number];
 type SalesOption = CustomerCenterData["salesBoard"][number];
-type FilterPanelKey = "time" | "product" | "tag" | null;
+type FilterPanelKey = "time" | "executionClass" | "product" | "tag" | null;
 type TimePresetKey = "today" | "last7" | "last30" | "thisMonth";
 
 function getDateInputValue(date: Date) {
@@ -96,21 +95,10 @@ function formatRangeLabel(from: string, to: string) {
 }
 
 function buildTimeFilterSummary(input: {
-  importedFrom: string;
-  importedTo: string;
   assignedFrom: string;
   assignedTo: string;
 }) {
-  const summaryParts = [
-    input.importedFrom || input.importedTo
-      ? `导入 ${formatRangeLabel(input.importedFrom, input.importedTo)}`
-      : "",
-    input.assignedFrom || input.assignedTo
-      ? `分配 ${formatRangeLabel(input.assignedFrom, input.assignedTo)}`
-      : "",
-  ].filter(Boolean);
-
-  return summaryParts.join(" · ");
+  return formatRangeLabel(input.assignedFrom, input.assignedTo);
 }
 
 function sortByCountDesc<T extends { count: number; label?: string; name?: string }>(items: T[]) {
@@ -123,6 +111,15 @@ function sortByCountDesc<T extends { count: number; label?: string; name?: strin
     return leftLabel.localeCompare(rightLabel, "zh-CN");
   });
 }
+
+const panelActionButtonClassName =
+  "crm-button crm-button-secondary inline-flex h-8 items-center rounded-full px-3 text-[12px] font-medium motion-safe:hover:-translate-y-[1px]";
+
+const panelInlineInputClassName =
+  "crm-input h-9 rounded-[11px] border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 text-[13px] shadow-none outline-none transition focus:ring-0";
+
+const panelPresetButtonClassName =
+  "rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-1.5 text-[12px] text-[var(--crm-badge-neutral-text)] transition-[border-color,background-color,color,transform,box-shadow] duration-150 motion-safe:hover:-translate-y-[1px] hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)] hover:shadow-[var(--color-shell-shadow-sm)]";
 
 function FilterButton({
   label,
@@ -144,28 +141,68 @@ function FilterButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-[14px] border px-3 text-[13px] transition-[border-color,background-color,color,box-shadow] duration-150",
+        "flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-[12px] border px-3 text-[13px] transition-[border-color,background-color,color,box-shadow,transform] duration-150 motion-safe:hover:-translate-y-[1px]",
         active || open
-          ? "border-black/12 bg-white text-black/84 shadow-[0_8px_18px_rgba(15,23,42,0.05)]"
-          : "border-black/8 bg-[rgba(248,250,252,0.84)] text-black/64 hover:border-black/12 hover:bg-white hover:text-black/82",
+          ? "border-[var(--color-accent-soft)] bg-[var(--color-shell-hover)] text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)]"
+          : "border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] text-[var(--crm-badge-neutral-text)] hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]",
       )}
     >
       <span className="flex min-w-0 items-center gap-2 overflow-hidden">
         {icon}
         <span className="truncate font-medium">{label}</span>
         {value ? (
-          <span className="hidden truncate text-[12px] text-black/48 lg:inline">
+          <span className="hidden truncate text-[12px] text-[var(--color-sidebar-muted)] lg:inline">
             {value}
           </span>
         ) : null}
       </span>
       <ChevronDown
         className={cn(
-          "h-3.5 w-3.5 shrink-0 text-black/38 transition-transform",
+          "h-3.5 w-3.5 shrink-0 text-[var(--color-sidebar-muted)] transition-transform",
           open && "rotate-180",
         )}
       />
     </button>
+  );
+}
+
+function InlineSelectControl({
+  label,
+  value,
+  placeholder,
+  options,
+  onChange,
+}: Readonly<{
+  label: string;
+  value: string;
+  placeholder: string;
+  options: Array<{
+    value: string;
+    label: string;
+  }>;
+  onChange: (nextValue: string) => void;
+}>) {
+  return (
+    <label className="group flex h-9 min-w-0 items-center gap-2 rounded-[12px] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 transition-[border-color,background-color,box-shadow,transform] duration-150 motion-safe:hover:-translate-y-[1px] hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-sm)] focus-within:border-[var(--color-accent-soft)] focus-within:bg-[var(--color-shell-hover)] focus-within:shadow-[var(--color-shell-shadow-sm)]">
+      <span className="shrink-0 text-[12px] font-medium text-[var(--color-sidebar-muted)]">
+        {label}
+      </span>
+      <div className="relative min-w-0 flex-1">
+        <select
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="crm-select h-full w-full appearance-none border-0 bg-transparent px-0 pr-4 text-[13px] text-[var(--foreground)] shadow-none outline-none focus:ring-0"
+        >
+          <option value="">{placeholder}</option>
+          {options.map((option) => (
+            <option key={`${label}-${option.value}`} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-0 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-sidebar-muted)]" />
+      </div>
+    </label>
   );
 }
 
@@ -187,7 +224,7 @@ function FilterPanel({
   return (
     <div
       className={cn(
-        "absolute top-full z-30 mt-2 rounded-[18px] border border-[rgba(15,23,42,0.08)] bg-[rgba(255,255,255,0.98)] p-3 shadow-[0_14px_32px_rgba(15,23,42,0.08)] backdrop-blur-[12px] ring-1 ring-black/[0.02]",
+        "crm-animate-pop absolute top-full z-30 mt-2 rounded-[16px] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-strong)] p-3 shadow-[var(--color-shell-shadow-lg)] backdrop-blur-[18px]",
         "max-w-[calc(100vw-1.5rem)]",
         align === "right" ? "right-0" : "left-0",
         widthClassName ?? "w-[min(18rem,calc(100vw-1.5rem))]",
@@ -216,20 +253,20 @@ function OptionRow({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex min-h-[42px] w-full items-center justify-between gap-3 rounded-[13px] border px-3 py-2.5 text-left text-[13px] transition-[border-color,background-color,box-shadow] duration-150",
+        "flex min-h-[40px] w-full items-center justify-between gap-3 rounded-[12px] border px-3 py-2.5 text-left text-[13px] transition-[border-color,background-color,box-shadow,transform] duration-150 motion-safe:hover:-translate-y-[1px]",
         selected
-          ? "border-black/12 bg-[var(--color-accent)]/6 shadow-[0_6px_14px_rgba(15,23,42,0.04)]"
-          : "border-transparent hover:border-black/8 hover:bg-[rgba(248,250,252,0.9)]",
+          ? "border-[var(--color-accent-soft)] bg-[var(--color-accent)]/8 shadow-[var(--color-shell-shadow-sm)]"
+          : "border-transparent hover:border-[var(--color-border-soft)] hover:bg-[var(--color-shell-surface-soft)]",
       )}
     >
       <div className="min-w-0">
-        <p className="truncate font-medium text-black/82">{title}</p>
-        {subtitle ? <p className="mt-0.5 text-xs leading-5 text-black/46">{subtitle}</p> : null}
+        <p className="truncate font-medium text-[var(--foreground)]">{title}</p>
+        {subtitle ? <p className="mt-0.5 text-xs leading-5 text-[var(--color-sidebar-muted)]">{subtitle}</p> : null}
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
         {typeof trailing !== "undefined" ? (
-          <span className="text-xs text-black/42">{trailing}</span>
+          <span className="text-xs text-[var(--color-sidebar-muted)]">{trailing}</span>
         ) : null}
         <span
           className={cn(
@@ -266,8 +303,8 @@ function TimeFilterSection({
   return (
     <div className="space-y-3">
       <div className="space-y-1">
-        <p className="text-[13px] font-semibold text-black/84">{title}</p>
-        <p className="text-xs leading-5 text-black/46">{description}</p>
+        <p className="text-[13px] font-semibold text-[var(--foreground)]">{title}</p>
+        <p className="text-xs leading-5 text-[var(--color-sidebar-muted)]">{description}</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -281,7 +318,7 @@ function TimeFilterSection({
             key={`${title}-${preset}`}
             type="button"
             onClick={() => onApplyPreset(preset)}
-            className="rounded-full border border-black/8 bg-[rgba(248,250,252,0.82)] px-3 py-1.5 text-[12px] text-black/62 transition hover:border-black/12 hover:bg-white hover:text-black/82"
+            className={panelPresetButtonClassName}
           >
             {label}
           </button>
@@ -298,7 +335,7 @@ function TimeFilterSection({
               to,
             })
           }
-          className="h-10 rounded-[12px] border border-black/8 bg-[rgba(248,250,252,0.82)] px-3 text-[13px] text-black/78 outline-none transition focus:border-black/14 focus:ring-2 focus:ring-black/5"
+          className={panelInlineInputClassName}
         />
         <input
           type="date"
@@ -309,14 +346,14 @@ function TimeFilterSection({
               to: event.target.value,
             })
           }
-          className="h-10 rounded-[12px] border border-black/8 bg-[rgba(248,250,252,0.82)] px-3 text-[13px] text-black/78 outline-none transition focus:border-black/14 focus:ring-2 focus:ring-black/5"
+          className={panelInlineInputClassName}
         />
       </div>
 
       <button
         type="button"
         onClick={onClear}
-        className="text-xs text-black/46 transition hover:text-black/70"
+        className="text-xs text-[var(--color-sidebar-muted)] transition hover:text-[var(--foreground)]"
       >
         清空 {title}
       </button>
@@ -326,18 +363,14 @@ function TimeFilterSection({
 
 export function CustomerFilterToolbar({
   filters,
-  queueCounts,
   productOptions,
   tagOptions,
-  matchedCount,
   teamOptions = [],
   salesOptions = [],
 }: Readonly<{
   filters: CustomerFilters;
-  queueCounts: QueueCounts;
   productOptions: ProductOption[];
   tagOptions: TagOption[];
-  matchedCount: number;
   teamOptions?: TeamOption[];
   salesOptions?: SalesOption[];
 }>) {
@@ -474,6 +507,13 @@ export function CustomerFilterToolbar({
 
   const showTeamFilter = teamOptions.length > 0;
   const showSalesFilter = salesOptions.length > 0;
+  const inlineControlCount = 4 + (showTeamFilter ? 1 : 0) + (showSalesFilter ? 1 : 0);
+  const wideGridClassName =
+    inlineControlCount >= 6
+      ? "xl:grid-cols-[minmax(320px,1.65fr)_repeat(6,minmax(0,0.92fr))]"
+      : inlineControlCount === 5
+        ? "xl:grid-cols-[minmax(320px,1.7fr)_repeat(5,minmax(0,1fr))]"
+        : "xl:grid-cols-[minmax(320px,1.75fr)_repeat(4,minmax(0,1fr))]";
 
   const visibleProductOptions = useMemo(
     () =>
@@ -505,9 +545,8 @@ export function CustomerFilterToolbar({
 
   const activeFilterCount = [
     Boolean(filters.search),
-    Boolean(filters.importedFrom || filters.importedTo),
     Boolean(filters.assignedFrom || filters.assignedTo),
-    filters.statuses.length > 0,
+    filters.executionClasses.length > 0,
     filters.productKeys.length > 0 || Boolean(filters.productKeyword),
     filters.tagIds.length > 0,
     Boolean(filters.teamId),
@@ -517,26 +556,11 @@ export function CustomerFilterToolbar({
   const timeFilterSummary = useMemo(
     () =>
       buildTimeFilterSummary({
-        importedFrom: filters.importedFrom,
-        importedTo: filters.importedTo,
         assignedFrom: filters.assignedFrom,
         assignedTo: filters.assignedTo,
       }),
-    [filters.assignedFrom, filters.assignedTo, filters.importedFrom, filters.importedTo],
+    [filters.assignedFrom, filters.assignedTo],
   );
-
-  const scopeHint = useMemo(() => {
-    const teamLabel = teamOptions.find((item) => item.id === filters.teamId)?.name;
-    const salesLabel = salesOptions.find((item) => item.id === filters.salesId)?.name;
-
-    if (salesLabel) {
-      return teamLabel ? `${teamLabel} / ${salesLabel}` : salesLabel;
-    }
-    if (teamLabel) {
-      return teamLabel;
-    }
-    return "当前可见范围";
-  }, [filters.salesId, filters.teamId, salesOptions, teamOptions]);
 
   const activeTagLabels = useMemo(
     () =>
@@ -556,94 +580,28 @@ export function CustomerFilterToolbar({
     [filters.productKeys, productOptions],
   );
 
+  const selectedExecutionClass = useMemo(
+    () =>
+      customerExecutionClassOptions.find(
+        (option) => option.value === (filters.executionClasses[0] ?? null),
+      ) ?? null,
+    [filters.executionClasses],
+  );
+
   const searchPending = pending && searchDraft.trim() !== filters.search;
 
-  const todayRange = useMemo(() => getTodayRange(), []);
-  const quickFilters = [
-    {
-      key: "today",
-      label: "今日新增",
-      active:
-        filters.importedFrom === todayRange.from && filters.importedTo === todayRange.to,
-      onClick: () =>
-        applyFilters({
-          importedFrom: todayRange.from,
-          importedTo: todayRange.to,
-          statuses: [],
-          queue: "all",
-        }),
-    },
-    {
-      key: "pending_first_call",
-      label: "待首呼",
-      active:
-        filters.statuses.length === 1 && filters.statuses[0] === "pending_first_call",
-      onClick: () =>
-        applyFilters({
-          statuses: ["pending_first_call"],
-          queue: "pending_first_call",
-        }),
-    },
-    {
-      key: "pending_follow_up",
-      label: "待回访",
-      active:
-        filters.statuses.length === 1 && filters.statuses[0] === "pending_follow_up",
-      onClick: () =>
-        applyFilters({
-          statuses: ["pending_follow_up"],
-          queue: "pending_follow_up",
-        }),
-    },
-    {
-      key: "pending_invitation",
-      label: "待邀约",
-      active:
-        filters.statuses.length === 1 && filters.statuses[0] === "pending_invitation",
-      onClick: () =>
-        applyFilters({
-          statuses: ["pending_invitation"],
-          queue: "pending_invitation",
-        }),
-    },
-    {
-      key: "pending_deal",
-      label: "待成交",
-      active: filters.statuses.length === 1 && filters.statuses[0] === "pending_deal",
-      onClick: () =>
-        applyFilters({
-          statuses: ["pending_deal"],
-          queue: "pending_deal",
-        }),
-    },
-  ] as const;
-
   return (
-    <div ref={rootRef} aria-busy={pending}>
+    <div ref={rootRef} aria-busy={pending} className="relative overflow-visible">
       <FiltersPanel
-        eyebrow="工作台筛选"
-        title="筛选与范围"
-        description="搜索优先，次级条件放进轻量弹层里；团队与销售范围保持在同一工具条内。"
+        title="客户筛选"
+        headerMode="hidden"
         className={cn(
-          "rounded-[1.1rem] border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,246,242,0.92))] shadow-[0_12px_24px_rgba(15,23,42,0.04)]",
+          "rounded-[0.95rem] border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]",
           pending && "opacity-90",
         )}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex h-8 items-center rounded-full border border-black/8 bg-white/86 px-3 text-[12px] font-medium text-black/58">
-              范围 {scopeHint}
-            </span>
-            <span className="inline-flex h-8 items-center rounded-full border border-black/8 bg-white/86 px-3 text-[12px] font-medium text-black/58">
-              命中 {matchedCount}
-            </span>
-            <span className="inline-flex h-8 items-center rounded-full border border-black/8 bg-white/86 px-3 text-[12px] font-medium text-black/58">
-              已筛 {activeFilterCount}
-            </span>
-          </div>
-        }
       >
-        <div className="space-y-3">
-          <div className="grid gap-2.5 xl:grid-cols-[minmax(320px,1.6fr)_repeat(4,minmax(0,1fr))]">
+        <div className="space-y-2.5">
+          <div className={cn("grid gap-2", wideGridClassName)}>
             <div className="xl:col-span-1">
               <form
                 role="search"
@@ -653,12 +611,12 @@ export function CustomerFilterToolbar({
                   submitSearch(searchDraft);
                 }}
                 className={cn(
-                  "flex min-h-10 items-center gap-2 rounded-[16px] border border-black/8 bg-white px-2.5 shadow-[0_8px_18px_rgba(15,23,42,0.04)] transition-[border-color,box-shadow] duration-150",
-                  searchPending && "border-black/12 shadow-[0_12px_24px_rgba(15,23,42,0.06)]",
+                  "flex min-h-9 items-center gap-2 rounded-[13px] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2.5 shadow-[var(--color-shell-shadow-sm)] transition-[border-color,box-shadow,transform] duration-150 motion-safe:hover:-translate-y-[1px]",
+                  searchPending && "border-[var(--color-accent-soft)] shadow-[var(--color-shell-shadow-md)]",
                 )}
               >
                 <div className="relative min-w-0 flex-1">
-                  <Search className="pointer-events-none absolute left-1 top-1/2 h-4 w-4 -translate-y-1/2 text-black/36" />
+                  <Search className="pointer-events-none absolute left-1 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-sidebar-muted)]" />
                   <input
                     value={searchDraft}
                     onChange={(event) => setSearchDraft(event.target.value)}
@@ -676,7 +634,7 @@ export function CustomerFilterToolbar({
                       }
                     }}
                     placeholder="搜索客户 / 手机号 / 商品 / 备注"
-                    className="h-10 w-full border-0 bg-transparent pl-8 pr-7 text-[13px] text-black/84 outline-none transition placeholder:text-black/34 focus:ring-0 sm:text-sm"
+                    className="h-9 w-full border-0 bg-transparent pl-8 pr-7 text-[13px] text-[var(--foreground)] outline-none transition placeholder:text-[var(--color-sidebar-muted)] focus:ring-0 sm:text-sm"
                   />
                   {searchDraft ? (
                     <button
@@ -685,7 +643,7 @@ export function CustomerFilterToolbar({
                         setSearchDraft("");
                         submitSearch("");
                       }}
-                      className="absolute right-0 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-black/34 transition hover:bg-black/[0.05] hover:text-black/58"
+                      className="absolute right-0 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-[var(--color-sidebar-muted)] transition hover:bg-[var(--color-shell-active)] hover:text-[var(--foreground)]"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -694,17 +652,17 @@ export function CustomerFilterToolbar({
 
                 <div className="flex shrink-0 items-center gap-2">
                   {searchPending ? (
-                    <span className="hidden text-[11px] font-medium text-black/48 sm:inline">
+                    <span className="hidden text-[11px] font-medium text-[var(--color-sidebar-muted)] sm:inline">
                       搜索中
                     </span>
                   ) : null}
                   <button
                     type="submit"
                     className={cn(
-                      "inline-flex h-8 items-center rounded-[11px] border px-3 text-[12px] font-medium transition-[border-color,background-color,color] duration-150",
+                      "inline-flex h-8 items-center rounded-[10px] border px-3 text-[12px] font-medium transition-[border-color,background-color,color] duration-150",
                       searchPending
-                        ? "border-black/10 bg-[rgba(248,250,252,0.92)] text-black/56"
-                        : "border-black/12 bg-[rgba(15,23,42,0.04)] text-black/74 hover:border-black/16 hover:bg-white hover:text-black/86",
+                        ? "border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] text-[var(--color-sidebar-muted)]"
+                        : "border-[var(--color-border-soft)] bg-[var(--color-shell-active)] text-[var(--crm-badge-neutral-text)] hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]",
                     )}
                   >
                     搜索
@@ -715,69 +673,41 @@ export function CustomerFilterToolbar({
 
             <div className="relative">
               <FilterButton
-                label="时间"
-                icon={<CalendarRange className="h-3.5 w-3.5 shrink-0 text-black/44" />}
+                label="分配时间"
+                icon={<CalendarRange className="h-3.5 w-3.5 shrink-0 text-[var(--color-sidebar-muted)]" />}
                 value={timeFilterSummary}
-                active={Boolean(
-                  filters.importedFrom ||
-                    filters.importedTo ||
-                    filters.assignedFrom ||
-                    filters.assignedTo,
-                )}
+                active={Boolean(filters.assignedFrom || filters.assignedTo)}
                 open={openPanel === "time"}
                 onClick={() => setOpenPanel((current) => (current === "time" ? null : "time"))}
               />
-              <FilterPanel open={openPanel === "time"} widthClassName="w-[20rem]">
+              <FilterPanel open={openPanel === "time"} widthClassName="w-[18rem]">
                 <div className="space-y-4">
                   <TimeFilterSection
-                    title="导入时间"
-                    description="保留现有导入时间筛选，继续服务导入承接与首呼检查。"
-                    from={filters.importedFrom}
-                    to={filters.importedTo}
+                    title="分配时间"
+                    description="统一按分配时间查看当前客户池。"
+                    from={filters.assignedFrom}
+                    to={filters.assignedTo}
                     onApplyPreset={(preset) => {
                       const range = getPresetRange(preset);
                       applyFilters({
-                        importedFrom: range.from,
-                        importedTo: range.to,
+                        assignedFrom: range.from,
+                        assignedTo: range.to,
                       });
                     }}
                     onChange={(nextValue) =>
                       applyFilters({
-                        importedFrom: nextValue.from,
-                        importedTo: nextValue.to,
+                        assignedFrom: nextValue.from,
+                        assignedTo: nextValue.to,
                       })
                     }
-                    onClear={() => applyFilters({ importedFrom: "", importedTo: "" })}
+                    onClear={() => applyFilters({ assignedFrom: "", assignedTo: "" })}
                   />
 
-                  <div className="border-t border-black/6 pt-4">
-                    <TimeFilterSection
-                      title="分配时间"
-                      description="按客户承接给当前负责人的时间筛选，不再混用客户创建时间。"
-                      from={filters.assignedFrom}
-                      to={filters.assignedTo}
-                      onApplyPreset={(preset) => {
-                        const range = getPresetRange(preset);
-                        applyFilters({
-                          assignedFrom: range.from,
-                          assignedTo: range.to,
-                        });
-                      }}
-                      onChange={(nextValue) =>
-                        applyFilters({
-                          assignedFrom: nextValue.from,
-                          assignedTo: nextValue.to,
-                        })
-                      }
-                      onClear={() => applyFilters({ assignedFrom: "", assignedTo: "" })}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-end border-t border-black/6 pt-3">
+                  <div className="flex items-center justify-end border-t border-[var(--color-border-soft)] pt-3">
                     <button
                       type="button"
                       onClick={() => setOpenPanel(null)}
-                      className="inline-flex h-8 items-center rounded-[10px] border border-black/8 bg-[rgba(248,250,252,0.9)] px-3 text-[12px] font-medium text-black/72 transition hover:border-black/12 hover:bg-white hover:text-black/84"
+                      className={panelActionButtonClassName}
                     >
                       完成
                     </button>
@@ -786,28 +716,64 @@ export function CustomerFilterToolbar({
               </FilterPanel>
             </div>
 
-            <label className="space-y-1.5">
-              <span className="sr-only">状态筛选</span>
-              <select
-                value={filters.statuses[0] ?? ""}
-                onChange={(event) => {
-                  const value = event.target.value as CustomerWorkStatusKey | "";
-                  applyFilters(
-                    value
-                      ? { statuses: [value], queue: value }
-                      : { statuses: [], queue: "all" },
-                  );
-                }}
-                className="h-10 w-full rounded-[14px] border border-black/8 bg-[rgba(248,250,252,0.84)] px-3 text-[13px] text-black/78 outline-none transition focus:border-black/14 focus:ring-2 focus:ring-black/5"
-              >
-                <option value="">全部状态</option>
-                {customerWorkStatusOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label} ({queueCounts[option.value]})
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="relative">
+              <FilterButton
+                label="客户分类"
+                value={selectedExecutionClass?.longLabel}
+                active={filters.executionClasses.length > 0}
+                open={openPanel === "executionClass"}
+                onClick={() =>
+                  setOpenPanel((current) =>
+                    current === "executionClass" ? null : "executionClass",
+                  )
+                }
+              />
+              <FilterPanel open={openPanel === "executionClass"} widthClassName="w-[18rem]">
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <p className="text-[13px] font-semibold text-[var(--foreground)]">客户分类</p>
+                    <p className="text-xs leading-5 text-[var(--color-sidebar-muted)]">
+                      统一以 ABCDE 作为当前客户经营分类。
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    {customerExecutionClassOptions.map((option) => (
+                      <OptionRow
+                        key={option.value}
+                        title={option.longLabel}
+                        subtitle={option.description}
+                        selected={filters.executionClasses.includes(option.value)}
+                        onClick={() => {
+                          applyFilters({ executionClasses: [option.value as CustomerExecutionClass] });
+                          setOpenPanel(null);
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-[var(--color-border-soft)] pt-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        applyFilters({ executionClasses: [] });
+                        setOpenPanel(null);
+                      }}
+                      className="text-xs text-[var(--color-sidebar-muted)] transition hover:text-[var(--foreground)]"
+                    >
+                      清空
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOpenPanel(null)}
+                      className={panelActionButtonClassName}
+                    >
+                      完成
+                    </button>
+                  </div>
+                </div>
+              </FilterPanel>
+            </div>
 
             <div className="relative">
               <FilterButton
@@ -829,9 +795,9 @@ export function CustomerFilterToolbar({
                 widthClassName="w-[21rem]"
               >
                 <div className="space-y-3">
-                  <p className="text-[13px] font-semibold text-black/84">商品筛选</p>
+                  <p className="text-[13px] font-semibold text-[var(--foreground)]">商品筛选</p>
                   <div className="relative">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-black/34" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-sidebar-muted)]" />
                     <input
                       value={productKeywordDraft}
                       onChange={(event) => setProductKeywordDraft(event.target.value)}
@@ -843,7 +809,7 @@ export function CustomerFilterToolbar({
                         }
                       }}
                       placeholder="搜索商品"
-                      className="h-10 w-full rounded-[12px] border border-black/8 bg-[rgba(248,250,252,0.82)] pl-8 pr-3 text-[13px] text-black/78 outline-none transition placeholder:text-black/34 focus:border-black/14 focus:ring-2 focus:ring-black/5"
+                      className={`${panelInlineInputClassName} pl-8 pr-3 placeholder:text-[var(--color-sidebar-muted)]`}
                     />
                   </div>
 
@@ -865,25 +831,25 @@ export function CustomerFilterToolbar({
                         />
                       ))
                     ) : (
-                      <p className="px-1 text-xs leading-5 text-black/40">暂无匹配项</p>
+                      <p className="px-1 text-xs leading-5 text-[var(--color-sidebar-muted)]">暂无匹配项</p>
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between border-t border-black/6 pt-3">
+                  <div className="flex items-center justify-between border-t border-[var(--color-border-soft)] pt-3">
                     <button
                       type="button"
                       onClick={() => {
                         setProductKeywordDraft("");
                         applyFilters({ productKeys: [], productKeyword: "" });
                       }}
-                      className="text-xs text-black/46 transition hover:text-black/70"
+                      className="text-xs text-[var(--color-sidebar-muted)] transition hover:text-[var(--foreground)]"
                     >
                       清空
                     </button>
                     <button
                       type="button"
                       onClick={() => setOpenPanel(null)}
-                      className="inline-flex h-8 items-center rounded-[10px] border border-black/8 bg-[rgba(248,250,252,0.9)] px-3 text-[12px] font-medium text-black/72 transition hover:border-black/12 hover:bg-white hover:text-black/84"
+                      className={panelActionButtonClassName}
                     >
                       完成
                     </button>
@@ -906,14 +872,14 @@ export function CustomerFilterToolbar({
                 widthClassName="w-[21rem]"
               >
                 <div className="space-y-3">
-                  <p className="text-[13px] font-semibold text-black/84">标签筛选</p>
+                  <p className="text-[13px] font-semibold text-[var(--foreground)]">标签筛选</p>
                   <div className="relative">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-black/34" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-sidebar-muted)]" />
                     <input
                       value={tagSearchDraft}
                       onChange={(event) => setTagSearchDraft(event.target.value)}
                       placeholder="搜索标签"
-                      className="h-10 w-full rounded-[12px] border border-black/8 bg-[rgba(248,250,252,0.82)] pl-8 pr-3 text-[13px] text-black/78 outline-none transition placeholder:text-black/34 focus:border-black/14 focus:ring-2 focus:ring-black/5"
+                      className={`${panelInlineInputClassName} pl-8 pr-3 placeholder:text-[var(--color-sidebar-muted)]`}
                     />
                   </div>
 
@@ -935,22 +901,22 @@ export function CustomerFilterToolbar({
                         />
                       ))
                     ) : (
-                      <p className="px-1 text-xs leading-5 text-black/40">暂无匹配项</p>
+                      <p className="px-1 text-xs leading-5 text-[var(--color-sidebar-muted)]">暂无匹配项</p>
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between border-t border-black/6 pt-3">
+                  <div className="flex items-center justify-between border-t border-[var(--color-border-soft)] pt-3">
                     <button
                       type="button"
                       onClick={() => applyFilters({ tagIds: [] })}
-                      className="text-xs text-black/46 transition hover:text-black/70"
+                      className="text-xs text-[var(--color-sidebar-muted)] transition hover:text-[var(--foreground)]"
                     >
                       清空
                     </button>
                     <button
                       type="button"
                       onClick={() => setOpenPanel(null)}
-                      className="inline-flex h-8 items-center rounded-[10px] border border-black/8 bg-[rgba(248,250,252,0.9)] px-3 text-[12px] font-medium text-black/72 transition hover:border-black/12 hover:bg-white hover:text-black/84"
+                      className={panelActionButtonClassName}
                     >
                       完成
                     </button>
@@ -958,89 +924,60 @@ export function CustomerFilterToolbar({
                 </div>
               </FilterPanel>
             </div>
+
+            {showTeamFilter ? (
+              <InlineSelectControl
+                label="团队"
+                value={filters.teamId}
+                placeholder="全部团队"
+                options={teamOptions.map((team) => ({
+                  value: team.id,
+                  label: team.name,
+                }))}
+                onChange={(nextValue) => applyFilters({ teamId: nextValue, salesId: "" })}
+              />
+            ) : null}
+
+            {showSalesFilter ? (
+              <InlineSelectControl
+                label="员工"
+                value={filters.salesId}
+                placeholder="全部员工"
+                options={salesOptions.map((sales) => ({
+                  value: sales.id,
+                  label: sales.name,
+                }))}
+                onChange={(nextValue) => applyFilters({ salesId: nextValue })}
+              />
+            ) : null}
           </div>
 
-          {(showTeamFilter || showSalesFilter) ? (
-            <div className="flex flex-wrap items-center gap-2.5">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black/38">
-                管理范围
-              </span>
-              {showTeamFilter ? (
-                <select
-                  value={filters.teamId}
-                  onChange={(event) =>
-                    applyFilters({ teamId: event.target.value, salesId: "" })
-                  }
-                  className="h-9 rounded-[12px] border border-black/8 bg-white/90 px-3 text-[13px] text-black/76 outline-none transition focus:border-black/14 focus:ring-2 focus:ring-black/5 sm:min-w-[10rem]"
-                >
-                  <option value="">全部团队</option>
-                  {teamOptions.map((team) => (
-                    <option key={team.id} value={team.id}>
-                      {team.name}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-
-              {showSalesFilter ? (
-                <select
-                  value={filters.salesId}
-                  onChange={(event) => applyFilters({ salesId: event.target.value })}
-                  className="h-9 rounded-[12px] border border-black/8 bg-white/90 px-3 text-[13px] text-black/76 outline-none transition focus:border-black/14 focus:ring-2 focus:ring-black/5 sm:min-w-[10rem]"
-                >
-                  <option value="">全部销售</option>
-                  {salesOptions.map((sales) => (
-                    <option key={sales.id} value={sales.id}>
-                      {sales.name}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-            </div>
-          ) : null}
-
-          <div className="flex flex-wrap items-center gap-2">
-            {quickFilters.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={item.onClick}
-                className={cn(
-                  "inline-flex h-8 items-center rounded-full border px-3 text-[12px] font-medium transition-colors",
-                  item.active
-                    ? "border-black/12 bg-white text-black/84 shadow-[0_6px_14px_rgba(15,23,42,0.05)]"
-                    : "border-black/8 bg-[rgba(255,255,255,0.74)] text-black/56 hover:border-black/12 hover:bg-white hover:text-black/82",
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-
-            {activeFilterCount > 0 ? (
+          {activeFilterCount > 0 ? (
+            <div className="flex items-center justify-between gap-3 border-t border-[var(--color-border-soft)] pt-2">
+              <p className="text-[12px] text-[var(--color-sidebar-muted)]">
+                当前已启用 {activeFilterCount} 项筛选
+              </p>
               <button
                 type="button"
                 onClick={() =>
                   applyFilters({
-                    queue: "all",
-                    statuses: [],
+                    executionClasses: [],
                     search: "",
                     productKeys: [],
                     productKeyword: "",
                     tagIds: [],
-                    importedFrom: "",
-                    importedTo: "",
                     assignedFrom: "",
                     assignedTo: "",
                     teamId: "",
                     salesId: "",
                   })
                 }
-                className="inline-flex h-8 items-center rounded-full border border-black/8 bg-transparent px-3 text-[12px] text-black/48 transition hover:border-black/12 hover:bg-white hover:text-black/72"
+                className="inline-flex h-8 items-center self-start rounded-full border border-[var(--color-border-soft)] bg-transparent px-3 text-[12px] text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color,transform] duration-150 motion-safe:hover:-translate-y-[1px] hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)] sm:self-auto"
               >
                 清空筛选
               </button>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
       </FiltersPanel>
     </div>

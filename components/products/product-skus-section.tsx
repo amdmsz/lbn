@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Search, SlidersHorizontal } from "lucide-react";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ProductMainImage } from "@/components/products/product-main-image";
@@ -10,8 +11,6 @@ import { MasterDataStatusBadge } from "@/components/settings/master-data-status-
 import { ActionBanner } from "@/components/shared/action-banner";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PaginationControls } from "@/components/shared/pagination-controls";
-import { SectionCard } from "@/components/shared/section-card";
-import { StatusBadge } from "@/components/shared/status-badge";
 import { formatDateTime } from "@/lib/customers/metadata";
 import { formatCurrency } from "@/lib/fulfillment/metadata";
 import {
@@ -24,6 +23,7 @@ import type {
   MasterDataRecycleGuard,
   MasterDataRecycleReasonCode,
 } from "@/lib/products/recycle-guards";
+import { cn } from "@/lib/utils";
 
 type DecimalLike = {
   toString(): string;
@@ -134,6 +134,15 @@ const EMPTY_DICTIONARIES = {
   financeCategoryOptions: [] as ProductCenterDictionaryOption[],
 };
 
+const skuQuietActionClassName =
+  "inline-flex min-h-0 items-center rounded-full border border-transparent px-2.5 py-2 text-sm font-medium text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color] hover:border-[var(--color-border-soft)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50";
+
+const skuControlSurfaceClassName =
+  "rounded-[1.08rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3.5 py-3.5 shadow-[var(--color-shell-shadow-sm)]";
+
+const skuMetricPillClassName =
+  "rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-sidebar-muted)]";
+
 function resolveDictionaryLabel(
   options: ProductCenterDictionaryOption[],
   code: string | null,
@@ -148,26 +157,26 @@ function resolveDictionaryLabel(
 function hasAdvancedFilters(filters: ProductCenterFilters) {
   return Boolean(
     filters.brandName ||
-      filters.seriesName ||
-      filters.categoryCode ||
-      filters.primarySalesSceneCode ||
-      filters.supplyGroupCode ||
-      filters.financeCategoryCode,
+    filters.seriesName ||
+    filters.categoryCode ||
+    filters.primarySalesSceneCode ||
+    filters.supplyGroupCode ||
+    filters.financeCategoryCode,
   );
 }
 
 function hasAnyFilters(filters: ProductCenterFilters) {
   return Boolean(
     filters.q ||
-      filters.status ||
-      filters.supplierId ||
-      filters.brandName ||
-      filters.seriesName ||
-      filters.categoryCode ||
-      filters.primarySalesSceneCode ||
-      filters.supplyGroupCode ||
-      filters.financeCategoryCode ||
-      filters.preset,
+    filters.status ||
+    filters.supplierId ||
+    filters.brandName ||
+    filters.seriesName ||
+    filters.categoryCode ||
+    filters.primarySalesSceneCode ||
+    filters.supplyGroupCode ||
+    filters.financeCategoryCode ||
+    filters.preset,
   );
 }
 
@@ -219,14 +228,12 @@ export function ProductSkusSection({
   };
   detailProduct: ProductDetail | null;
   detailSkuId: string;
-  dictionaries:
-    | {
-        categoryOptions: ProductCenterDictionaryOption[];
-        primarySalesSceneOptions: ProductCenterDictionaryOption[];
-        supplyGroupOptions: ProductCenterDictionaryOption[];
-        financeCategoryOptions: ProductCenterDictionaryOption[];
-      }
-    | null;
+  dictionaries: {
+    categoryOptions: ProductCenterDictionaryOption[];
+    primarySalesSceneOptions: ProductCenterDictionaryOption[];
+    supplyGroupOptions: ProductCenterDictionaryOption[];
+    financeCategoryOptions: ProductCenterDictionaryOption[];
+  } | null;
   canCreate: boolean;
   canManage: boolean;
   canViewSupplyIdentity: boolean;
@@ -236,15 +243,23 @@ export function ProductSkusSection({
   manageSuppliersHref: string;
   upsertProductAction: (formData: FormData) => Promise<ProductActionResult>;
   toggleProductAction: (formData: FormData) => Promise<ProductActionResult>;
-  moveProductToRecycleBinAction: (formData: FormData) => Promise<ProductActionResult>;
+  moveProductToRecycleBinAction: (
+    formData: FormData,
+  ) => Promise<ProductActionResult>;
   upsertProductSkuAction: (formData: FormData) => Promise<ProductActionResult>;
   toggleProductSkuAction: (formData: FormData) => Promise<ProductActionResult>;
-  moveProductSkuToRecycleBinAction: (formData: FormData) => Promise<ProductActionResult>;
-  createInlineSupplierAction: (formData: FormData) => Promise<InlineSupplierResult>;
+  moveProductSkuToRecycleBinAction: (
+    formData: FormData,
+  ) => Promise<ProductActionResult>;
+  createInlineSupplierAction: (
+    formData: FormData,
+  ) => Promise<InlineSupplierResult>;
 }>) {
   const router = useRouter();
   const [notice, setNotice] = useState<ProductActionResult | null>(null);
-  const [recycleTarget, setRecycleTarget] = useState<ProductSkuItem | null>(null);
+  const [recycleTarget, setRecycleTarget] = useState<ProductSkuItem | null>(
+    null,
+  );
   const [recycleReason, setRecycleReason] =
     useState<MasterDataRecycleReasonCode>("mistaken_creation");
   const [advancedOpen, setAdvancedOpen] = useState(hasAdvancedFilters(filters));
@@ -260,12 +275,20 @@ export function ProductSkusSection({
       })
     : workspaceHref;
   const pageStart =
-    pagination.totalCount > 0 ? (pagination.page - 1) * pagination.pageSize + 1 : 0;
+    pagination.totalCount > 0
+      ? (pagination.page - 1) * pagination.pageSize + 1
+      : 0;
   const pageEnd =
     pagination.totalCount > 0
       ? Math.min(pagination.page * pagination.pageSize, pagination.totalCount)
       : 0;
   const activeFilters = hasAnyFilters(filters);
+  const visibleStatusLabel =
+    filters.status === "enabled"
+      ? "仅启用"
+      : filters.status === "disabled"
+        ? "仅停用"
+        : "全部状态";
 
   function openDetail(item: ProductSkuItem) {
     router.push(
@@ -312,7 +335,10 @@ export function ProductSkusSection({
       setNotice(result);
       closeRecycleDialog();
 
-      if (result.recycleStatus === "created" || result.recycleStatus === "already_in_recycle_bin") {
+      if (
+        result.recycleStatus === "created" ||
+        result.recycleStatus === "already_in_recycle_bin"
+      ) {
         router.refresh();
       }
 
@@ -324,180 +350,211 @@ export function ProductSkusSection({
 
   return (
     <div className="space-y-4">
-      <SectionCard
-        density="compact"
-        title="筛选"
-        description="SKU 视图只保留当前仍有效的经营字段，用来跨商品扫描销售规格、价格和执行能力。"
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge label={`结果 ${summary.totalCount}`} variant="neutral" />
-            <StatusBadge label={`启用 ${summary.enabledCount}`} variant="neutral" />
-          </div>
-        }
+      <form
+        method="get"
+        className={cn(skuControlSurfaceClassName, "space-y-3")}
       >
-        <div className="space-y-3">
-          <form method="get" className="space-y-3">
-            <input type="hidden" name="tab" value="skus" />
+        <input type="hidden" name="tab" value="skus" />
 
-            <div className="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_12rem_12rem_auto]">
-              <label className="min-w-0 space-y-2">
-                <span className="crm-label">搜索</span>
-                <input
-                  name="q"
-                  defaultValue={filters.q}
-                  placeholder={
-                    canViewSupplyIdentity
-                      ? "商品名、商品编码、SKU 名、品牌、系列或供应商"
-                      : "商品名、商品编码、SKU 名、品牌或系列"
-                  }
-                  className="crm-input"
-                />
-              </label>
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+          <label className="relative min-w-0 flex-1">
+            <span className="sr-only">搜索 SKU</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-sidebar-muted)]" />
+            <input
+              name="q"
+              defaultValue={filters.q}
+              placeholder={
+                canViewSupplyIdentity
+                  ? "输入规格名、商品名、商品编码、品牌、系列或供应商"
+                  : "输入规格名、商品名、商品编码、品牌或系列"
+              }
+              className="crm-input min-h-[2.85rem] pl-10"
+            />
+          </label>
 
-              <label className="space-y-2">
-                <span className="crm-label">状态</span>
-                <select name="status" defaultValue={filters.status} className="crm-select">
-                  <option value="">全部</option>
-                  <option value="enabled">仅启用</option>
-                  <option value="disabled">仅停用</option>
+          <div
+            className={cn(
+              "grid gap-3 sm:grid-cols-2",
+              canViewSupplyIdentity ? "xl:w-[25rem]" : "xl:w-[11.5rem]",
+            )}
+          >
+            <label className="space-y-1.5">
+              <span className="sr-only">SKU 状态</span>
+              <select
+                name="status"
+                defaultValue={filters.status}
+                className="crm-select min-h-[2.85rem]"
+              >
+                <option value="">显示：全部状态</option>
+                <option value="enabled">显示：仅启用</option>
+                <option value="disabled">显示：仅停用</option>
+              </select>
+            </label>
+
+            {canViewSupplyIdentity ? (
+              <label className="space-y-1.5">
+                <span className="sr-only">供应商</span>
+                <select
+                  name="supplierId"
+                  defaultValue={filters.supplierId}
+                  className="crm-select min-h-[2.85rem]"
+                >
+                  <option value="">供应商：全部</option>
+                  {suppliers.map((supplier) => (
+                    <option key={supplier.id} value={supplier.id}>
+                      {supplier.name} ({supplier.code})
+                      {supplier.enabled ? "" : " / 停用"}
+                    </option>
+                  ))}
                 </select>
               </label>
-
-              {canViewSupplyIdentity ? (
-                <label className="space-y-2">
-                  <span className="crm-label">供应商</span>
-                  <select name="supplierId" defaultValue={filters.supplierId} className="crm-select">
-                    <option value="">全部供应商</option>
-                    {suppliers.map((supplier) => (
-                      <option key={supplier.id} value={supplier.id}>
-                        {supplier.name} ({supplier.code})
-                        {supplier.enabled ? "" : " / 停用"}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : (
-                <div className="hidden xl:block" />
-              )}
-
-              <div className="flex flex-wrap items-end justify-start gap-2 xl:justify-end">
-                <button type="submit" className="crm-button crm-button-primary">
-                  应用筛选
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAdvancedOpen((current) => !current)}
-                  className="crm-button crm-button-secondary"
-                >
-                  {advancedOpen ? "收起高级筛选" : "高级筛选"}
-                </button>
-                <Link
-                  href={buildProductCenterHref(PRODUCT_CENTER_EMPTY_FILTERS, { tab: "skus" })}
-                  className="crm-button crm-button-secondary"
-                >
-                  重置
-                </Link>
-              </div>
-            </div>
-
-            {advancedOpen ? (
-              <div className="grid gap-3 rounded-[0.95rem] border border-black/8 bg-[rgba(247,248,250,0.7)] p-3.5 md:grid-cols-2 xl:grid-cols-3">
-                <label className="space-y-2">
-                  <span className="crm-label">品牌</span>
-                  <input
-                    name="brandName"
-                    defaultValue={filters.brandName}
-                    className="crm-input"
-                    placeholder="按品牌模糊筛选"
-                  />
-                </label>
-
-                <label className="space-y-2">
-                  <span className="crm-label">系列</span>
-                  <input
-                    name="seriesName"
-                    defaultValue={filters.seriesName}
-                    className="crm-input"
-                    placeholder="按系列模糊筛选"
-                  />
-                </label>
-
-                <label className="space-y-2">
-                  <span className="crm-label">类目</span>
-                  <select
-                    name="categoryCode"
-                    defaultValue={filters.categoryCode}
-                    className="crm-select"
-                  >
-                    <option value="">全部类目</option>
-                    {dictionaryOptions.categoryOptions.map((option) => (
-                      <option key={option.code} value={option.code}>
-                        {option.label}
-                        {option.isActive ? "" : " / 停用"}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="space-y-2">
-                  <span className="crm-label">主销售场景</span>
-                  <select
-                    name="primarySalesSceneCode"
-                    defaultValue={filters.primarySalesSceneCode}
-                    className="crm-select"
-                  >
-                    <option value="">全部场景</option>
-                    {dictionaryOptions.primarySalesSceneOptions.map((option) => (
-                      <option key={option.code} value={option.code}>
-                        {option.label}
-                        {option.isActive ? "" : " / 停用"}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                {canViewSupplyGroup ? (
-                  <label className="space-y-2">
-                    <span className="crm-label">供货归类</span>
-                    <select
-                      name="supplyGroupCode"
-                      defaultValue={filters.supplyGroupCode}
-                      className="crm-select"
-                    >
-                      <option value="">全部供货归类</option>
-                      {dictionaryOptions.supplyGroupOptions.map((option) => (
-                        <option key={option.code} value={option.code}>
-                          {option.label}
-                          {option.isActive ? "" : " / 停用"}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
-
-                {canViewFinanceCategory ? (
-                  <label className="space-y-2">
-                    <span className="crm-label">财务归类</span>
-                    <select
-                      name="financeCategoryCode"
-                      defaultValue={filters.financeCategoryCode}
-                      className="crm-select"
-                    >
-                      <option value="">全部财务归类</option>
-                      {dictionaryOptions.financeCategoryOptions.map((option) => (
-                        <option key={option.code} value={option.code}>
-                          {option.label}
-                          {option.isActive ? "" : " / 停用"}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
-              </div>
             ) : null}
-          </form>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 xl:ml-auto xl:justify-end">
+            <button
+              type="button"
+              onClick={() => setAdvancedOpen((current) => !current)}
+              className="crm-button crm-button-secondary min-h-[2.85rem] gap-2 px-3.5"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              {advancedOpen ? "收起筛选" : "筛选"}
+            </button>
+            <button
+              type="submit"
+              className="crm-button crm-button-primary min-h-[2.85rem] px-4"
+            >
+              查看结果
+            </button>
+            <Link
+              href={buildProductCenterHref(PRODUCT_CENTER_EMPTY_FILTERS, {
+                tab: "skus",
+              })}
+              className="crm-button crm-button-secondary min-h-[2.85rem] px-3.5"
+            >
+              清空
+            </Link>
+          </div>
         </div>
-      </SectionCard>
+
+        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border-soft)] pt-3">
+          <span className="text-[11px] font-medium tracking-[0.08em] text-[var(--color-sidebar-muted)]">
+            当前范围
+          </span>
+          <span className={skuMetricPillClassName}>{visibleStatusLabel}</span>
+          <span className={skuMetricPillClassName}>
+            SKU {summary.totalCount}
+          </span>
+          <span className={skuMetricPillClassName}>
+            商品 {summary.productCount}
+          </span>
+          <span className={skuMetricPillClassName}>
+            启用 {summary.enabledCount}
+          </span>
+          <span className={skuMetricPillClassName}>
+            引用 {summary.salesOrderItemCount}
+          </span>
+          {activeFilters ? (
+            <span className={skuMetricPillClassName}>已应用筛选</span>
+          ) : null}
+        </div>
+
+        {advancedOpen ? (
+          <div className="grid gap-3 rounded-[0.98rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3.5 md:grid-cols-2 xl:grid-cols-3">
+            <label className="space-y-2">
+              <span className="crm-label">品牌</span>
+              <input
+                name="brandName"
+                defaultValue={filters.brandName}
+                className="crm-input"
+                placeholder="按品牌模糊筛选"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="crm-label">系列</span>
+              <input
+                name="seriesName"
+                defaultValue={filters.seriesName}
+                className="crm-input"
+                placeholder="按系列模糊筛选"
+              />
+            </label>
+
+            <label className="space-y-2">
+              <span className="crm-label">类目</span>
+              <select
+                name="categoryCode"
+                defaultValue={filters.categoryCode}
+                className="crm-select"
+              >
+                <option value="">全部类目</option>
+                {dictionaryOptions.categoryOptions.map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.label}
+                    {option.isActive ? "" : " / 停用"}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-2">
+              <span className="crm-label">主销售场景</span>
+              <select
+                name="primarySalesSceneCode"
+                defaultValue={filters.primarySalesSceneCode}
+                className="crm-select"
+              >
+                <option value="">全部场景</option>
+                {dictionaryOptions.primarySalesSceneOptions.map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.label}
+                    {option.isActive ? "" : " / 停用"}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {canViewSupplyGroup ? (
+              <label className="space-y-2">
+                <span className="crm-label">供货归类</span>
+                <select
+                  name="supplyGroupCode"
+                  defaultValue={filters.supplyGroupCode}
+                  className="crm-select"
+                >
+                  <option value="">全部供货归类</option>
+                  {dictionaryOptions.supplyGroupOptions.map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {option.label}
+                      {option.isActive ? "" : " / 停用"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+
+            {canViewFinanceCategory ? (
+              <label className="space-y-2">
+                <span className="crm-label">财务归类</span>
+                <select
+                  name="financeCategoryCode"
+                  defaultValue={filters.financeCategoryCode}
+                  className="crm-select"
+                >
+                  <option value="">全部财务归类</option>
+                  {dictionaryOptions.financeCategoryOptions.map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {option.label}
+                      {option.isActive ? "" : " / 停用"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
+        ) : null}
+      </form>
 
       {notice ? (
         <ActionBanner tone={notice.status === "success" ? "success" : "danger"}>
@@ -505,35 +562,37 @@ export function ProductSkusSection({
         </ActionBanner>
       ) : null}
 
-      <SectionCard
-        density="compact"
-        title="SKU 目录"
-        description="每一行只表达一个销售规格，不再拼接已删除的规格参数字段。"
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge label={`商品 ${summary.productCount}`} variant="neutral" />
-            <StatusBadge label={`订单引用 ${summary.salesOrderItemCount}`} variant="neutral" />
-          </div>
-        }
-        contentClassName="p-0"
-      >
+      <div className="rounded-[1.12rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-sm)]">
         {items.length > 0 ? (
-          <>
-            <div className="crm-table-shell rounded-none border-0 shadow-none">
+          <div className="space-y-0 overflow-hidden">
+            <div className="flex flex-col gap-2 border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-1">
+                <p className="crm-detail-label text-[11px]">SKU 工作台</p>
+                <h3 className="text-[0.96rem] font-semibold text-[var(--foreground)]">
+                  规格与商品母档的轻维护视图
+                </h3>
+              </div>
+              <p className="text-[12px] text-[var(--color-sidebar-muted)]">
+                本页显示 {pageStart} - {pageEnd} 条，共 {pagination.totalCount}{" "}
+                条
+              </p>
+            </div>
+
+            <div className="crm-table-shell overflow-x-auto rounded-none border-0 shadow-none">
               <table className="crm-table">
                 <thead>
                   <tr>
-                    <th>SKU</th>
+                    <th>规格</th>
                     <th>所属商品</th>
-                    {canViewSupplyIdentity ? <th>执行供应</th> : null}
-                    <th>价格 / 履约</th>
-                    <th>引用 / 状态</th>
+                    <th>默认售价</th>
+                    <th>经营资料</th>
+                    <th>状态</th>
                     <th className="text-right">操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item) => {
-                    const productSummary = joinReadableParts([
+                    const productIdentityLine = joinReadableParts([
                       item.product.brandName,
                       item.product.seriesName,
                       resolveDictionaryLabel(
@@ -541,14 +600,30 @@ export function ProductSkusSection({
                         item.product.categoryCode,
                       ),
                     ]);
-                    const supplyGroupLabel = resolveDictionaryLabel(
-                      dictionaryOptions.supplyGroupOptions,
-                      item.product.supplyGroupCode,
-                    );
-                    const financeCategoryLabel = resolveDictionaryLabel(
-                      dictionaryOptions.financeCategoryOptions,
-                      item.product.financeCategoryCode,
-                    );
+                    const businessLine = joinReadableParts([
+                      resolveDictionaryLabel(
+                        dictionaryOptions.primarySalesSceneOptions,
+                        item.product.primarySalesSceneCode,
+                      ),
+                      canViewSupplyGroup
+                        ? resolveDictionaryLabel(
+                            dictionaryOptions.supplyGroupOptions,
+                            item.product.supplyGroupCode,
+                          )
+                        : null,
+                      canViewFinanceCategory
+                        ? resolveDictionaryLabel(
+                            dictionaryOptions.financeCategoryOptions,
+                            item.product.financeCategoryCode,
+                          )
+                        : null,
+                    ]);
+                    const executionLine = joinReadableParts([
+                      item.codSupported ? "COD" : null,
+                      item.insuranceSupported
+                        ? `保价 ${formatCurrency(item.defaultInsuranceAmount)}`
+                        : null,
+                    ]);
 
                     return (
                       <tr key={item.id}>
@@ -557,24 +632,19 @@ export function ProductSkusSection({
                             <button
                               type="button"
                               onClick={() => openDetail(item)}
-                              className="truncate text-left text-sm font-semibold text-black/84 transition-colors hover:text-[var(--color-accent)]"
+                              className="truncate text-left text-sm font-semibold text-[var(--foreground)] transition-colors hover:text-[var(--color-accent-strong)]"
                             >
                               {item.skuName}
                             </button>
-                            <div className="flex flex-wrap gap-2 text-[12px] leading-5 text-black/48">
-                              <span className="rounded-full border border-black/8 bg-[rgba(247,248,250,0.82)] px-2.5 py-1">
-                                默认售价 {formatCurrency(item.defaultUnitPrice)}
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                              <span>
+                                订单引用 {item._count.salesOrderItems}
                               </span>
-                              {item.codSupported ? <StatusBadge label="COD" variant="info" /> : null}
-                              {item.insuranceSupported ? (
-                                <StatusBadge
-                                  label={`保价 ${formatCurrency(item.defaultInsuranceAmount)}`}
-                                  variant="warning"
-                                />
-                              ) : null}
+                              <span>创建 {formatDateTime(item.createdAt)}</span>
                             </div>
                           </div>
                         </td>
+
                         <td>
                           <div className="flex min-w-0 gap-3">
                             <ProductMainImage
@@ -588,92 +658,119 @@ export function ProductSkusSection({
                               <button
                                 type="button"
                                 onClick={() => openDetail(item)}
-                                className="block min-w-0 truncate text-left text-sm font-semibold text-black/84 transition-colors hover:text-[var(--color-accent)]"
+                                className="block min-w-0 truncate text-left text-sm font-semibold text-[var(--foreground)] transition-colors hover:text-[var(--color-accent-strong)]"
                               >
                                 {item.product.name}
                               </button>
-                              <div className="flex flex-wrap gap-x-2 gap-y-1 text-[12px] leading-5 text-black/48">
+                              <div className="flex flex-wrap gap-x-2 gap-y-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
                                 <span>{item.product.code}</span>
-                                {productSummary ? <span>{productSummary}</span> : null}
+                                {productIdentityLine ? (
+                                  <span>{productIdentityLine}</span>
+                                ) : null}
                               </div>
                             </div>
                           </div>
                         </td>
-                        {canViewSupplyIdentity ? (
-                          <td>
-                            {item.product.supplier ? (
-                              <div className="space-y-1 text-sm text-black/72">
-                                <p className="font-medium text-black/84">{item.product.supplier.name}</p>
-                                <p className="text-[12px] text-black/48">
+
+                        <td>
+                          <div className="space-y-1.5">
+                            <p className="text-[0.95rem] font-semibold text-[var(--foreground)]">
+                              {formatCurrency(item.defaultUnitPrice)}
+                            </p>
+                            <p className="text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                              当前规格默认销售价
+                            </p>
+                          </div>
+                        </td>
+
+                        <td>
+                          <div className="space-y-1.5 text-sm text-[var(--color-sidebar-muted)]">
+                            <p className="font-medium text-[var(--foreground)]">
+                              {canViewSupplyIdentity
+                                ? item.product.supplier?.name || "未绑定供应"
+                                : businessLine || "轻维护规格"}
+                            </p>
+                            <div className="flex flex-wrap gap-x-2 gap-y-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                              {canViewSupplyIdentity &&
+                              item.product.supplier ? (
+                                <span>
                                   {item.product.supplier.code}
-                                  {item.product.supplier.enabled ? "" : " / 停用"}
-                                </p>
-                              </div>
-                            ) : (
-                              <span className="text-sm text-black/40">未绑定</span>
-                            )}
-                          </td>
-                        ) : null}
-                        <td>
-                          <div className="space-y-1 text-sm text-black/72">
-                            <p className="font-medium text-black/84">
-                              默认售价 {formatCurrency(item.defaultUnitPrice)}
-                            </p>
-                            <div className="flex flex-wrap gap-x-2 gap-y-1 text-[12px] text-black/48">
-                              {canViewSupplyGroup && supplyGroupLabel ? (
-                                <span>供货归类 {supplyGroupLabel}</span>
+                                  {item.product.supplier.enabled
+                                    ? ""
+                                    : " / 停用"}
+                                </span>
                               ) : null}
-                              {canViewFinanceCategory && financeCategoryLabel ? (
-                                <span>财务归类 {financeCategoryLabel}</span>
+                              {!canViewSupplyIdentity && businessLine ? (
+                                <span>{businessLine}</span>
+                              ) : null}
+                              {canViewSupplyIdentity && businessLine ? (
+                                <span>{businessLine}</span>
+                              ) : null}
+                              {executionLine ? (
+                                <span>{executionLine}</span>
                               ) : null}
                             </div>
                           </div>
                         </td>
+
                         <td>
-                          <div className="space-y-1 text-sm text-black/72">
-                            <p className="text-[12px] text-black/48">
-                              订单引用 {item._count.salesOrderItems}
-                            </p>
-                            <p className="text-[12px] text-black/48">
-                              最近更新 {formatDateTime(item.updatedAt)}
-                            </p>
-                            <div className="pt-1">
-                              <MasterDataStatusBadge isActive={item.enabled} />
-                            </div>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="flex flex-wrap justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => openDetail(item)}
-                              className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-                            >
-                              预览
-                            </button>
-                            <Link
-                              href={`/products/${item.product.id}`}
-                              className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-                            >
-                              详情页
-                            </Link>
+                          <div className="flex min-w-[7rem] flex-col items-start gap-2">
                             {canManage ? (
                               <button
                                 type="button"
                                 onClick={() => handleToggle(item)}
                                 disabled={pendingAction}
-                                className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84 disabled:cursor-not-allowed disabled:opacity-50"
+                                aria-label={
+                                  item.enabled ? "停用规格" : "启用规格"
+                                }
+                                className={cn(
+                                  "relative inline-flex h-7 w-11 items-center rounded-full border p-[3px] transition-[border-color,background-color]",
+                                  item.enabled
+                                    ? "border-[rgba(79,125,247,0.18)] bg-[rgba(79,125,247,0.12)]"
+                                    : "border-[var(--color-border-soft)] bg-[var(--color-shell-active)]",
+                                  pendingAction &&
+                                    "cursor-not-allowed opacity-70",
+                                )}
                               >
-                                {item.enabled ? "停用" : "启用"}
+                                <span
+                                  className={cn(
+                                    "h-5 w-5 rounded-full bg-white shadow-[0_2px_8px_rgba(18,24,31,0.14)] transition-transform duration-200",
+                                    item.enabled
+                                      ? "translate-x-4"
+                                      : "translate-x-0",
+                                  )}
+                                />
                               </button>
-                            ) : null}
+                            ) : (
+                              <MasterDataStatusBadge isActive={item.enabled} />
+                            )}
+                            <p className="text-[11px] font-medium text-[var(--color-sidebar-muted)]">
+                              {item.enabled ? "已上架" : "已停用"}
+                            </p>
+                            <p className="text-[11px] text-[var(--color-sidebar-muted)]">
+                              更新 {formatDateTime(item.updatedAt)}
+                            </p>
+                          </div>
+                        </td>
+
+                        <td>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openDetail(item)}
+                              className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                            >
+                              详情
+                            </button>
                             {canManage ? (
                               <button
                                 type="button"
                                 onClick={() => setRecycleTarget(item)}
-                                className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84"
+                                className={skuQuietActionClassName}
                               >
-                                {item.recycleGuard.canMoveToRecycleBin ? "回收" : "查看引用"}
+                                {item.recycleGuard.canMoveToRecycleBin
+                                  ? "回收"
+                                  : "查看引用"}
                               </button>
                             ) : null}
                           </div>
@@ -685,36 +782,39 @@ export function ProductSkusSection({
               </table>
             </div>
 
-            <div className="border-t border-black/6 px-4 py-4">
-              <PaginationControls
-                page={pagination.page}
-                totalPages={pagination.totalPages}
-                summary={`本页显示 ${pageStart} - ${pageEnd} 条 SKU，共 ${pagination.totalCount} 条`}
-                buildHref={(pageNumber) =>
-                  buildProductCenterHref(filters, {
-                    tab: "skus",
-                    page: pageNumber,
-                    detail: "",
-                    detailSku: "",
-                  })
-                }
-              />
-            </div>
-          </>
+            <PaginationControls
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              summary={`本页显示 ${pageStart} - ${pageEnd} 条 SKU，共 ${pagination.totalCount} 条`}
+              buildHref={(pageNumber) =>
+                buildProductCenterHref(filters, {
+                  tab: "skus",
+                  page: pageNumber,
+                  detail: "",
+                  detailSku: "",
+                })
+              }
+            />
+          </div>
         ) : (
           <div className="p-4 md:p-5">
             <EmptyState
-              title={activeFilters ? "当前筛选下没有 SKU" : "还没有可经营的 SKU"}
+              title={
+                activeFilters ? "当前筛选下没有 SKU" : "还没有可经营的 SKU"
+              }
               description={
                 activeFilters
-                  ? "调整搜索词或高级筛选后继续定位 SKU。"
-                  : "新建商品会直接录入首个 SKU，后续再在详情工作台里继续复制销售变体。"
+                  ? "调整筛选后继续定位 SKU。"
+                  : "先创建商品，再在详情里继续补充规格。"
               }
               action={
                 <div className="flex flex-wrap justify-center gap-2">
                   {activeFilters ? (
                     <Link
-                      href={buildProductCenterHref(PRODUCT_CENTER_EMPTY_FILTERS, { tab: "skus" })}
+                      href={buildProductCenterHref(
+                        PRODUCT_CENTER_EMPTY_FILTERS,
+                        { tab: "skus" },
+                      )}
                       className="crm-button crm-button-secondary"
                     >
                       清空筛选
@@ -722,14 +822,19 @@ export function ProductSkusSection({
                   ) : null}
                   {canCreate ? (
                     <Link
-                      href={buildProductCenterHref(filters, { createProduct: "1" })}
+                      href={buildProductCenterHref(filters, {
+                        createProduct: "1",
+                      })}
                       className="crm-button crm-button-primary"
                     >
                       新建商品
                     </Link>
                   ) : null}
                   {!activeFilters && canAccessSupplierTab ? (
-                    <Link href={manageSuppliersHref} className="crm-button crm-button-secondary">
+                    <Link
+                      href={manageSuppliersHref}
+                      className="crm-button crm-button-secondary"
+                    >
                       查看供应商
                     </Link>
                   ) : null}
@@ -738,7 +843,7 @@ export function ProductSkusSection({
             />
           </div>
         )}
-      </SectionCard>
+      </div>
 
       <ProductWorkspaceDetailDrawer
         key={

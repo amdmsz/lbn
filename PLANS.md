@@ -2,7 +2,7 @@
 
 ## 文档状态
 
-- 更新时间：2026-04-18
+- 更新时间：2026-04-22
 - 用途：记录真实里程碑状态，区分已完成、正在推进、待开始
 - 维护原则：只记录当前真实基线，不把已废弃的旧交易主模型继续当未来计划，不把 UI 愿景写成已落地事实
 
@@ -25,6 +25,7 @@
 - 页面主入口、兼容路由、hover / dropdown / empty-state 动作必须遵循 `UI_ENTRYPOINTS.md`
 - 不把页面美化误做成主入口漂移
 - 不把结构升级误做成 schema 或 truth layer 变更
+- 当前已进入全站 UI / 视觉系统 / 客户经营真相切换计划，先改文档真相，再改 KPI / shell / 关键工作台
 - 异步导入基线属于运行时与工作流增强，不属于新交易模型里程碑
 
 ---
@@ -176,7 +177,7 @@
 - 不回头重做 backfill
 - 不把 `/payment-records`、`/collection-tasks` 改成父单主视角
 - 不把 `GiftRecord` 与订单赠品混链
-- 不把 UI 重构扩成全站无边界重写
+- 不把全站 UI / truth cutover 偷偷扩成新的交易真相或 schema 重写
 - 不在未明确里程碑时顺手重做 truth layer
 - 不把异步导入扩写成新的 Lead / Customer 模型改造
 
@@ -184,50 +185,33 @@
 
 ## 4. 当前建议里程碑（不含 recycle 主线）
 
-### M7. 执行工作台收口
+### M7. 全站 UI / 视觉系统 / 客户经营真相切换
 
-状态：待开始
-
-目标：
-
-- 继续统一 `tradeNo / subOrderNo / supplier` 在执行工作台中的展示
-- 强化父单与子单之间的关系可读性
-- 不改变 `/payment-records`、`/collection-tasks` 的主查询粒度
-
-范围：
-
-- `/payment-records` 中补父单编号与子单编号展示
-- `/collection-tasks` 中补父单编号与子单编号展示
-- 子单详情与执行摘要页的 bundle / gift 可读性收口
-- 跨执行页的 TradeOrder / SalesOrder 识别一致性收口
-
-明确不做：
-
-- 不改 schema
-- 不改 payment / fulfillment truth layer
-- 不父单化 execution 列表
-
-### M7B. Lead Import Runtime / Observability 收口
-
-状态：待开始
+状态：待开始，Phase 0 文档重置为第一步
 
 目标：
 
-- 收口异步导入的运行时说明、部署基线、staging 验收与可观测性说明
-- 让 Web、Redis、worker 三段链路在 README / HANDOFF / deployment / staging 文档中保持一致
+- 把客户经营真相从旧 `Customer.level` 语义切到 `ABCDE`
+- 把主管首页切到 `员工经营表 -> 员工客户池`
+- 把销售首页切到 `/customers` 日常作业台
+- 把全局壳层、颜色系统、页面骨架和共享基元统一切到新的轻量高级 workbench 语言
 
-范围：
+阶段：
 
-- README 本地启动说明
-- HANDOFF 运行时基线
-- deployment / staging 文档
-- 导入失败、重试与 worker 日志的交接说明
+- Phase 0：文档真相重置
+- Phase 1：`ABCDE` 分类合同与 KPI 口径
+- Phase 2：共享 shell / token / 视觉系统
+- Phase 3：Supervisor cockpit
+- Phase 4：Sales daily workbench
+- Phase 5：Customer dossier
+- Phase 6：secondary surface alignment
+- Phase 7：validation / hardening
 
 明确不做：
 
-- 不改 Lead / Customer 业务边界
-- 不重开 schema
-- 不做新的导入页面主入口设计
+- 不偷改交易 / 支付 / 履约真相
+- 不静默改主入口和兼容路由
+- 不把 UI 改造顺手扩成 schema rewrite
 
 ### M8. 商品经营深化
 
@@ -275,10 +259,12 @@
 
 ## 5. 当前建议执行顺序
 
-1. M7：执行工作台收口
-2. M7B：Lead Import Runtime / Observability 收口
-3. M8：商品经营深化
-4. M9：Finance / Reconciliation 首版
+1. M7 Phase 0：文档真相重置
+2. M7 Phase 1：`ABCDE` 分类合同与 KPI 口径
+3. M7 Phase 2 ~ Phase 5：shell / supervisor cockpit / sales workbench / customer dossier
+4. M7 Phase 6 ~ Phase 7：secondary alignment 与 hardening
+5. M8：商品经营深化
+6. M9：Finance / Reconciliation 首版
 
 ---
 
@@ -288,30 +274,25 @@
 - `SalesOrder` 继续是 supplier 子单
 - bundle / gift / direct SKU 都继续走 `TradeOrderItemComponent`
 - `payment / fulfillment truth` 不重新混用
-- 旧执行主链继续稳定
-- 重要动作继续留痕
+- 客户经营分类真相以 `ABCDE` 为准；旧 `Customer.level` 不再继续扩产品语义
+- 主管首页主链为员工经营表，销售首页主链为 `/customers` 表格作业台
 - UI 重构不得漂移主入口与兼容路由
 - 异步导入基线不得因部署遗漏而失效
+- 重要动作继续留痕
 - `npm run lint` 和 `npm run build` 必须始终保持通过
 
 ---
 
 ## 7. 当前 UI / IA 级别补充
 
-当前 UI 方向作为仓库级设计约束已经确定为：
+当前 UI 方向已不再是“仅做渐进式页面 polish”，而是一次明确的全站 cutover：
 
-- `Linear` 风格骨架
-- `Cohere` 风格数据层密度
-- `Vercel` 风格排版与细节
-- `Claude / Notion` 少量温和感
+- 先共享壳层和视觉系统，再落主管 / 销售两个核心工作台
+- 默认减少顶部介绍、厚重导航块和解释性文案
+- 以 table-first、progressive disclosure、轻量抽屉和内联编辑为主
+- 视觉质量来自结构、比例、留白、字体和表格秩序，而不是堆卡片和堆说明文字
 
-当前这部分属于 `DESIGN.md` 约束，不单独作为 truth-layer 里程碑。
-
-执行方式：
-
-- 以页面模块为单位渐进重构
-- 先共享基元，再落页面
-- 不把视觉升级误做成业务模型改造
+这部分继续受 `DESIGN.md` 约束，但当前已经成为仓库级 active milestone，而不是“有空再做”的局部美化项
 
 ---
 

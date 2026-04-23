@@ -1,6 +1,20 @@
+import "dotenv/config";
 import { createLeadImportWorker } from "../lib/lead-imports/worker";
+import {
+  getLeadImportChunkSize,
+  getLeadImportJobAttempts,
+  getLeadImportWorkerConcurrency,
+  LEAD_IMPORT_QUEUE_NAME,
+} from "../lib/lead-imports/queue";
 
 async function main() {
+  console.log("[lead-import-worker] boot", {
+    queueName: LEAD_IMPORT_QUEUE_NAME,
+    chunkSize: getLeadImportChunkSize(),
+    workerConcurrency: getLeadImportWorkerConcurrency(),
+    jobAttempts: getLeadImportJobAttempts(),
+  });
+
   const worker = createLeadImportWorker();
 
   worker.on("ready", () => {

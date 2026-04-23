@@ -21,6 +21,7 @@ import { ensureGiftFreightPaymentArtifacts } from "@/lib/payments/mutations";
 export type GiftActor = {
   id: string;
   role: RoleCode;
+  teamId?: string | null;
 };
 
 export type CreateGiftRecordInput = {
@@ -88,6 +89,7 @@ export async function createGiftRecord(
   const customerScope = getCustomerScope(
     actor.role === "OPS" ? "SUPERVISOR" : actor.role,
     actor.id,
+    actor.teamId,
   );
 
   if (!customerScope) {
@@ -207,7 +209,7 @@ export async function updateGiftReview(
   }
 
   const parsed = updateGiftReviewSchema.parse(rawInput);
-  const scope = getGiftScope(actor.role, actor.id);
+  const scope = getGiftScope(actor.role, actor.id, actor.teamId);
 
   if (!scope) {
     throw new Error("当前角色无权审核礼品记录。");

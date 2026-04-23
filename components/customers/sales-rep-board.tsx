@@ -5,6 +5,9 @@ import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { formatDateTime } from "@/lib/customers/metadata";
 
+const boardMetricClassName =
+  "rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3 shadow-[var(--color-shell-shadow-sm)]";
+
 export function SalesRepBoard({
   items,
   selectedSalesId,
@@ -30,17 +33,21 @@ export function SalesRepBoard({
               <article
                 key={sales.id}
                 className={[
-                  "crm-card-muted space-y-4 p-4 transition",
-                  isActive ? "border-[rgba(154,97,51,0.28)] bg-white/90" : "",
+                  "crm-card-muted space-y-4 border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-4 shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow]",
+                  isActive
+                    ? "border-[rgba(122,154,255,0.2)] bg-[var(--color-shell-hover)] shadow-[var(--color-shell-shadow-md)]"
+                    : "",
                 ].join(" ")}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1.5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-base font-semibold text-black/84">{sales.name}</h3>
+                      <h3 className="text-base font-semibold text-[var(--foreground)]">
+                        {sales.name}
+                      </h3>
                       <StatusBadge label={`@${sales.username}`} variant="neutral" />
                     </div>
-                    <p className="text-sm text-black/52">
+                    <p className="text-sm text-[var(--color-sidebar-muted)]">
                       {sales.teamName ? `${sales.teamName} · 销售工作台` : "销售工作台"}
                     </p>
                   </div>
@@ -55,40 +62,50 @@ export function SalesRepBoard({
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-[0.9rem] border border-black/6 bg-white/72 px-3.5 py-3">
-                    <p className="text-[11px] font-semibold text-black/42">当前客户数</p>
-                    <p className="mt-2 text-2xl font-semibold text-black/84">
+                  <div className={boardMetricClassName}>
+                    <p className="text-[11px] font-semibold text-[var(--color-sidebar-muted)]">
+                      当前客户数
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold text-[var(--foreground)]">
                       {sales.customerCount}
                     </p>
                   </div>
-                  <div className="rounded-[0.9rem] border border-black/6 bg-white/72 px-3.5 py-3">
-                    <p className="text-[11px] font-semibold text-black/42">新导入客户</p>
-                    <p className="mt-2 text-2xl font-semibold text-black/84">
+                  <div className={boardMetricClassName}>
+                    <p className="text-[11px] font-semibold text-[var(--color-sidebar-muted)]">
+                      新导入客户
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold text-[var(--foreground)]">
                       {sales.todayNewImportedCount}
                     </p>
                   </div>
-                  <div className="rounded-[0.9rem] border border-black/6 bg-white/72 px-3.5 py-3">
-                    <p className="text-[11px] font-semibold text-black/42">待首呼</p>
-                    <p className="mt-2 text-2xl font-semibold text-black/84">
+                  <div className={boardMetricClassName}>
+                    <p className="text-[11px] font-semibold text-[var(--color-sidebar-muted)]">
+                      待首呼
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold text-[var(--foreground)]">
                       {sales.pendingFirstCallCount}
                     </p>
                   </div>
-                  <div className="rounded-[0.9rem] border border-black/6 bg-white/72 px-3.5 py-3">
-                    <p className="text-[11px] font-semibold text-black/42">待回访</p>
-                    <p className="mt-2 text-2xl font-semibold text-black/84">
+                  <div className={boardMetricClassName}>
+                    <p className="text-[11px] font-semibold text-[var(--color-sidebar-muted)]">
+                      待回访
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold text-[var(--foreground)]">
                       {sales.pendingFollowUpCount}
                     </p>
                   </div>
-                  <div className="rounded-[0.9rem] border border-black/6 bg-white/72 px-3.5 py-3 sm:col-span-2">
+                  <div className={`${boardMetricClassName} sm:col-span-2`}>
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-[11px] font-semibold text-black/42">待成交</p>
-                        <p className="mt-2 text-2xl font-semibold text-black/84">
+                        <p className="text-[11px] font-semibold text-[var(--color-sidebar-muted)]">
+                          待成交
+                        </p>
+                        <p className="mt-2 text-2xl font-semibold text-[var(--foreground)]">
                           {sales.pendingDealCount}
                         </p>
                       </div>
-                      <div className="text-right text-sm text-black/52">
-                        <p className="font-medium text-black/68">最近跟进</p>
+                      <div className="text-right text-sm text-[var(--color-sidebar-muted)]">
+                        <p className="font-medium text-[var(--foreground)]">最近跟进</p>
                         <p className="mt-1">
                           {sales.latestFollowUpAt
                             ? formatDateTime(sales.latestFollowUpAt)

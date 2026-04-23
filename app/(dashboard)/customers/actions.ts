@@ -35,7 +35,10 @@ import {
   listFilteredCustomerCenterCustomerIds,
   listVisibleCustomerCenterCustomerIds,
 } from "@/lib/customers/queries";
-import { createOwnedCustomer } from "@/lib/customers/mutations";
+import {
+  createOwnedCustomer,
+  updateCustomerRemark,
+} from "@/lib/customers/mutations";
 import { assignCustomerTag } from "@/lib/master-data/mutations";
 import { moveToRecycleBin } from "@/lib/recycle-bin/lifecycle";
 import type { MoveToRecycleBinResult } from "@/lib/recycle-bin/types";
@@ -92,6 +95,11 @@ export type CreateOwnedCustomerActionResult = {
   message: string;
   customerId: string | null;
   fieldErrors: Partial<Record<CreateOwnedCustomerField, string>>;
+};
+
+export type UpdateCustomerRemarkActionResult = {
+  status: "success" | "error";
+  message: string;
 };
 
 const CUSTOMER_BATCH_ACTION_LIMIT = buildCustomerBatchActionLimit(
@@ -388,15 +396,15 @@ function buildBatchRecycleMessage(summary: {
 function getCustomerFilterParamsFromFormData(formData: FormData) {
   return {
     queue: String(formData.get("queue") ?? ""),
-    statuses: formData.getAll("statuses").map((value) => String(value).trim()),
+    executionClasses: formData
+      .getAll("executionClasses")
+      .map((value) => String(value).trim()),
     teamId: String(formData.get("teamId") ?? "").trim(),
     salesId: String(formData.get("salesId") ?? "").trim(),
     search: String(formData.get("search") ?? "").trim(),
     productKeys: formData.getAll("productKeys").map((value) => String(value).trim()),
     productKeyword: String(formData.get("productKeyword") ?? "").trim(),
     tagIds: formData.getAll("tagIds").map((value) => String(value).trim()),
-    importedFrom: String(formData.get("importedFrom") ?? "").trim(),
-    importedTo: String(formData.get("importedTo") ?? "").trim(),
     assignedFrom: String(formData.get("assignedFrom") ?? "").trim(),
     assignedTo: String(formData.get("assignedTo") ?? "").trim(),
     page: String(formData.get("page") ?? "1").trim(),
@@ -479,6 +487,7 @@ async function getBatchCustomerActor() {
   return {
     id: session.user.id,
     role: session.user.role,
+    teamId: session.user.teamId,
     permissionCodes: session.user.permissionCodes,
   };
 }
@@ -549,6 +558,49 @@ export async function createOwnedCustomerAction(
       message: error instanceof Error ? error.message : "新增客户失败，请稍后重试。",
       customerId: null,
       fieldErrors: {},
+    };
+  }
+}
+
+export async function updateCustomerRemarkAction(
+  formData: FormData,
+): Promise<UpdateCustomerRemarkActionResult> {
+  try {
+    const session = await auth();
+
+    if (!session?.user) {
+      return {
+        status: "error",
+        message: "登录已失效，请重新登录后再试。",
+      };
+    }
+
+    const customerId = String(formData.get("customerId") ?? "").trim();
+    const remark = String(formData.get("remark") ?? "");
+
+    const result = await updateCustomerRemark(
+      {
+        id: session.user.id,
+        role: session.user.role,
+        teamId: session.user.teamId,
+      },
+      {
+        customerId,
+        remark,
+      },
+    );
+
+    revalidatePath("/customers");
+    revalidatePath(`/customers/${result.customerId}`);
+
+    return {
+      status: "success",
+      message: result.description,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "更新备注失败，请稍后重试。",
     };
   }
 }

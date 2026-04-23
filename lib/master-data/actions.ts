@@ -42,6 +42,7 @@ async function getActor() {
   return {
     id: session.user.id,
     role: session.user.role,
+    teamId: session.user.teamId,
   };
 }
 

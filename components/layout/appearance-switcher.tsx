@@ -88,7 +88,7 @@ export function AppearanceSwitcher() {
                 "rounded-full border px-3 py-2 text-[12px] font-medium transition-colors",
                 active
                   ? "border-[var(--color-border)] bg-[var(--color-accent-soft)] text-[var(--foreground)]"
-                  : "border-[var(--color-border)] bg-[var(--color-panel)] text-[var(--color-sidebar-muted)] hover:border-[rgba(154,97,51,0.28)] hover:text-[var(--foreground)]",
+                  : "border-[var(--color-border)] bg-[var(--color-panel)] text-[var(--color-sidebar-muted)] hover:border-[rgba(47,107,255,0.24)] hover:text-[var(--foreground)]",
               )}
             >
               {option.label}

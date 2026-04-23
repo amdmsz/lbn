@@ -57,6 +57,24 @@ import { cn } from "@/lib/utils";
 
 const sectionShellClassName = "crm-workspace-shell";
 
+const quietWorkbenchCardClassName =
+  "rounded-[1.05rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-4 py-4 shadow-[var(--color-shell-shadow-sm)]";
+
+const quietWorkbenchInsetClassName =
+  "rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
+
+const quietWorkbenchSampleCardClassName =
+  "rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2.5 shadow-[var(--color-shell-shadow-sm)]";
+
+const quietWorkbenchActionLinkClassName =
+  "inline-flex h-9 items-center rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3.5 text-sm text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color,transform,box-shadow] duration-150 hover:-translate-y-px hover:border-[rgba(122,154,255,0.18)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)] hover:shadow-[var(--color-shell-shadow-sm)]";
+
+const quietWorkbenchTagClassName =
+  "rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-2 py-0.5 text-[11px] text-[var(--color-sidebar-muted)]";
+
+const quietWorkbenchResultClassName =
+  "mt-4 rounded-[1rem] border border-[rgba(122,154,255,0.18)] bg-[rgba(111,141,255,0.12)] px-3.5 py-3";
+
 function formatDateTimeValue(value: Date | null) {
   return value ? formatDateTime(value) : "未记录";
 }
@@ -395,19 +413,19 @@ function RecycleAutomationCard({
   onApply: () => void;
 }>) {
   return (
-    <div className="rounded-[1.05rem] border border-black/8 bg-[rgba(255,255,255,0.88)] px-4 py-4 shadow-[0_10px_24px_rgba(18,24,31,0.04)]">
+    <div className={quietWorkbenchCardClassName}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/38">
+          <p className="crm-detail-label text-[10px]">
             {kind === "inactive" ? "Inactive Recycle" : "Owner Exit Recycle"}
           </p>
-          <h3 className="mt-1.5 text-[1rem] font-semibold tracking-tight text-black/84">
+          <h3 className="mt-1.5 text-[1rem] font-semibold tracking-tight text-[var(--foreground)]">
             {title}
           </h3>
-          <p className="mt-2 max-w-3xl text-[13px] leading-6 text-black/56">
+          <p className="mt-2 max-w-3xl text-[13px] leading-6 text-[var(--color-sidebar-muted)]">
             {description}
           </p>
-          <p className="mt-2 text-[12px] leading-5 text-black/46">
+          <p className="mt-2 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
             {preview?.ruleSummary ?? formatRecycleRuleSummary(kind)}
           </p>
         </div>
@@ -459,9 +477,9 @@ function RecycleAutomationCard({
 
       {preview ? (
         <div className="mt-4 grid gap-3 2xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-          <div className="space-y-3 rounded-[16px] border border-black/6 bg-[rgba(247,248,250,0.62)] px-3.5 py-3">
+          <div className={cn(quietWorkbenchInsetClassName, "space-y-3")}>
             <div>
-              <p className="text-[12px] font-medium text-black/68">命中规则</p>
+              <p className="text-[12px] font-medium text-[var(--foreground)]">命中规则</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {preview.reasons.length > 0 ? (
                   preview.reasons.map((reason) => (
@@ -479,8 +497,8 @@ function RecycleAutomationCard({
 
             <div className="grid gap-3 md:grid-cols-2">
               <div>
-                <p className="text-[12px] font-medium text-black/68">影响 owner</p>
-                <div className="mt-2 space-y-1.5 text-[12px] leading-5 text-black/56">
+                <p className="text-[12px] font-medium text-[var(--foreground)]">影响 owner</p>
+                <div className="mt-2 space-y-1.5 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
                   {preview.ownerBuckets.length > 0 ? (
                     preview.ownerBuckets.map((bucket) => (
                       <div key={`${bucket.id ?? "unknown"}-${bucket.label}`}>
@@ -493,8 +511,8 @@ function RecycleAutomationCard({
                 </div>
               </div>
               <div>
-                <p className="text-[12px] font-medium text-black/68">影响团队</p>
-                <div className="mt-2 space-y-1.5 text-[12px] leading-5 text-black/56">
+                <p className="text-[12px] font-medium text-[var(--foreground)]">影响团队</p>
+                <div className="mt-2 space-y-1.5 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
                   {preview.teamBuckets.length > 0 ? (
                     preview.teamBuckets.map((bucket) => (
                       <div key={`${bucket.id ?? "unknown"}-${bucket.label}`}>
@@ -509,16 +527,16 @@ function RecycleAutomationCard({
             </div>
           </div>
 
-          <div className="rounded-[16px] border border-black/6 bg-[rgba(247,248,250,0.62)] px-3.5 py-3">
-            <p className="text-[12px] font-medium text-black/68">样例客户</p>
-            <div className="mt-2 space-y-2.5 text-[12px] leading-5 text-black/56">
+          <div className={quietWorkbenchInsetClassName}>
+            <p className="text-[12px] font-medium text-[var(--foreground)]">样例客户</p>
+            <div className="mt-2 space-y-2.5 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
               {preview.sampleCustomers.length > 0 ? (
                 preview.sampleCustomers.map((item) => (
                   <div
                     key={item.customerId}
-                    className="rounded-[14px] border border-black/6 bg-white/78 px-3 py-2.5"
+                    className={quietWorkbenchSampleCardClassName}
                   >
-                    <div className="font-medium text-black/76">
+                    <div className="font-medium text-[var(--foreground)]">
                       {item.customerName} · {item.ownerName ?? "无 owner"}
                     </div>
                     <div>{item.reasonLabel}</div>
@@ -534,7 +552,7 @@ function RecycleAutomationCard({
                   </div>
                 ))
               ) : (
-                <div className="rounded-[14px] border border-dashed border-black/8 px-3 py-3 text-black/46">
+                <div className="rounded-[0.95rem] border border-dashed border-[var(--color-border-soft)] px-3 py-3 text-[var(--color-sidebar-muted)]">
                   当前规则预览没有命中客户。
                 </div>
               )}
@@ -544,8 +562,8 @@ function RecycleAutomationCard({
       ) : null}
 
       {applyResult ? (
-        <div className="mt-4 rounded-[16px] border border-[rgba(58,105,143,0.12)] bg-[rgba(244,248,252,0.76)] px-3.5 py-3">
-          <p className="text-[12px] font-medium text-black/72">执行结果</p>
+        <div className={quietWorkbenchResultClassName}>
+          <p className="text-[12px] font-medium text-[var(--foreground)]">执行结果</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <StatusBadge label={`尝试 ${applyResult.counts.attempted}`} variant="neutral" />
             <StatusBadge label={`成功 ${applyResult.counts.success}`} variant="success" />
@@ -562,7 +580,7 @@ function RecycleAutomationCard({
             ) : null}
           </div>
           {applyResult.appliedSamples.length > 0 ? (
-            <div className="mt-2 text-[12px] leading-5 text-black/56">
+            <div className="mt-2 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
               已处理样例：
               {applyResult.appliedSamples
                 .map((item) => item.customerName)
@@ -604,26 +622,26 @@ function AutoAssignAutomationCard({
   const blockingIssue = preview?.blockingIssue ?? applyResult?.blockingIssue ?? null;
 
   return (
-    <div className="rounded-[1.05rem] border border-black/8 bg-[rgba(255,255,255,0.88)] px-4 py-4 shadow-[0_10px_24px_rgba(18,24,31,0.04)]">
+    <div className={quietWorkbenchCardClassName}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/38">
+          <p className="crm-detail-label text-[10px]">
             Auto Assign
           </p>
-          <h3 className="mt-1.5 text-[1rem] font-semibold tracking-tight text-black/84">
+          <h3 className="mt-1.5 text-[1rem] font-semibold tracking-tight text-[var(--foreground)]">
             自动分配
           </h3>
-          <p className="mt-2 max-w-3xl text-[13px] leading-6 text-black/56">
+          <p className="mt-2 max-w-3xl text-[13px] leading-6 text-[var(--color-sidebar-muted)]">
             只处理团队公海中的 PUBLIC 客户。先预览，再按团队规则批次执行，不把自动分配和手动指派揉成一套黑盒逻辑。
           </p>
-          <p className="mt-2 text-[12px] leading-5 text-black/46">
+          <p className="mt-2 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
             {preview?.ruleSummary ??
               (activeTeamAutoAssign?.teamId
                 ? `当前策略为 ${strategyLabel}，每次 apply 最多处理 ${batchSize} 位客户。`
                 : "请先切到一个具体团队，再预览或执行自动分配。")}
           </p>
           {blockingIssue ? (
-            <p className="mt-2 text-[12px] leading-5 text-[rgba(161,71,64,0.92)]">
+            <p className="mt-2 text-[12px] leading-5 text-[var(--color-danger)]">
               {blockingIssue.detail}
             </p>
           ) : null}
@@ -666,9 +684,9 @@ function AutoAssignAutomationCard({
 
       {preview ? (
         <div className="mt-4 grid gap-3 2xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-          <div className="space-y-3 rounded-[16px] border border-black/6 bg-[rgba(247,248,250,0.62)] px-3.5 py-3">
+          <div className={cn(quietWorkbenchInsetClassName, "space-y-3")}>
             <div>
-              <p className="text-[12px] font-medium text-black/68">规则摘要</p>
+              <p className="text-[12px] font-medium text-[var(--foreground)]">规则摘要</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <StatusBadge label={`batch ${batchSize}`} variant="neutral" />
                 {preview.unassignedReasonSummaries.length > 0 ? (
@@ -687,8 +705,8 @@ function AutoAssignAutomationCard({
 
             <div className="grid gap-3 md:grid-cols-2">
               <div>
-                <p className="text-[12px] font-medium text-black/68">候选 SALES</p>
-                <div className="mt-2 space-y-1.5 text-[12px] leading-5 text-black/56">
+                <p className="text-[12px] font-medium text-[var(--foreground)]">候选 SALES</p>
+                <div className="mt-2 space-y-1.5 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
                   {preview.availableSales.length > 0 ? (
                     preview.availableSales.slice(0, 6).map((sales) => (
                       <div key={sales.salesId}>
@@ -701,8 +719,8 @@ function AutoAssignAutomationCard({
                 </div>
               </div>
               <div>
-                <p className="text-[12px] font-medium text-black/68">分配分布</p>
-                <div className="mt-2 space-y-1.5 text-[12px] leading-5 text-black/56">
+                <p className="text-[12px] font-medium text-[var(--foreground)]">分配分布</p>
+                <div className="mt-2 space-y-1.5 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
                   {preview.ownerBuckets.length > 0 ? (
                     preview.ownerBuckets.map((bucket) => (
                       <div key={bucket.ownerId}>
@@ -717,16 +735,16 @@ function AutoAssignAutomationCard({
             </div>
           </div>
 
-          <div className="rounded-[16px] border border-black/6 bg-[rgba(247,248,250,0.62)] px-3.5 py-3">
-            <p className="text-[12px] font-medium text-black/68">样例结果</p>
-            <div className="mt-2 space-y-2.5 text-[12px] leading-5 text-black/56">
+          <div className={quietWorkbenchInsetClassName}>
+            <p className="text-[12px] font-medium text-[var(--foreground)]">样例结果</p>
+            <div className="mt-2 space-y-2.5 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
               {preview.sampleAssignments.length > 0 ? (
                 preview.sampleAssignments.map((item) => (
                   <div
                     key={item.customerId}
-                    className="rounded-[14px] border border-black/6 bg-white/78 px-3 py-2.5"
+                    className={quietWorkbenchSampleCardClassName}
                   >
-                    <div className="font-medium text-black/76">
+                    <div className="font-medium text-[var(--foreground)]">
                       {item.customerName} → {item.salesName}
                     </div>
                     <div>
@@ -744,15 +762,15 @@ function AutoAssignAutomationCard({
                 preview.sampleUnassigned.map((item) => (
                   <div
                     key={item.customerId}
-                    className="rounded-[14px] border border-black/6 bg-white/78 px-3 py-2.5"
+                    className={quietWorkbenchSampleCardClassName}
                   >
-                    <div className="font-medium text-black/76">{item.customerName}</div>
+                    <div className="font-medium text-[var(--foreground)]">{item.customerName}</div>
                     <div>{item.reasonLabel}</div>
                     <div>{item.reasonDetail}</div>
                   </div>
                 ))
               ) : (
-                <div className="rounded-[14px] border border-dashed border-black/8 px-3 py-3 text-black/46">
+                <div className="rounded-[0.95rem] border border-dashed border-[var(--color-border-soft)] px-3 py-3 text-[var(--color-sidebar-muted)]">
                   当前规则预览没有命中客户。
                 </div>
               )}
@@ -762,8 +780,8 @@ function AutoAssignAutomationCard({
       ) : null}
 
       {applyResult ? (
-        <div className="mt-4 rounded-[16px] border border-[rgba(58,105,143,0.12)] bg-[rgba(244,248,252,0.76)] px-3.5 py-3">
-          <p className="text-[12px] font-medium text-black/72">执行结果</p>
+        <div className={quietWorkbenchResultClassName}>
+          <p className="text-[12px] font-medium text-[var(--foreground)]">执行结果</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <StatusBadge label={`尝试 ${applyResult.counts.attempted}`} variant="neutral" />
             <StatusBadge label={`成功 ${applyResult.counts.success}`} variant="success" />
@@ -777,12 +795,12 @@ function AutoAssignAutomationCard({
             ) : null}
           </div>
           {applyResult.nextRoundRobinCursorUserId ? (
-            <div className="mt-2 text-[12px] leading-5 text-black/56">
+            <div className="mt-2 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
               当前轮转游标已续到 {applyResult.nextRoundRobinCursorUserId}。
             </div>
           ) : null}
           {applyResult.appliedSamples.length > 0 ? (
-            <div className="mt-2 text-[12px] leading-5 text-black/56">
+            <div className="mt-2 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
               已处理样例：
               {applyResult.appliedSamples.map((item) => item.customerName).join("、")}
             </div>
@@ -968,16 +986,16 @@ export function CustomerPublicPoolWorkbench({
       className="!gap-0"
       header={
         <div className={cn(sectionShellClassName, "mb-4")}>
-          <header className="rounded-[1rem] border border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(248,246,242,0.9))] px-4 py-3.5 shadow-[0_14px_30px_rgba(15,23,42,0.04)] md:px-5 md:py-4">
+          <header className="rounded-[1.1rem] border border-[var(--color-border-soft)] bg-[linear-gradient(180deg,var(--color-shell-surface-strong),var(--color-shell-surface-soft))] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)] backdrop-blur-[18px] md:px-5 md:py-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-black/38">
+                <p className="crm-detail-label text-[10px]">
                   Customer Ownership Lifecycle
                 </p>
-                <h1 className="mt-1.5 text-[1.28rem] font-semibold tracking-tight text-black/88 md:text-[1.46rem]">
+                <h1 className="mt-1.5 text-[1.28rem] font-semibold tracking-tight text-[var(--foreground)] md:text-[1.46rem]">
                   公海池
                 </h1>
-                <p className="mt-2 max-w-3xl text-[12.5px] leading-5 text-black/54 md:text-[13px]">
+                <p className="mt-2 max-w-3xl text-[12.5px] leading-5 text-[var(--color-sidebar-muted)] md:text-[13px]">
                   公海池属于 Customer 域，不是独立对象。这里承接认领、指派、回收和
                   ownership 审计，保持客户主工作流仍然收口在 `/customers`。
                 </p>
@@ -995,7 +1013,7 @@ export function CustomerPublicPoolWorkbench({
                       href={buildCustomerPublicPoolSettingsHref(
                         data.filters.teamId || data.actor.teamId || "",
                       )}
-                      className="inline-flex h-9 items-center rounded-[0.85rem] border border-black/8 bg-[rgba(247,248,250,0.84)] px-3.5 text-sm text-black/66 transition-colors hover:border-black/12 hover:bg-white hover:text-black/84"
+                      className={quietWorkbenchActionLinkClassName}
                     >
                       团队规则
                     </Link>
@@ -1003,7 +1021,7 @@ export function CustomerPublicPoolWorkbench({
                       href={buildCustomerPublicPoolReportsHref({
                         teamId: data.filters.teamId || data.actor.teamId || "",
                       })}
-                      className="inline-flex h-9 items-center rounded-[0.85rem] border border-black/8 bg-[rgba(247,248,250,0.84)] px-3.5 text-sm text-black/66 transition-colors hover:border-black/12 hover:bg-white hover:text-black/84"
+                      className={quietWorkbenchActionLinkClassName}
                     >
                       运营报表
                     </Link>
@@ -1011,7 +1029,7 @@ export function CustomerPublicPoolWorkbench({
                 ) : null}
                 <Link
                   href="/customers"
-                  className="inline-flex h-9 items-center rounded-[0.85rem] border border-black/8 bg-[rgba(247,248,250,0.84)] px-3.5 text-sm text-black/66 transition-colors hover:border-black/12 hover:bg-white hover:text-black/84"
+                  className={quietWorkbenchActionLinkClassName}
                 >
                   返回客户中心
                 </Link>
@@ -1038,7 +1056,7 @@ export function CustomerPublicPoolWorkbench({
                 density="strip"
                 className={
                   item.active
-                    ? "border-[rgba(15,23,42,0.14)] bg-white shadow-[0_10px_20px_rgba(18,24,31,0.045)]"
+                    ? "border-[rgba(122,154,255,0.2)] bg-[var(--color-shell-hover)] shadow-[var(--color-shell-shadow-md)]"
                     : undefined
                 }
               />
@@ -1053,7 +1071,7 @@ export function CustomerPublicPoolWorkbench({
             title={viewMeta.title}
             description={viewMeta.description}
             density="compact"
-            className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+            className="rounded-[1.05rem] border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]"
             actions={
               <div className="flex flex-wrap gap-1.5">
                 {data.filters.view !== "records" ? (
@@ -1076,24 +1094,24 @@ export function CustomerPublicPoolWorkbench({
               ) : null}
 
               <div className="grid gap-3 2xl:grid-cols-[minmax(0,1fr)_340px]">
-                <div className="rounded-[1rem] border border-black/8 bg-[rgba(247,248,250,0.72)] px-4 py-3.5 shadow-[0_6px_16px_rgba(18,24,31,0.03)]">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/38">
-                当前动作提示
-              </p>
-              <p className="mt-1.5 text-sm leading-6 text-black/72">{selectionHint}</p>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {data.filters.view !== "records" ? (
-                  <StatusBadge label={`可处理 ${actionableCount}`} variant="neutral" />
-                ) : null}
-                <StatusBadge label={`匹配 ${data.pagination.totalCount}`} variant="neutral" />
-                {selectedCount > 0 ? (
-                  <StatusBadge label={`已选择 ${selectedCount}`} variant="info" />
-                ) : null}
-                {data.filters.view === "pool" ? (
-                  <StatusBadge label={`锁定 ${data.summary.lockedCount}`} variant="warning" />
-                ) : null}
-              </div>
-            </div>
+                <div className={quietWorkbenchInsetClassName}>
+                  <p className="crm-detail-label text-[10px]">当前动作提示</p>
+                  <p className="mt-1.5 text-sm leading-6 text-[var(--foreground)]">
+                    {selectionHint}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {data.filters.view !== "records" ? (
+                      <StatusBadge label={`可处理 ${actionableCount}`} variant="neutral" />
+                    ) : null}
+                    <StatusBadge label={`匹配 ${data.pagination.totalCount}`} variant="neutral" />
+                    {selectedCount > 0 ? (
+                      <StatusBadge label={`已选择 ${selectedCount}`} variant="info" />
+                    ) : null}
+                    {data.filters.view === "pool" ? (
+                      <StatusBadge label={`锁定 ${data.summary.lockedCount}`} variant="warning" />
+                    ) : null}
+                  </div>
+                </div>
               </div>
             </div>
           </SectionCard>
@@ -1101,7 +1119,7 @@ export function CustomerPublicPoolWorkbench({
           <form
             action="/customers/public-pool"
             method="get"
-            className="grid gap-3 rounded-[1.05rem] border border-black/8 bg-[rgba(255,255,255,0.88)] px-4 py-4 shadow-[0_10px_24px_rgba(18,24,31,0.04)] md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6"
+            className="grid gap-3 rounded-[1.05rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-4 py-4 shadow-[var(--color-shell-shadow-sm)] md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6"
           >
             <input type="hidden" name="view" value={data.filters.view} />
             {data.filters.view === "pool" ? (
@@ -1318,14 +1336,23 @@ export function CustomerPublicPoolWorkbench({
 
                     return (
                       <div className="space-y-1">
-                        <Link href={detailHref} className="font-medium text-black/84 hover:text-black">
+                        <Link
+                          href={detailHref}
+                          className="font-medium text-[var(--foreground)] transition-colors hover:text-[var(--color-accent-strong)]"
+                        >
                           {row.name}
                         </Link>
-                        <div className="text-[12px] text-black/54">{row.phone}</div>
+                        <div className="text-[12px] text-[var(--color-sidebar-muted)]">
+                          {row.phone}
+                        </div>
                         <div className="flex flex-wrap gap-1">
-                          <span className="text-[12px] text-black/48">{row.region}</span>
+                          <span className="text-[12px] text-[var(--color-sidebar-muted)]">
+                            {row.region}
+                          </span>
                           {row.publicPoolTeam ? (
-                            <span className="text-[12px] text-black/48">· {row.publicPoolTeam.name}</span>
+                            <span className="text-[12px] text-[var(--color-sidebar-muted)]">
+                              · {row.publicPoolTeam.name}
+                            </span>
                           ) : null}
                         </div>
                       </div>
@@ -1337,21 +1364,20 @@ export function CustomerPublicPoolWorkbench({
                   title: "来源 / 标签",
                   render: (row) => (
                     <div className="space-y-1">
-                      <div className="text-[12px] text-black/72">
+                      <div className="text-[12px] text-[var(--foreground)]">
                         {row.latestLeadSource ?? "无来源记录"}
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {row.tags.length > 0 ? (
                           row.tags.map((tag) => (
-                            <span
-                              key={tag.id}
-                              className="rounded-full border border-black/8 px-2 py-0.5 text-[11px] text-black/58"
-                            >
+                            <span key={tag.id} className={quietWorkbenchTagClassName}>
                               {tag.name}
                             </span>
                           ))
                         ) : (
-                          <span className="text-[12px] text-black/44">无标签</span>
+                          <span className="text-[12px] text-[var(--color-sidebar-muted)]">
+                            无标签
+                          </span>
                         )}
                       </div>
                     </div>
@@ -1362,10 +1388,10 @@ export function CustomerPublicPoolWorkbench({
                   title: "最近有效跟进",
                   render: (row) => (
                     <div className="space-y-1">
-                      <div className="text-[12px] text-black/72">
+                      <div className="text-[12px] text-[var(--foreground)]">
                         {formatDateTimeValue(row.lastEffectiveFollowUpAt)}
                       </div>
-                      <div className="text-[12px] text-black/48">
+                      <div className="text-[12px] text-[var(--color-sidebar-muted)]">
                         {formatRelativeAge(row.lastEffectiveFollowUpAt)}
                       </div>
                     </div>
@@ -1376,13 +1402,13 @@ export function CustomerPublicPoolWorkbench({
                   title: "最近 Owner",
                   render: (row) => (
                     <div className="space-y-1">
-                      <div className="text-[12px] text-black/72">
+                      <div className="text-[12px] text-[var(--foreground)]">
                         {row.lastOwner ? row.lastOwner.name : "未承接"}
                       </div>
-                      <div className="text-[12px] text-black/48">
+                      <div className="text-[12px] text-[var(--color-sidebar-muted)]">
                         {row.lastOwner ? `@${row.lastOwner.username}` : "无最近 owner"}
                       </div>
-                      <div className="text-[12px] text-black/44">
+                      <div className="text-[12px] text-[var(--color-sidebar-muted)]">
                         {row.lastOwner?.teamName ?? "无团队记录"}
                       </div>
                     </div>
@@ -1393,10 +1419,10 @@ export function CustomerPublicPoolWorkbench({
                   title: "入池原因 / 时间",
                   render: (row) => (
                     <div className="space-y-1">
-                      <div className="text-[12px] text-black/72">
+                      <div className="text-[12px] text-[var(--foreground)]">
                         {row.publicPoolReasonLabel ?? "未记录原因"}
                       </div>
-                      <div className="text-[12px] text-black/48">
+                      <div className="text-[12px] text-[var(--color-sidebar-muted)]">
                         {formatDateTimeValue(row.publicPoolEnteredAt)}
                       </div>
                     </div>
@@ -1412,7 +1438,7 @@ export function CustomerPublicPoolWorkbench({
                       ) : (
                         <StatusBadge label="可认领" variant="success" />
                       )}
-                      <div className="text-[12px] text-black/48">
+                      <div className="text-[12px] text-[var(--color-sidebar-muted)]">
                         {formatProtectionWindow(row.claimLockedUntil)}
                       </div>
                     </div>
@@ -1422,7 +1448,7 @@ export function CustomerPublicPoolWorkbench({
                   key: "orders",
                   title: "订单 / 成交摘要",
                   render: (row) => (
-                    <div className="space-y-1 text-[12px] text-black/60">
+                    <div className="space-y-1 text-[12px] text-[var(--color-sidebar-muted)]">
                       <div>交易单 {row.orderSummary.tradeOrderCount}</div>
                       <div>销售单 {row.orderSummary.salesOrderCount}</div>
                       <div>{row.orderSummary.hasApprovedSalesOrder ? "有已审核订单" : "未成交"}</div>
@@ -1439,7 +1465,7 @@ export function CustomerPublicPoolWorkbench({
                       <div className="flex flex-col items-start gap-2">
                         <Link
                           href={detailHref}
-                          className="text-[12px] font-medium text-black/60 underline-offset-2 hover:text-black/84 hover:underline"
+                          className="text-[12px] font-medium text-[var(--color-sidebar-muted)] underline-offset-2 transition-colors hover:text-[var(--foreground)] hover:underline"
                         >
                           查看详情
                         </Link>
@@ -1462,7 +1488,7 @@ export function CustomerPublicPoolWorkbench({
                             认领
                           </button>
                         ) : (
-                          <span className="text-[12px] text-black/48">
+                          <span className="text-[12px] text-[var(--color-sidebar-muted)]">
                             {row.isLocked ? "保护中，暂不指派" : "通过上方批量栏指派"}
                           </span>
                         )}
@@ -1555,11 +1581,18 @@ export function CustomerPublicPoolWorkbench({
 
                       return (
                         <div className="space-y-1">
-                          <Link href={detailHref} className="font-medium text-black/84 hover:text-black">
+                          <Link
+                            href={detailHref}
+                            className="font-medium text-[var(--foreground)] transition-colors hover:text-[var(--color-accent-strong)]"
+                          >
                             {row.name}
                           </Link>
-                          <div className="text-[12px] text-black/54">{row.phone}</div>
-                          <div className="text-[12px] text-black/48">{row.region}</div>
+                          <div className="text-[12px] text-[var(--color-sidebar-muted)]">
+                            {row.phone}
+                          </div>
+                          <div className="text-[12px] text-[var(--color-sidebar-muted)]">
+                            {row.region}
+                          </div>
                         </div>
                       );
                     },
@@ -1568,7 +1601,7 @@ export function CustomerPublicPoolWorkbench({
                     key: "owner",
                     title: "当前 Owner",
                     render: (row) => (
-                      <div className="space-y-1 text-[12px] text-black/60">
+                      <div className="space-y-1 text-[12px] text-[var(--color-sidebar-muted)]">
                         <div>{row.owner?.name ?? "无 owner"}</div>
                         <div>{row.owner ? `@${row.owner.username}` : "-"}</div>
                         <div>{row.owner?.teamName ?? "无团队"}</div>
@@ -1580,10 +1613,10 @@ export function CustomerPublicPoolWorkbench({
                     title: "最近有效跟进",
                     render: (row) => (
                       <div className="space-y-1">
-                        <div className="text-[12px] text-black/72">
+                        <div className="text-[12px] text-[var(--foreground)]">
                           {formatDateTimeValue(row.lastEffectiveFollowUpAt)}
                         </div>
-                        <div className="text-[12px] text-black/48">
+                        <div className="text-[12px] text-[var(--color-sidebar-muted)]">
                           {formatRelativeAge(row.lastEffectiveFollowUpAt)}
                         </div>
                       </div>
@@ -1599,7 +1632,7 @@ export function CustomerPublicPoolWorkbench({
                         ) : (
                           <StatusBadge label="可回收" variant="neutral" />
                         )}
-                        <div className="text-[12px] text-black/48">
+                        <div className="text-[12px] text-[var(--color-sidebar-muted)]">
                           {formatProtectionWindow(row.claimLockedUntil)}
                         </div>
                       </div>
@@ -1609,7 +1642,7 @@ export function CustomerPublicPoolWorkbench({
                     key: "orders",
                     title: "订单 / 成交摘要",
                     render: (row) => (
-                      <div className="space-y-1 text-[12px] text-black/60">
+                      <div className="space-y-1 text-[12px] text-[var(--color-sidebar-muted)]">
                         <div>交易单 {row.orderSummary.tradeOrderCount}</div>
                         <div>销售单 {row.orderSummary.salesOrderCount}</div>
                         <div>{row.orderSummary.hasApprovedSalesOrder ? "有已审核订单" : "未成交"}</div>
@@ -1626,7 +1659,7 @@ export function CustomerPublicPoolWorkbench({
                         <div className="flex flex-col items-start gap-2">
                           <Link
                             href={detailHref}
-                            className="text-[12px] font-medium text-black/60 underline-offset-2 hover:text-black/84 hover:underline"
+                            className="text-[12px] font-medium text-[var(--color-sidebar-muted)] underline-offset-2 transition-colors hover:text-[var(--foreground)] hover:underline"
                           >
                             查看详情
                           </Link>
@@ -1675,7 +1708,9 @@ export function CustomerPublicPoolWorkbench({
                   key: "time",
                   title: "时间",
                   render: (row) => (
-                    <div className="text-[12px] text-black/72">{formatDateTime(row.createdAt)}</div>
+                    <div className="text-[12px] text-[var(--foreground)]">
+                      {formatDateTime(row.createdAt)}
+                    </div>
                   ),
                 },
                 {
@@ -1685,11 +1720,13 @@ export function CustomerPublicPoolWorkbench({
                     <div className="space-y-1">
                       <Link
                         href={buildCustomerPublicPoolCustomerDetailHref(row.customer.id, filters)}
-                        className="font-medium text-black/84 hover:text-black"
+                        className="font-medium text-[var(--foreground)] transition-colors hover:text-[var(--color-accent-strong)]"
                       >
                         {row.customer.name}
                       </Link>
-                      <div className="text-[12px] text-black/54">{row.customer.phone}</div>
+                      <div className="text-[12px] text-[var(--color-sidebar-muted)]">
+                        {row.customer.phone}
+                      </div>
                     </div>
                   ),
                 },
@@ -1699,7 +1736,7 @@ export function CustomerPublicPoolWorkbench({
                   render: (row) => (
                     <div className="space-y-1">
                       <StatusBadge label={row.reasonLabel} variant="info" />
-                      <div className="text-[12px] text-black/48">
+                      <div className="text-[12px] text-[var(--color-sidebar-muted)]">
                         {(row.fromOwnershipMode
                           ? getCustomerOwnershipModeLabel(row.fromOwnershipMode)
                           : "无状态") + " → " + getCustomerOwnershipModeLabel(row.toOwnershipMode)}
@@ -1711,7 +1748,7 @@ export function CustomerPublicPoolWorkbench({
                   key: "owners",
                   title: "归属变化",
                   render: (row) => (
-                    <div className="space-y-1 text-[12px] text-black/60">
+                    <div className="space-y-1 text-[12px] text-[var(--color-sidebar-muted)]">
                       <div>从：{row.fromOwner ? row.fromOwner.name : "公海 / 无 owner"}</div>
                       <div>到：{row.toOwner ? row.toOwner.name : "公海 / 无 owner"}</div>
                     </div>
@@ -1721,7 +1758,7 @@ export function CustomerPublicPoolWorkbench({
                   key: "actor",
                   title: "操作者",
                   render: (row) => (
-                    <div className="space-y-1 text-[12px] text-black/60">
+                    <div className="space-y-1 text-[12px] text-[var(--color-sidebar-muted)]">
                       <div>{row.actor?.name ?? "系统"}</div>
                       <div>{row.actor ? `@${row.actor.username}` : "-"}</div>
                     </div>
@@ -1731,7 +1768,7 @@ export function CustomerPublicPoolWorkbench({
                   key: "auditMeta",
                   title: "审计快照",
                   render: (row) => (
-                    <div className="space-y-1 text-[12px] text-black/56">
+                    <div className="space-y-1 text-[12px] text-[var(--color-sidebar-muted)]">
                       <div>团队：{row.team?.name ?? "无团队"}</div>
                       <div>有效跟进：{formatDateTimeValue(row.effectiveFollowUpAt)}</div>
                       <div>保护至：{formatProtectionWindow(row.claimLockedUntil)}</div>
@@ -1742,7 +1779,7 @@ export function CustomerPublicPoolWorkbench({
                   key: "note",
                   title: "备注",
                   render: (row) => (
-                    <div className="max-w-[16rem] text-[12px] leading-5 text-black/56">
+                    <div className="max-w-[16rem] text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
                       {row.note || "无备注"}
                     </div>
                   ),
@@ -1752,7 +1789,7 @@ export function CustomerPublicPoolWorkbench({
           </DataTableWrapper>
         ) : null}
 
-        <div className="mt-[14px] [&>div]:rounded-[16px] [&>div]:border-[rgba(15,23,42,0.08)] [&>div]:bg-[rgba(255,255,255,0.72)] [&>div]:px-[14px] [&>div]:py-[12px] [&>div]:shadow-none md:[&>div]:rounded-[18px] md:[&>div]:px-4 xl:[&>div]:rounded-[20px] xl:[&>div]:px-[18px] [&_.crm-toolbar-cluster]:gap-2 [&_a]:h-8 [&_a]:rounded-[10px] [&_a]:px-3 [&_a]:py-0 [&_a]:text-[13px] [&_a]:shadow-none [&_a]:hover:translate-y-0 [&_p]:text-[13px] [&_p]:leading-5">
+        <div className="mt-[14px] [&>div]:rounded-[16px] [&>div]:border-[var(--color-border-soft)] [&>div]:bg-[var(--color-panel-soft)] [&>div]:px-[14px] [&>div]:py-[12px] [&>div]:shadow-[var(--color-shell-shadow-sm)] md:[&>div]:rounded-[18px] md:[&>div]:px-4 xl:[&>div]:rounded-[20px] xl:[&>div]:px-[18px] [&_.crm-toolbar-cluster]:gap-2 [&_a]:h-8 [&_a]:rounded-[10px] [&_a]:border [&_a]:border-[var(--color-border-soft)] [&_a]:bg-[var(--color-shell-surface)] [&_a]:px-3 [&_a]:py-0 [&_a]:text-[13px] [&_a]:text-[var(--color-sidebar-muted)] [&_a]:shadow-none [&_a]:hover:translate-y-0 [&_a]:hover:border-[rgba(122,154,255,0.18)] [&_a]:hover:bg-[var(--color-shell-hover)] [&_a]:hover:text-[var(--foreground)] [&_p]:text-[13px] [&_p]:leading-5 [&_p]:text-[var(--color-sidebar-muted)]">
           <PaginationControls
             page={data.pagination.page}
             totalPages={data.pagination.totalPages}

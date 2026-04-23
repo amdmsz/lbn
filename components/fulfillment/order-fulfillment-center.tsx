@@ -6,7 +6,6 @@ import { MetricCard } from "@/components/shared/metric-card";
 import { PageHeader } from "@/components/shared/page-header";
 import { RecordTabs } from "@/components/shared/record-tabs";
 import { SectionCard } from "@/components/shared/section-card";
-import { StatusBadge } from "@/components/shared/status-badge";
 import { ShippingExportBatchesSection } from "@/components/shipping/shipping-export-batches-section";
 import { ShippingOperationsSection } from "@/components/shipping/shipping-operations-section";
 import { TradeOrdersSection } from "@/components/trade-orders/trade-orders-section";
@@ -68,7 +67,11 @@ function getShippingStageCount(shippingData: ShippingData) {
 }
 
 function getTradeOrdersFocusLabel(tradeOrdersData: TradeOrdersData) {
-  return tradeOrdersData.filters.focusView || tradeOrdersData.filters.statusView || "全部";
+  return (
+    tradeOrdersData.filters.focusView ||
+    tradeOrdersData.filters.statusView ||
+    "全部"
+  );
 }
 
 function getBatchFileViewLabel(fileView: string) {
@@ -140,7 +143,9 @@ export function OrderFulfillmentCenter({
   createShippingExportBatchAction: (formData: FormData) => Promise<void>;
   updateShippingAction: (formData: FormData) => Promise<void>;
   bulkUpdateShippingAction: (formData: FormData) => Promise<void>;
-  regenerateShippingExportBatchFileAction: (formData: FormData) => Promise<void>;
+  regenerateShippingExportBatchFileAction: (
+    formData: FormData,
+  ) => Promise<void>;
 }>) {
   const roleMeta = getRoleMeta(role);
   const accessibleViews = getOrderFulfillmentViewsForRole(role);
@@ -150,11 +155,15 @@ export function OrderFulfillmentCenter({
     href: buildOrderFulfillmentHref(view),
   }));
 
-  const isTradeOrdersView = activeView === "trade-orders" && tradeOrdersData !== null;
+  const isTradeOrdersView =
+    activeView === "trade-orders" && tradeOrdersData !== null;
   const isShippingView = activeView === "shipping" && shippingData !== null;
   const isBatchesView = activeView === "batches" && batchData !== null;
   const notice =
-    tradeOrdersData?.notice ?? shippingData?.notice ?? batchData?.notice ?? null;
+    tradeOrdersData?.notice ??
+    shippingData?.notice ??
+    batchData?.notice ??
+    null;
 
   const headerDescription = isTradeOrdersView
     ? "以 TradeOrder 为父单主叙事，统一承接审核、履约摘要和跨执行视图跳转，不回退到子单主视角。"
@@ -165,55 +174,43 @@ export function OrderFulfillmentCenter({
         : roleMeta.description;
 
   const headerMeta = isTradeOrdersView ? (
-    <>
-      <StatusBadge label={roleMeta.scope} variant="info" />
-      <StatusBadge
-        label={`当前视图 ${getOrderFulfillmentViewLabel(activeView)}`}
-        variant="success"
-      />
-      <StatusBadge
-        label={`当前焦点 ${getTradeOrdersFocusLabel(tradeOrdersData)}`}
-        variant="neutral"
-      />
-      <StatusBadge label="详情语义 parent-first" variant="info" />
-    </>
+    <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.06em] text-[var(--color-sidebar-muted)]">
+      <span>{roleMeta.scope}</span>
+      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+      <span>{getOrderFulfillmentViewLabel(activeView)}</span>
+      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+      <span>焦点 {getTradeOrdersFocusLabel(tradeOrdersData)}</span>
+      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+      <span>parent-first</span>
+    </div>
   ) : isShippingView ? (
-    <>
-      <StatusBadge label={roleMeta.scope} variant="info" />
-      <StatusBadge
-        label={`当前视图 ${getOrderFulfillmentViewLabel(activeView)}`}
-        variant="success"
-      />
-      <StatusBadge
-        label={`当前 supplier ${shippingData.activeSupplier?.supplier.name ?? "待选择"}`}
-        variant={shippingData.activeSupplier ? "neutral" : "warning"}
-      />
-      <StatusBadge
-        label={`stage ${shippingData.filters.stageView}`}
-        variant={shippingData.filters.stageView === "EXCEPTION" ? "warning" : "info"}
-      />
-    </>
+    <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.06em] text-[var(--color-sidebar-muted)]">
+      <span>{roleMeta.scope}</span>
+      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+      <span>{getOrderFulfillmentViewLabel(activeView)}</span>
+      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+      <span>
+        {shippingData.activeSupplier?.supplier.name ?? "待选择 supplier"}
+      </span>
+      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+      <span>stage {shippingData.filters.stageView}</span>
+    </div>
   ) : isBatchesView ? (
-    <>
-      <StatusBadge label={roleMeta.scope} variant="info" />
-      <StatusBadge
-        label={`当前视图 ${getOrderFulfillmentViewLabel(activeView)}`}
-        variant="success"
-      />
-      <StatusBadge
-        label={`文件过滤 ${getBatchFileViewLabel(batchData.filters.fileView)}`}
-        variant={batchData.filters.fileView ? "info" : "neutral"}
-      />
-      <StatusBadge label="定位 结果 / 审计" variant="neutral" />
-    </>
+    <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.06em] text-[var(--color-sidebar-muted)]">
+      <span>{roleMeta.scope}</span>
+      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+      <span>{getOrderFulfillmentViewLabel(activeView)}</span>
+      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+      <span>{getBatchFileViewLabel(batchData.filters.fileView)}</span>
+      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+      <span>结果 / 审计</span>
+    </div>
   ) : (
-    <>
-      <StatusBadge label={roleMeta.scope} variant="info" />
-      <StatusBadge
-        label={`当前视图 ${getOrderFulfillmentViewLabel(activeView)}`}
-        variant="success"
-      />
-    </>
+    <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.06em] text-[var(--color-sidebar-muted)]">
+      <span>{roleMeta.scope}</span>
+      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+      <span>{getOrderFulfillmentViewLabel(activeView)}</span>
+    </div>
   );
 
   const summary = isTradeOrdersView ? (
@@ -311,30 +308,21 @@ export function OrderFulfillmentCenter({
       title="父单总览工作台"
       description="先按焦点切换，再在当前父单池里完成审核、履约概览和跨执行视图跳转。默认态更利于扫描，次级动作后置。"
       density="compact"
-      className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+      className="rounded-[1.05rem] border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]"
       actions={
-        <div className="flex flex-wrap gap-1.5">
-          <StatusBadge
-            label={`待审核 ${tradeOrdersData.summary.pendingReviewCount}`}
-            variant={tradeOrdersData.summary.pendingReviewCount > 0 ? "warning" : "neutral"}
-          />
-          <StatusBadge
-            label={`已审核 ${tradeOrdersData.summary.approvedCount}`}
-            variant="success"
-          />
-          <StatusBadge
-            label={canAccessSalesOrderModule(role) ? "保留父单主叙事" : "只读总览视角"}
-            variant={canAccessSalesOrderModule(role) ? "info" : "neutral"}
-          />
-        </div>
+        <p className="text-[12px] text-[var(--color-sidebar-muted)]">
+          待审核 {tradeOrdersData.summary.pendingReviewCount} · 已审核{" "}
+          {tradeOrdersData.summary.approvedCount} ·{" "}
+          {canAccessSalesOrderModule(role) ? "保留父单主叙事" : "只读总览视角"}
+        </p>
       }
     >
       <div className="space-y-3">
         <RecordTabs activeValue={activeView} items={viewTabs} />
-        <div className="rounded-[0.95rem] border border-black/8 bg-[rgba(247,248,250,0.72)] px-3.5 py-3 text-sm leading-6 text-black/66">
+        <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3 text-sm leading-6 text-[var(--color-sidebar-muted)]">
           当前焦点为 {getTradeOrdersFocusLabel(tradeOrdersData)}，审核筛选为{" "}
-          {tradeOrdersData.filters.statusView || "全部"}。保留 parent-first 详情语义和
-          `/orders/[id]` 兼容跳转，只收口父单列表层级与动作优先级。
+          {tradeOrdersData.filters.statusView || "全部"}。保留 parent-first
+          详情语义和 `/orders/[id]` 兼容跳转，只收口父单列表层级与动作优先级。
         </div>
       </div>
     </SectionCard>
@@ -344,31 +332,24 @@ export function OrderFulfillmentCenter({
       title="发货执行工作面"
       description="先按阶段切换，再进入具体 supplier 工作池。批量动作和明细表保持在同一条执行语境里。"
       density="compact"
-      className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+      className="rounded-[1.05rem] border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]"
       actions={
-        <div className="flex flex-wrap gap-1.5">
-          <StatusBadge label={`可见视图 ${accessibleViews.length}`} variant="neutral" />
-          <StatusBadge
-            label={
-              shippingData.activeBatch
-                ? `当前批次 ${shippingData.activeBatch.exportNo}`
-                : "当前未锁定批次"
-            }
-            variant={shippingData.activeBatch ? "success" : "neutral"}
-          />
-          <StatusBadge
-            label={canAccessSalesOrderModule(role) ? "保留父单叙事" : "仅执行视角"}
-            variant={canAccessSalesOrderModule(role) ? "info" : "warning"}
-          />
-        </div>
+        <p className="text-[12px] text-[var(--color-sidebar-muted)]">
+          可见视图 {accessibleViews.length} ·{" "}
+          {shippingData.activeBatch
+            ? `当前批次 ${shippingData.activeBatch.exportNo}`
+            : "当前未锁定批次"}{" "}
+          · {canAccessSalesOrderModule(role) ? "保留父单叙事" : "仅执行视角"}
+        </p>
       }
     >
       <div className="space-y-3">
         <RecordTabs activeValue={activeView} items={viewTabs} />
-        <div className="rounded-[0.95rem] border border-black/8 bg-[rgba(247,248,250,0.72)] px-3.5 py-3 text-sm leading-6 text-black/66">
+        <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3 text-sm leading-6 text-[var(--color-sidebar-muted)]">
           当前聚焦阶段 {shippingData.filters.stageView}，supplier 为{" "}
-          {shippingData.activeSupplier?.supplier.name ?? "待选择"}。保留 tab、stageView、
-          supplierViewId 等导航参数语义不变，只收口执行层级与信息密度。
+          {shippingData.activeSupplier?.supplier.name ?? "待选择"}。保留
+          tab、stageView、 supplierViewId
+          等导航参数语义不变，只收口执行层级与信息密度。
         </div>
       </div>
     </SectionCard>
@@ -378,33 +359,22 @@ export function OrderFulfillmentCenter({
       title="冻结结果与审计回看"
       description="统一回看冻结快照、文件状态和跨视图追溯入口，但不把批次页重新做成执行主入口。"
       density="compact"
-      className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+      className="rounded-[1.05rem] border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]"
       actions={
-        <div className="flex flex-wrap gap-1.5">
-          <StatusBadge
-            label={`当前过滤 ${getBatchFileViewLabel(batchData.filters.fileView)}`}
-            variant={batchData.filters.fileView ? "info" : "neutral"}
-          />
-          <StatusBadge
-            label={`文件就绪 ${getBatchReadyCount(batchData)}`}
-            variant={getBatchReadyCount(batchData) > 0 ? "success" : "neutral"}
-          />
-          <StatusBadge
-            label={`待补文件 ${getBatchPendingCount(batchData)}`}
-            variant={getBatchPendingCount(batchData) > 0 ? "warning" : "neutral"}
-          />
-          <StatusBadge
-            label={`历史批次 ${getBatchLegacyCount(batchData)}`}
-            variant="neutral"
-          />
-        </div>
+        <p className="text-[12px] text-[var(--color-sidebar-muted)]">
+          当前过滤 {getBatchFileViewLabel(batchData.filters.fileView)} ·
+          文件就绪 {getBatchReadyCount(batchData)} · 待补文件{" "}
+          {getBatchPendingCount(batchData)}
+          {" · "}历史批次 {getBatchLegacyCount(batchData)}
+        </p>
       }
     >
       <div className="space-y-3">
         <RecordTabs activeValue={activeView} items={viewTabs} />
-        <div className="rounded-[0.95rem] border border-black/8 bg-[rgba(247,248,250,0.72)] px-3.5 py-3 text-sm leading-6 text-black/66">
-          当前文件过滤为 {getBatchFileViewLabel(batchData.filters.fileView)}。保留
-          `/fulfillment?tab=batches` 的结果 / 审计定位，以及回到发货执行、回看来源父单的既有导航语义。
+        <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3 text-sm leading-6 text-[var(--color-sidebar-muted)]">
+          当前文件过滤为 {getBatchFileViewLabel(batchData.filters.fileView)}
+          。保留 `/fulfillment?tab=batches` 的结果 /
+          审计定位，以及回到发货执行、回看来源父单的既有导航语义。
         </div>
       </div>
     </SectionCard>
@@ -443,7 +413,9 @@ export function OrderFulfillmentCenter({
       summary={summary}
       toolbar={toolbar}
     >
-      {notice ? <ActionBanner tone={notice.tone}>{notice.message}</ActionBanner> : null}
+      {notice ? (
+        <ActionBanner tone={notice.tone}>{notice.message}</ActionBanner>
+      ) : null}
 
       {activeView === "trade-orders" && tradeOrdersData ? (
         <TradeOrdersSection
@@ -495,7 +467,9 @@ export function OrderFulfillmentCenter({
           backHref={buildOrderFulfillmentHref(
             canAccessShippingModule(role) ? "shipping" : "trade-orders",
           )}
-          backLabel={canAccessShippingModule(role) ? "返回发货执行" : "返回交易单"}
+          backLabel={
+            canAccessShippingModule(role) ? "返回发货执行" : "返回交易单"
+          }
         />
       ) : null}
     </WorkbenchLayout>

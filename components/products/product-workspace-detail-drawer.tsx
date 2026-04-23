@@ -8,6 +8,8 @@ import { MasterDataRecycleDialog } from "@/components/products/master-data-recyc
 import { ProductFormDrawer } from "@/components/products/product-form-drawer";
 import {
   ProductExecutionSummarySection,
+  productWorkbenchQuietActionClassName,
+  productWorkbenchSoftActionClassName,
   ProductSkuWorkspaceSection,
   ProductWorkbenchHero,
 } from "@/components/products/product-workbench-sections";
@@ -143,20 +145,32 @@ export function ProductWorkspaceDetailDrawer({
   onClose: () => void;
   upsertProductAction: (formData: FormData) => Promise<ProductActionResult>;
   toggleProductAction: (formData: FormData) => Promise<ProductActionResult>;
-  moveProductToRecycleBinAction: (formData: FormData) => Promise<ProductActionResult>;
+  moveProductToRecycleBinAction: (
+    formData: FormData,
+  ) => Promise<ProductActionResult>;
   upsertProductSkuAction: (formData: FormData) => Promise<ProductActionResult>;
   toggleProductSkuAction: (formData: FormData) => Promise<ProductActionResult>;
-  moveProductSkuToRecycleBinAction: (formData: FormData) => Promise<ProductActionResult>;
-  createInlineSupplierAction: (formData: FormData) => Promise<InlineSupplierResult>;
+  moveProductSkuToRecycleBinAction: (
+    formData: FormData,
+  ) => Promise<ProductActionResult>;
+  createInlineSupplierAction: (
+    formData: FormData,
+  ) => Promise<InlineSupplierResult>;
 }>) {
   const router = useRouter();
   const [notice, setNotice] = useState<ProductActionResult | null>(null);
   const [productDrawerOpen, setProductDrawerOpen] = useState(false);
-  const [skuDrawerMode, setSkuDrawerMode] = useState<"create" | "edit" | null>(null);
-  const [skuCreateMode, setSkuCreateMode] = useState<"quick" | "advanced">("quick");
+  const [skuDrawerMode, setSkuDrawerMode] = useState<"create" | "edit" | null>(
+    null,
+  );
+  const [skuCreateMode, setSkuCreateMode] = useState<"quick" | "advanced">(
+    "quick",
+  );
   const [editingSkuId, setEditingSkuId] = useState<string | null>(null);
   const [templateSkuId, setTemplateSkuId] = useState<string | null>(null);
-  const [recycleTarget, setRecycleTarget] = useState<RecycleTarget | null>(null);
+  const [recycleTarget, setRecycleTarget] = useState<RecycleTarget | null>(
+    null,
+  );
   const [recycleReason, setRecycleReason] =
     useState<MasterDataRecycleReasonCode>("mistaken_creation");
   const [pendingAction, startActionTransition] = useTransition();
@@ -166,21 +180,23 @@ export function ProductWorkspaceDetailDrawer({
   }
 
   const currentProduct = product;
-  const focusSku =
-    focusSkuId ? currentProduct.skus.find((sku) => sku.id === focusSkuId) ?? null : null;
-  const editingSku =
-    editingSkuId ? currentProduct.skus.find((sku) => sku.id === editingSkuId) ?? null : null;
-  const activeSkuCount = currentProduct.skus.filter((sku) => sku.enabled).length;
+  const focusSku = focusSkuId
+    ? (currentProduct.skus.find((sku) => sku.id === focusSkuId) ?? null)
+    : null;
+  const editingSku = editingSkuId
+    ? (currentProduct.skus.find((sku) => sku.id === editingSkuId) ?? null)
+    : null;
+  const activeSkuCount = currentProduct.skus.filter(
+    (sku) => sku.enabled,
+  ).length;
   const quickCreateButtonLabel =
     currentProduct.skus.length > 0 ? "复制为新规格" : "新增首个规格";
   const templateSourceSku = templateSkuId
-    ? currentProduct.skus.find((sku) => sku.id === templateSkuId) ?? null
-    : focusSku ?? currentProduct.skus[0] ?? null;
+    ? (currentProduct.skus.find((sku) => sku.id === templateSkuId) ?? null)
+    : (focusSku ?? currentProduct.skus[0] ?? null);
 
   function mapSkuToDraft(
-    source:
-      | ProductWorkspaceDetail["skus"][number]
-      | null,
+    source: ProductWorkspaceDetail["skus"][number] | null,
   ): ProductSkuDraft | null {
     if (!source) {
       return null;
@@ -199,15 +215,10 @@ export function ProductWorkspaceDetailDrawer({
 
   function openQuickSkuCreate(sourceSkuId?: string | null) {
     setEditingSkuId(null);
-    setTemplateSkuId(sourceSkuId ?? focusSku?.id ?? currentProduct.skus[0]?.id ?? null);
+    setTemplateSkuId(
+      sourceSkuId ?? focusSku?.id ?? currentProduct.skus[0]?.id ?? null,
+    );
     setSkuCreateMode("quick");
-    setSkuDrawerMode("create");
-  }
-
-  function openAdvancedSkuCreate(sourceSkuId?: string | null) {
-    setEditingSkuId(null);
-    setTemplateSkuId(sourceSkuId ?? focusSku?.id ?? currentProduct.skus[0]?.id ?? null);
-    setSkuCreateMode("advanced");
     setSkuDrawerMode("create");
   }
 
@@ -270,7 +281,10 @@ export function ProductWorkspaceDetailDrawer({
       setNotice(result);
       closeRecycleDialog();
 
-      if (result.recycleStatus === "created" || result.recycleStatus === "already_in_recycle_bin") {
+      if (
+        result.recycleStatus === "created" ||
+        result.recycleStatus === "already_in_recycle_bin"
+      ) {
         if (recycleTarget.kind === "product") {
           onClose();
           return;
@@ -293,49 +307,48 @@ export function ProductWorkspaceDetailDrawer({
           type="button"
           aria-label="关闭商品详情抽屉"
           onClick={onClose}
-          className="absolute inset-0 bg-[rgba(15,23,42,0.22)] backdrop-blur-[1.5px]"
+          className="absolute inset-0 bg-[rgba(15,23,42,0.18)] backdrop-blur-[2px]"
         />
 
-        <aside className="absolute inset-y-0 right-0 flex w-full max-w-[60rem] flex-col border-l border-black/8 bg-[rgba(255,255,255,0.988)] shadow-[-18px_0_40px_rgba(15,23,42,0.1)]">
-          <div className="flex items-start justify-between gap-4 border-b border-black/6 px-5 py-3.5 sm:px-6">
+        <aside className="absolute inset-y-0 right-0 flex w-full max-w-[56rem] flex-col border-l border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[-18px_0_40px_rgba(15,23,42,0.08)]">
+          <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-5 py-3 sm:px-6">
             <div className="min-w-0 space-y-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/38">
-                  商品中心
-                </p>
-                <span className="rounded-full border border-black/8 bg-black/[0.03] px-2.5 py-1 text-[11px] font-medium text-black/52">
-                  右侧工作台
-                </span>
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
+                <span>商品</span>
+                <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+                <span>详情</span>
               </div>
-              <h3 className="truncate text-[1.02rem] font-semibold text-black/86">
+              <h3 className="truncate text-[1rem] font-semibold text-[var(--foreground)]">
                 {currentProduct.name}
               </h3>
-              <p className="text-[13px] leading-5 text-black/56">
+              <p className="text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">
                 {focusSku
                   ? `当前聚焦规格：${focusSku.skuName}`
-                  : "围绕同一商品查看母档、规格目录和次级执行摘要。"}
+                  : "围绕产品名与销售规格做轻维护。"}
               </p>
             </div>
 
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-black/8 bg-white/92 text-black/50 transition-colors hover:bg-black/[0.03] hover:text-black/72"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] text-[var(--color-sidebar-muted)] transition-colors hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
 
           {notice ? (
-            <div className="border-b border-black/6 px-5 py-3 sm:px-6">
-              <ActionBanner tone={notice.status === "success" ? "success" : "danger"}>
+            <div className="border-b border-[var(--color-border-soft)] px-5 py-3 sm:px-6">
+              <ActionBanner
+                tone={notice.status === "success" ? "success" : "danger"}
+              >
                 {notice.message}
               </ActionBanner>
             </div>
           ) : null}
 
           <div className="flex-1 overflow-y-auto px-5 py-4 sm:px-6">
-            <div className="space-y-3.5">
+            <div className="space-y-3">
               <ProductWorkbenchHero
                 product={currentProduct}
                 dictionaries={dictionaries}
@@ -343,47 +356,40 @@ export function ProductWorkspaceDetailDrawer({
                 activeSkuCount={activeSkuCount}
                 primaryActions={
                   canManage ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => openQuickSkuCreate()}
-                        className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
-                      >
-                        {quickCreateButtonLabel}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openAdvancedSkuCreate()}
-                        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-                      >
-                        高级新增 SKU
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setProductDrawerOpen(true)}
-                        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-                      >
-                        编辑商品
-                      </button>
-                    </>
+                    <button
+                      type="button"
+                      onClick={() => openQuickSkuCreate()}
+                      className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
+                    >
+                      添加规格
+                    </button>
                   ) : null
                 }
                 utilityActions={
                   <>
+                    {canManage ? (
+                      <button
+                        type="button"
+                        onClick={() => setProductDrawerOpen(true)}
+                        className={productWorkbenchSoftActionClassName}
+                      >
+                        编辑商品
+                      </button>
+                    ) : null}
                     <Link
                       href={`/products/${currentProduct.id}`}
-                      className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                      className={productWorkbenchQuietActionClassName}
                     >
-                      兼容详情页
+                      页面详情
                     </Link>
                     {canManage ? (
                       <button
                         type="button"
                         onClick={handleToggleProduct}
                         disabled={pendingAction}
-                        className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84 disabled:cursor-not-allowed disabled:opacity-50"
+                        className={productWorkbenchQuietActionClassName}
                       >
-                        {currentProduct.enabled ? "停用商品" : "启用商品"}
+                        {currentProduct.enabled ? "停用" : "启用"}
                       </button>
                     ) : null}
                     {canManage ? (
@@ -398,9 +404,11 @@ export function ProductWorkspaceDetailDrawer({
                             guard: currentProduct.recycleGuard,
                           })
                         }
-                        className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84"
+                        className={productWorkbenchQuietActionClassName}
                       >
-                        {currentProduct.recycleGuard.canMoveToRecycleBin ? "移入回收站" : "查看引用关系"}
+                        {currentProduct.recycleGuard.canMoveToRecycleBin
+                          ? "回收"
+                          : "查看引用"}
                       </button>
                     ) : null}
                   </>
@@ -416,8 +424,10 @@ export function ProductWorkspaceDetailDrawer({
                     {buildSkuDetailHref && !isFocused ? (
                       <button
                         type="button"
-                        onClick={() => router.replace(buildSkuDetailHref(sku.id))}
-                        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                        onClick={() =>
+                          router.replace(buildSkuDetailHref(sku.id))
+                        }
+                        className={productWorkbenchSoftActionClassName}
                       >
                         查看规格
                       </button>
@@ -426,7 +436,7 @@ export function ProductWorkspaceDetailDrawer({
                       <button
                         type="button"
                         onClick={() => openQuickSkuCreate(sku.id)}
-                        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                        className={productWorkbenchQuietActionClassName}
                       >
                         复制为新规格
                       </button>
@@ -440,7 +450,7 @@ export function ProductWorkspaceDetailDrawer({
                           setSkuCreateMode("advanced");
                           setSkuDrawerMode("edit");
                         }}
-                        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                        className={productWorkbenchQuietActionClassName}
                       >
                         编辑规格
                       </button>
@@ -450,7 +460,7 @@ export function ProductWorkspaceDetailDrawer({
                         type="button"
                         onClick={() => handleToggleSku(sku.id)}
                         disabled={pendingAction}
-                        className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84 disabled:cursor-not-allowed disabled:opacity-50"
+                        className={productWorkbenchQuietActionClassName}
                       >
                         {sku.enabled ? "停用" : "启用"}
                       </button>
@@ -468,9 +478,11 @@ export function ProductWorkspaceDetailDrawer({
                             skuId: sku.id,
                           })
                         }
-                        className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84"
+                        className={productWorkbenchQuietActionClassName}
                       >
-                        {sku.recycleGuard.canMoveToRecycleBin ? "移入回收站" : "查看引用"}
+                        {sku.recycleGuard.canMoveToRecycleBin
+                          ? "回收"
+                          : "查看引用"}
                       </button>
                     ) : null}
                   </>
@@ -538,8 +550,14 @@ export function ProductWorkspaceDetailDrawer({
         productId={currentProduct.id}
         productName={currentProduct.name}
         supplierName={currentProduct.supplier?.name ?? null}
-        sku={skuDrawerMode === "edit" && editingSku ? mapSkuToDraft(editingSku) : null}
-        templateSku={skuDrawerMode === "create" ? mapSkuToDraft(templateSourceSku) : null}
+        sku={
+          skuDrawerMode === "edit" && editingSku
+            ? mapSkuToDraft(editingSku)
+            : null
+        }
+        templateSku={
+          skuDrawerMode === "create" ? mapSkuToDraft(templateSourceSku) : null
+        }
         redirectTo={currentHref}
         createMode={skuCreateMode}
         upsertAction={upsertProductSkuAction}
@@ -562,7 +580,9 @@ export function ProductWorkspaceDetailDrawer({
         objectName={recycleTarget?.name ?? ""}
         objectTypeLabel={recycleTarget?.kind === "sku" ? "SKU" : "商品"}
         secondaryLabel={recycleTarget?.secondaryLabel ?? ""}
-        domainLabel={recycleTarget?.kind === "sku" ? "商品中心 / SKU" : "商品中心 / 商品"}
+        domainLabel={
+          recycleTarget?.kind === "sku" ? "商品中心 / SKU" : "商品中心 / 商品"
+        }
         updatedAt={recycleTarget?.updatedAt ?? new Date()}
         guard={
           recycleTarget?.guard ?? {

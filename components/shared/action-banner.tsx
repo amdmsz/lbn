@@ -16,6 +16,8 @@ export function ActionBanner({
 }>) {
   return (
     <div
+      role={tone === "danger" ? "alert" : "status"}
+      aria-live={tone === "danger" ? "assertive" : "polite"}
       className={cn(
         "crm-banner",
         density === "compact" ? "text-[13px]" : "",

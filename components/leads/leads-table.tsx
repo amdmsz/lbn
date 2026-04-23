@@ -3,7 +3,13 @@
 import type { LeadSource, LeadStatus } from "@prisma/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState, useTransition } from "react";
+import {
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type ReactNode,
+} from "react";
 import {
   batchAssignLeadsAction,
   batchMoveLeadsToRecycleBinAction,
@@ -39,6 +45,7 @@ import type {
   LeadSalesOption,
 } from "@/lib/leads/queries";
 import { scheduleSmartScroll } from "@/lib/smart-scroll";
+import { cn } from "@/lib/utils";
 
 type LeadListItem = {
   id: string;
@@ -125,7 +132,10 @@ function normalizeDate(value: Date | string) {
   return value instanceof Date ? value : new Date(value);
 }
 
-function buildLeadHref(filters: LeadListFilters, overrides: Partial<LeadListFilters> = {}) {
+function buildLeadHref(
+  filters: LeadListFilters,
+  overrides: Partial<LeadListFilters> = {},
+) {
   const nextFilters = {
     ...filters,
     ...overrides,
@@ -184,15 +194,6 @@ function buildLeadHref(filters: LeadListFilters, overrides: Partial<LeadListFilt
   return query ? `/leads?${query}` : "/leads";
 }
 
-function buildRangeLabel(pagination: PaginationData) {
-  const start =
-    pagination.totalCount === 0
-      ? 0
-      : (pagination.page - 1) * pagination.pageSize + 1;
-  const end = Math.min(pagination.page * pagination.pageSize, pagination.totalCount);
-  return `本页显示 ${start}-${end}`;
-}
-
 function FilterHiddenInputs({
   filters,
   includePage = false,
@@ -209,7 +210,9 @@ function FilterHiddenInputs({
 
   return (
     <>
-      {nextFilters.name ? <input type="hidden" name="name" value={nextFilters.name} /> : null}
+      {nextFilters.name ? (
+        <input type="hidden" name="name" value={nextFilters.name} />
+      ) : null}
       {nextFilters.phone ? (
         <input type="hidden" name="phone" value={nextFilters.phone} />
       ) : null}
@@ -247,11 +250,152 @@ function FilterHiddenInputs({
       {nextFilters.createdTo ? (
         <input type="hidden" name="createdTo" value={nextFilters.createdTo} />
       ) : null}
-      <input type="hidden" name="pageSize" value={String(nextFilters.pageSize)} />
+      <input
+        type="hidden"
+        name="pageSize"
+        value={String(nextFilters.pageSize)}
+      />
       {includePage ? (
         <input type="hidden" name="page" value={String(nextFilters.page)} />
       ) : null}
     </>
+  );
+}
+
+function SnapshotCard({
+  label,
+  value,
+  note,
+  children,
+  footer,
+  tone = "default",
+}: Readonly<{
+  label: string;
+  value?: ReactNode;
+  note?: string;
+  children?: ReactNode;
+  footer?: ReactNode;
+  tone?: "default" | "info" | "success" | "danger";
+}>) {
+  return (
+    <div
+      className={cn(
+        "rounded-[1rem] border px-3.5 py-3 shadow-[var(--color-shell-shadow-sm)]",
+        tone === "info" &&
+          "border-[rgba(111,141,255,0.16)] bg-[rgba(111,141,255,0.06)]",
+        tone === "success" &&
+          "border-[rgba(87,212,176,0.16)] bg-[rgba(87,212,176,0.06)]",
+        tone === "danger" &&
+          "border-[rgba(209,91,118,0.16)] bg-[rgba(209,91,118,0.06)]",
+        tone === "default" &&
+          "border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)]",
+      )}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
+        {label}
+      </p>
+      {typeof value !== "undefined" ? (
+        <div className="mt-2 text-[1.28rem] font-semibold tracking-[-0.04em] text-[var(--foreground)]">
+          {value}
+        </div>
+      ) : null}
+      {note ? (
+        <p className="mt-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+          {note}
+        </p>
+      ) : null}
+      {children ? <div className="mt-2.5 space-y-1.5">{children}</div> : null}
+      {footer ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">{footer}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function SelectionStateBanner({
+  title,
+  description,
+  action,
+  tone = "default",
+}: Readonly<{
+  title: string;
+  description: string;
+  action?: ReactNode;
+  tone?: "default" | "info" | "danger";
+}>) {
+  return (
+    <div
+      className={cn(
+        "rounded-[0.98rem] border px-3.5 py-3",
+        tone === "info" &&
+          "border-[var(--color-accent-soft)] bg-[var(--color-accent)]/8",
+        tone === "danger" &&
+          "border-[rgba(209,91,118,0.16)] bg-[rgba(209,91,118,0.06)]",
+        tone === "default" &&
+          "border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)]",
+      )}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-0.5">
+          <p className="text-[13px] font-medium text-[var(--foreground)]">
+            {title}
+          </p>
+          <p className="text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+            {description}
+          </p>
+        </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+function LeadWorkbenchDialog({
+  title,
+  description,
+  onClose,
+  children,
+  footer,
+}: Readonly<{
+  title: string;
+  description: string;
+  onClose: () => void;
+  children: ReactNode;
+  footer: ReactNode;
+}>) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(8,11,18,0.32)] px-4 py-6 backdrop-blur-[10px]">
+      <div className="w-full max-w-[36rem] overflow-hidden rounded-[1.4rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-lg)]">
+        <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-5 py-4">
+          <div className="space-y-1.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-sidebar-muted)]">
+              批量操作
+            </p>
+            <div>
+              <h3 className="text-[1.08rem] font-semibold tracking-[-0.03em] text-[var(--foreground)]">
+                {title}
+              </h3>
+              <p className="mt-1 text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
+                {description}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="crm-button crm-button-ghost min-h-0 rounded-full px-3 py-2 text-sm"
+          >
+            关闭
+          </button>
+        </div>
+
+        <div className="space-y-4 px-5 py-4">{children}</div>
+
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-5 py-4">
+          {footer}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -271,92 +415,117 @@ function AssignmentSummaryStrip({
   importBatchId: string;
 }>) {
   const countLabelPrefix = importBatchId ? "本批" : "当前";
+  const ownerPreview = assignedByOwner.slice(0, 3);
+  const ownerOverflowCount = Math.max(
+    assignedByOwner.length - ownerPreview.length,
+    0,
+  );
+  const hasFeedback = feedbackState.status !== "idle" && feedbackState.message;
+  const feedbackSummary =
+    feedbackState.summary.totalCount > 0
+      ? `成功 ${feedbackState.summary.successCount} · 跳过 ${feedbackState.summary.skippedCount} · 阻断 ${feedbackState.summary.blockedCount}`
+      : "完成一次分配后会在这里保留最近结果。";
 
   return (
-    <SectionCard
-      title="分配结果摘要"
-      eyebrow="Result Snapshot"
-      density="compact"
-      description="这里保留本批或当前上下文的分配结果摘要，不再默认常驻整列已分配明细。"
-      actions={
-        <Link
-          href={assignedViewHref}
-          scroll={false}
-          className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-        >
-          查看已分配结果
-        </Link>
-      }
-    >
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,180px)_minmax(0,180px)_minmax(0,1fr)_minmax(0,1.1fr)]">
-        <div className="rounded-[0.95rem] border border-black/7 bg-[rgba(255,255,255,0.9)] px-3.5 py-3 shadow-[0_6px_16px_rgba(18,24,31,0.03)]">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">
-            {countLabelPrefix}未分配
-          </p>
-          <p className="mt-2 text-[1.25rem] font-semibold tracking-tight text-black/86">
-            {unassignedCount}
-          </p>
-          <p className="mt-1 text-[12px] text-black/50">待处理主工作区剩余数量</p>
-        </div>
-
-        <div className="rounded-[0.95rem] border border-black/7 bg-[rgba(255,255,255,0.9)] px-3.5 py-3 shadow-[0_6px_16px_rgba(18,24,31,0.03)]">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">
-            {countLabelPrefix}已分配
-          </p>
-          <p className="mt-2 text-[1.25rem] font-semibold tracking-tight text-black/86">
-            {assignedCount}
-          </p>
-          <p className="mt-1 text-[12px] text-black/50">结果回看与轻量修正入口</p>
-        </div>
-
-        <div className="rounded-[0.95rem] border border-black/7 bg-[rgba(255,255,255,0.9)] px-3.5 py-3 shadow-[0_6px_16px_rgba(18,24,31,0.03)]">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">
-            分配到各员工
-          </p>
-          {assignedByOwner.length > 0 ? (
-            <div className="mt-2 space-y-1.5">
-              {assignedByOwner.map((item) => (
-                <div
-                  key={item.ownerId}
-                  className="flex items-center justify-between gap-3 text-[13px] text-black/68"
-                >
-                  <span className="truncate">
-                    {item.ownerName}
-                    <span className="ml-1 text-black/44">@{item.ownerUsername}</span>
-                  </span>
-                  <span className="shrink-0 font-semibold text-[var(--color-accent)]">
-                    +{item.count}
-                  </span>
-                </div>
-              ))}
+    <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
+      <SnapshotCard
+        label={`${countLabelPrefix}未分配`}
+        value={unassignedCount}
+        note="当前待处理主工作区"
+      />
+      <SnapshotCard
+        label={`${countLabelPrefix}已分配`}
+        value={assignedCount}
+        note="结果回看与轻量修正入口"
+        tone="info"
+      />
+      <SnapshotCard
+        label="分配到各员工"
+        note={
+          ownerOverflowCount > 0
+            ? `其余 ${ownerOverflowCount} 位员工已折叠`
+            : assignedByOwner.length === 0
+              ? "当前还没有已分配结果"
+              : undefined
+        }
+      >
+        {ownerPreview.length > 0 ? (
+          ownerPreview.map((item) => (
+            <div
+              key={item.ownerId}
+              className="flex items-center justify-between gap-3 text-[12.5px] text-[var(--color-sidebar-muted)]"
+            >
+              <span className="truncate">
+                {item.ownerName}
+                <span className="ml-1 text-[11px]">@{item.ownerUsername}</span>
+              </span>
+              <span className="shrink-0 font-semibold text-[var(--foreground)]">
+                +{item.count}
+              </span>
             </div>
-          ) : (
-            <p className="mt-2 text-[13px] leading-5 text-black/52">
-              当前上下文下还没有已分配结果。
-            </p>
-          )}
-        </div>
-
-        <div className="rounded-[0.95rem] border border-black/7 bg-[rgba(255,255,255,0.9)] px-3.5 py-3 shadow-[0_6px_16px_rgba(18,24,31,0.03)]">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">
-            最近一次分配反馈
+          ))
+        ) : (
+          <p className="text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+            分配后会在这里显示员工分布。
           </p>
-          {feedbackState.status !== "idle" && feedbackState.message ? (
-            <LeadBatchActionNoticeBanner
-              state={feedbackState}
-              successLabel="成功分配"
-              entityCountLabel="条线索"
-              countUnitLabel="条"
-              className="mt-2"
-            />
-          ) : (
-            <p className="mt-2 text-[13px] leading-5 text-black/52">
-              完成一次分配后，这里会立即反馈最新结果摘要。
-            </p>
-          )}
-        </div>
-      </div>
-    </SectionCard>
+        )}
+      </SnapshotCard>
+      <SnapshotCard
+        label="最近结果"
+        note={
+          hasFeedback ? feedbackState.message : "这里保留最近一次批量分配反馈。"
+        }
+        tone={
+          hasFeedback
+            ? feedbackState.status === "success"
+              ? "success"
+              : "danger"
+            : "default"
+        }
+        footer={
+          <Link
+            href={assignedViewHref}
+            scroll={false}
+            className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+          >
+            查看已分配结果
+          </Link>
+        }
+      >
+        <p className="text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+          {feedbackSummary}
+        </p>
+      </SnapshotCard>
+    </div>
+  );
+}
+
+function renderLeadTagPreview(item: LeadListItem) {
+  if (item.leadTags.length === 0) {
+    return (
+      <span className="text-[12px] text-[var(--color-sidebar-muted)]">-</span>
+    );
+  }
+
+  const visibleTags = item.leadTags.slice(0, 2);
+  const hiddenCount = item.leadTags.length - visibleTags.length;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {visibleTags.map((record) => (
+        <TagPill
+          key={record.id}
+          label={record.tag.name}
+          color={record.tag.color}
+          className="shadow-none"
+        />
+      ))}
+      {hiddenCount > 0 ? (
+        <span className="inline-flex items-center rounded-full border border-[var(--crm-badge-neutral-border)] bg-[var(--crm-badge-neutral-bg)] px-2 py-[0.28rem] text-[10px] font-medium text-[var(--crm-badge-neutral-text)]">
+          +{hiddenCount}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -393,27 +562,37 @@ function AssignedReviewTable({
               <tr key={item.id}>
                 <td>
                   <div className="space-y-0.5">
-                    <div className="font-medium text-black/82">
+                    <div className="font-medium text-[var(--foreground)]">
                       {item.name?.trim() || "未填写姓名"}
                     </div>
-                    <div className="text-xs tabular-nums text-black/48">{item.phone}</div>
+                    <div className="text-xs tabular-nums text-[var(--color-sidebar-muted)]">
+                      {item.phone}
+                    </div>
                   </div>
                 </td>
                 <td>
                   {item.owner ? (
                     <div>
-                      <div>{item.owner.name}</div>
-                      <div className="text-xs text-black/45">@{item.owner.username}</div>
+                      <div className="text-[var(--foreground)]">
+                        {item.owner.name}
+                      </div>
+                      <div className="text-xs text-[var(--color-sidebar-muted)]">
+                        @{item.owner.username}
+                      </div>
                     </div>
                   ) : (
-                    "未分配"
+                    <span className="text-[var(--color-sidebar-muted)]">
+                      未分配
+                    </span>
                   )}
                 </td>
-                <td>{item.interestedProduct?.trim() || "暂无最近意向"}</td>
+                <td className="text-[13px] text-[var(--color-sidebar-muted)]">
+                  {item.interestedProduct?.trim() || "暂无最近意向"}
+                </td>
                 <td>
                   <LeadStatusBadge status={item.status} />
                 </td>
-                <td className="whitespace-nowrap text-sm text-black/58">
+                <td className="whitespace-nowrap text-sm text-[var(--color-sidebar-muted)]">
                   {formatDateTime(normalizeDate(assignedAt))}
                 </td>
                 <td>
@@ -475,12 +654,10 @@ export function LeadsTable({
   const [assignNotice, setAssignNotice] = useState<LeadBatchActionNoticeState>(
     initialAssignBatchNoticeState,
   );
-  const [singleRecycleNotice, setSingleRecycleNotice] = useState<SingleRecycleNoticeState>(
-    initialSingleRecycleNoticeState,
-  );
-  const [batchRecycleNotice, setBatchRecycleNotice] = useState<LeadBatchActionNoticeState>(
-    initialRecycleBatchNoticeState,
-  );
+  const [singleRecycleNotice, setSingleRecycleNotice] =
+    useState<SingleRecycleNoticeState>(initialSingleRecycleNoticeState);
+  const [batchRecycleNotice, setBatchRecycleNotice] =
+    useState<LeadBatchActionNoticeState>(initialRecycleBatchNoticeState);
   const [recycleDialogState, setRecycleDialogState] =
     useState<RecycleDialogState>(null);
   const [recycleReason, setRecycleReason] =
@@ -586,7 +763,10 @@ export function LeadsTable({
   }
 
   function handleRecycleConfirm() {
-    if (!recycleDialogState || !recycleDialogState.recycleGuard.canMoveToRecycleBin) {
+    if (
+      !recycleDialogState ||
+      !recycleDialogState.recycleGuard.canMoveToRecycleBin
+    ) {
       return;
     }
 
@@ -615,7 +795,10 @@ export function LeadsTable({
     const formData = new FormData(event.currentTarget);
 
     startTransition(async () => {
-      const nextState = await batchAssignLeadsAction(initialAssignBatchNoticeState, formData);
+      const nextState = await batchAssignLeadsAction(
+        initialAssignBatchNoticeState,
+        formData,
+      );
 
       setAssignNotice(nextState);
 
@@ -638,7 +821,10 @@ export function LeadsTable({
       setBatchRecycleNotice(nextState);
       closeBatchRecycleDialog();
 
-      if (nextState.summary.successCount > 0 || nextState.summary.skippedCount > 0) {
+      if (
+        nextState.summary.successCount > 0 ||
+        nextState.summary.skippedCount > 0
+      ) {
         resetSelection();
         router.refresh();
       }
@@ -648,17 +834,19 @@ export function LeadsTable({
   const pageSizeControl = (
     <form
       onSubmit={(event) => event.preventDefault()}
-      className="flex items-center gap-2 text-sm text-black/60"
+      className="flex items-center gap-2 rounded-[10px] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-1.5 text-[12px] text-[var(--color-sidebar-muted)]"
     >
-      <span>每页显示</span>
+      <span>每页</span>
       <select
         name="pageSize"
         defaultValue={String(filters.pageSize)}
-        className="crm-select min-h-0 w-[88px] px-3 py-2 text-sm"
+        className="crm-select min-h-0 h-7 w-[78px] border-0 bg-transparent px-0 py-0 pr-5 text-[12px] text-[var(--foreground)] shadow-none"
         onChange={(event) => {
           const nextPageSize = Number(event.currentTarget.value);
           const nextHref = buildLeadHref(filters, {
-            pageSize: Number.isFinite(nextPageSize) ? nextPageSize : filters.pageSize,
+            pageSize: Number.isFinite(nextPageSize)
+              ? nextPageSize
+              : filters.pageSize,
             page: 1,
           });
 
@@ -701,6 +889,7 @@ export function LeadsTable({
       {singleRecycleNotice.message ? (
         <ActionBanner
           tone={singleRecycleNotice.status === "success" ? "success" : "danger"}
+          className="rounded-[0.95rem] shadow-none"
         >
           <p>{singleRecycleNotice.message}</p>
         </ActionBanner>
@@ -711,17 +900,18 @@ export function LeadsTable({
         successLabel="成功移入回收站"
         entityCountLabel="条线索"
         countUnitLabel="条"
+        className="rounded-[0.95rem] shadow-none"
       />
 
       {isAssignedView ? (
         <SectionCard
           title="已分配结果"
-          eyebrow="Review Workspace"
           density="compact"
           anchorId={scrollTargetId}
-          description="已分配结果只在需要时进入回看，不再默认占据主工作台宽度。"
+          description="只在需要时进入回看，不再占据默认主工作台。"
+          className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
           actions={
-            <div className="flex flex-wrap items-center gap-2 text-sm text-black/56">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--color-sidebar-muted)]">
               <span>共 {assigned.totalCount} 条</span>
               <Link
                 href={unassignedViewHref}
@@ -760,32 +950,31 @@ export function LeadsTable({
       ) : (
         <SectionCard
           title="未分配"
-          eyebrow="Primary Workspace"
           density="compact"
           anchorId={scrollTargetId}
-          className="border-[var(--color-accent)]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(246,249,255,0.9))] shadow-[0_14px_30px_rgba(77,143,230,0.08)]"
-          description="这里是待分配线索处理主工作台，优先承接本次导入、今日导入和全部未分配线索。"
+          className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+          description="优先承接本次导入、今日导入与全部未分配线索。"
           actions={
-            <div className="flex flex-wrap items-center gap-2 text-sm text-black/55">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--color-sidebar-muted)]">
               <span>共 {unassigned.totalCount} 条</span>
               {canAssign ? (
                 <>
                   <button
-                  type="button"
-                  disabled={selectedCount === 0 || salesOptions.length === 0}
-                  onClick={openAssignDialog}
-                  className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
-                >
-                  批量分配
-                </button>
-                <button
-                  type="button"
-                  disabled={selectedCount === 0}
-                  onClick={openBatchRecycleDialog}
-                  className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-                >
-                  批量移入回收站
-                </button>
+                    type="button"
+                    disabled={selectedCount === 0 || salesOptions.length === 0}
+                    onClick={openAssignDialog}
+                    className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
+                  >
+                    批量分配
+                  </button>
+                  <button
+                    type="button"
+                    disabled={selectedCount === 0}
+                    onClick={openBatchRecycleDialog}
+                    className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                  >
+                    批量移入回收站
+                  </button>
                 </>
               ) : null}
             </div>
@@ -793,43 +982,49 @@ export function LeadsTable({
         >
           <div className="space-y-4">
             {selectionMode === "filtered" ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-[var(--color-accent)]/16 bg-[var(--color-accent)]/5 px-3.5 py-3 text-sm text-black/72">
-                <span>
-                  已选择当前筛选结果全部 {unassigned.totalCount} 条未分配线索，可直接执行跨页批量分配或批量移入回收站。
-                </span>
-                <button
-                  type="button"
-                  onClick={resetSelection}
-                  className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-                >
-                  取消跨页选择
-                </button>
-              </div>
+              <SelectionStateBanner
+                title={`当前筛选结果 ${unassigned.totalCount} 条已选`}
+                description="批量动作会直接应用到整个筛选结果。"
+                tone="info"
+                action={
+                  <button
+                    type="button"
+                    onClick={resetSelection}
+                    className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                  >
+                    取消跨页选择
+                  </button>
+                }
+              />
             ) : null}
 
             {selectionMode === "manual" &&
             allChecked &&
             canAssign &&
             unassigned.totalCount > unassigned.items.length ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-black/8 bg-black/[0.025] px-3.5 py-3 text-sm text-black/68">
-                <span>已选择当前页全部 {unassigned.items.length} 条未分配线索。</span>
-                {canSelectFiltered ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectionMode("filtered");
-                      setSelectedIds([]);
-                    }}
-                    className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-                  >
-                    选择当前筛选结果全部 {unassigned.totalCount} 条
-                  </button>
-                ) : filteredSelectionExceedsLimit ? (
-                  <span>
-                    当前筛选结果共 {unassigned.totalCount} 条，超过 {MAX_BATCH_ASSIGNMENT_SIZE} 条上限，请先缩小范围。
-                  </span>
-                ) : null}
-              </div>
+              <SelectionStateBanner
+                title={`已选择当前页全部 ${unassigned.items.length} 条`}
+                description={
+                  canSelectFiltered
+                    ? `可继续扩展到全部 ${unassigned.totalCount} 条筛选结果。`
+                    : `当前筛选结果共 ${unassigned.totalCount} 条，超过单次 ${MAX_BATCH_ASSIGNMENT_SIZE} 条上限，请先缩小范围。`
+                }
+                tone={filteredSelectionExceedsLimit ? "danger" : "default"}
+                action={
+                  canSelectFiltered ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectionMode("filtered");
+                        setSelectedIds([]);
+                      }}
+                      className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                    >
+                      选择全部 {unassigned.totalCount} 条
+                    </button>
+                  ) : null
+                }
+              />
             ) : null}
 
             {unassigned.items.length === 0 ? (
@@ -881,7 +1076,8 @@ export function LeadsTable({
                               <input
                                 type="checkbox"
                                 checked={
-                                  selectionMode === "filtered" || selectedIdSet.has(item.id)
+                                  selectionMode === "filtered" ||
+                                  selectedIdSet.has(item.id)
                                 }
                                 onChange={() => toggleLead(item.id)}
                                 aria-label={`选择线索 ${item.name ?? item.phone}`}
@@ -891,35 +1087,25 @@ export function LeadsTable({
                           ) : null}
                           <td>
                             <div className="space-y-0.5">
-                              <div className="font-medium text-black/82">
+                              <div className="font-medium text-[var(--foreground)]">
                                 {item.name?.trim() || "未填写姓名"}
                               </div>
-                              <div className="text-xs tabular-nums text-black/48">
+                              <div className="text-xs tabular-nums text-[var(--color-sidebar-muted)]">
                                 {item.phone}
                               </div>
                             </div>
                           </td>
-                          <td>{getLeadSourceLabel(item.source)}</td>
-                          <td>{item.interestedProduct?.trim() || "暂无最近意向"}</td>
+                          <td className="text-[13px] text-[var(--color-sidebar-muted)]">
+                            {getLeadSourceLabel(item.source)}
+                          </td>
+                          <td className="text-[13px] text-[var(--color-sidebar-muted)]">
+                            {item.interestedProduct?.trim() || "暂无最近意向"}
+                          </td>
                           <td>
                             <LeadStatusBadge status={item.status} />
                           </td>
-                          <td>
-                            {item.leadTags.length > 0 ? (
-                              <div className="flex flex-wrap gap-1.5">
-                                {item.leadTags.map((record) => (
-                                  <TagPill
-                                    key={record.id}
-                                    label={record.tag.name}
-                                    color={record.tag.color}
-                                  />
-                                ))}
-                              </div>
-                            ) : (
-                              "-"
-                            )}
-                          </td>
-                          <td className="whitespace-nowrap text-sm text-black/58">
+                          <td>{renderLeadTagPreview(item)}</td>
+                          <td className="whitespace-nowrap text-sm text-[var(--color-sidebar-muted)]">
                             {formatDateTime(normalizeDate(item.createdAt))}
                           </td>
                           <td>
@@ -952,9 +1138,11 @@ export function LeadsTable({
                   <PaginationControls
                     page={unassigned.pagination.page}
                     totalPages={unassigned.pagination.totalPages}
-                    summary={`${buildRangeLabel(unassigned.pagination)}，共 ${unassigned.pagination.totalCount} 条未分配线索`}
-                    buildHref={(pageNumber) => buildLeadHref(filters, { page: pageNumber })}
-                    leftSlot={pageSizeControl}
+                    summary={`当前第 ${unassigned.pagination.page} / ${unassigned.pagination.totalPages} 页，共 ${unassigned.pagination.totalCount} 条未分配线索`}
+                    buildHref={(pageNumber) =>
+                      buildLeadHref(filters, { page: pageNumber })
+                    }
+                    rightSlot={pageSizeControl}
                     scrollTargetId={scrollTargetId}
                   />
                 ) : null}
@@ -965,175 +1153,200 @@ export function LeadsTable({
       )}
 
       {dialogOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8">
-          <div className="crm-card w-full max-w-lg p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-semibold text-black/85">批量分配线索</h3>
-                <p className="mt-2 text-sm leading-6 text-black/60">
-                  {selectionMode === "filtered"
-                    ? `本次将按当前未分配筛选结果批量分配 ${unassigned.totalCount} 条线索，并同步客户承接关系。`
-                    : `本次将分配已选中的 ${selectedIds.length} 条线索，并同步客户承接关系。`}
-                </p>
-              </div>
+        <LeadWorkbenchDialog
+          title="批量分配线索"
+          description={
+            selectionMode === "filtered"
+              ? `按当前未分配筛选结果分配 ${unassigned.totalCount} 条线索，并同步客户承接关系。`
+              : `本次将分配已选中的 ${selectedIds.length} 条线索，并同步客户承接关系。`
+          }
+          onClose={() => setDialogOpen(false)}
+          footer={
+            <>
               <button
                 type="button"
                 onClick={() => setDialogOpen(false)}
-                className="crm-button crm-button-ghost min-h-0 px-2 py-2 text-sm"
+                className="crm-button crm-button-secondary"
               >
-                关闭
+                取消
               </button>
-            </div>
-
-            <form ref={formRef} onSubmit={handleAssignSubmit} className="mt-5 space-y-3.5">
-              <input type="hidden" name="selectionMode" value={selectionMode} />
-
-              {selectionMode === "filtered" ? (
-                <FilterHiddenInputs
-                  filters={filters}
-                  includePage
-                  overrides={{
-                    view: "unassigned",
-                    assignedOwnerId: "",
-                  }}
-                />
-              ) : (
-                selectedIds.map((leadId) => (
-                  <input key={leadId} type="hidden" name="leadIds" value={leadId} />
-                ))
-              )}
-
-              <label className="block space-y-2">
-                <span className="crm-label">目标销售</span>
-                <select name="toUserId" defaultValue="" className="crm-select" required>
-                  <option value="" disabled>
-                    请选择销售
-                  </option>
-                  {salesOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block space-y-2">
-                <span className="crm-label">分配备注</span>
-                <textarea
-                  name="note"
-                  rows={4}
-                  maxLength={500}
-                  className="crm-textarea"
-                  placeholder="可选，用于记录分配原因或补充说明"
-                />
-              </label>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setDialogOpen(false)}
-                  className="crm-button crm-button-secondary"
-                >
-                  取消
-                </button>
-                <button
-                  type="submit"
-                  disabled={pending || selectedCount === 0}
-                  className="crm-button crm-button-primary"
-                >
-                  {pending ? "分配中..." : "确认分配"}
-                </button>
-              </div>
-            </form>
+              <button
+                type="submit"
+                form="lead-batch-assign-form"
+                disabled={pending || selectedCount === 0}
+                className="crm-button crm-button-primary"
+              >
+                {pending ? "分配中..." : "确认分配"}
+              </button>
+            </>
+          }
+        >
+          <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
+              当前范围
+            </p>
+            <p className="mt-1 text-[13px] font-medium text-[var(--foreground)]">
+              {selectionMode === "filtered"
+                ? `全部筛选结果 ${unassigned.totalCount} 条`
+                : `已选线索 ${selectedIds.length} 条`}
+            </p>
+            <p className="mt-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+              分配后会沿用当前承接链路进入客户侧继续跟进。
+            </p>
           </div>
-        </div>
+
+          <form
+            id="lead-batch-assign-form"
+            ref={formRef}
+            onSubmit={handleAssignSubmit}
+            className="space-y-3.5"
+          >
+            <input type="hidden" name="selectionMode" value={selectionMode} />
+
+            {selectionMode === "filtered" ? (
+              <FilterHiddenInputs
+                filters={filters}
+                includePage
+                overrides={{
+                  view: "unassigned",
+                  assignedOwnerId: "",
+                }}
+              />
+            ) : (
+              selectedIds.map((leadId) => (
+                <input
+                  key={leadId}
+                  type="hidden"
+                  name="leadIds"
+                  value={leadId}
+                />
+              ))
+            )}
+
+            <label className="block space-y-2">
+              <span className="crm-label">目标销售</span>
+              <select
+                name="toUserId"
+                defaultValue=""
+                className="crm-select"
+                required
+              >
+                <option value="" disabled>
+                  请选择销售
+                </option>
+                {salesOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block space-y-2">
+              <span className="crm-label">分配备注</span>
+              <textarea
+                name="note"
+                rows={4}
+                maxLength={500}
+                className="crm-textarea"
+                placeholder="可选，用于记录分配原因或补充说明"
+              />
+            </label>
+          </form>
+        </LeadWorkbenchDialog>
       ) : null}
 
       {batchRecycleDialogOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8">
-          <div className="crm-card w-full max-w-lg p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-semibold text-black/85">批量移入回收站</h3>
-                <p className="mt-2 text-sm leading-6 text-black/60">
-                  {selectionMode === "filtered"
-                    ? `本次将按当前未分配筛选结果检查 ${unassigned.totalCount} 条线索，并逐条复用现有回收站 guard。`
-                    : `本次将检查已选中的 ${selectedCount} 条未分配线索，并逐条复用现有回收站 guard。`}
-                </p>
-              </div>
+        <LeadWorkbenchDialog
+          title="批量移入回收站"
+          description={
+            selectionMode === "filtered"
+              ? `会检查当前筛选结果 ${unassigned.totalCount} 条线索，并逐条复用现有回收站 guard。`
+              : `会检查已选中的 ${selectedCount} 条未分配线索，并逐条复用现有回收站 guard。`
+          }
+          onClose={closeBatchRecycleDialog}
+          footer={
+            <>
               <button
                 type="button"
                 onClick={closeBatchRecycleDialog}
-                className="crm-button crm-button-ghost min-h-0 px-2 py-2 text-sm"
+                className="crm-button crm-button-secondary"
               >
-                关闭
+                取消
               </button>
-            </div>
-
-            <form onSubmit={handleBatchRecycleSubmit} className="mt-5 space-y-3.5">
-              <input type="hidden" name="selectionMode" value={selectionMode} />
-
-              {selectionMode === "filtered" ? (
-                <FilterHiddenInputs
-                  filters={filters}
-                  includePage
-                  overrides={{
-                    view: "unassigned",
-                    assignedOwnerId: "",
-                  }}
-                />
-              ) : (
-                selectedIds.map((leadId) => (
-                  <input key={leadId} type="hidden" name="leadIds" value={leadId} />
-                ))
-              )}
-
-              <label className="block space-y-2">
-                <span className="crm-label">移入原因</span>
-                <select
-                  name="reasonCode"
-                  value={batchRecycleReason}
-                  onChange={(event) =>
-                    setBatchRecycleReason(event.currentTarget.value as LeadRecycleReasonCode)
-                  }
-                  className="crm-select"
-                >
-                  {LEAD_RECYCLE_REASON_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.74)] p-4">
-                <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
-                  结果说明
-                </p>
-                <p className="mt-2 text-[13px] leading-5 text-black/56">
-                  执行结果会明确区分成功移入回收站、已在回收站和被阻断；被阻断线索会继续保留在当前未分配工作台。
-                </p>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={closeBatchRecycleDialog}
-                  className="crm-button crm-button-secondary"
-                >
-                  取消
-                </button>
-                <button
-                  type="submit"
-                  disabled={batchRecyclePending || selectedCount === 0}
-                  className="crm-button crm-button-primary"
-                >
-                  {batchRecyclePending ? "移入中..." : "确认移入回收站"}
-                </button>
-              </div>
-            </form>
+              <button
+                type="submit"
+                form="lead-batch-recycle-form"
+                disabled={batchRecyclePending || selectedCount === 0}
+                className="crm-button crm-button-primary"
+              >
+                {batchRecyclePending ? "移入中..." : "确认移入回收站"}
+              </button>
+            </>
+          }
+        >
+          <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
+              当前范围
+            </p>
+            <p className="mt-1 text-[13px] font-medium text-[var(--foreground)]">
+              {selectionMode === "filtered"
+                ? `全部筛选结果 ${unassigned.totalCount} 条`
+                : `已选线索 ${selectedCount} 条`}
+            </p>
+            <p className="mt-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+              成功、已在回收站与被阻断会分别统计；被阻断对象会继续留在当前工作台。
+            </p>
           </div>
-        </div>
+
+          <form
+            id="lead-batch-recycle-form"
+            onSubmit={handleBatchRecycleSubmit}
+            className="space-y-3.5"
+          >
+            <input type="hidden" name="selectionMode" value={selectionMode} />
+
+            {selectionMode === "filtered" ? (
+              <FilterHiddenInputs
+                filters={filters}
+                includePage
+                overrides={{
+                  view: "unassigned",
+                  assignedOwnerId: "",
+                }}
+              />
+            ) : (
+              selectedIds.map((leadId) => (
+                <input
+                  key={leadId}
+                  type="hidden"
+                  name="leadIds"
+                  value={leadId}
+                />
+              ))
+            )}
+
+            <label className="block space-y-2">
+              <span className="crm-label">移入原因</span>
+              <select
+                name="reasonCode"
+                value={batchRecycleReason}
+                onChange={(event) =>
+                  setBatchRecycleReason(
+                    event.currentTarget.value as LeadRecycleReasonCode,
+                  )
+                }
+                className="crm-select"
+              >
+                {LEAD_RECYCLE_REASON_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </form>
+        </LeadWorkbenchDialog>
       ) : null}
 
       <LeadRecycleDialog

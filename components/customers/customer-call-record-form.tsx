@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createCustomerCallRecordAction } from "@/app/(dashboard)/customers/[id]/call-actions";
 import {
@@ -45,12 +45,13 @@ function HelperChoiceButton({
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "inline-flex h-9 items-center rounded-full border px-3.5 text-[12px] font-medium transition-colors",
+        "crm-motion-pill inline-flex h-8.5 items-center rounded-full border px-3 text-[11px] font-medium tracking-[0.01em] transition-[border-color,background-color,color,box-shadow,transform] duration-150",
         active
-          ? "border-[rgba(154,97,51,0.2)] bg-[rgba(154,97,51,0.09)] text-[rgba(84,55,31,0.96)]"
-          : "border-black/8 bg-white/92 text-black/60",
+          ? "border-[rgba(79,125,247,0.14)] bg-[rgba(79,125,247,0.06)] text-[var(--foreground)] shadow-[inset_0_1px_0_rgba(255,255,255,0.52)]"
+          : "border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] text-[var(--color-sidebar-muted)] hover:border-[rgba(79,125,247,0.1)] hover:bg-[var(--color-shell-surface)] hover:text-[var(--foreground)]",
       )}
     >
       {label}
@@ -68,6 +69,7 @@ export function CustomerCallRecordForm({
   variant = "full",
   defaultDurationSeconds = 0,
   defaultCallTime = null,
+  defaultResult = "",
   remarkAutoFocus = false,
   onCancel,
   onLater,
@@ -81,6 +83,7 @@ export function CustomerCallRecordForm({
   variant?: "full" | "quick-note" | "mobile-followup";
   defaultDurationSeconds?: number;
   defaultCallTime?: Date | string | null;
+  defaultResult?: string;
   remarkAutoFocus?: boolean;
   onCancel?: () => void;
   onLater?: () => void;
@@ -98,11 +101,22 @@ export function CustomerCallRecordForm({
     "UNKNOWN",
   );
   const [wechatState, setWechatState] = useState<MobileCallWechatState>("NONE");
-  const [selectedResult, setSelectedResult] = useState("");
+  const resolvedDefaultResult = resultOptions.some(
+    (option) => option.value === defaultResult,
+  )
+    ? defaultResult
+    : "";
+  const [selectedResult, setSelectedResult] = useState(resolvedDefaultResult);
   const mobileResultOptions =
     variant === "mobile-followup"
       ? filterMobileCallResultOptions(resultOptions, connectedState, wechatState)
       : resultOptions;
+
+  useEffect(() => {
+    setSelectedResult(resolvedDefaultResult);
+    setConnectedState(inferConnectedStateFromResultCode(resolvedDefaultResult));
+    setWechatState(inferWechatStateFromResultCode(resolvedDefaultResult));
+  }, [resolvedDefaultResult]);
 
   function syncMobileResult(
     nextConnectedState: MobileCallConnectedState,
@@ -135,9 +149,9 @@ export function CustomerCallRecordForm({
 
       if (nextState.status === "success") {
         formRef.current?.reset();
-        setConnectedState("UNKNOWN");
-        setWechatState("NONE");
-        setSelectedResult("");
+        setConnectedState(inferConnectedStateFromResultCode(resolvedDefaultResult));
+        setWechatState(inferWechatStateFromResultCode(resolvedDefaultResult));
+        setSelectedResult(resolvedDefaultResult);
         onSuccess?.();
         router.refresh();
       }
@@ -145,7 +159,7 @@ export function CustomerCallRecordForm({
   }
 
   return (
-    <form ref={formRef} onSubmit={handleSubmit} className={cn("space-y-4", className)}>
+    <form ref={formRef} onSubmit={handleSubmit} className={cn("space-y-3.5", className)}>
       <input type="hidden" name="customerId" value={customerId} />
 
       {variant === "quick-note" ? (
@@ -157,26 +171,25 @@ export function CustomerCallRecordForm({
             value={String(defaultDurationSeconds)}
           />
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-2">
-              <span className="crm-label">通话结果</span>
-              <select name="result" defaultValue="" required className="crm-select">
-                <option value="" disabled>
-                  请选择通话结果
+          <label className="block space-y-1.5">
+            <span className="crm-label">通话结果</span>
+            <select
+              name="result"
+              value={selectedResult}
+              onChange={(event) => setSelectedResult(event.target.value)}
+              required
+              className="crm-select"
+            >
+              <option value="" disabled>
+                请选择通话结果
+              </option>
+              {resultOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
-                {resultOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="space-y-2">
-              <span className="crm-label">下次跟进时间</span>
-              <input type="datetime-local" name="nextFollowUpAt" className="crm-input" />
-            </label>
-          </div>
+              ))}
+            </select>
+          </label>
         </>
       ) : variant === "mobile-followup" ? (
         <>
@@ -188,12 +201,12 @@ export function CustomerCallRecordForm({
           />
 
           <div className="space-y-4">
-            <div className="rounded-[18px] border border-black/7 bg-[rgba(247,248,250,0.74)] px-4 py-3 text-[12px] leading-5 text-black/54">
-              拨号时间按发起拨打时刻记录，通话时长默认记为 0 秒。本页只做回页补记，不伪造真实接通或挂机状态。
+            <div className="rounded-[16px] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-2.5 text-[11px] leading-5 text-[var(--color-sidebar-muted)]">
+              按发起拨打时间记录。这里只补记结果与备注。
             </div>
 
             <div className="space-y-2.5">
-              <span className="crm-label">是否接通</span>
+              <span className="crm-label">接通状态</span>
               <div className="flex flex-wrap gap-2">
                 <HelperChoiceButton
                   label="未标记"
@@ -218,7 +231,7 @@ export function CustomerCallRecordForm({
             </div>
 
             <div className="space-y-2.5">
-              <span className="crm-label">是否加微</span>
+              <span className="crm-label">加微状态</span>
               <div className="flex flex-wrap gap-2">
                 <HelperChoiceButton
                   label="未提及"
@@ -307,7 +320,13 @@ export function CustomerCallRecordForm({
 
           <label className="space-y-2">
             <span className="crm-label">通话结果</span>
-            <select name="result" defaultValue="" required className="crm-select">
+            <select
+              name="result"
+              value={selectedResult}
+              onChange={(event) => setSelectedResult(event.target.value)}
+              required
+              className="crm-select"
+            >
               <option value="" disabled>
                 请选择通话结果
               </option>
@@ -348,7 +367,7 @@ export function CustomerCallRecordForm({
         className={cn(
           "flex justify-end",
           variant === "mobile-followup" && (onCancel || onLater)
-            ? "flex-col gap-2"
+            ? "flex-wrap items-center justify-between gap-2"
             : "",
         )}
       >
@@ -367,7 +386,7 @@ export function CustomerCallRecordForm({
               <button
                 type="button"
                 onClick={onLater}
-                className="crm-button crm-button-secondary min-h-0 px-3.5 py-2 text-sm"
+                className="crm-button crm-button-ghost min-h-0 px-3.5 py-2 text-sm"
               >
                 稍后补记
               </button>

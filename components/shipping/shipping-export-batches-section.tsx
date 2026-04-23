@@ -2,7 +2,10 @@ import Link from "next/link";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PaginationControls } from "@/components/shared/pagination-controls";
 import { SectionCard } from "@/components/shared/section-card";
-import { StatusBadge, type StatusBadgeVariant } from "@/components/shared/status-badge";
+import {
+  StatusBadge,
+  type StatusBadgeVariant,
+} from "@/components/shared/status-badge";
 import { formatDateTime } from "@/lib/customers/metadata";
 import {
   buildFulfillmentShippingHref,
@@ -10,11 +13,21 @@ import {
 } from "@/lib/fulfillment/navigation";
 import { buildShippingExportBatchDownloadHref } from "@/lib/shipping/download";
 import type { getShippingExportBatchesPageData } from "@/lib/shipping/queries";
+import { cn } from "@/lib/utils";
 
 type BatchData = Awaited<ReturnType<typeof getShippingExportBatchesPageData>>;
 type ExportBatchItem = BatchData["items"][number];
 type BatchFilters = BatchData["filters"];
 type PaginationData = BatchData["pagination"];
+
+const batchResultCardClassName =
+  "overflow-hidden rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-sm)]";
+
+const batchResultInsetClassName =
+  "rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)]";
+
+const batchQuietActionClassName =
+  "inline-flex min-h-0 items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-1.5 text-xs font-medium text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]";
 
 function buildPageHref(
   filters: BatchFilters,
@@ -107,7 +120,9 @@ function getFileViewLabel(fileView: string) {
 }
 
 function getBatchKeyword(item: ExportBatchItem) {
-  return item.sourceTradeOrders.length === 1 ? item.sourceTradeOrders[0]?.tradeNo ?? "" : "";
+  return item.sourceTradeOrders.length === 1
+    ? (item.sourceTradeOrders[0]?.tradeNo ?? "")
+    : "";
 }
 
 function getPrimaryShippingHref(item: ExportBatchItem) {
@@ -178,17 +193,19 @@ function BatchResultItem({
   ];
 
   return (
-    <article className="overflow-hidden rounded-[1rem] border border-black/7 bg-[rgba(255,255,255,0.94)] shadow-[0_8px_20px_rgba(18,24,31,0.04)]">
-      <div className="flex flex-col gap-3 border-b border-black/7 bg-[rgba(251,252,253,0.94)] px-4 py-3 lg:flex-row lg:items-start lg:justify-between">
+    <article className={batchResultCardClassName}>
+      <div className="flex flex-col gap-3 border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-[15px] font-semibold tracking-tight text-black/86">
+            <h3 className="text-[15px] font-semibold tracking-tight text-[var(--foreground)]">
               {item.exportNo}
             </h3>
             <StatusBadge label={fileState.label} variant={fileState.variant} />
-            <StatusBadge label={`supplier ${item.supplier.name}`} variant="neutral" />
+            <span className="rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
+              {item.supplier.name}
+            </span>
           </div>
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-black/50">
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--color-sidebar-muted)]">
             <span>导出 {formatDateTime(item.exportedAt)}</span>
             <span>导出人 {getExporterLabel(item)}</span>
             <span>{item._count.lines} 行冻结快照</span>
@@ -204,16 +221,17 @@ function BatchResultItem({
               下载文件
             </a>
           ) : (
-            <span className="inline-flex min-h-0 items-center rounded-full border border-black/10 bg-[rgba(247,248,250,0.82)] px-3 py-1.5 text-xs text-black/50">
-              文件未就绪
-            </span>
+            <span className={batchQuietActionClassName}>文件未就绪</span>
           )}
 
           {canManageReporting && item.canRegenerate ? (
             <form action={regenerateFileAction}>
               <input type="hidden" name="exportBatchId" value={item.id} />
               <input type="hidden" name="redirectTo" value={redirectTo} />
-              <button type="submit" className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-xs">
+              <button
+                type="submit"
+                className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-xs"
+              >
                 {item.fileState === "READY" ? "重生成文件" : "生成文件"}
               </button>
             </form>
@@ -221,25 +239,27 @@ function BatchResultItem({
         </div>
       </div>
 
-      <div className="border-b border-black/7 bg-[rgba(247,248,250,0.64)] px-4 py-3">
+      <div className="border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3">
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
           {metrics.map((metric) => (
             <div
               key={metric.label}
-              className="rounded-[0.82rem] border border-black/8 bg-white/88 px-3 py-2.5"
+              className={cn(batchResultInsetClassName, "px-3 py-2.5")}
             >
-              <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-black/40">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-sidebar-muted)]">
                 {metric.label}
               </div>
-              <div className="mt-1 text-sm font-semibold text-black/82">{metric.value}</div>
+              <div className="mt-1 text-sm font-semibold text-[var(--foreground)]">
+                {metric.value}
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="grid gap-px bg-black/6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.95fr)]">
-        <div className="bg-white/98 px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">
+      <div className="grid gap-px bg-[var(--color-border-soft)] xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.95fr)]">
+        <div className="bg-[var(--color-panel)] px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
             来源父单
           </p>
           {item.sourceTradeOrders.length > 0 ? (
@@ -247,40 +267,47 @@ function BatchResultItem({
               {item.sourceTradeOrders.map((tradeOrder) => (
                 <Link
                   key={`${item.id}-${tradeOrder.id}`}
-                  href={buildFulfillmentTradeOrdersHref({ keyword: tradeOrder.tradeNo })}
-                  className="rounded-full border border-black/8 bg-[rgba(247,248,250,0.85)] px-3 py-1.5 text-xs text-black/62 transition hover:border-black/14 hover:bg-white"
+                  href={buildFulfillmentTradeOrdersHref({
+                    keyword: tradeOrder.tradeNo,
+                  })}
+                  className={batchQuietActionClassName}
                 >
                   {tradeOrder.tradeNo}
                 </Link>
               ))}
             </div>
           ) : (
-            <div className="mt-3 text-sm text-black/52">
+            <div className="mt-3 text-sm text-[var(--color-sidebar-muted)]">
               当前批次还没有来源父单快照，保留为历史兼容回看记录。
             </div>
           )}
 
           {item.remark ? (
-            <div className="mt-3 rounded-[0.9rem] border border-black/8 bg-[rgba(247,248,250,0.82)] px-3.5 py-3">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/40">
+            <div className={cn(batchResultInsetClassName, "mt-3 px-3.5 py-3")}>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
                 备注
               </div>
-              <div className="mt-1.5 text-sm leading-6 text-black/62">{item.remark}</div>
+              <div className="mt-1.5 text-sm leading-6 text-[var(--color-sidebar-muted)]">
+                {item.remark}
+              </div>
             </div>
           ) : null}
         </div>
 
-        <div className="bg-white/98 px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">
+        <div className="bg-[var(--color-panel)] px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
             文件与审计
           </p>
-          <div className="mt-2 space-y-1.5 text-sm text-black/64">
+          <div className="mt-2 space-y-1.5 text-sm text-[var(--color-sidebar-muted)]">
             <div>文件名：{item.fileName}</div>
             <div>状态说明：{fileState.note}</div>
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2">
-            <Link href={shippingHref} className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-xs">
+            <Link
+              href={shippingHref}
+              className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-xs"
+            >
               回到发货执行
             </Link>
             {item.stageSummary.pendingTrackingCount > 0 ? (
@@ -338,7 +365,10 @@ export function ShippingExportBatchesSection({
     baseSearchParams,
   );
   const pageStart = (pagination.page - 1) * pagination.pageSize + 1;
-  const pageEnd = Math.min(pagination.page * pagination.pageSize, pagination.totalCount);
+  const pageEnd = Math.min(
+    pagination.page * pagination.pageSize,
+    pagination.totalCount,
+  );
 
   return (
     <div className="space-y-5">
@@ -348,14 +378,9 @@ export function ShippingExportBatchesSection({
         description="按批次号、来源父单和文件状态过滤冻结结果。保留跨视图返回语义，不把这里重新做成执行主入口。"
         density="compact"
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {filters.supplierId ? (
-              <StatusBadge label="已锁定 supplier 视角" variant="info" />
-            ) : null}
-            <StatusBadge
-              label={`当前过滤 ${getFileViewLabel(filters.fileView)}`}
-              variant={filters.fileView ? "info" : "neutral"}
-            />
+          <div className="flex flex-wrap items-center gap-2 text-[12px] text-[var(--color-sidebar-muted)]">
+            {filters.supplierId ? <span>已锁定 supplier 视角</span> : null}
+            <span>当前过滤 {getFileViewLabel(filters.fileView)}</span>
             <Link href={backHref} className="crm-text-link text-sm">
               {backLabel}
             </Link>
@@ -385,7 +410,11 @@ export function ShippingExportBatchesSection({
 
           <label className="space-y-1.5">
             <span className="crm-label">文件状态</span>
-            <select name="fileView" defaultValue={filters.fileView} className="crm-select">
+            <select
+              name="fileView"
+              defaultValue={filters.fileView}
+              className="crm-select"
+            >
               <option value="">全部状态</option>
               <option value="READY">文件就绪</option>
               <option value="MISSING">文件缺失</option>
@@ -420,23 +449,17 @@ export function ShippingExportBatchesSection({
           description="以文件状态、来源父单和审计说明为主线回看冻结结果，下载与重生成保留为清楚但次级的动作层。"
           density="compact"
           actions={
-            <div className="flex flex-wrap gap-1.5">
-              <StatusBadge label={`当前页 ${items.length}`} variant="neutral" />
-              <StatusBadge
-                label={`文件就绪 ${readyCount}`}
-                variant={readyCount > 0 ? "success" : "neutral"}
-              />
-              <StatusBadge
-                label={`待补文件 ${pendingCount}`}
-                variant={pendingCount > 0 ? "warning" : "neutral"}
-              />
-            </div>
+            <p className="text-[12px] text-[var(--color-sidebar-muted)]">
+              当前页 {items.length} · 文件就绪 {readyCount} · 待补文件{" "}
+              {pendingCount}
+            </p>
           }
           contentClassName="space-y-3.5"
         >
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-black/52">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--color-sidebar-muted)]">
             <span>
-              当前显示 {pageStart} - {pageEnd} / 共 {pagination.totalCount} 个批次
+              当前显示 {pageStart} - {pageEnd} / 共 {pagination.totalCount}{" "}
+              个批次
             </span>
             <span>当前列表优先服务冻结快照回看、文件状态判断和审计联动。</span>
           </div>
@@ -458,7 +481,12 @@ export function ShippingExportBatchesSection({
             totalPages={pagination.totalPages}
             summary={`当前显示 ${pageStart} - ${pageEnd} / 共 ${pagination.totalCount} 个批次`}
             buildHref={(pageNumber) =>
-              buildPageHref(filters, { page: pageNumber }, basePath, baseSearchParams)
+              buildPageHref(
+                filters,
+                { page: pageNumber },
+                basePath,
+                baseSearchParams,
+              )
             }
           />
         </SectionCard>

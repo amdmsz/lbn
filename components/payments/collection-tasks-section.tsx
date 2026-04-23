@@ -221,7 +221,7 @@ export function CollectionTasksSection({
 
       {items.length > 0 ? (
         <div className="space-y-5">
-          <div className="flex flex-wrap items-center gap-3 text-sm text-black/60">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--color-sidebar-muted)]">
             <span>
               共 {pagination.totalCount} 条催收任务，当前第 {pagination.page} / {pagination.totalPages} 页
             </span>
@@ -242,10 +242,10 @@ export function CollectionTasksSection({
                 {items.map((item) => (
                   <tr key={item.id}>
                     <td>
-                      <div className="font-medium text-black/80">
+                      <div className="font-medium text-[var(--foreground)]">
                         {getPaymentSourceLabel(item.sourceType)}
                       </div>
-                      <div className="mt-1 text-xs text-black/45">
+                      <div className="mt-1 text-xs text-[var(--color-sidebar-muted)]">
                         {item.salesOrder ? `订单 ${item.salesOrder.orderNo}` : item.giftRecord?.giftName}
                       </div>
                       {item.salesOrder ? (
@@ -255,15 +255,15 @@ export function CollectionTasksSection({
                       ) : null}
                     </td>
                     <td>
-                      <div className="space-y-1 text-sm text-black/70">
+                      <div className="space-y-1 text-sm text-[var(--color-sidebar-muted)]">
                         <div>
                           {item.customer.name} / {item.customer.phone}
                         </div>
-                        <div className="text-xs text-black/45">
+                        <div className="text-xs text-[var(--color-sidebar-muted)]">
                           负责人：{item.owner.name || item.owner.username}
                         </div>
                         {item.shippingTask ? (
-                          <div className="text-xs text-black/45">
+                          <div className="text-xs text-[var(--color-sidebar-muted)]">
                             发货：{item.shippingTask.shippingStatus} /{" "}
                             {item.shippingTask.trackingNumber || "未回填单号"}
                           </div>
@@ -286,10 +286,10 @@ export function CollectionTasksSection({
                             variant={getPaymentPlanStatusVariant(item.paymentPlan.status)}
                           />
                         </div>
-                        <div className="text-xs text-black/45">
+                        <div className="text-xs text-[var(--color-sidebar-muted)]">
                           {getPaymentCollectionChannelLabel(item.paymentPlan.collectionChannel)}
                         </div>
-                        <div className="text-xs text-black/45">
+                        <div className="text-xs text-[var(--color-sidebar-muted)]">
                           {getPaymentPlanProgressSummary(item.paymentPlan)}
                         </div>
                       </div>
@@ -306,18 +306,20 @@ export function CollectionTasksSection({
                             variant={getCollectionTaskStatusVariant(item.status)}
                           />
                         </div>
-                        <div className="text-xs text-black/45">
+                        <div className="text-xs text-[var(--color-sidebar-muted)]">
                           到期时间：{item.dueAt ? formatDateTime(item.dueAt) : "未设置"}
                         </div>
-                        <div className="text-xs text-black/45">
+                        <div className="text-xs text-[var(--color-sidebar-muted)]">
                           下次跟进：{" "}
                           {item.nextFollowUpAt ? formatDateTime(item.nextFollowUpAt) : "未设置"}
                         </div>
-                        <div className="text-xs text-black/45">
+                        <div className="text-xs text-[var(--color-sidebar-muted)]">
                           最近联系：{" "}
                           {item.lastContactAt ? formatDateTime(item.lastContactAt) : "未设置"}
                         </div>
-                        <div className="text-xs text-black/45">备注：{item.remark || "无"}</div>
+                        <div className="text-xs text-[var(--color-sidebar-muted)]">
+                          备注：{item.remark || "无"}
+                        </div>
                       </div>
                     </td>
                     <td className="min-w-[280px]">
@@ -365,7 +367,7 @@ export function CollectionTasksSection({
                           </button>
                         </form>
                       ) : (
-                        <div className="space-y-2 text-sm leading-7 text-black/55">
+                        <div className="space-y-2 text-sm leading-7 text-[var(--color-sidebar-muted)]">
                           <div>创建时间：{formatDateTime(item.createdAt)}</div>
                           <div>
                             关闭时间：{item.closedAt ? formatDateTime(item.closedAt) : "未关闭"}

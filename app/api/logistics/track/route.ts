@@ -31,6 +31,7 @@ export async function GET(request: Request) {
     {
       id: session.user.id,
       role: session.user.role,
+      teamId: session.user.teamId,
     },
     shippingTaskId,
   );

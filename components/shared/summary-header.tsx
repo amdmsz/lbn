@@ -37,8 +37,8 @@ export function SummaryHeader({
     <section
       className={cn(
         isCompact
-          ? "overflow-hidden rounded-[1rem] border border-black/7 bg-[rgba(255,255,255,0.86)] shadow-[0_10px_22px_rgba(18,24,31,0.04)]"
-          : "crm-card overflow-hidden border border-black/7 bg-[rgba(255,255,255,0.92)] shadow-[0_20px_40px_rgba(18,24,31,0.05)]",
+          ? "overflow-hidden rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow]"
+          : "crm-card overflow-hidden border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-md)]",
         className,
       )}
     >
@@ -59,7 +59,7 @@ export function SummaryHeader({
               <p
                 className={cn(
                   "font-semibold uppercase tracking-[0.18em]",
-                  isCompact ? "text-[10px] text-black/42" : "text-[10px] text-[var(--color-accent)]",
+                  isCompact ? "text-[10px] text-[var(--color-accent)]" : "text-[10px] text-[var(--color-accent)]",
                 )}
               >
                 {eyebrow}
@@ -68,7 +68,7 @@ export function SummaryHeader({
             <div className={cn(isCompact ? "space-y-1.5" : "space-y-2")}>
               <h1
                 className={cn(
-                  "font-semibold tracking-tight text-black/87",
+                  "font-semibold tracking-tight text-[var(--foreground)]",
                   isCompact ? "text-[1.34rem] md:text-[1.56rem]" : "text-[1.75rem] md:text-[2rem]",
                 )}
               >
@@ -78,8 +78,8 @@ export function SummaryHeader({
                 <p
                   className={cn(
                     isCompact
-                      ? "max-w-4xl text-[12.5px] leading-5 text-black/54 md:text-[13px]"
-                      : "max-w-4xl text-sm leading-6 text-black/58",
+                      ? "max-w-4xl text-[12.5px] leading-5 text-[var(--color-sidebar-muted)] md:text-[13px]"
+                      : "max-w-4xl text-sm leading-6 text-[var(--color-sidebar-muted)]",
                   )}
                 >
                   {description}
@@ -105,20 +105,20 @@ export function SummaryHeader({
       </div>
 
       {metrics?.length ? (
-        <div className="grid gap-px border-t border-black/7 bg-[rgba(31,35,41,0.06)] sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+        <div className="crm-summary-metrics sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
           {metrics.map((metric) => (
             <div
               key={`${metric.label}-${metric.value}`}
-              className="bg-[rgba(255,255,255,0.9)] px-3.5 py-3 md:px-4 md:py-3.5"
+              className="crm-summary-metric px-3.5 py-3 md:px-4 md:py-3.5"
             >
-              <p className="crm-eyebrow text-black/40">{metric.label}</p>
-              <p className="mt-1.5 text-[1.28rem] font-semibold text-black/85 md:text-[1.45rem]">
+              <p className="crm-eyebrow">{metric.label}</p>
+              <p className="mt-1.5 text-[1.28rem] font-semibold text-[var(--foreground)] md:text-[1.45rem]">
                 {metric.value}
               </p>
               {metric.hint ? (
                 <p
                   title={metric.hint}
-                  className="mt-1 text-[12px] leading-5 text-black/50"
+                  className="mt-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]"
                 >
                   {metric.hint}
                 </p>

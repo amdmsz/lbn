@@ -14,6 +14,7 @@ import { attachGiftFreightPaymentArtifactsToShippingTask } from "@/lib/payments/
 export type GiftFulfillmentCompatActor = {
   id: string;
   role: RoleCode;
+  teamId?: string | null;
 };
 
 export type SaveGiftFulfillmentCompatInput = {
@@ -82,7 +83,7 @@ export async function saveGiftFulfillmentCompatTask(
   }
 
   const parsed = saveGiftFulfillmentCompatSchema.parse(rawInput);
-  const scope = getGiftScope(actor.role, actor.id);
+  const scope = getGiftScope(actor.role, actor.id, actor.teamId);
 
   if (!scope) {
     throw new Error("当前角色无权处理礼品履约兼容任务。");

@@ -37,6 +37,7 @@ export async function createGiftRecordAction(
       {
         id: session.user.id,
         role: session.user.role,
+        teamId: session.user.teamId,
       },
       {
         customerId: String(formData.get("customerId") ?? ""),
@@ -86,6 +87,7 @@ export async function updateGiftReviewAction(
       {
         id: session.user.id,
         role: session.user.role,
+        teamId: session.user.teamId,
       },
       {
         giftRecordId: String(formData.get("giftRecordId") ?? ""),
@@ -128,6 +130,7 @@ export async function saveGiftFulfillmentCompatAction(
       {
         id: session.user.id,
         role: session.user.role,
+        teamId: session.user.teamId,
       },
       {
         giftRecordId: String(formData.get("giftRecordId") ?? ""),

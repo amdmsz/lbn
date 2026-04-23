@@ -52,7 +52,7 @@ function AvatarBadge({
   return (
     <div
       className={cn(
-        "inline-flex items-center justify-center rounded-full bg-[linear-gradient(180deg,#d5a474,#a96636)] font-semibold text-white shadow-[0_10px_18px_rgba(154,97,51,0.18)]",
+        "inline-flex items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--color-accent)_0%,#8aa8ff_100%)] font-semibold text-white shadow-[0_10px_18px_rgba(79,125,247,0.22)]",
         size === "large" ? "h-11 w-11 text-base" : "h-10 w-10 text-sm",
       )}
     >
@@ -93,7 +93,7 @@ function AccountRow({
 
   if (!onClick) {
     return (
-      <div className="flex items-center gap-3 rounded-[1rem] border border-black/6 bg-white/72 px-3 py-3">
+      <div className="flex items-center gap-3 rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
         {content}
       </div>
     );
@@ -103,7 +103,7 @@ function AccountRow({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-[1rem] border border-black/6 bg-white/72 px-3 py-3 text-left transition-[border-color,background-color] hover:border-[rgba(154,97,51,0.22)] hover:bg-white"
+      className="crm-motion-pill flex w-full items-center gap-3 rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3 text-left transition-[border-color,background-color,box-shadow] hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-md)]"
     >
       {content}
     </button>
@@ -113,6 +113,7 @@ function AccountRow({
 export function AccountMenu({
   currentUser,
   compact = false,
+  dropdownPlacement,
 }: Readonly<{
   currentUser: {
     name: string;
@@ -122,6 +123,7 @@ export function AccountMenu({
     teamName: string | null;
   };
   compact?: boolean;
+  dropdownPlacement?: "up-start" | "right-start" | "down-end";
 }>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -129,6 +131,8 @@ export function AccountMenu({
   const [avatarOverride, setAvatarOverride] = useState<string | null | undefined>(undefined);
   const avatarPath = avatarOverride === undefined ? currentUser.avatarPath : avatarOverride;
   const identityMeta = getIdentityMeta(currentUser.roleName, currentUser.teamName);
+  const resolvedDropdownPlacement =
+    dropdownPlacement ?? (compact ? "right-start" : "up-start");
 
   useEffect(() => {
     if (!open) {
@@ -165,10 +169,10 @@ export function AccountMenu({
           aria-label="打开账户面板"
           onClick={() => setOpen((current) => !current)}
           className={cn(
-            "inline-flex h-11 w-11 items-center justify-center rounded-[1rem] border bg-white/76 shadow-[0_10px_18px_rgba(15,23,42,0.08)] transition-[border-color,background-color,box-shadow]",
+            "crm-motion-pill inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-shell-topbar-border)] bg-[var(--color-shell-surface)] transition-[border-color,background-color,box-shadow]",
             open
-              ? "border-[rgba(154,97,51,0.22)] bg-white"
-              : "border-black/8 hover:border-[rgba(154,97,51,0.24)] hover:bg-white",
+              ? "border-[var(--color-accent-soft)] bg-[var(--color-shell-hover)] shadow-[var(--color-shell-shadow-md)]"
+              : "hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-sm)]",
           )}
         >
           <AvatarBadge avatarPath={avatarPath} name={currentUser.name} />
@@ -183,10 +187,10 @@ export function AccountMenu({
         aria-label="打开账户面板"
         onClick={() => setOpen((current) => !current)}
         className={cn(
-          "flex w-full items-center gap-3 rounded-[1.05rem] border px-3 py-3 text-left shadow-[0_10px_20px_rgba(18,24,31,0.05)] transition-[border-color,background-color,box-shadow]",
+          "crm-motion-pill flex w-full items-center gap-3 rounded-[1.05rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3 text-left shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow]",
           open
-            ? "border-[rgba(154,97,51,0.18)] bg-white shadow-[0_12px_24px_rgba(18,24,31,0.07)]"
-            : "border-black/6 bg-white/72 hover:border-[rgba(154,97,51,0.2)] hover:bg-white",
+            ? "border-[var(--color-accent-soft)] bg-[var(--color-shell-hover)] shadow-[var(--color-shell-shadow-md)]"
+            : "hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)]",
         )}
       >
         <AvatarBadge avatarPath={avatarPath} name={currentUser.name} />
@@ -225,11 +229,15 @@ export function AccountMenu({
       {open ? (
         <div
           className={cn(
-            "absolute z-50 w-[18.75rem] overflow-hidden rounded-[1.2rem] border border-black/8 bg-[rgba(249,246,241,0.96)] shadow-[0_24px_44px_rgba(15,23,42,0.16)] backdrop-blur-[18px]",
-            compact ? "bottom-0 left-[calc(100%+0.6rem)]" : "bottom-[calc(100%+0.6rem)] left-0",
+            "crm-animate-pop absolute z-50 w-[18.75rem] overflow-hidden rounded-[1.2rem] border border-[var(--color-shell-topbar-border)] bg-[var(--color-shell-surface-strong)] shadow-[var(--color-shell-shadow-lg)] backdrop-blur-[20px]",
+            resolvedDropdownPlacement === "right-start"
+              ? "bottom-0 left-[calc(100%+0.6rem)]"
+              : resolvedDropdownPlacement === "down-end"
+                ? "right-0 top-[calc(100%+0.6rem)]"
+                : "bottom-[calc(100%+0.6rem)] left-0",
           )}
         >
-          <div className="border-b border-black/6 px-4 py-4">
+          <div className="border-b border-[var(--color-shell-topbar-border)] px-4 py-4">
             <div className="flex items-center gap-3">
               <AvatarBadge avatarPath={avatarPath} name={currentUser.name} size="large" />
               <div className="min-w-0">
@@ -263,7 +271,7 @@ export function AccountMenu({
             />
 
             {avatarPanelOpen ? (
-              <div className="rounded-[1rem] border border-black/6 bg-white/64 p-2">
+              <div className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-2">
                 <AvatarSettingsPanel
                   user={currentUser}
                   avatarPath={avatarPath}
@@ -272,7 +280,7 @@ export function AccountMenu({
               </div>
             ) : null}
 
-            <div className="rounded-[1rem] border border-black/6 bg-white/72 px-3 py-3">
+            <div className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
               <div className="flex items-start gap-3">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.95rem] bg-[var(--color-accent-soft)] text-[var(--color-accent-strong)]">
                   <Palette className="h-4 w-4" />
@@ -292,14 +300,14 @@ export function AccountMenu({
             </div>
           </div>
 
-          <div className="border-t border-black/6 px-4 py-3">
+          <div className="border-t border-[var(--color-shell-topbar-border)] px-4 py-3">
             <button
               type="button"
               onClick={() => signOut({ callbackUrl: "/login" })}
-              className="flex w-full items-center justify-between rounded-[1rem] border border-black/6 bg-white/72 px-3 py-2.5 text-left transition-[border-color,background-color] hover:border-[rgba(154,97,51,0.22)] hover:bg-white"
+              className="crm-motion-pill flex w-full items-center justify-between rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2.5 text-left transition-[border-color,background-color,box-shadow] hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-md)]"
             >
               <span className="flex items-center gap-2.5">
-                <span className="flex h-8 w-8 items-center justify-center rounded-[0.9rem] bg-[rgba(168,60,40,0.12)] text-[rgb(144,44,29)]">
+                <span className="flex h-8 w-8 items-center justify-center rounded-[0.9rem] bg-[rgba(209,91,118,0.12)] text-[var(--color-danger)]">
                   <LogOut className="h-4 w-4" />
                 </span>
                 <span>

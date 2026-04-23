@@ -86,6 +86,18 @@ The worker uses:
 npm run worker:lead-imports
 ```
 
+Recommended runtime check:
+
+```bash
+npm run check:lead-import-runtime
+```
+
+To fail loudly when no worker is currently online:
+
+```bash
+REQUIRE_LEAD_IMPORT_WORKER=1 npm run check:lead-import-runtime
+```
+
 ## Redis
 
 You can use:
@@ -240,6 +252,13 @@ sudo systemctl status jiuzhuang-crm-import-worker --no-pager
 sudo journalctl -u jiuzhuang-crm-import-worker -n 100 --no-pager
 ```
 
+Then run the runtime check from the app root:
+
+```bash
+cd /srv/jiuzhuang-crm/current
+REQUIRE_LEAD_IMPORT_WORKER=1 npm run check:lead-import-runtime
+```
+
 ### 7. Final business verification
 
 - Upload a small file in `/lead-imports`
@@ -253,6 +272,7 @@ sudo journalctl -u jiuzhuang-crm-import-worker -n 100 --no-pager
 After deployment:
 
 - confirm Redis connectivity
+- run `npm run check:lead-import-runtime`
 - confirm the web app can create a `QUEUED` batch
 - confirm the worker moves the batch to `IMPORTING`
 - confirm progress appears in both the import center and the batch detail page

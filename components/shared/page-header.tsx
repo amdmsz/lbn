@@ -32,8 +32,8 @@ export function PageHeader({
     <header
       className={cn(
         isCompact
-          ? "relative overflow-hidden rounded-[1rem] border border-black/7 bg-[rgba(255,255,255,0.86)] px-4 py-3.5 shadow-[0_10px_22px_rgba(18,24,31,0.04)] md:px-5 md:py-4"
-          : "crm-card relative overflow-hidden border border-black/7 bg-[rgba(255,255,255,0.92)] p-5 shadow-[0_18px_36px_rgba(18,24,31,0.05)] md:p-6",
+          ? "relative overflow-hidden rounded-[1.05rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3 shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow] md:px-5 md:py-3.5"
+          : "crm-card relative overflow-hidden border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4.5 shadow-[var(--color-shell-shadow-md)] md:p-5",
         className,
       )}
     >
@@ -43,13 +43,25 @@ export function PageHeader({
           isCompact ? "gap-3.5 lg:items-start" : "gap-5 lg:items-start",
         )}
       >
-        <div className={cn("min-w-0", isCompact ? "max-w-3xl space-y-2" : "max-w-4xl space-y-3")}>
+        <div
+          className={cn(
+            "min-w-0",
+            isCompact ? "max-w-3xl space-y-2" : "max-w-4xl space-y-3",
+          )}
+        >
           {context ? <div>{context}</div> : null}
-          <div className={cn("flex flex-wrap items-center", isCompact ? "gap-1.5" : "gap-2")}>
+          <div
+            className={cn(
+              "flex flex-wrap items-center",
+              isCompact ? "gap-1.5" : "gap-2",
+            )}
+          >
             <p
               className={cn(
                 "crm-eyebrow",
-                isCompact ? "text-black/42" : "text-[var(--color-accent)]",
+                isCompact
+                  ? "text-[var(--color-sidebar-muted)]"
+                  : "text-[var(--color-sidebar-muted)]",
               )}
             >
               {eyebrow}
@@ -57,14 +69,18 @@ export function PageHeader({
             {showSystemLabel ? (
               <>
                 <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]/70" />
-                <p className="text-xs text-black/48">{BRAND_NAME_EN}</p>
+                <p className="text-xs text-[var(--color-sidebar-muted)]">
+                  {BRAND_NAME_EN}
+                </p>
               </>
             ) : null}
           </div>
           <h1
             className={cn(
-              "font-semibold tracking-tight text-black/88",
-              isCompact ? "text-[1.28rem] md:text-[1.5rem]" : "text-[1.75rem] md:text-[2.15rem]",
+              "font-semibold tracking-tight text-[var(--foreground)]",
+              isCompact
+                ? "text-[1.18rem] md:text-[1.38rem]"
+                : "text-[1.64rem] md:text-[1.92rem]",
             )}
           >
             {title}
@@ -73,15 +89,20 @@ export function PageHeader({
             <p
               className={cn(
                 isCompact
-                  ? "max-w-3xl text-[12.5px] leading-5 text-black/54 md:text-[13px]"
-                  : "max-w-4xl text-sm leading-7 text-black/58 md:text-[0.95rem]",
+                  ? "max-w-2xl text-[12px] leading-5 text-[var(--color-sidebar-muted)]"
+                  : "max-w-4xl text-sm leading-6 text-[var(--color-sidebar-muted)] md:text-[0.92rem]",
               )}
             >
               {description}
             </p>
           ) : null}
           {meta ? (
-            <div className={cn("crm-toolbar-cluster", isCompact ? "gap-1.5 pt-0.5" : "pt-1")}>
+            <div
+              className={cn(
+                "crm-toolbar-cluster",
+                isCompact ? "gap-1.5 pt-0" : "pt-0.5",
+              )}
+            >
               {meta}
             </div>
           ) : null}
@@ -90,9 +111,7 @@ export function PageHeader({
           <div
             className={cn(
               "crm-header-actions w-full min-w-0 lg:w-auto lg:max-w-[24rem] lg:justify-end",
-              isCompact
-                ? "self-start"
-                : "crm-action-surface self-start border border-black/7 bg-[rgba(247,248,250,0.82)]",
+              isCompact ? "self-start" : "self-start",
             )}
           >
             {actions}

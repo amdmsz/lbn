@@ -1,13 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Plus } from "lucide-react";
 import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { ProductSkusSection } from "@/components/products/product-skus-section";
 import { ProductsSection } from "@/components/products/products-section";
 import { SuppliersSection } from "@/components/suppliers/suppliers-section";
 import { ActionBanner } from "@/components/shared/action-banner";
-import { PageHeader } from "@/components/shared/page-header";
-import { RecordTabs } from "@/components/shared/record-tabs";
-import { StatusBadge } from "@/components/shared/status-badge";
 import { getParamValue } from "@/lib/action-notice";
 import {
   canAccessProductModule,
@@ -47,6 +45,7 @@ import {
   toggleSupplierInlineAction,
   upsertSupplierInlineAction,
 } from "../suppliers/actions";
+import { cn } from "@/lib/utils";
 
 export default async function ProductsPage({
   searchParams,
@@ -59,7 +58,9 @@ export default async function ProductsPage({
     redirect("/login");
   }
 
-  if (!canAccessProductModule(session.user.role, session.user.permissionCodes)) {
+  if (
+    !canAccessProductModule(session.user.role, session.user.permissionCodes)
+  ) {
     redirect(getDefaultRouteForRole(session.user.role));
   }
 
@@ -67,8 +68,14 @@ export default async function ProductsPage({
   const requestedTab = getParamValue(resolvedSearchParams?.tab);
   const detailProductId = getParamValue(resolvedSearchParams?.detail);
   const detailSkuId = getParamValue(resolvedSearchParams?.detailSku);
-  const canCreate = canCreateProducts(session.user.role, session.user.permissionCodes);
-  const canManage = canManageProducts(session.user.role, session.user.permissionCodes);
+  const canCreate = canCreateProducts(
+    session.user.role,
+    session.user.permissionCodes,
+  );
+  const canManage = canManageProducts(
+    session.user.role,
+    session.user.permissionCodes,
+  );
   const canAccessSupplierTab = canAccessSupplierModule(
     session.user.role,
     session.user.permissionCodes,
@@ -103,11 +110,18 @@ export default async function ProductsPage({
     permissionCodes: session.user.permissionCodes,
   };
 
-  const productData = activeTab === "products" ? await getProductsPageData(viewer, resolvedSearchParams) : null;
+  const productData =
+    activeTab === "products"
+      ? await getProductsPageData(viewer, resolvedSearchParams)
+      : null;
   const productSkuData =
-    activeTab === "skus" ? await getProductSkusPageData(viewer, resolvedSearchParams) : null;
+    activeTab === "skus"
+      ? await getProductSkusPageData(viewer, resolvedSearchParams)
+      : null;
   const supplierData =
-    activeTab === "suppliers" ? await getSuppliersPageData(viewer, resolvedSearchParams) : null;
+    activeTab === "suppliers"
+      ? await getSuppliersPageData(viewer, resolvedSearchParams)
+      : null;
   const productCenterMeta =
     activeTab === "suppliers" ? null : await getProductCenterMeta(viewer);
   const detailData =
@@ -115,8 +129,7 @@ export default async function ProductsPage({
       ? null
       : await getProductDetail(viewer, detailProductId, resolvedSearchParams);
 
-  const productFilters =
-    productData?.filters ??
+  const productFilters = productData?.filters ??
     productSkuData?.filters ?? {
       q: "",
       status: "",
@@ -124,26 +137,29 @@ export default async function ProductsPage({
       brandName: "",
       seriesName: "",
       categoryCode: "",
-        primarySalesSceneCode: "",
-        supplyGroupCode: "",
-        financeCategoryCode: "",
-        preset: "",
-        page: 1,
-        savedViewId: "",
+      primarySalesSceneCode: "",
+      supplyGroupCode: "",
+      financeCategoryCode: "",
+      preset: "",
+      page: 1,
+      savedViewId: "",
     };
-  const supplierFilters =
-    supplierData?.filters ?? {
-      supplierQ: "",
-      supplierStatus: "",
-    };
+  const supplierFilters = supplierData?.filters ?? {
+    supplierQ: "",
+    supplierStatus: "",
+  };
 
   const productWorkspaceHref = buildProductCenterHref(productFilters);
-  const skuWorkspaceHref = buildProductCenterHref(productFilters, { tab: "skus" });
+  const skuWorkspaceHref = buildProductCenterHref(productFilters, {
+    tab: "skus",
+  });
   const supplierWorkspaceHref = buildSupplierCenterHref(supplierFilters);
   const initialCreateProduct =
-    activeTab === "products" && getParamValue(resolvedSearchParams?.createProduct) === "1";
+    activeTab === "products" &&
+    getParamValue(resolvedSearchParams?.createProduct) === "1";
   const initialCreateSupplier =
-    activeTab === "suppliers" && getParamValue(resolvedSearchParams?.createSupplier) === "1";
+    activeTab === "suppliers" &&
+    getParamValue(resolvedSearchParams?.createSupplier) === "1";
 
   const notice =
     activeTab === "products"
@@ -171,7 +187,8 @@ export default async function ProductsPage({
             value: "suppliers",
             label: "供应商",
             href: supplierWorkspaceHref,
-            count: activeTab === "suppliers" ? supplierData?.items.length : null,
+            count:
+              activeTab === "suppliers" ? supplierData?.items.length : null,
           },
         ]
       : []),
@@ -190,126 +207,223 @@ export default async function ProductsPage({
           ? "仅看停用"
           : "全部状态";
 
-  const productMetrics =
+  const activeViewLabel =
+    activeTab === "products"
+      ? "商品主档"
+      : activeTab === "skus"
+        ? "SKU 经营"
+        : "供应目录";
+  const headerTitle =
+    activeTab === "products"
+      ? "商品列表"
+      : activeTab === "skus"
+        ? "SKU 列表"
+        : "供应商目录";
+  const headerDescription =
+    activeTab === "products"
+      ? "以商品名与规格为主的轻量主数据工作区。"
+      : activeTab === "skus"
+        ? "按规格查看默认售价、商品覆盖与当前经营范围。"
+        : "供应商保持为商品域次级面，只做轻维护。";
+
+  const topSummaryItems =
     activeTab === "products" && productData
       ? [
           {
-            label: "当前商品",
+            label: "商品",
             value: String(productData.summary.totalCount),
-            note: "基于当前筛选后可见的商品主数据",
+            note: "当前结果",
           },
           {
-            label: "启用商品",
+            label: "启用",
             value: String(productData.summary.enabledCount),
-            note: "当前仍可直接参与建单与报价的商品",
+            note: "仍可经营",
           },
           {
-            label: "SKU 覆盖",
+            label: "规格",
             value: String(productData.summary.skuCount),
-            note: "当前结果下关联的销售规格总量",
+            note: "当前覆盖",
           },
           {
-            label: "订单引用",
+            label: "引用",
             value: String(productData.summary.salesOrderItemCount),
-            note: "当前结果下历史订单中引用商品的次数",
+            note: "历史订单",
           },
         ]
-      : [];
-
-  const skuMetrics =
-    activeTab === "skus" && productSkuData
-      ? [
-          {
-            label: "当前 SKU",
-            value: String(productSkuData.summary.totalCount),
-            note: "当前筛选后可见的销售规格数量",
-          },
-          {
-            label: "启用 SKU",
-            value: String(productSkuData.summary.enabledCount),
-            note: "当前仍可直接参与建单的规格数量",
-          },
-          {
-            label: "覆盖商品",
-            value: String(productSkuData.summary.productCount),
-            note: "当前结果涉及的同款商品数量",
-          },
-          {
-            label: "订单引用",
-            value: String(productSkuData.summary.salesOrderItemCount),
-            note: "当前结果下历史订单中引用 SKU 的次数",
-          },
-        ]
-      : [];
-
-  void productMetrics;
-  void skuMetrics;
+      : activeTab === "skus" && productSkuData
+        ? [
+            {
+              label: "SKU",
+              value: String(productSkuData.summary.totalCount),
+              note: "当前结果",
+            },
+            {
+              label: "启用",
+              value: String(productSkuData.summary.enabledCount),
+              note: "仍可建单",
+            },
+            {
+              label: "商品",
+              value: String(productSkuData.summary.productCount),
+              note: "当前覆盖",
+            },
+            {
+              label: "引用",
+              value: String(productSkuData.summary.salesOrderItemCount),
+              note: "历史订单",
+            },
+          ]
+        : activeTab === "suppliers" && supplierData
+          ? [
+              {
+                label: "供应商",
+                value: String(supplierData.items.length),
+                note: "当前结果",
+              },
+              {
+                label: "启用",
+                value: String(
+                  supplierData.items.filter((item) => item.enabled).length,
+                ),
+                note: "仍在使用",
+              },
+              {
+                label: "关联商品",
+                value: String(
+                  supplierData.items.reduce(
+                    (sum, item) => sum + item._count.products,
+                    0,
+                  ),
+                ),
+                note: "商品覆盖",
+              },
+              {
+                label: "当前视图",
+                value: activeViewLabel,
+                note: "商品域次级面",
+              },
+            ]
+          : [];
 
   return (
     <WorkbenchLayout
       header={
-        <div className="mb-4">
-          <PageHeader
-            eyebrow="商品目录工作台"
-            title="商品中心"
-            description="保持 /products 为唯一入口，在同一工作台内查看商品、规格和轻量供应目录。Product 视图优先按类目看商品，再展开销售规格。"
-            meta={
-              <>
-                <StatusBadge
-                  label={
-                    activeTab === "products"
-                      ? "Product 视图"
-                      : activeTab === "skus"
-                        ? "SKU 视图"
-                        : "Supplier 视图"
-                  }
-                  variant="info"
-                />
-                <StatusBadge label={activeStatusLabel} variant="neutral" />
+        <section className="mb-4 rounded-[1.12rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-4 shadow-[var(--color-shell-shadow-sm)] sm:px-5 sm:py-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="min-w-0 space-y-2.5">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
+                <span>商品中心</span>
+                <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+                <span>{activeViewLabel}</span>
+                <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+                <span>{activeStatusLabel}</span>
                 {activeTab !== "suppliers" && productFilters.supplierId ? (
-                  <StatusBadge label="已限定供应商" variant="neutral" />
-                ) : null}
-              </>
-            }
-            actions={
-              <div className="flex flex-wrap gap-2 lg:justify-end">
-                {activeTab !== "suppliers" && canCreate ? (
-                  <Link
-                    href={buildProductCenterHref(productFilters, { createProduct: "1" })}
-                    className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
-                  >
-                    新建商品
-                  </Link>
-                ) : null}
-                {activeTab !== "suppliers" && canAccessSupplierTab ? (
-                  <Link
-                    href={supplierWorkspaceHref}
-                    className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-                  >
-                    供应商目录
-                  </Link>
-                ) : null}
-                {activeTab === "suppliers" && canManageSupplierData ? (
-                  <Link
-                    href={buildSupplierCenterHref(supplierFilters, { createSupplier: "1" })}
-                    className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
-                  >
-                    新建供应商
-                  </Link>
+                  <>
+                    <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+                    <span>已限定供应商</span>
+                  </>
                 ) : null}
               </div>
-            }
-          />
-        </div>
-      }
-      summary={undefined}
-      toolbar={
-        <div className="mb-4 rounded-[1rem] border border-black/8 bg-white/92 p-1.5 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-          <RecordTabs activeValue={activeTab} items={viewTabs} />
-        </div>
+
+              <div className="space-y-1.5">
+                <h1 className="text-[1.2rem] font-semibold tracking-[-0.04em] text-[var(--foreground)] sm:text-[1.42rem]">
+                  {headerTitle}
+                </h1>
+                <p className="max-w-2xl text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">
+                  {headerDescription}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 xl:justify-end">
+              {activeTab !== "suppliers" && canCreate ? (
+                <Link
+                  href={buildProductCenterHref(productFilters, {
+                    createProduct: "1",
+                  })}
+                  className="crm-button crm-button-primary min-h-0 gap-2 px-3.5 py-2 text-sm"
+                >
+                  <Plus className="h-4 w-4" />
+                  添加商品
+                </Link>
+              ) : null}
+              {activeTab !== "suppliers" && canAccessSupplierTab ? (
+                <Link
+                  href={supplierWorkspaceHref}
+                  className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                >
+                  供应商目录
+                </Link>
+              ) : null}
+              {activeTab === "suppliers" && canManageSupplierData ? (
+                <Link
+                  href={buildSupplierCenterHref(supplierFilters, {
+                    createSupplier: "1",
+                  })}
+                  className="crm-button crm-button-primary min-h-0 gap-2 px-3.5 py-2 text-sm"
+                >
+                  <Plus className="h-4 w-4" />
+                  新建供应商
+                </Link>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2 rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-2">
+            {viewTabs.map((item) => (
+              <Link
+                key={item.value}
+                href={item.href}
+                className={cn(
+                  "inline-flex min-h-[2.4rem] items-center gap-2 rounded-full px-3.5 py-2 text-[13px] font-medium transition-[border-color,background-color,color]",
+                  item.value === activeTab
+                    ? "border border-[rgba(111,141,255,0.14)] bg-[rgba(111,141,255,0.08)] text-[var(--foreground)]"
+                    : "border border-transparent text-[var(--color-sidebar-muted)] hover:border-[var(--color-border-soft)] hover:bg-[var(--color-panel)] hover:text-[var(--foreground)]",
+                )}
+              >
+                <span>{item.label}</span>
+                {typeof item.count === "number" ? (
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 py-0.5 text-[10.5px]",
+                      item.value === activeTab
+                        ? "bg-[rgba(111,141,255,0.12)] text-[var(--color-accent-strong)]"
+                        : "bg-[var(--color-panel)] text-[var(--color-sidebar-muted)]",
+                    )}
+                  >
+                    {item.count}
+                  </span>
+                ) : null}
+              </Link>
+            ))}
+          </div>
+
+          {topSummaryItems.length > 0 ? (
+            <div className="mt-4 grid grid-cols-2 gap-2.5 xl:grid-cols-4">
+              {topSummaryItems.map((item) => (
+                <div
+                  key={item.label}
+                  className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3"
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
+                    {item.label}
+                  </p>
+                  <p className="mt-1.5 text-[1.08rem] font-semibold tracking-[-0.04em] text-[var(--foreground)]">
+                    {item.value}
+                  </p>
+                  <p className="mt-0.5 text-[10.5px] leading-4 text-[var(--color-sidebar-muted)]">
+                    {item.note}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
       }
     >
-      {notice ? <ActionBanner tone={notice.tone}>{notice.message}</ActionBanner> : null}
+      {notice ? (
+        <ActionBanner tone={notice.tone}>{notice.message}</ActionBanner>
+      ) : null}
 
       {activeTab === "products" && productData ? (
         <ProductsSection
@@ -336,7 +450,9 @@ export default async function ProductsPage({
           moveToRecycleBinAction={moveProductToRecycleBinInlineAction}
           upsertProductSkuAction={upsertProductSkuInlineAction}
           toggleProductSkuAction={toggleProductSkuInlineAction}
-          moveProductSkuToRecycleBinAction={moveProductSkuToRecycleBinInlineAction}
+          moveProductSkuToRecycleBinAction={
+            moveProductSkuToRecycleBinInlineAction
+          }
           createInlineSupplierAction={createInlineSupplierAction}
         />
       ) : null}
@@ -363,7 +479,9 @@ export default async function ProductsPage({
           moveProductToRecycleBinAction={moveProductToRecycleBinInlineAction}
           upsertProductSkuAction={upsertProductSkuInlineAction}
           toggleProductSkuAction={toggleProductSkuInlineAction}
-          moveProductSkuToRecycleBinAction={moveProductSkuToRecycleBinInlineAction}
+          moveProductSkuToRecycleBinAction={
+            moveProductSkuToRecycleBinInlineAction
+          }
           createInlineSupplierAction={createInlineSupplierAction}
         />
       ) : null}

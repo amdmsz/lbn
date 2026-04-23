@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { Search } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
+import type { ReactNode } from "react";
+import { FiltersPanel } from "@/components/shared/filters-panel";
 import type { LeadListFilters, LeadSalesOption } from "@/lib/leads/queries";
 import { LEADS_PAGE_SIZE, leadStatusOptions } from "@/lib/leads/metadata";
 import { scheduleSmartScroll } from "@/lib/smart-scroll";
@@ -90,7 +93,26 @@ function buildQuickFilterHref(
   });
 }
 
-function QuickFilterLink({
+function getScopeLabel(filters: LeadListFilters) {
+  if (filters.view === "assigned") {
+    return "已分配回看";
+  }
+
+  if (filters.quick === "import_batch" && filters.importBatchId) {
+    return "本次导入";
+  }
+
+  if (filters.quick === "today") {
+    return "今日导入";
+  }
+
+  return "全部未分配";
+}
+
+const inlineFieldClassName =
+  "group flex h-9 min-w-0 items-center gap-2 rounded-[12px] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 transition-[border-color,background-color,box-shadow,transform] duration-150 motion-safe:hover:-translate-y-[1px] hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-sm)] focus-within:border-[var(--color-accent-soft)] focus-within:bg-[var(--color-shell-hover)] focus-within:shadow-[var(--color-shell-shadow-sm)]";
+
+function ScopeLink({
   label,
   href,
   active,
@@ -105,7 +127,7 @@ function QuickFilterLink({
 }>) {
   if (disabled) {
     return (
-      <span className="inline-flex min-h-9 items-center rounded-full border border-dashed border-black/10 px-3 text-sm text-black/32">
+      <span className="inline-flex h-8 items-center rounded-full border border-dashed border-[var(--color-border-soft)] px-3 text-[12px] text-[var(--color-sidebar-muted)] opacity-60">
         {label}
       </span>
     );
@@ -121,14 +143,65 @@ function QuickFilterLink({
         }
       }}
       className={cn(
-        "inline-flex min-h-9 items-center rounded-full border px-3 text-sm transition-colors",
+        "inline-flex h-8 items-center rounded-full border px-3 text-[12px] font-medium transition-[border-color,background-color,color,box-shadow,transform] duration-150 motion-safe:hover:-translate-y-[1px]",
         active
-          ? "border-[var(--color-accent)]/18 bg-[var(--color-accent)]/8 text-[var(--color-accent)]"
-          : "border-transparent bg-black/[0.035] text-black/62 hover:border-black/8 hover:bg-white hover:text-black/84",
+          ? "border-[var(--color-accent-soft)] bg-[var(--color-accent)]/8 text-[var(--color-accent-strong)] shadow-[var(--color-shell-shadow-sm)]"
+          : "border-transparent bg-transparent text-[var(--color-sidebar-muted)] hover:border-[var(--color-border-soft)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]",
       )}
     >
       {label}
     </Link>
+  );
+}
+
+function InlineSelectControl({
+  label,
+  name,
+  defaultValue,
+  children,
+}: Readonly<{
+  label: string;
+  name: string;
+  defaultValue: string;
+  children: ReactNode;
+}>) {
+  return (
+    <label className={inlineFieldClassName}>
+      <span className="shrink-0 text-[12px] font-medium text-[var(--color-sidebar-muted)]">
+        {label}
+      </span>
+      <select
+        name={name}
+        defaultValue={defaultValue}
+        className="crm-select h-full min-w-0 flex-1 border-0 bg-transparent px-0 py-0 pr-5 text-[13px] text-[var(--foreground)] shadow-none outline-none focus:ring-0"
+      >
+        {children}
+      </select>
+    </label>
+  );
+}
+
+function InlineDateControl({
+  label,
+  name,
+  defaultValue,
+}: Readonly<{
+  label: string;
+  name: string;
+  defaultValue: string;
+}>) {
+  return (
+    <label className={inlineFieldClassName}>
+      <span className="shrink-0 text-[12px] font-medium text-[var(--color-sidebar-muted)]">
+        {label}
+      </span>
+      <input
+        type="date"
+        name={name}
+        defaultValue={defaultValue}
+        className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-[13px] text-[var(--foreground)] outline-none focus:ring-0"
+      />
+    </label>
   );
 }
 
@@ -148,7 +221,7 @@ export function LeadsFilters({
   }>;
   scrollTargetId?: string;
 }>) {
-  const pathname = usePathname();
+  const pathname = usePathname() || "/leads";
   const router = useRouter();
   const activeQuick =
     filters.view === "assigned"
@@ -159,6 +232,16 @@ export function LeadsFilters({
           ? "today"
           : "all_unassigned";
 
+  const activeFilterCount = [
+    Boolean(filters.name),
+    Boolean(filters.phone),
+    Boolean(filters.status),
+    Boolean(filters.tagId),
+    Boolean(filters.assignedOwnerId),
+    Boolean(filters.createdFrom),
+    Boolean(filters.createdTo),
+  ].filter(Boolean).length;
+
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -167,15 +250,22 @@ export function LeadsFilters({
       ...filters,
       name: String(formData.get("name") ?? "").trim(),
       phone: String(formData.get("phone") ?? "").trim(),
-      status: String(formData.get("status") ?? "").trim() as LeadListFilters["status"],
+      status: String(
+        formData.get("status") ?? "",
+      ).trim() as LeadListFilters["status"],
       tagId: String(formData.get("tagId") ?? "").trim(),
-      view: String(formData.get("view") ?? "unassigned").trim() as LeadListFilters["view"],
-      quick: String(formData.get("quick") ?? "").trim() as LeadListFilters["quick"],
+      view: String(
+        formData.get("view") ?? "unassigned",
+      ).trim() as LeadListFilters["view"],
+      quick: String(
+        formData.get("quick") ?? "",
+      ).trim() as LeadListFilters["quick"],
       importBatchId: String(formData.get("importBatchId") ?? "").trim(),
       assignedOwnerId: String(formData.get("assignedOwnerId") ?? "").trim(),
       createdFrom: String(formData.get("createdFrom") ?? "").trim(),
       createdTo: String(formData.get("createdTo") ?? "").trim(),
-      pageSize: Number(formData.get("pageSize") ?? LEADS_PAGE_SIZE) || LEADS_PAGE_SIZE,
+      pageSize:
+        Number(formData.get("pageSize") ?? LEADS_PAGE_SIZE) || LEADS_PAGE_SIZE,
       page: 1,
     };
 
@@ -186,34 +276,90 @@ export function LeadsFilters({
     router.replace(buildLeadListHref(pathname, nextFilters), { scroll: false });
   }
 
+  const resetHref = buildLeadListHref(pathname, {
+    ...filters,
+    name: "",
+    phone: "",
+    status: "",
+    tagId: "",
+    view: "unassigned",
+    quick: "all_unassigned",
+    importBatchId: "",
+    assignedOwnerId: "",
+    createdFrom: "",
+    createdTo: "",
+    page: 1,
+  });
+
+  const gridClassName = showOwnerFilter
+    ? "xl:grid-cols-[minmax(300px,1.45fr)_minmax(250px,1.15fr)_repeat(5,minmax(0,0.88fr))]"
+    : "xl:grid-cols-[minmax(300px,1.55fr)_minmax(250px,1.2fr)_repeat(4,minmax(0,0.94fr))]";
+
   return (
-    <div className="space-y-3 rounded-[1rem] border border-black/7 bg-[rgba(255,255,255,0.82)] px-4 py-3.5 shadow-[0_10px_20px_rgba(18,24,31,0.035)] md:px-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/38">
-            Leads Workspace
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <QuickFilterLink
+    <FiltersPanel
+      title="线索筛选"
+      headerMode="hidden"
+      className="rounded-[0.95rem] border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]"
+    >
+      <form onSubmit={handleSubmit} className="space-y-2.5">
+        <input type="hidden" name="view" value={filters.view} />
+        <input type="hidden" name="quick" value={filters.quick} />
+        <input
+          type="hidden"
+          name="importBatchId"
+          value={filters.importBatchId}
+        />
+        <input type="hidden" name="pageSize" value={String(filters.pageSize)} />
+
+        <div className={cn("grid gap-2 md:grid-cols-2", gridClassName)}>
+          <label
+            className={cn(
+              "flex min-h-9 items-center gap-2 rounded-[13px] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2.5 shadow-[var(--color-shell-shadow-sm)] transition-[border-color,box-shadow,transform] duration-150 motion-safe:hover:-translate-y-[1px] hover:border-[var(--color-accent-soft)] hover:shadow-[var(--color-shell-shadow-md)]",
+              "xl:col-span-1",
+            )}
+          >
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-1 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-sidebar-muted)]" />
+              <input
+                name="name"
+                defaultValue={filters.name}
+                placeholder="搜索姓名"
+                className="h-9 w-full border-0 bg-transparent pl-8 pr-1 text-[13px] text-[var(--foreground)] outline-none placeholder:text-[var(--color-sidebar-muted)] focus:ring-0"
+              />
+            </div>
+            <div className="h-4 w-px bg-[var(--color-border-soft)]" />
+            <input
+              name="phone"
+              defaultValue={filters.phone}
+              placeholder="手机号"
+              className="h-9 min-w-[7rem] border-0 bg-transparent px-0 text-[13px] text-[var(--foreground)] outline-none placeholder:text-[var(--color-sidebar-muted)] focus:ring-0"
+            />
+          </label>
+
+          <div className="flex min-h-9 flex-wrap items-center gap-1.5 rounded-[13px] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2.5 py-1.5 shadow-[var(--color-shell-shadow-sm)]">
+            <span className="shrink-0 text-[12px] font-medium text-[var(--color-sidebar-muted)]">
+              范围
+            </span>
+            <ScopeLink
               label="本次导入"
               href={buildQuickFilterHref(pathname, filters, "import_batch")}
               active={activeQuick === "import_batch"}
               disabled={!filters.importBatchId}
               scrollTargetId={scrollTargetId}
             />
-            <QuickFilterLink
+            <ScopeLink
               label="今日导入"
               href={buildQuickFilterHref(pathname, filters, "today")}
               active={activeQuick === "today"}
               scrollTargetId={scrollTargetId}
             />
-            <QuickFilterLink
+            <ScopeLink
               label="全部未分配"
               href={buildQuickFilterHref(pathname, filters, "all_unassigned")}
               active={activeQuick === "all_unassigned"}
               scrollTargetId={scrollTargetId}
             />
-            <QuickFilterLink
+            <ScopeLink
               label="已分配回看"
               href={buildLeadListHref(pathname, filters, {
                 view: "assigned",
@@ -223,135 +369,96 @@ export function LeadsFilters({
               scrollTargetId={scrollTargetId}
             />
           </div>
-        </div>
 
-        <Link
-          href={buildLeadListHref(pathname, {
-            ...filters,
-            name: "",
-            phone: "",
-            status: "",
-            tagId: "",
-            view: "unassigned",
-            quick: "all_unassigned",
-            importBatchId: "",
-            assignedOwnerId: "",
-            createdFrom: "",
-            createdTo: "",
-            page: 1,
-          })}
-          scroll={false}
-          onClick={() => {
-            if (scrollTargetId) {
-              scheduleSmartScroll(scrollTargetId);
-            }
-          }}
-          className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-        >
-          清空条件
-        </Link>
-      </div>
+          <InlineSelectControl
+            label="状态"
+            name="status"
+            defaultValue={filters.status}
+          >
+            <option value="">全部状态</option>
+            {leadStatusOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </InlineSelectControl>
 
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <input type="hidden" name="view" value={filters.view} />
-        <input type="hidden" name="quick" value={filters.quick} />
-        <input type="hidden" name="importBatchId" value={filters.importBatchId} />
-        <input type="hidden" name="pageSize" value={String(filters.pageSize)} />
+          <InlineSelectControl
+            label="标签"
+            name="tagId"
+            defaultValue={filters.tagId}
+          >
+            <option value="">全部标签</option>
+            {tagOptions.map((tag) => (
+              <option key={tag.id} value={tag.id}>
+                {tag.label}
+              </option>
+            ))}
+          </InlineSelectControl>
 
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_repeat(2,minmax(0,0.9fr))]">
-          <label className="space-y-1">
-            <span className="crm-label">姓名</span>
-            <input
-              name="name"
-              defaultValue={filters.name}
-              placeholder="搜索姓名"
-              className="crm-input"
-            />
-          </label>
-
-          <label className="space-y-1">
-            <span className="crm-label">手机号</span>
-            <input
-              name="phone"
-              defaultValue={filters.phone}
-              placeholder="搜索手机号"
-              className="crm-input"
-            />
-          </label>
-
-          <label className="space-y-1">
-            <span className="crm-label">状态</span>
-            <select name="status" defaultValue={filters.status} className="crm-select">
-              <option value="">全部状态</option>
-              {leadStatusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
+          {showOwnerFilter ? (
+            <InlineSelectControl
+              label="负责人"
+              name="assignedOwnerId"
+              defaultValue={filters.assignedOwnerId}
+            >
+              <option value="">全部负责人</option>
+              {ownerOptions.map((option) => (
+                <option key={option.id} value={option.id}>
                   {option.label}
                 </option>
               ))}
-            </select>
-          </label>
-
-          <label className="space-y-1">
-            <span className="crm-label">标签</span>
-            <select name="tagId" defaultValue={filters.tagId} className="crm-select">
-              <option value="">全部标签</option>
-              {tagOptions.map((tag) => (
-                <option key={tag.id} value={tag.id}>
-                  {tag.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="grid gap-3 xl:grid-cols-[repeat(3,minmax(0,0.9fr))_auto]">
-          {showOwnerFilter ? (
-            <label className="space-y-1">
-              <span className="crm-label">已分配负责人</span>
-              <select
-                name="assignedOwnerId"
-                defaultValue={filters.assignedOwnerId}
-                className="crm-select"
-              >
-                <option value="">全部负责人</option>
-                {ownerOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            </InlineSelectControl>
           ) : (
-            <input type="hidden" name="assignedOwnerId" value={filters.assignedOwnerId} />
+            <input
+              type="hidden"
+              name="assignedOwnerId"
+              value={filters.assignedOwnerId}
+            />
           )}
 
-          <label className="space-y-1">
-            <span className="crm-label">创建开始</span>
-            <input
-              type="date"
-              name="createdFrom"
-              defaultValue={filters.createdFrom}
-              className="crm-input"
-            />
-          </label>
+          <InlineDateControl
+            label="开始"
+            name="createdFrom"
+            defaultValue={filters.createdFrom}
+          />
+          <InlineDateControl
+            label="结束"
+            name="createdTo"
+            defaultValue={filters.createdTo}
+          />
+        </div>
 
-          <label className="space-y-1">
-            <span className="crm-label">创建结束</span>
-            <input
-              type="date"
-              name="createdTo"
-              defaultValue={filters.createdTo}
-              className="crm-input"
-            />
-          </label>
+        <div className="flex flex-col gap-2 border-t border-[var(--color-border-soft)] pt-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[12px] text-[var(--color-sidebar-muted)]">
+            当前范围 {getScopeLabel(filters)}
+            {activeFilterCount > 0
+              ? ` · 已启用 ${activeFilterCount} 项条件`
+              : ""}
+          </p>
 
-          <div className="flex items-end justify-end">
-            <button type="submit" className="crm-button crm-button-primary w-full xl:w-auto">
-              应用筛选
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={resetHref}
+              scroll={false}
+              onClick={() => {
+                if (scrollTargetId) {
+                  scheduleSmartScroll(scrollTargetId);
+                }
+              }}
+              className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+            >
+              重置
+            </Link>
+            <button
+              type="submit"
+              className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
+            >
+              应用
             </button>
           </div>
         </div>
       </form>
-    </div>
+    </FiltersPanel>
   );
 }

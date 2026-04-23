@@ -75,6 +75,12 @@ function getTargetVariant(item: RecycleBinListItem) {
   return "neutral" as const;
 }
 
+const recyclePanelClassName =
+  "space-y-3 rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
+
+const recycleInsetPanelClassName =
+  "rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2.5 shadow-[var(--color-shell-shadow-sm)]";
+
 function getDialogMeta(state: RecycleBinDialogState): RecycleBinDialogMeta | null {
   if (!state) {
     return null;
@@ -170,29 +176,27 @@ function GuardSection({
   const blockerCount = groups.reduce((count, group) => count + group.items.length, 0);
 
   return (
-    <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
+    <div className={recyclePanelClassName}>
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
-          {title}
-        </p>
+        <p className="crm-detail-label text-[11px]">{title}</p>
         <StatusBadge
           label={blockerCount > 0 ? `${blockerCount} 个阻断项` : emptyLabel}
           variant={blockerCount > 0 ? "warning" : "success"}
         />
       </div>
-      <p className="text-[13px] leading-5 text-black/58">{summary}</p>
+      <p className="text-[13px] leading-5 text-[var(--color-sidebar-muted)]">{summary}</p>
       {groups.length > 0 ? (
         <div className="space-y-2">
           {groups.map((group) => (
             <div
               key={`${title}-${group.title}`}
-              className="space-y-2 rounded-[0.85rem] border border-black/7 bg-white/78 px-3 py-2.5"
+              className={cn(recycleInsetPanelClassName, "space-y-2")}
             >
               <div className="space-y-1">
-                <p className="text-[13px] font-medium leading-5 text-black/78">
+                <p className="text-[13px] font-medium leading-5 text-[var(--foreground)]">
                   {group.title}
                 </p>
-                <p className="text-[12.5px] leading-5 text-black/56">
+                <p className="text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">
                   {group.description}
                 </p>
               </div>
@@ -200,16 +204,16 @@ function GuardSection({
                 {group.items.map((blocker) => (
                   <div
                     key={`${title}-${group.title}-${blocker.name}`}
-                    className="rounded-[0.75rem] border border-black/6 bg-[rgba(249,250,252,0.82)] px-3 py-2"
+                    className="rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-strong)] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
                   >
-                    <p className="text-[12.5px] font-medium leading-5 text-black/76">
+                    <p className="text-[12.5px] font-medium leading-5 text-[var(--foreground)]">
                       {blocker.name}
                     </p>
-                    <p className="mt-1 text-[12px] leading-5 text-black/56">
+                    <p className="mt-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
                       {blocker.description}
                     </p>
                     {blocker.suggestedAction ? (
-                      <p className="mt-1 text-[12px] leading-5 text-black/48">
+                      <p className="mt-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
                         建议动作：{blocker.suggestedAction}
                       </p>
                     ) : null}
@@ -233,8 +237,8 @@ function SummaryRow({
 }>) {
   return (
     <div className="space-y-1">
-      <p className="text-[12px] text-black/42">{label}</p>
-      <p className="text-sm font-medium leading-5 text-black/78">{value}</p>
+      <p className="crm-detail-label text-[11px]">{label}</p>
+      <p className="text-sm font-medium leading-5 text-[var(--foreground)]">{value}</p>
     </div>
   );
 }
@@ -250,10 +254,10 @@ function DetailRow({
 }>) {
   return (
     <div className="space-y-1">
-      <p className="text-[12px] text-black/42">{label}</p>
+      <p className="crm-detail-label text-[11px]">{label}</p>
       <p
         className={cn(
-          "text-sm font-medium text-black/78",
+          "text-sm font-medium text-[var(--foreground)]",
           multiline ? "leading-6" : "leading-5",
         )}
       >
@@ -311,16 +315,18 @@ function renderFinalizeActionButtons({
             event.stopPropagation();
             onOpenDialog("purge", item);
           }}
-          disabled={pending}
-          className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm text-[var(--color-danger)] hover:border-[rgba(141,59,51,0.16)] hover:bg-[rgba(255,247,246,0.88)] disabled:cursor-not-allowed disabled:text-black/42 disabled:opacity-55"
-          title="提前永久删除"
-        >
-          提前永久删除
-        </button>
+        disabled={pending}
+        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm text-[var(--color-danger)] hover:border-[rgba(255,148,175,0.24)] hover:bg-[rgba(255,148,175,0.12)] disabled:cursor-not-allowed disabled:text-[var(--color-sidebar-muted)] disabled:opacity-55"
+        title="提前永久删除"
+      >
+        提前永久删除
+      </button>
       ) : item.finalActionPreview?.finalAction === "ARCHIVE" ? (
-        <p className="text-xs leading-5 text-black/48">3 天后仅封存</p>
+        <p className="text-xs leading-5 text-[var(--color-sidebar-muted)]">3 天后仅封存</p>
       ) : item.purgeRequiresAdmin ? (
-        <p className="text-xs leading-5 text-black/48">仅管理员可提前永久删除</p>
+        <p className="text-xs leading-5 text-[var(--color-sidebar-muted)]">
+          仅管理员可提前永久删除
+        </p>
       ) : null}
     </div>
   );
@@ -356,7 +362,7 @@ function renderDefaultActionButtons({
           onOpenDialog("purge", item);
         }}
         disabled={!item.canPurge || pending}
-        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm text-[var(--color-danger)] hover:border-[rgba(141,59,51,0.16)] hover:bg-[rgba(255,247,246,0.88)] disabled:cursor-not-allowed disabled:text-black/42 disabled:opacity-55"
+        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm text-[var(--color-danger)] hover:border-[rgba(255,148,175,0.24)] hover:bg-[rgba(255,148,175,0.12)] disabled:cursor-not-allowed disabled:text-[var(--color-sidebar-muted)] disabled:opacity-55"
         title={
           item.canPurge
             ? "永久删除对象"
@@ -542,8 +548,8 @@ export function RecycleBinWorkbench({
                         className={cn(
                           "cursor-pointer transition-colors",
                           selected
-                            ? "bg-[rgba(160,106,29,0.05)]"
-                            : "hover:bg-[rgba(18,24,31,0.025)]",
+                            ? "bg-[rgba(111,141,255,0.12)]"
+                            : "hover:bg-[var(--color-shell-hover)]",
                         )}
                       >
                         <td>
@@ -552,7 +558,7 @@ export function RecycleBinWorkbench({
                             variant={getTargetVariant(item)}
                           />
                         </td>
-                        <td className="text-black/82">
+                        <td className="text-[var(--foreground)]">
                           <div className="space-y-1">
                             <div className="font-medium">{item.name}</div>
                             <button
@@ -567,12 +573,16 @@ export function RecycleBinWorkbench({
                             </button>
                           </div>
                         </td>
-                        <td className="text-black/56">{item.secondaryLabel}</td>
+                        <td className="text-[var(--color-sidebar-muted)]">{item.secondaryLabel}</td>
                         {showStatusColumns ? (
-                          <td className="text-black/62">{item.statusLabel ?? "--"}</td>
+                          <td className="text-[var(--color-sidebar-muted)]">
+                            {item.statusLabel ?? "--"}
+                          </td>
                         ) : null}
                         {showStatusColumns ? (
-                          <td className="text-black/62">{item.ownerLabel ?? "--"}</td>
+                          <td className="text-[var(--color-sidebar-muted)]">
+                            {item.ownerLabel ?? "--"}
+                          </td>
                         ) : null}
                         <td>{item.deleteReasonLabel}</td>
                         <td className="whitespace-nowrap">{item.deletedAtLabel}</td>
@@ -581,7 +591,7 @@ export function RecycleBinWorkbench({
                         </td>
                         <td className="min-w-[18rem]">
                           <div className="space-y-2">
-                            <p className="text-sm leading-6 text-black/62">
+                            <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
                               {isHistoryView
                                 ? item.resolutionSummary ?? "当前为历史终态只读记录。"
                                 : isFinalizeTab && item.finalActionPreview
@@ -602,7 +612,7 @@ export function RecycleBinWorkbench({
                             ) : isFinalizeTab && item.finalActionPreview ? (
                               <>
                                 {getFinalizeActionBadges(item)}
-                                <p className="text-xs leading-5 text-black/48">
+                                <p className="text-xs leading-5 text-[var(--color-sidebar-muted)]">
                                   {item.remainingTimeLabel
                                     ? `剩余时间：${item.remainingTimeLabel}`
                                     : "剩余时间：待重算"}
@@ -631,10 +641,12 @@ export function RecycleBinWorkbench({
                         <td className="align-top">
                           {isHistoryView ? (
                             <div className="space-y-2">
-                              <div className="text-sm font-medium text-black/72">
+                              <div className="text-sm font-medium text-[var(--foreground)]">
                                 {item.resolvedByLabel ?? "--"}
                               </div>
-                              <p className="text-xs leading-5 text-black/48">只读历史</p>
+                              <p className="text-xs leading-5 text-[var(--color-sidebar-muted)]">
+                                只读历史
+                              </p>
                             </div>
                           ) : isFinalizeTab
                             ? renderFinalizeActionButtons({
@@ -683,10 +695,8 @@ export function RecycleBinWorkbench({
         >
           {selectedItem ? (
             <div className="space-y-4">
-              <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
-                <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
-                  对象摘要
-                </p>
+              <div className={recyclePanelClassName}>
+                <p className="crm-detail-label text-[11px]">对象摘要</p>
                 <div className="space-y-2">
                   <DetailRow label="对象类型" value={selectedItem.targetTypeLabel} />
                   <DetailRow label="名称" value={selectedItem.name} />
@@ -701,16 +711,10 @@ export function RecycleBinWorkbench({
               </div>
 
               {selectedItem.customerSummary && !isHistoryView ? (
-                <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
-                  <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
-                    客户补充信息
-                  </p>
+                <div className={recyclePanelClassName}>
+                  <p className="crm-detail-label text-[11px]">客户补充信息</p>
                   <div className="space-y-2">
                     <DetailRow label="手机号" value={selectedItem.customerSummary.phone} />
-                    <DetailRow
-                      label="客户等级"
-                      value={selectedItem.customerSummary.levelLabel}
-                    />
                     <DetailRow
                       label="归属模式"
                       value={selectedItem.customerSummary.ownershipLabel}
@@ -733,10 +737,8 @@ export function RecycleBinWorkbench({
 
               {isHistoryView ? <RecycleBinHistorySummary item={selectedItem} /> : null}
 
-              <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
-                <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
-                  删除原因
-                </p>
+              <div className={recyclePanelClassName}>
+                <p className="crm-detail-label text-[11px]">删除原因</p>
                 <div className="space-y-2">
                   <DetailRow label="原因类型" value={selectedItem.deleteReasonLabel} />
                   <DetailRow
@@ -747,23 +749,19 @@ export function RecycleBinWorkbench({
                 </div>
               </div>
 
-                <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
-                  <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
-                    删除信息
-                </p>
+              <div className={recyclePanelClassName}>
+                <p className="crm-detail-label text-[11px]">删除信息</p>
                 <div className="space-y-2">
                   <DetailRow label="删除时间" value={selectedItem.deletedAtLabel} />
                   <DetailRow label="删除人" value={selectedItem.deletedByLabel} />
-                  </div>
                 </div>
+              </div>
 
               {isHistoryView ? (
                 <>
-                  <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
+                  <div className={recyclePanelClassName}>
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
-                        最终结果
-                      </p>
+                      <p className="crm-detail-label text-[11px]">最终结果</p>
                       <div className="flex flex-wrap gap-2">
                         <StatusBadge
                           label={selectedItem.resolutionActionLabel ?? selectedItem.entryStatusLabel}
@@ -796,11 +794,9 @@ export function RecycleBinWorkbench({
                     </div>
                   </div>
 
-                  <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
+                  <div className={recyclePanelClassName}>
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
-                        审计信息
-                      </p>
+                      <p className="crm-detail-label text-[11px]">审计信息</p>
                       <div className="flex flex-wrap gap-2">
                         <StatusBadge
                           label={getHistoryArchiveSourceBadge(selectedItem).label}
@@ -846,11 +842,11 @@ export function RecycleBinWorkbench({
                   {selectedItem.archivePayloadJsonText &&
                   selectedItem.targetType !== "CUSTOMER" &&
                   selectedItem.targetType !== "TRADE_ORDER" ? (
-                    <details className="rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
-                      <summary className="cursor-pointer list-none text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                    <details className={recyclePanelClassName}>
+                      <summary className="cursor-pointer list-none crm-detail-label text-[11px]">
                         Archive Payload
                       </summary>
-                      <pre className="mt-3 overflow-x-auto rounded-[0.85rem] border border-black/7 bg-white/80 p-3 text-xs leading-6 text-black/68">
+                      <pre className="mt-3 overflow-x-auto rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] p-3 text-xs leading-6 text-[var(--color-sidebar-muted)]">
                         {selectedItem.archivePayloadJsonText}
                       </pre>
                     </details>
@@ -866,67 +862,65 @@ export function RecycleBinWorkbench({
                   />
 
                   {isFinalizeTab && selectedItem.finalActionPreview ? (
-                <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
-                      Finalize preview
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <StatusBadge
-                        label={selectedItem.finalActionPreview.finalAction}
-                        variant={
-                          selectedItem.finalActionPreview.finalAction === "PURGE"
-                            ? "warning"
-                            : "info"
-                        }
-                      />
-                      {selectedItem.finalActionLabel ? (
-                        <StatusBadge
-                          label={selectedItem.finalActionLabel}
-                          variant="neutral"
+                    <div className={recyclePanelClassName}>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="crm-detail-label text-[11px]">Finalize preview</p>
+                        <div className="flex flex-wrap gap-2">
+                          <StatusBadge
+                            label={selectedItem.finalActionPreview.finalAction}
+                            variant={
+                              selectedItem.finalActionPreview.finalAction === "PURGE"
+                                ? "warning"
+                                : "info"
+                            }
+                          />
+                          {selectedItem.finalActionLabel ? (
+                            <StatusBadge
+                              label={selectedItem.finalActionLabel}
+                              variant="neutral"
+                            />
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <DetailRow
+                          label="剩余时间"
+                          value={selectedItem.remainingTimeLabel ?? "待重算"}
                         />
-                      ) : null}
+                        <DetailRow
+                          label="当前判断"
+                          value={
+                            selectedItem.finalizeSummary ??
+                            selectedItem.finalActionPreview.blockerSummary
+                          }
+                          multiline
+                        />
+                        <DetailRow
+                          label="提前永久删除"
+                          value={
+                            selectedItem.finalActionPreview.canEarlyPurge
+                              ? "仅 ADMIN 可在冷静期内提前永久删除"
+                              : "当前不开放提前永久删除"
+                          }
+                          multiline
+                        />
+                      </div>
+
+                      <GuardSection
+                        title="Finalize blocker"
+                        emptyLabel={
+                          selectedItem.finalActionPreview.finalAction === "PURGE"
+                            ? "当前终态为 PURGE"
+                            : "当前终态为 ARCHIVE"
+                        }
+                        summary={
+                          selectedItem.finalizeSummary ??
+                          selectedItem.finalActionPreview.blockerSummary
+                        }
+                        groups={selectedItem.finalizeBlockerGroups}
+                      />
                     </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <DetailRow
-                      label="剩余时间"
-                      value={selectedItem.remainingTimeLabel ?? "待重算"}
-                    />
-                    <DetailRow
-                      label="当前判断"
-                      value={
-                        selectedItem.finalizeSummary ??
-                        selectedItem.finalActionPreview.blockerSummary
-                      }
-                      multiline
-                    />
-                    <DetailRow
-                      label="提前永久删除"
-                      value={
-                        selectedItem.finalActionPreview.canEarlyPurge
-                          ? "仅 ADMIN 可在冷静期内提前永久删除"
-                          : "当前不开放提前永久删除"
-                      }
-                      multiline
-                    />
-                  </div>
-
-                  <GuardSection
-                    title="Finalize blocker"
-                    emptyLabel={
-                      selectedItem.finalActionPreview.finalAction === "PURGE"
-                        ? "当前终态为 PURGE"
-                        : "当前终态为 ARCHIVE"
-                    }
-                    summary={
-                      selectedItem.finalizeSummary ??
-                      selectedItem.finalActionPreview.blockerSummary
-                    }
-                    groups={selectedItem.finalizeBlockerGroups}
-                  />
-                </div>
                   ) : (
                     <GuardSection
                       title="清理判断"
@@ -944,11 +938,11 @@ export function RecycleBinWorkbench({
                 </>
               )}
 
-              <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
-                <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+              <div className={recyclePanelClassName}>
+                <p className="crm-detail-label text-[11px]">
                   {isHistoryView ? "对象入口快照" : "恢复目标位置"}
                 </p>
-                <div className="rounded-[0.85rem] border border-black/7 bg-white/78 px-3 py-2 text-sm font-medium text-black/74">
+                <div className="rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2 text-sm font-medium text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)]">
                   {selectedItem.restoreRouteSnapshot}
                 </div>
               </div>
@@ -1012,9 +1006,9 @@ function RecycleBinConfirmDialog({
         : meta.impactHint;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/34 px-4 py-8">
-      <div className="w-full max-w-xl overflow-hidden rounded-[1.05rem] border border-black/10 bg-[rgba(255,255,255,0.98)] shadow-[0_24px_60px_rgba(18,24,31,0.16)]">
-        <div className="flex items-start justify-between gap-4 border-b border-black/7 bg-[rgba(247,248,250,0.88)] px-5 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,5,10,0.72)] px-4 py-8 backdrop-blur-[18px]">
+      <div className="w-full max-w-xl overflow-hidden rounded-[1.35rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-lg)]">
+        <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-5 py-4">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge label={meta.badgeLabel} variant={meta.badgeVariant} />
@@ -1031,8 +1025,12 @@ function RecycleBinConfirmDialog({
               ) : null}
             </div>
             <div>
-              <h3 className="text-[1.02rem] font-semibold text-black/86">{meta.title}</h3>
-              <p className="mt-1 text-sm leading-6 text-black/58">{meta.description}</p>
+              <h3 className="text-[1.02rem] font-semibold text-[var(--foreground)]">
+                {meta.title}
+              </h3>
+              <p className="mt-1 text-sm leading-6 text-[var(--color-sidebar-muted)]">
+                {meta.description}
+              </p>
             </div>
           </div>
           <button
@@ -1045,7 +1043,7 @@ function RecycleBinConfirmDialog({
         </div>
 
         <div className="space-y-4 px-5 py-4">
-          <div className="grid gap-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.78)] p-4 sm:grid-cols-2">
+          <div className="grid gap-3 rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:grid-cols-2">
             <SummaryRow label="对象名称" value={state.item.name} />
             <SummaryRow label="对象类型" value={state.item.targetTypeLabel} />
             <SummaryRow label="次标识" value={state.item.secondaryLabel} />
@@ -1060,24 +1058,28 @@ function RecycleBinConfirmDialog({
             <SummaryRow label="删除人" value={state.item.deletedByLabel} />
           </div>
 
-          <div className="space-y-2 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.74)] p-4">
-            <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
-              当前判断
+          <div className="space-y-2 rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+            <p className="crm-detail-label text-[11px]">当前判断</p>
+            <p className="text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
+              {currentSummary}
             </p>
-            <p className="text-[13px] leading-5 text-black/58">{currentSummary}</p>
           </div>
 
-          <div className="space-y-2 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.74)] p-4">
-            <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+          <div className="space-y-2 rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+            <p className="crm-detail-label text-[11px]">
               {meta.impactLabel}
             </p>
-            <p className="text-[13px] leading-5 text-black/58">{impactContent}</p>
-            <p className="text-[12px] leading-5 text-black/46">{meta.impactHint}</p>
+            <p className="text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
+              {impactContent}
+            </p>
+            <p className="text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+              {meta.impactHint}
+            </p>
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-black/7 bg-[rgba(247,248,250,0.8)] px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-          <p className="text-[13px] leading-5 text-black/56">
+        <div className="flex flex-col gap-3 border-t border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <p className="text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
             {state.mode === "restore"
               ? "恢复成功后，对象会按原业务入口重新可见。"
               : state.mode === "finalize"

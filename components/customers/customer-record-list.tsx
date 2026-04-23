@@ -40,7 +40,7 @@ export function CustomerTabSection({
       actions={actions}
       density="compact"
       className={cn(
-        "rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]",
+        "rounded-[1.05rem] border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]",
         className,
       )}
       contentClassName="p-4 md:p-5"
@@ -56,23 +56,30 @@ export function CustomerRecordCard({
   description,
   href,
   hrefLabel,
+  className,
 }: Readonly<{
   title: string;
   meta: string[];
   description?: string;
   href?: string;
   hrefLabel?: string;
+  className?: string;
 }>) {
   return (
-    <div className="rounded-[1rem] border border-black/8 bg-[linear-gradient(180deg,rgba(250,250,251,0.84),rgba(255,255,255,0.92))] px-4 py-3.5 transition-[border-color,background-color,box-shadow] duration-150 hover:border-black/12 hover:bg-white hover:shadow-[0_10px_20px_rgba(18,24,31,0.04)]">
+    <div
+      className={cn(
+        "rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3.5 transition-[border-color,background-color,box-shadow] duration-150 hover:border-[rgba(122,154,255,0.18)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-sm)]",
+        className,
+      )}
+    >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1 space-y-2">
-          <p className="text-sm font-semibold text-black/84">{title}</p>
+          <p className="text-sm font-semibold text-[var(--foreground)]">{title}</p>
           {description ? (
-            <p className="text-[13px] leading-6 text-black/58">{description}</p>
+            <p className="text-[13px] leading-6 text-[var(--color-sidebar-muted)]">{description}</p>
           ) : null}
           {meta.length > 0 ? (
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] leading-5 text-black/48">
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
               {meta.map((item, index) => (
                 <span key={`${index}-${item}`} className="max-w-full break-words">
                   {item}

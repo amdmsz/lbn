@@ -7,6 +7,7 @@ import { queryShippingLogisticsTrace } from "@/lib/logistics/provider";
 export type LogisticsViewer = {
   id: string;
   role: RoleCode;
+  teamId?: string | null;
 };
 
 export async function getShippingTaskLogisticsTrace(
@@ -15,32 +16,14 @@ export async function getShippingTaskLogisticsTrace(
 ) {
   const andClauses: Prisma.ShippingTaskWhereInput[] = [{ id: shippingTaskId }];
 
-  if (viewer.role === "SUPERVISOR") {
-    const user = await prisma.user.findUnique({
-      where: { id: viewer.id },
-      select: { teamId: true },
-    });
+  const scope = getShippingTaskScope(viewer.role, viewer.id, viewer.teamId);
 
-    if (!user?.teamId) {
-      return null;
-    }
+  if (!scope) {
+    throw new Error("You do not have access to logistics trace.");
+  }
 
-    andClauses.push({
-      OR: [
-        { salesOrder: { owner: { is: { teamId: user.teamId } } } },
-        { salesOrder: { customer: { owner: { is: { teamId: user.teamId } } } } },
-      ],
-    });
-  } else {
-    const scope = getShippingTaskScope(viewer.role, viewer.id);
-
-    if (!scope) {
-      throw new Error("You do not have access to logistics trace.");
-    }
-
-    if (Object.keys(scope).length > 0) {
-      andClauses.push(scope);
-    }
+  if (Object.keys(scope).length > 0) {
+    andClauses.push(scope);
   }
 
   const shippingTask = await prisma.shippingTask.findFirst({

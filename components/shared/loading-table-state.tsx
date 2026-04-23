@@ -37,7 +37,7 @@ export function LoadingTableState({
             {Array.from({ length: rowCount }).map((_, index) => (
               <div
                 key={index}
-                className="crm-loading-block h-12 rounded-none border-b border-black/6 last:border-b-0"
+                className="crm-loading-block h-12 rounded-none border-b border-[var(--color-border-soft)] last:border-b-0"
               />
             ))}
           </div>

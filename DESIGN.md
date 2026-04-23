@@ -59,8 +59,9 @@ The UI must support:
 Primary reference mix:
 
 - **Linear** for page skeleton, precision, restraint, table-and-workbench clarity
-- **Cohere** for KPI rows, data summaries, dashboard density, and supervisory views
+- **Apple-like product restraint** for calm premium surfaces, obvious interaction hierarchy, and "few words, strong structure"
 - **Vercel** for typography restraint, spacing discipline, clean surfaces, and detail polish
+- **Cohere** only for supervisory KPI density and management-level comparison rows
 - **Claude / Notion** only for slight warmth in detail pages, empty states, and writing surfaces
 
 ### 3.2 Desired feeling
@@ -129,9 +130,12 @@ Visual refactors must not silently change:
 - dropdown / more-action destinations
 - empty-state action targets
 
-### 4.6 Incremental refactor by default
+### 4.6 Sitewide cutover baseline
 
-Unless explicitly requested, redesign should happen through incremental page-by-page improvement rather than a full frontend rewrite.
+This repository is now in an explicit sitewide UI / visual / IA cutover program.
+
+Implementation should still happen in controlled phases, but the intended destination is no longer a page-local polish pass.
+Shared shell, tokens, workbench primitives, supervisor cockpit, sales workbench, and customer dossier should converge on one coherent system.
 
 ---
 
@@ -150,6 +154,8 @@ The interface should be built from:
 - precise typography
 - compact structural rhythm
 
+The current warm beige / earthy CRM palette should be treated as deprecated direction for the new cutover.
+
 ### 5.2 Accent strategy
 
 Accent color should be used deliberately, not broadly.
@@ -164,6 +170,12 @@ Allowed primary accent use cases:
 - key operational highlight
 
 Avoid multiple competing accent colors in the same viewport.
+
+Avoid:
+
+- generic purple-on-white defaults
+- warm brown luxury cues
+- scattered rainbow KPI accents
 
 ### 5.3 Warmth strategy
 
@@ -181,6 +193,7 @@ Warmth should **not** come from:
 - consumer-style illustrations
 - saturated surfaces everywhere
 - oversized rounded toy-like components
+- long explanatory copy
 
 ---
 
@@ -213,14 +226,21 @@ Suggested practical baseline:
 
 ### 6.2 Accent palette
 
-Primary accent should follow a restrained purple-indigo family inspired by Linear, but slightly softened for business CRM usage.
+Primary accent should follow a restrained cool-tech direction:
 
-Suggested baseline:
+- cool blue
+- slate-blue
+- steel-cyan
 
-- `--accent-primary`: `#5b5bd6`
-- `--accent-primary-hover`: `#4c4ccc`
-- `--accent-primary-soft`: `#eeefff`
-- `--accent-focus-ring`: `rgba(91, 91, 214, 0.22)`
+Do not use warm brown as the new primary product accent.
+Do not default to purple just because it looks "SaaS-like".
+
+Suggested baseline direction for the current cutover:
+
+- `--accent-primary`: `#2563eb`
+- `--accent-primary-hover`: `#1d4ed8`
+- `--accent-primary-soft`: `#e8f0ff`
+- `--accent-focus-ring`: `rgba(37, 99, 235, 0.18)`
 
 Optional data accent support for charts or summary highlights:
 
@@ -330,6 +350,7 @@ A good page header should contain:
 - optional short subtitle
 - right-aligned primary actions
 - no oversized intro copy
+- no "how to use this page" paragraphs unless the workflow is truly non-obvious
 
 The header should feel concise and operational.
 
@@ -358,6 +379,7 @@ Summary cards should be:
 
 Prefer 3–5 summary cards max in most top rows.
 Do not create oversized status blocks.
+Supervisor home should prefer a compact KPI strip above a pure operating table rather than tall dashboard stacks.
 
 ### 8.5 Main workbench
 
@@ -632,27 +654,40 @@ This is a primary daily sales workbench.
 
 Priorities:
 
-- compact and powerful filter bar
-- clear owner / follow-up / latest activity visibility
-- stronger customer value recognition
-- tighter customer cards or table rows
-- less badge clutter
-- hover actions that stay disciplined and do not visually dominate
+- default to a dense table as the primary mode
+- prioritize today’s assigned customers and immediate next actions
+- keep imported intent / purchase information visible in-row
+- support inline classification and inline remark editing
+- clear latest call result / contact progress visibility
+- reduce card-first thinking and avoid thick top scaffolding
 
-### 13.2 `/customers/[id]`
+### 13.2 `/dashboard`
+
+This should become the supervisor / management operating cockpit rather than a generic role dashboard.
+
+Priorities:
+
+- compact day-based KPI strip
+- pure employee operating table as the main content layer
+- obvious drill-down into employee customer pools
+- restrained copy and minimal decorative framing
+- no giant quick-entry card walls
+
+### 13.3 `/customers/[id]`
 
 This page should feel like a compact operational dossier.
 
 Priorities:
 
 - reduce oversized profile card height
+- surface current `ABCDE` class clearly
 - make cumulative purchase amount more prominent
 - unify orders / payment / follow-up / logistics sections visually
 - make recent records easier to scan
-- remove decorative bulk
+- remove decorative bulk and repeated explanations
 - strengthen action clarity without crowding the top
 
-### 13.3 `/fulfillment`
+### 13.4 `/fulfillment`
 
 This is the main order and fulfillment domain workbench.
 
@@ -665,7 +700,7 @@ Priorities:
 - no verbose dashboard theater
 - no re-splitting into disconnected mini-products inside each tab
 
-### 13.4 `/products`
+### 13.5 `/products`
 
 This is a clean master-data center.
 
@@ -677,7 +712,7 @@ Priorities:
 - controlled form density
 - obvious primary actions
 
-### 13.5 `/customers/public-pool`
+### 13.6 `/customers/public-pool`
 
 This is an ownership lifecycle workbench, not a lead marketplace.
 
@@ -688,9 +723,9 @@ Priorities:
 - settings and reports linkage stays obvious
 - operational density remains high without collapsing into chaos
 
-### 13.6 Reporting / supervisor views
+### 13.7 Reporting / supervisor views
 
-Supervisor/admin-facing views may use more Cohere-like KPI density, but should still remain restrained and aligned with the same base system.
+Supervisor/admin-facing views may use more KPI density, but should still remain restrained, comparison-first, and aligned with the same base system.
 
 ---
 
@@ -712,6 +747,7 @@ Use progressive disclosure for:
 - dense subordinate detail
 
 Do not dump everything into the first screen.
+Do not keep explanatory paragraphs on the first screen if the layout itself can communicate the workflow.
 
 ### 14.3 Destructive actions
 
@@ -763,6 +799,7 @@ Avoid decorative or cinematic motion.
 - Don’t center the whole experience around a hero search bar
 - Don’t use oversized consumer-style cards
 - Don’t turn every page into a dashboard
+- Don’t keep oversized top nav blocks or helper copy just to explain obvious workflows
 - Don’t flood the UI with colorful badges
 - Don’t hide important business actions too deeply
 - Don’t silently change route destinations during visual refactor

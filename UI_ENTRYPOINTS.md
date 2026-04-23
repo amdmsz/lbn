@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document records the real UI and interaction entrypoints in the repository as of `2026-04-05`.
+This document records the real UI and interaction entrypoints in the repository as of `2026-04-22`.
 
 It is not a product wish list.
 It is a code-audited registry for:
@@ -18,6 +18,9 @@ This file should be updated whenever a capability is cut over, redirected, or re
 
 ## Current Domain Mainlines
 
+- Supervisor / management daily operating mainline: `/dashboard`
+- Sales daily workbench mainline: `/customers`
+- Supervisor drill-down employee customer pool mainline: `/customers?salesId=<salesId>`
 - Order and fulfillment domain mainline: `/fulfillment`
 - Trade-order list mainline: `/fulfillment?tab=trade-orders`
 - Shipping execution mainline: `/fulfillment?tab=shipping`
@@ -36,6 +39,74 @@ Compatibility routes currently still in use:
 - `/shipping/export-batches` -> redirects to `/fulfillment?tab=batches`
 - `/suppliers` -> redirects to `/products?tab=suppliers`
 - `/orders/[id]` -> parent-first detail, child fallback compatibility route
+
+---
+
+## Home And Daily Workbench Mainlines
+
+### Supervisor / Management Daily Operations
+
+**唯一主链（当前 cutover 目标主入口）**
+
+- `/dashboard`
+
+**主入口列表**
+
+- Left navigation home entry for `ADMIN / SUPERVISOR`
+- Default post-login landing route for supervisor-style roles
+- Employee row drill-down links from dashboard into `/customers?salesId=<salesId>`
+
+**涉及的关键文件**
+
+- `app/(dashboard)/dashboard/page.tsx`
+- `components/dashboard/dashboard-workbench.tsx`
+- `lib/reports/queries.ts`
+- `components/layout/sidebar-nav.tsx`
+
+**每次改该能力时必须同步检查的入口**
+
+- Desktop sidebar home entry
+- Mobile sheet navigation home entry
+- Employee drill-down links into customer pools
+- Dashboard KPI cards / summary strip / employee table alignment
+
+**当前风险说明**
+
+- Existing dashboard still carries generic role-workbench and 30-day summary behavior
+- This route is the highest-risk page for product-truth drift during the current cutover
+
+### Sales Daily Workbench
+
+**唯一主链（当前 cutover 目标主入口）**
+
+- `/customers`
+
+**主入口列表**
+
+- Left navigation customer entry for `SALES`
+- Supervisor drill-down entry through `/customers?salesId=<salesId>`
+- Customer detail back-links and empty-state return links
+
+**涉及的关键文件**
+
+- `app/(dashboard)/customers/page.tsx`
+- `components/customers/customer-center-workbench.tsx`
+- `components/customers/customer-filter-toolbar.tsx`
+- `components/customers/customers-table.tsx`
+- `lib/customers/queries.ts`
+
+**每次改该能力时必须同步检查的入口**
+
+- Sales default route behavior
+- Supervisor drill-down filtered employee pool behavior
+- Table-first layout and inline edit affordances
+- Empty-state reset links
+- Card / hover / more-action fallbacks
+
+**当前风险说明**
+
+- Current customer center is close to the desired workbench but still carries generic summary and legacy density
+- Inline classification / remark editing and “today assigned” first-screen behavior must not drift into a second workbench
 
 ---
 

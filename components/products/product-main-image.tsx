@@ -1,4 +1,7 @@
-import { buildProductImageGlyph, resolveProductMainImageSrc } from "@/lib/products/image";
+import {
+  buildProductImageGlyph,
+  resolveProductMainImageSrc,
+} from "@/lib/products/image";
 
 type ProductMainImageProps = {
   mainImagePath: string | null | undefined;
@@ -9,9 +12,12 @@ type ProductMainImageProps = {
   className?: string;
 };
 
-const sizeClasses: Record<NonNullable<ProductMainImageProps["size"]>, string> = {
-  list: "h-14 w-14 rounded-[1rem] text-sm",
-  hero: "h-28 w-28 rounded-[1.15rem] text-xl",
+const sizeClasses: Record<
+  NonNullable<ProductMainImageProps["size"]>,
+  string
+> = {
+  list: "h-12 w-12 rounded-[0.9rem] text-sm",
+  hero: "h-32 w-32 rounded-[1.25rem] text-[1.25rem]",
   form: "h-20 w-20 rounded-[1rem] text-base",
 };
 
@@ -32,14 +38,14 @@ export function ProductMainImage({
       <img
         src={src}
         alt={name}
-        className={`${sizeClasses[size]} ${className} border border-black/8 bg-[rgba(247,248,250,0.94)] object-cover shadow-[0_10px_20px_rgba(15,23,42,0.06)]`}
+        className={`${sizeClasses[size]} ${className} border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] object-cover shadow-[var(--color-shell-shadow-xs)] transition-transform duration-500 ease-out`}
       />
     );
   }
 
   return (
     <div
-      className={`${sizeClasses[size]} ${className} flex items-center justify-center border border-black/8 bg-[linear-gradient(180deg,rgba(247,248,250,0.94),rgba(255,255,255,0.98))] font-semibold tracking-[0.08em] text-black/58`}
+      className={`${sizeClasses[size]} ${className} flex items-center justify-center border border-[var(--color-border-soft)] bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(244,247,250,0.96))] font-semibold tracking-[0.08em] text-[var(--color-sidebar-muted)] shadow-[var(--color-shell-shadow-xs)] transition-transform duration-500 ease-out`}
     >
       {glyph}
     </div>

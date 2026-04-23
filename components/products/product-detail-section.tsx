@@ -6,6 +6,8 @@ import { MasterDataRecycleDialog } from "@/components/products/master-data-recyc
 import { ProductFormDrawer } from "@/components/products/product-form-drawer";
 import {
   ProductExecutionSummarySection,
+  productWorkbenchQuietActionClassName,
+  productWorkbenchSoftActionClassName,
   ProductSkuWorkspaceSection,
   ProductWorkbenchHero,
 } from "@/components/products/product-workbench-sections";
@@ -142,40 +144,56 @@ export function ProductDetailSection({
   initialOpenSkuCreator: boolean;
   upsertProductAction: (formData: FormData) => Promise<ProductActionResult>;
   toggleProductAction: (formData: FormData) => Promise<ProductActionResult>;
-  moveProductToRecycleBinAction: (formData: FormData) => Promise<ProductActionResult>;
+  moveProductToRecycleBinAction: (
+    formData: FormData,
+  ) => Promise<ProductActionResult>;
   upsertProductSkuAction: (formData: FormData) => Promise<ProductActionResult>;
   toggleProductSkuAction: (formData: FormData) => Promise<ProductActionResult>;
-  moveProductSkuToRecycleBinAction: (formData: FormData) => Promise<ProductActionResult>;
-  createInlineSupplierAction: (formData: FormData) => Promise<InlineSupplierResult>;
+  moveProductSkuToRecycleBinAction: (
+    formData: FormData,
+  ) => Promise<ProductActionResult>;
+  createInlineSupplierAction: (
+    formData: FormData,
+  ) => Promise<InlineSupplierResult>;
 }>) {
   const [notice, setNotice] = useState<ProductActionResult | null>(null);
-  const [productDrawerOpen, setProductDrawerOpen] = useState(initialOpenProductEditor);
+  const [productDrawerOpen, setProductDrawerOpen] = useState(
+    initialOpenProductEditor,
+  );
   const [skuDrawerMode, setSkuDrawerMode] = useState<"create" | "edit" | null>(
     initialOpenSkuCreator ? "create" : null,
   );
-  const [skuCreateMode, setSkuCreateMode] = useState<"quick" | "advanced">("quick");
+  const [skuCreateMode, setSkuCreateMode] = useState<"quick" | "advanced">(
+    "quick",
+  );
   const [editingSkuId, setEditingSkuId] = useState<string | null>(null);
   const [templateSkuId, setTemplateSkuId] = useState<string | null>(null);
-  const [dismissInitialProductDrawer, setDismissInitialProductDrawer] = useState(
-    initialOpenProductEditor,
+  const [dismissInitialProductDrawer, setDismissInitialProductDrawer] =
+    useState(initialOpenProductEditor);
+  const [dismissInitialSkuDrawer, setDismissInitialSkuDrawer] = useState(
+    initialOpenSkuCreator,
   );
-  const [dismissInitialSkuDrawer, setDismissInitialSkuDrawer] = useState(initialOpenSkuCreator);
-  const [recycleTarget, setRecycleTarget] = useState<RecycleTarget | null>(null);
+  const [recycleTarget, setRecycleTarget] = useState<RecycleTarget | null>(
+    null,
+  );
   const [recycleReason, setRecycleReason] =
     useState<MasterDataRecycleReasonCode>("mistaken_creation");
   const [pendingAction, startActionTransition] = useTransition();
   const router = useRouter();
 
-  const editingSku =
-    editingSkuId ? product.skus.find((sku) => sku.id === editingSkuId) ?? null : null;
+  const editingSku = editingSkuId
+    ? (product.skus.find((sku) => sku.id === editingSkuId) ?? null)
+    : null;
   const activeSkuCount = product.skus.filter((sku) => sku.enabled).length;
   const quickCreateButtonLabel =
     product.skus.length > 0 ? "复制为新规格" : "新增首个规格";
   const templateSourceSku = templateSkuId
-    ? product.skus.find((sku) => sku.id === templateSkuId) ?? null
-    : product.skus[0] ?? null;
+    ? (product.skus.find((sku) => sku.id === templateSkuId) ?? null)
+    : (product.skus[0] ?? null);
 
-  function mapSkuToDraft(source: ProductDetail["skus"][number] | null): ProductSkuDraft | null {
+  function mapSkuToDraft(
+    source: ProductDetail["skus"][number] | null,
+  ): ProductSkuDraft | null {
     if (!source) {
       return null;
     }
@@ -195,13 +213,6 @@ export function ProductDetailSection({
     setEditingSkuId(null);
     setTemplateSkuId(sourceSkuId ?? product.skus[0]?.id ?? null);
     setSkuCreateMode("quick");
-    setSkuDrawerMode("create");
-  }
-
-  function openAdvancedSkuCreate(sourceSkuId?: string | null) {
-    setEditingSkuId(null);
-    setTemplateSkuId(sourceSkuId ?? product.skus[0]?.id ?? null);
-    setSkuCreateMode("advanced");
     setSkuDrawerMode("create");
   }
 
@@ -275,7 +286,10 @@ export function ProductDetailSection({
       setNotice(result);
       closeRecycleDialog();
 
-      if (result.recycleStatus === "created" || result.recycleStatus === "already_in_recycle_bin") {
+      if (
+        result.recycleStatus === "created" ||
+        result.recycleStatus === "already_in_recycle_bin"
+      ) {
         if (recycleTarget.kind === "product") {
           router.push("/products");
           return;
@@ -309,29 +323,13 @@ export function ProductDetailSection({
         activeSkuCount={activeSkuCount}
         primaryActions={
           canManage ? (
-            <>
-              <button
-                type="button"
-                onClick={() => openQuickSkuCreate()}
-                className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
-              >
-                {quickCreateButtonLabel}
-              </button>
-              <button
-                type="button"
-                onClick={() => openAdvancedSkuCreate()}
-                className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-              >
-                高级新增 SKU
-              </button>
-              <button
-                type="button"
-                onClick={() => setProductDrawerOpen(true)}
-                className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-              >
-                编辑商品
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => openQuickSkuCreate()}
+              className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
+            >
+              添加规格
+            </button>
           ) : null
         }
         utilityActions={
@@ -339,11 +337,18 @@ export function ProductDetailSection({
             <>
               <button
                 type="button"
+                onClick={() => setProductDrawerOpen(true)}
+                className={productWorkbenchSoftActionClassName}
+              >
+                编辑商品
+              </button>
+              <button
+                type="button"
                 onClick={handleToggleProduct}
                 disabled={pendingAction}
-                className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84 disabled:cursor-not-allowed disabled:opacity-50"
+                className={productWorkbenchQuietActionClassName}
               >
-                {product.enabled ? "停用商品" : "启用商品"}
+                {product.enabled ? "停用" : "启用"}
               </button>
               <button
                 type="button"
@@ -356,9 +361,9 @@ export function ProductDetailSection({
                     guard: product.recycleGuard,
                   })
                 }
-                className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84"
+                className={productWorkbenchQuietActionClassName}
               >
-                {product.recycleGuard.canMoveToRecycleBin ? "移入回收站" : "查看引用关系"}
+                {product.recycleGuard.canMoveToRecycleBin ? "回收" : "查看引用"}
               </button>
             </>
           ) : null
@@ -374,7 +379,7 @@ export function ProductDetailSection({
               <button
                 type="button"
                 onClick={() => openQuickSkuCreate(sku.id)}
-                className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                className={productWorkbenchSoftActionClassName}
               >
                 复制为新规格
               </button>
@@ -388,7 +393,7 @@ export function ProductDetailSection({
                   setSkuCreateMode("advanced");
                   setSkuDrawerMode("edit");
                 }}
-                className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                className={productWorkbenchQuietActionClassName}
               >
                 编辑规格
               </button>
@@ -398,7 +403,7 @@ export function ProductDetailSection({
                 type="button"
                 onClick={() => handleToggleSku(sku.id)}
                 disabled={pendingAction}
-                className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84 disabled:cursor-not-allowed disabled:opacity-50"
+                className={productWorkbenchQuietActionClassName}
               >
                 {sku.enabled ? "停用" : "启用"}
               </button>
@@ -407,18 +412,18 @@ export function ProductDetailSection({
               <button
                 type="button"
                 onClick={() =>
-                    setRecycleTarget({
-                      kind: "sku",
-                      name: sku.skuName,
-                      secondaryLabel: sku.skuName,
-                      updatedAt: sku.updatedAt,
-                      guard: sku.recycleGuard,
-                      skuId: sku.id,
+                  setRecycleTarget({
+                    kind: "sku",
+                    name: sku.skuName,
+                    secondaryLabel: sku.skuName,
+                    updatedAt: sku.updatedAt,
+                    guard: sku.recycleGuard,
+                    skuId: sku.id,
                   })
                 }
-                className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84"
+                className={productWorkbenchQuietActionClassName}
               >
-                {sku.recycleGuard.canMoveToRecycleBin ? "移入回收站" : "查看引用"}
+                {sku.recycleGuard.canMoveToRecycleBin ? "回收" : "查看引用"}
               </button>
             ) : null}
           </>
@@ -482,8 +487,14 @@ export function ProductDetailSection({
         productId={product.id}
         productName={product.name}
         supplierName={product.supplier?.name ?? null}
-        sku={skuDrawerMode === "edit" && editingSku ? mapSkuToDraft(editingSku) : null}
-        templateSku={skuDrawerMode === "create" ? mapSkuToDraft(templateSourceSku) : null}
+        sku={
+          skuDrawerMode === "edit" && editingSku
+            ? mapSkuToDraft(editingSku)
+            : null
+        }
+        templateSku={
+          skuDrawerMode === "create" ? mapSkuToDraft(templateSourceSku) : null
+        }
         redirectTo={currentHref}
         createMode={skuCreateMode}
         upsertAction={upsertProductSkuAction}
@@ -500,7 +511,9 @@ export function ProductDetailSection({
         objectName={recycleTarget?.name ?? ""}
         objectTypeLabel={recycleTarget?.kind === "sku" ? "SKU" : "商品"}
         secondaryLabel={recycleTarget?.secondaryLabel ?? ""}
-        domainLabel={recycleTarget?.kind === "sku" ? "商品主数据 / SKU" : "商品主数据"}
+        domainLabel={
+          recycleTarget?.kind === "sku" ? "商品主数据 / SKU" : "商品主数据"
+        }
         updatedAt={recycleTarget?.updatedAt ?? new Date()}
         guard={
           recycleTarget?.guard ?? {

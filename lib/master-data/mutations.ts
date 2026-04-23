@@ -20,6 +20,7 @@ import { findActiveRecycleEntry } from "@/lib/recycle-bin/repository";
 type Actor = {
   id: string;
   role: RoleCode;
+  teamId?: string | null;
 };
 
 const codeSchema = z
@@ -656,7 +657,7 @@ export async function assignCustomerTag(
     throw new Error("当前角色无权使用客户标签。");
   }
 
-  const customerScope = getCustomerScope(actor.role, actor.id);
+  const customerScope = getCustomerScope(actor.role, actor.id, actor.teamId);
   if (!customerScope) {
     throw new Error("当前角色无权访问该客户。");
   }
@@ -742,7 +743,7 @@ export async function removeCustomerTag(
     throw new Error("当前角色无权使用客户标签。");
   }
 
-  const customerScope = getCustomerScope(actor.role, actor.id);
+  const customerScope = getCustomerScope(actor.role, actor.id, actor.teamId);
   if (!customerScope) {
     throw new Error("当前角色无权访问该客户。");
   }
@@ -819,7 +820,7 @@ export async function assignLeadTag(
     throw new Error("当前角色无权使用线索标签。");
   }
 
-  const leadScope = getLeadScope(actor.role, actor.id);
+  const leadScope = getLeadScope(actor.role, actor.id, actor.teamId);
   if (!leadScope) {
     throw new Error("当前角色无权访问该线索。");
   }
@@ -899,7 +900,7 @@ export async function removeLeadTag(
     throw new Error("当前角色无权使用线索标签。");
   }
 
-  const leadScope = getLeadScope(actor.role, actor.id);
+  const leadScope = getLeadScope(actor.role, actor.id, actor.teamId);
   if (!leadScope) {
     throw new Error("当前角色无权访问该线索。");
   }

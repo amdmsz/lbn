@@ -24,7 +24,7 @@ export function PageMeta({
         <div className="crm-page-meta-main" />
       )}
       {secondary ? (
-        <div className="crm-page-meta-side text-sm leading-6 text-black/54 lg:text-right">
+        <div className="crm-page-meta-side text-sm leading-6 text-[var(--color-sidebar-muted)] lg:text-right">
           {secondary}
         </div>
       ) : null}

@@ -19,10 +19,10 @@ function MetricCardContent({
       <p
         className={
           isStrip
-            ? "text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40"
+            ? "text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-sidebar-muted)]"
             : isCompact
-            ? "text-[10px] font-semibold uppercase tracking-[0.12em] text-black/42"
-            : "text-[11px] font-semibold uppercase tracking-[0.14em] text-black/46"
+              ? "text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]"
+              : "text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-sidebar-muted)]"
         }
       >
         {label}
@@ -30,10 +30,10 @@ function MetricCardContent({
       <p
         className={
           isStrip
-            ? "mt-2 text-[1.1rem] font-semibold tracking-[-0.03em] text-black/86 md:text-[1.18rem]"
+            ? "mt-2 text-[1.1rem] font-semibold tracking-[-0.035em] text-[var(--foreground)] md:text-[1.18rem]"
             : isCompact
-            ? "mt-1.5 text-[1.28rem] font-semibold tracking-tight text-black/86 md:text-[1.45rem]"
-            : "mt-3 text-[1.85rem] font-semibold tracking-tight text-black/86"
+              ? "mt-1.5 text-[1.28rem] font-semibold tracking-[-0.035em] text-[var(--foreground)] md:text-[1.48rem]"
+              : "mt-3 text-[1.82rem] font-semibold tracking-[-0.04em] text-[var(--foreground)]"
         }
       >
         {value}
@@ -42,10 +42,10 @@ function MetricCardContent({
         title={note}
         className={
           isStrip
-            ? "mt-1 line-clamp-2 text-[12px] leading-5 text-black/48"
+            ? "mt-1 line-clamp-2 text-[12px] leading-5 text-[var(--color-sidebar-muted)]"
             : isCompact
-            ? "mt-1 max-w-[18rem] truncate text-[12px] leading-5 text-black/50"
-            : "mt-2 max-w-[18rem] text-sm leading-6 text-black/55"
+              ? "mt-1 max-w-[18rem] truncate text-[12px] leading-5 text-[var(--color-sidebar-muted)]"
+              : "mt-2 max-w-[18rem] text-sm leading-6 text-[var(--color-sidebar-muted)]"
         }
       >
         {note}
@@ -75,28 +75,42 @@ export function MetricCard({
   const isCompact = density === "compact";
   const cardClassName =
     (isStrip
-      ? "block rounded-[1rem] border border-black/8 bg-[rgba(255,255,255,0.92)] px-3.5 py-3 shadow-[0_6px_16px_rgba(18,24,31,0.025)] transition-[border-color,background-color,box-shadow] md:px-4 md:py-3.5"
+      ? "block rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3.5 py-3 shadow-[var(--color-shell-shadow-sm)] transition-[transform,border-color,background-color,box-shadow] duration-200 md:px-4 md:py-3.25"
       : isCompact
-      ? "block rounded-[0.95rem] border border-black/7 bg-[rgba(255,255,255,0.84)] px-3.5 py-3 shadow-[0_8px_18px_rgba(18,24,31,0.03)] transition-colors md:px-4 md:py-3.5"
-      : "crm-card block border border-black/7 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(249,247,243,0.9))] p-4 shadow-[0_14px_28px_rgba(18,24,31,0.05)] transition-colors md:p-5") +
+        ? "block rounded-[1.05rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-3.5 py-3 shadow-[var(--color-shell-shadow-sm)] transition-[transform,border-color,background-color,box-shadow] duration-200 md:px-4 md:py-3.25"
+        : "crm-card block border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4 shadow-[var(--color-shell-shadow-lg)] transition-[transform,border-color,background-color,box-shadow] duration-200 md:p-5") +
     (href
       ? isStrip
-        ? " hover:border-black/12 hover:bg-white hover:shadow-[0_10px_20px_rgba(18,24,31,0.04)]"
-        : " hover:border-[var(--color-accent)]/24 hover:bg-white"
+        ? " hover:-translate-y-[1px] hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-sm)]"
+        : " hover:-translate-y-[1px] hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-md)]"
       : "") +
     (className ? ` ${className}` : "");
 
   if (href) {
     return (
-      <SmartLink href={href} scrollTargetId={scrollTargetId} className={cardClassName}>
-        <MetricCardContent label={label} value={value} note={note} density={density} />
+      <SmartLink
+        href={href}
+        scrollTargetId={scrollTargetId}
+        className={cardClassName}
+      >
+        <MetricCardContent
+          label={label}
+          value={value}
+          note={note}
+          density={density}
+        />
       </SmartLink>
     );
   }
 
   return (
     <section className={cardClassName}>
-      <MetricCardContent label={label} value={value} note={note} density={density} />
+      <MetricCardContent
+        label={label}
+        value={value}
+        note={note}
+        density={density}
+      />
     </section>
   );
 }

@@ -10,16 +10,22 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { upsertCustomerLiveInvitationAction } from "@/app/(dashboard)/customers/[id]/engagement-actions";
 import {
+  CustomerDossierMeta,
+  CustomerDossierNotice,
+  CustomerDossierPanel,
+  CustomerDossierRecordCard,
+  CustomerDossierSignalRail,
+  type CustomerDossierSignalItem,
+} from "@/components/customers/customer-dossier-primitives";
+import {
   initialCustomerEngagementActionState,
   type CustomerEngagementActionState,
 } from "@/components/customers/customer-engagement-action-state";
 import {
   CustomerEmptyState,
-  CustomerRecordCard,
   CustomerTabSection,
 } from "@/components/customers/customer-record-list";
 import { ActionBanner } from "@/components/shared/action-banner";
-import { StatusBadge } from "@/components/shared/status-badge";
 import {
   booleanChoiceOptions,
   getAttendanceStatusLabel,
@@ -91,6 +97,39 @@ export function CustomerLiveRecordsSection({
   const [pendingCreate, startCreateTransition] = useTransition();
   const [pendingUpdateId, setPendingUpdateId] = useState<string | null>(null);
   const [invitedAtDefault] = useState(getDefaultDateTimeLocalValue);
+  const latestRecord = records[0] ?? null;
+  const attendedCount = records.filter(
+    (record) => record.attendanceStatus === "ATTENDED",
+  ).length;
+  const giftQualifiedCount = records.filter((record) => record.giftQualified).length;
+  const signals: CustomerDossierSignalItem[] = [
+    {
+      label: "最近场次",
+      value: latestRecord ? latestRecord.liveSession.title : "暂无场次",
+      description: latestRecord
+        ? formatDateTime(latestRecord.liveSession.startAt)
+        : "还没有直播邀约记录",
+    },
+    {
+      label: "到场情况",
+      value: `${attendedCount} 场到场`,
+      description: `${records.length} 条直播记录`,
+    },
+    {
+      label: "礼品达标",
+      value: `${giftQualifiedCount} 条`,
+      description: latestRecord
+        ? `最近状态 ${getInvitationStatusLabel(latestRecord.invitationStatus)}`
+        : "暂无达标记录",
+    },
+    {
+      label: "可选场次",
+      value: `${liveSessions.length} 场`,
+      description: liveSessions[0]
+        ? `最近场次 ${formatDateTime(liveSessions[0].startAt)}`
+        : "当前没有可选直播场次",
+    },
+  ];
 
   async function handleCreateSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -135,309 +174,316 @@ export function CustomerLiveRecordsSection({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <CustomerTabSection
-        eyebrow="操作区"
-        title={canManage ? "录入或更新直播邀约" : "当前为只读视图"}
+        eyebrow="直播画像"
+        title={canManage ? "直播邀约与到场补记" : "直播经营总览"}
         description={
           canManage
-            ? "在这里选择直播场次并记录邀约、到场、观看时长和礼品达标情况。若同一客户同一场次已有记录，更新现有记录即可。"
-            : "当前角色仅支持查看已有直播互动记录，不提供新增或更新入口。"
+            ? "先看直播状态，再补记邀约与到场。"
+            : "当前角色仅支持查看已有直播互动记录。"
         }
         actions={
-          <StatusBadge label={`可选场次 ${liveSessions.length}`} variant="info" />
+          <CustomerDossierMeta>可选场次 {liveSessions.length} 场</CustomerDossierMeta>
         }
       >
-        {canManage ? (
-          <form ref={createFormRef} onSubmit={handleCreateSubmit} className="mt-1 space-y-4">
-            <input type="hidden" name="customerId" value={customerId} />
+        <div className="space-y-4">
+          <CustomerDossierSignalRail items={signals} />
+          {canManage ? (
+            <CustomerDossierPanel>
+              <form ref={createFormRef} onSubmit={handleCreateSubmit} className="space-y-4">
+                <input type="hidden" name="customerId" value={customerId} />
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <label className="space-y-2">
-                <span className="crm-label">直播场次</span>
-                <select
-                  name="liveSessionId"
-                  defaultValue=""
-                  required
-                  className="crm-select"
-                >
-                  <option value="" disabled>
-                    请选择直播场次
-                  </option>
-                  {liveSessions.map((session) => (
-                    <option key={session.id} value={session.id}>
-                      {session.title} · {formatDateTime(session.startAt)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <label className="space-y-2">
+                    <span className="crm-label">直播场次</span>
+                    <select
+                      name="liveSessionId"
+                      defaultValue=""
+                      required
+                      className="crm-select"
+                    >
+                      <option value="" disabled>
+                        请选择直播场次
+                      </option>
+                      {liveSessions.map((session) => (
+                        <option key={session.id} value={session.id}>
+                          {session.title} · {formatDateTime(session.startAt)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
 
-              <label className="space-y-2">
-                <span className="crm-label">是否已邀约</span>
-                <select name="invited" defaultValue="true" className="crm-select">
-                  {booleanChoiceOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  <label className="space-y-2">
+                    <span className="crm-label">是否已邀约</span>
+                    <select name="invited" defaultValue="true" className="crm-select">
+                      {booleanChoiceOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
 
-              <label className="space-y-2">
-                <span className="crm-label">邀约时间</span>
-                <input
-                  type="datetime-local"
-                  name="invitedAt"
-                  defaultValue={invitedAtDefault}
-                  className="crm-input"
-                />
-              </label>
+                  <label className="space-y-2">
+                    <span className="crm-label">邀约时间</span>
+                    <input
+                      type="datetime-local"
+                      name="invitedAt"
+                      defaultValue={invitedAtDefault}
+                      className="crm-input"
+                    />
+                  </label>
 
-              <label className="space-y-2">
-                <span className="crm-label">邀约方式</span>
-                <select
-                  name="invitationMethod"
-                  defaultValue="WECHAT"
-                  className="crm-select"
-                >
-                  {invitationMethodOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  <label className="space-y-2">
+                    <span className="crm-label">邀约方式</span>
+                    <select
+                      name="invitationMethod"
+                      defaultValue="WECHAT"
+                      className="crm-select"
+                    >
+                      {invitationMethodOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
 
-              <label className="space-y-2">
-                <span className="crm-label">是否到场</span>
-                <select name="attended" defaultValue="false" className="crm-select">
-                  {booleanChoiceOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  <label className="space-y-2">
+                    <span className="crm-label">是否到场</span>
+                    <select name="attended" defaultValue="false" className="crm-select">
+                      {booleanChoiceOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
 
-              <label className="space-y-2">
-                <span className="crm-label">观看时长（分钟）</span>
-                <input
-                  type="number"
-                  name="watchDurationMinutes"
-                  min={0}
-                  max={24 * 60}
-                  defaultValue={0}
-                  className="crm-input"
-                />
-              </label>
+                  <label className="space-y-2">
+                    <span className="crm-label">观看时长（分钟）</span>
+                    <input
+                      type="number"
+                      name="watchDurationMinutes"
+                      min={0}
+                      max={24 * 60}
+                      defaultValue={0}
+                      className="crm-input"
+                    />
+                  </label>
 
-              <label className="space-y-2">
-                <span className="crm-label">是否礼品达标</span>
-                <select name="giftQualified" defaultValue="false" className="crm-select">
-                  {booleanChoiceOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+                  <label className="space-y-2">
+                    <span className="crm-label">是否礼品达标</span>
+                    <select name="giftQualified" defaultValue="false" className="crm-select">
+                      {booleanChoiceOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
 
-            <label className="block space-y-2">
-              <span className="crm-label">备注</span>
-              <textarea
-                name="remark"
-                rows={4}
-                maxLength={1000}
-                placeholder="记录邀约话术、客户反馈或观看情况"
-                className="crm-textarea"
-              />
-            </label>
+                <label className="block space-y-2">
+                  <span className="crm-label">备注</span>
+                  <textarea
+                    name="remark"
+                    rows={4}
+                    maxLength={1000}
+                    placeholder="记录邀约话术、客户反馈或观看情况"
+                    className="crm-textarea"
+                  />
+                </label>
 
-            {createState.message ? (
-              <ActionBanner tone={createState.status === "success" ? "success" : "danger"}>
-                {createState.message}
-              </ActionBanner>
-            ) : null}
+                {createState.message ? (
+                  <ActionBanner tone={createState.status === "success" ? "success" : "danger"}>
+                    {createState.message}
+                  </ActionBanner>
+                ) : null}
 
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={pendingCreate || liveSessions.length === 0}
-                className="crm-button crm-button-primary"
-              >
-                {pendingCreate ? "保存中..." : "保存直播记录"}
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="rounded-[0.9rem] border border-black/6 bg-white/68 px-4 py-3 text-sm leading-7 text-black/58">
-            当前页面保留直播记录回看能力。若需新增或更新直播邀约，请由当前承接销售或具备权限的角色操作。
-          </div>
-        )}
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={pendingCreate || liveSessions.length === 0}
+                    className="crm-button crm-button-primary"
+                  >
+                    {pendingCreate ? "保存中..." : "保存直播记录"}
+                  </button>
+                </div>
+              </form>
+            </CustomerDossierPanel>
+          ) : (
+            <CustomerDossierNotice>
+              仅查看记录。更新直播邀约请由当前承接销售处理。
+            </CustomerDossierNotice>
+          )}
+        </div>
       </CustomerTabSection>
 
       <CustomerTabSection
-        eyebrow="历史记录"
+        eyebrow="直播轨迹"
         title="直播互动历史"
-        description="集中查看该客户的直播邀约、到场、观看时长和礼品达标情况。"
-        actions={<StatusBadge label={`${records.length} 条记录`} variant="neutral" />}
+        description="回看邀约、到场、观看时长与礼品达标。"
+        actions={<CustomerDossierMeta>{records.length} 条记录</CustomerDossierMeta>}
       >
         {records.length > 0 ? (
           <div className="space-y-4">
             {records.map((record) => (
               <div key={record.id} className="space-y-3">
-                <CustomerRecordCard
+                <CustomerDossierRecordCard
                   title={record.liveSession.title}
                   meta={[
-                    `主播：${record.liveSession.hostName}`,
-                    `开播时间：${formatDateTime(record.liveSession.startAt)}`,
-                    `场次状态：${getLiveSessionStatusLabel(record.liveSession.status)}`,
-                    `销售：${record.sales.name} (@${record.sales.username})`,
-                    `邀约状态：${getInvitationStatusLabel(record.invitationStatus)}`,
-                    `邀约方式：${getInvitationMethodLabel(record.invitationMethod)}`,
-                    `到场状态：${getAttendanceStatusLabel(record.attendanceStatus)}`,
-                    `观看时长：${record.watchDurationMinutes ?? 0} 分钟`,
-                    `礼品达标：${record.giftQualified ? "是" : "否"}`,
+                    `主播 ${record.liveSession.hostName}`,
+                    `开播 ${formatDateTime(record.liveSession.startAt)}`,
+                    `场次状态 ${getLiveSessionStatusLabel(record.liveSession.status)}`,
+                    `销售 ${record.sales.name} (@${record.sales.username})`,
+                    `邀约状态 ${getInvitationStatusLabel(record.invitationStatus)}`,
+                    `邀约方式 ${getInvitationMethodLabel(record.invitationMethod)}`,
+                    `到场状态 ${getAttendanceStatusLabel(record.attendanceStatus)}`,
+                    `观看时长 ${record.watchDurationMinutes ?? 0} 分钟`,
+                    `礼品达标 ${record.giftQualified ? "是" : "否"}`,
                   ]}
-                  description={record.remark?.trim() || "无备注"}
+                  summary={record.remark?.trim() || "无备注"}
+                  aside={record.liveSession.targetProduct || "未绑定产品"}
                 />
 
                 {canManage ? (
-                  <form
-                    onSubmit={(event) => handleUpdateSubmit(event, record.id)}
-                    className="crm-subtle-panel"
-                  >
-                    <input type="hidden" name="customerId" value={customerId} />
-                    <input type="hidden" name="liveSessionId" value={record.liveSession.id} />
+                  <CustomerDossierPanel>
+                    <form
+                      onSubmit={(event) => handleUpdateSubmit(event, record.id)}
+                      className="space-y-4"
+                    >
+                      <input type="hidden" name="customerId" value={customerId} />
+                      <input type="hidden" name="liveSessionId" value={record.liveSession.id} />
 
-                    <div className="grid gap-4 lg:grid-cols-3">
-                      <label className="space-y-2">
-                        <span className="crm-label">是否已邀约</span>
-                        <select
-                          name="invited"
-                          defaultValue={
-                            record.invitationStatus === "PENDING" ? "false" : "true"
-                          }
-                          className="crm-select"
-                        >
-                          {booleanChoiceOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                      <div className="grid gap-4 lg:grid-cols-3">
+                        <label className="space-y-2">
+                          <span className="crm-label">是否已邀约</span>
+                          <select
+                            name="invited"
+                            defaultValue={
+                              record.invitationStatus === "PENDING" ? "false" : "true"
+                            }
+                            className="crm-select"
+                          >
+                            {booleanChoiceOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
 
-                      <label className="space-y-2">
-                        <span className="crm-label">邀约时间</span>
-                        <input
-                          type="datetime-local"
-                          name="invitedAt"
-                          defaultValue={
-                            record.invitedAt
-                              ? new Date(
-                                  record.invitedAt.getTime() -
-                                    record.invitedAt.getTimezoneOffset() * 60_000,
-                                )
-                                  .toISOString()
-                                  .slice(0, 16)
-                              : ""
-                          }
-                          className="crm-input"
+                        <label className="space-y-2">
+                          <span className="crm-label">邀约时间</span>
+                          <input
+                            type="datetime-local"
+                            name="invitedAt"
+                            defaultValue={
+                              record.invitedAt
+                                ? new Date(
+                                    record.invitedAt.getTime() -
+                                      record.invitedAt.getTimezoneOffset() * 60_000,
+                                  )
+                                    .toISOString()
+                                    .slice(0, 16)
+                                : ""
+                            }
+                            className="crm-input"
+                          />
+                        </label>
+
+                        <label className="space-y-2">
+                          <span className="crm-label">邀约方式</span>
+                          <select
+                            name="invitationMethod"
+                            defaultValue={record.invitationMethod}
+                            className="crm-select"
+                          >
+                            {invitationMethodOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="space-y-2">
+                          <span className="crm-label">是否到场</span>
+                          <select
+                            name="attended"
+                            defaultValue={
+                              record.attendanceStatus === "ATTENDED" ? "true" : "false"
+                            }
+                            className="crm-select"
+                          >
+                            {booleanChoiceOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="space-y-2">
+                          <span className="crm-label">观看时长（分钟）</span>
+                          <input
+                            type="number"
+                            name="watchDurationMinutes"
+                            min={0}
+                            max={24 * 60}
+                            defaultValue={record.watchDurationMinutes ?? 0}
+                            className="crm-input"
+                          />
+                        </label>
+
+                        <label className="space-y-2">
+                          <span className="crm-label">是否礼品达标</span>
+                          <select
+                            name="giftQualified"
+                            defaultValue={record.giftQualified ? "true" : "false"}
+                            className="crm-select"
+                          >
+                            {booleanChoiceOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+
+                      <label className="block space-y-2">
+                        <span className="crm-label">备注</span>
+                        <textarea
+                          name="remark"
+                          rows={3}
+                          maxLength={1000}
+                          defaultValue={record.remark ?? ""}
+                          className="crm-textarea"
                         />
                       </label>
 
-                      <label className="space-y-2">
-                        <span className="crm-label">邀约方式</span>
-                        <select
-                          name="invitationMethod"
-                          defaultValue={record.invitationMethod}
-                          className="crm-select"
+                      {updateStates[record.id]?.message ? (
+                        <ActionBanner
+                          tone={updateStates[record.id]?.status === "success" ? "success" : "danger"}
                         >
-                          {invitationMethodOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                          {updateStates[record.id]?.message}
+                        </ActionBanner>
+                      ) : null}
 
-                      <label className="space-y-2">
-                        <span className="crm-label">是否到场</span>
-                        <select
-                          name="attended"
-                          defaultValue={
-                            record.attendanceStatus === "ATTENDED" ? "true" : "false"
-                          }
-                          className="crm-select"
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={pendingUpdateId === record.id}
+                          className="crm-button crm-button-secondary"
                         >
-                          {booleanChoiceOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-
-                      <label className="space-y-2">
-                        <span className="crm-label">观看时长（分钟）</span>
-                        <input
-                          type="number"
-                          name="watchDurationMinutes"
-                          min={0}
-                          max={24 * 60}
-                          defaultValue={record.watchDurationMinutes ?? 0}
-                          className="crm-input"
-                        />
-                      </label>
-
-                      <label className="space-y-2">
-                        <span className="crm-label">是否礼品达标</span>
-                        <select
-                          name="giftQualified"
-                          defaultValue={record.giftQualified ? "true" : "false"}
-                          className="crm-select"
-                        >
-                          {booleanChoiceOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-
-                    <label className="mt-4 block space-y-2">
-                      <span className="crm-label">备注</span>
-                      <textarea
-                        name="remark"
-                        rows={3}
-                        maxLength={1000}
-                        defaultValue={record.remark ?? ""}
-                        className="crm-textarea"
-                      />
-                    </label>
-
-                    {updateStates[record.id]?.message ? (
-                      <ActionBanner
-                        tone={updateStates[record.id]?.status === "success" ? "success" : "danger"}
-                        className="mt-4"
-                      >
-                        {updateStates[record.id]?.message}
-                      </ActionBanner>
-                    ) : null}
-
-                    <div className="mt-4 flex justify-end">
-                      <button
-                        type="submit"
-                        disabled={pendingUpdateId === record.id}
-                        className="crm-button crm-button-secondary"
-                      >
-                        {pendingUpdateId === record.id ? "保存中..." : "更新该场记录"}
-                      </button>
-                    </div>
-                  </form>
+                          {pendingUpdateId === record.id ? "保存中..." : "更新该场记录"}
+                        </button>
+                      </div>
+                    </form>
+                  </CustomerDossierPanel>
                 ) : null}
               </div>
             ))}

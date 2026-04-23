@@ -7,6 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "worker:lead-imports": "tsx scripts/lead-import-worker.ts",
+    "check:lead-import-runtime": "node scripts/check-lead-import-runtime.mjs",
     "worker:recycle-auto-finalize": "tsx scripts/recycle-auto-finalize.ts",
     "lint": "eslint",
     "prisma:status": "node scripts/prisma-guardrails.mjs status",

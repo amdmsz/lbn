@@ -1,9 +1,7 @@
 import { redirect } from "next/navigation";
 import { FinanceExceptionsSection } from "@/components/finance/finance-exceptions-section";
 import { FinanceSubnav } from "@/components/finance/finance-subnav";
-import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { PageHeader } from "@/components/shared/page-header";
-import { StatusBadge } from "@/components/shared/status-badge";
 import {
   canAccessFinanceModule,
   getDefaultRouteForRole,
@@ -30,29 +28,26 @@ export default async function FinanceExceptionsPage() {
   return (
     <div className="crm-page">
       <PageHeader
-        title="财务异常预览"
-        description="集中识别异常订单、异常收款和异常履约，并提供来源说明与跳转入口。"
-        actions={
-          <>
-            <StatusBadge label={data.scopeLabel} variant="info" />
-            <StatusBadge label="异常预览" variant="danger" />
-          </>
+        eyebrow="财务中心"
+        title="异常预览"
+        description="集中识别异常并回流处理。"
+        meta={
+          <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.06em] text-[var(--color-sidebar-muted)]">
+            <span>{data.scopeLabel}</span>
+            <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+            <span>异常回流入口</span>
+          </div>
         }
       />
 
       <FinanceSubnav active="exceptions" />
 
-      <DataTableWrapper
-        title="异常列表"
-        description="当前阶段只做人工核对入口，不自动关单、不自动对账，也不接真实支付或物流 API。"
-      >
-        <FinanceExceptionsSection
-          scopeLabel={data.scopeLabel}
-          summaryCards={data.summaryCards}
-          groupedCounts={data.groupedCounts}
-          items={data.items}
-        />
-      </DataTableWrapper>
+      <FinanceExceptionsSection
+        scopeLabel={data.scopeLabel}
+        summaryCards={data.summaryCards}
+        groupedCounts={data.groupedCounts}
+        items={data.items}
+      />
     </div>
   );
 }

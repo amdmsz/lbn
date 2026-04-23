@@ -227,7 +227,7 @@ export function PaymentRecordsSection({
 
       {items.length > 0 ? (
         <div className="space-y-5">
-          <div className="flex flex-wrap items-center gap-3 text-sm text-black/60">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--color-sidebar-muted)]">
             <span>
               共 {pagination.totalCount} 条收款记录，当前第 {pagination.page} / {pagination.totalPages} 页
             </span>
@@ -248,10 +248,10 @@ export function PaymentRecordsSection({
                 {items.map((item) => (
                   <tr key={item.id}>
                     <td>
-                      <div className="font-medium text-black/80">
+                      <div className="font-medium text-[var(--foreground)]">
                         {getPaymentSourceLabel(item.sourceType)}
                       </div>
-                      <div className="mt-1 text-xs text-black/45">
+                      <div className="mt-1 text-xs text-[var(--color-sidebar-muted)]">
                         {item.salesOrder ? `订单 ${item.salesOrder.orderNo}` : item.giftRecord?.giftName}
                       </div>
                       {item.salesOrder ? (
@@ -261,18 +261,18 @@ export function PaymentRecordsSection({
                       ) : null}
                     </td>
                     <td>
-                      <div className="space-y-1 text-sm text-black/70">
+                      <div className="space-y-1 text-sm text-[var(--color-sidebar-muted)]">
                         <div>
                           {item.customer?.name || "无客户"} / {item.customer?.phone || "-"}
                         </div>
-                        <div className="text-xs text-black/45">
+                        <div className="text-xs text-[var(--color-sidebar-muted)]">
                           负责人：{item.owner?.name || item.owner?.username || "未指派"}
                         </div>
-                        <div className="text-xs text-black/45">
+                        <div className="text-xs text-[var(--color-sidebar-muted)]">
                           提交人：{item.submittedBy.name || item.submittedBy.username}
                         </div>
                         {item.shippingTask ? (
-                          <div className="text-xs text-black/45">
+                          <div className="text-xs text-[var(--color-sidebar-muted)]">
                             发货：{item.shippingTask.shippingStatus} /{" "}
                             {item.shippingTask.trackingNumber || "未回填单号"}
                           </div>
@@ -295,10 +295,10 @@ export function PaymentRecordsSection({
                             variant={getPaymentPlanStatusVariant(item.paymentPlan.status)}
                           />
                         </div>
-                        <div className="text-xs text-black/45">
+                        <div className="text-xs text-[var(--color-sidebar-muted)]">
                           {getPaymentCollectionChannelLabel(item.paymentPlan.collectionChannel)}
                         </div>
-                        <div className="text-xs text-black/45">
+                        <div className="text-xs text-[var(--color-sidebar-muted)]">
                           {getPaymentPlanProgressSummary(item.paymentPlan)}
                         </div>
                       </div>
@@ -309,19 +309,21 @@ export function PaymentRecordsSection({
                           label={getPaymentRecordStatusLabel(item.status)}
                           variant={getPaymentRecordStatusVariant(item.status)}
                         />
-                        <div className="text-xs text-black/45">
+                        <div className="text-xs text-[var(--color-sidebar-muted)]">
                           {getPaymentRecordChannelLabel(item.channel)}
                         </div>
-                        <div className="text-xs text-black/45">
+                        <div className="text-xs text-[var(--color-sidebar-muted)]">
                           金额：{formatCurrency(item.amount)}
                         </div>
-                        <div className="text-xs text-black/45">
+                        <div className="text-xs text-[var(--color-sidebar-muted)]">
                           收款时间：{formatDateTime(item.occurredAt)}
                         </div>
-                        <div className="text-xs text-black/45">
+                        <div className="text-xs text-[var(--color-sidebar-muted)]">
                           流水号：{item.referenceNo || "无"}
                         </div>
-                        <div className="text-xs text-black/45">备注：{item.remark || "无"}</div>
+                        <div className="text-xs text-[var(--color-sidebar-muted)]">
+                          备注：{item.remark || "无"}
+                        </div>
                       </div>
                     </td>
                     <td className="min-w-[260px]">
@@ -348,7 +350,7 @@ export function PaymentRecordsSection({
                           </button>
                         </form>
                       ) : (
-                        <div className="space-y-2 text-sm leading-7 text-black/55">
+                        <div className="space-y-2 text-sm leading-7 text-[var(--color-sidebar-muted)]">
                           <div>
                             确认人：{item.confirmedBy?.name || item.confirmedBy?.username || "待确认"}
                           </div>

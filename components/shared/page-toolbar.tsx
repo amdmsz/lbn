@@ -24,21 +24,28 @@ export function PageToolbar({
     <section
       className={cn(
         isCompact
-          ? "overflow-hidden rounded-[0.95rem] border border-black/7 bg-white/88 shadow-[0_10px_22px_rgba(18,24,31,0.04)]"
-          : "crm-card overflow-hidden border-black/7 bg-white/90 shadow-[0_18px_42px_rgba(18,24,31,0.05)]",
+          ? "overflow-hidden rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow]"
+          : "crm-card overflow-hidden border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-md)]",
         className,
       )}
     >
       <div
         className={cn(
           "flex flex-col lg:flex-row lg:justify-between",
-          isCompact ? "gap-3 px-4 py-3 md:px-5 md:py-3.5 lg:items-center" : "gap-4 px-4 py-4 md:px-5 lg:items-start",
+          isCompact
+            ? "gap-2.5 px-4 py-3 md:px-4.5 md:py-3.5 lg:items-center"
+            : "gap-4 px-4 py-4 md:px-5 lg:items-start",
         )}
       >
         <div className={cn("min-w-0", isCompact ? "space-y-1.5" : "space-y-2")}>
-          <p className={cn("crm-eyebrow", isCompact ? "text-black/40" : "text-black/48")}>{eyebrow}</p>
+          <p className="crm-eyebrow">{eyebrow}</p>
           {title ? (
-            <h2 className={cn("font-semibold text-black/84", isCompact ? "text-[0.94rem]" : "text-base")}>
+            <h2
+              className={cn(
+                "font-semibold text-[var(--foreground)]",
+                isCompact ? "text-[0.92rem]" : "text-base",
+              )}
+            >
               {title}
             </h2>
           ) : null}
@@ -46,8 +53,8 @@ export function PageToolbar({
             <p
               className={cn(
                 isCompact
-                  ? "max-w-3xl text-[12.5px] leading-5 text-black/54 md:text-[13px]"
-                  : "max-w-3xl text-sm leading-6 text-black/56",
+                  ? "max-w-3xl text-[12.5px] leading-5 text-[var(--color-sidebar-muted)] md:text-[13px]"
+                  : "max-w-3xl text-sm leading-6 text-[var(--color-sidebar-muted)]",
               )}
             >
               {description}
@@ -68,10 +75,10 @@ export function PageToolbar({
       {primary ? (
         <div
           className={cn(
-            "border-t border-black/7",
+            "border-t border-[var(--color-border-soft)]",
             isCompact
-              ? "bg-[rgba(247,248,250,0.72)] px-4 py-2.5 md:px-5"
-              : "bg-[linear-gradient(180deg,rgba(247,248,250,0.86),rgba(255,255,255,0.86))] px-4 py-3 md:px-5",
+              ? "bg-[var(--color-shell-surface-soft)] px-4 py-2.5 md:px-4.5"
+              : "bg-[var(--color-shell-surface)] px-4 py-3 md:px-5",
           )}
         >
           <div className={cn("min-w-0 overflow-x-auto", isCompact ? "pb-0.5" : "")}>

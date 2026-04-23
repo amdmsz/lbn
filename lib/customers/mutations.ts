@@ -3,7 +3,6 @@ import {
   OperationModule,
   OperationTargetType,
   UserStatus,
-  type CustomerLevel,
   type CustomerStatus,
   type Prisma,
   type RoleCode,
@@ -25,6 +24,7 @@ import { normalizeImportedPhone } from "@/lib/lead-imports/metadata";
 type CustomerMutationActor = {
   id: string;
   role: RoleCode;
+  teamId?: string | null;
 };
 
 export type UpdateCustomerProfileInput = {
@@ -36,7 +36,11 @@ export type UpdateCustomerProfileInput = {
   district?: string;
   address?: string;
   status: string;
-  level: string;
+  remark?: string;
+};
+
+export type UpdateCustomerRemarkInput = {
+  customerId: string;
   remark?: string;
 };
 
@@ -57,12 +61,6 @@ const customerStatusValues = [
   "BLACKLISTED",
 ] as const satisfies CustomerStatus[];
 
-const customerLevelValues = [
-  "NEW",
-  "REGULAR",
-  "VIP",
-] as const satisfies CustomerLevel[];
-
 const editableCustomerProfileFieldLabels = {
   name: "姓名",
   wechatId: "微信",
@@ -71,7 +69,6 @@ const editableCustomerProfileFieldLabels = {
   district: "区县",
   address: "地址",
   status: "状态",
-  level: "等级",
   remark: "备注",
 } as const;
 
@@ -81,7 +78,6 @@ type EditableCustomerProfileSnapshot = {
   [Key in EditableCustomerProfileField]:
     | string
     | CustomerStatus
-    | CustomerLevel
     | null;
 };
 
@@ -94,7 +90,6 @@ const updateCustomerProfileSchema = z.object({
   district: z.string().trim().max(50, "区县不能超过 50 个字符").default(""),
   address: z.string().trim().max(500, "地址不能超过 500 个字符").default(""),
   status: z.enum(customerStatusValues, { message: "客户状态无效" }),
-  level: z.enum(customerLevelValues, { message: "客户等级无效" }),
   remark: z.string().trim().max(1000, "备注不能超过 1000 个字符").default(""),
 });
 
@@ -108,6 +103,11 @@ const createOwnedCustomerSchema = z.object({
   remark: z.string().trim().max(1000, "备注不能超过 1000 个字符").default(""),
 });
 
+const updateCustomerRemarkSchema = z.object({
+  customerId: z.string().trim().min(1, "缺少客户 ID"),
+  remark: z.string().trim().max(1000, "备注不能超过 1000 个字符").default(""),
+});
+
 const editableCustomerProfileSelect = {
   id: true,
   name: true,
@@ -117,7 +117,6 @@ const editableCustomerProfileSelect = {
   district: true,
   address: true,
   status: true,
-  level: true,
   remark: true,
 } satisfies Prisma.CustomerSelect;
 
@@ -151,7 +150,6 @@ function buildEditableCustomerProfileSnapshot(
     district: customer.district,
     address: customer.address,
     status: customer.status,
-    level: customer.level,
     remark: customer.remark,
   };
 }
@@ -167,7 +165,6 @@ function buildEditableCustomerProfileUpdateData(
     district: normalizeOptionalText(input.district),
     address: normalizeOptionalText(input.address),
     status: input.status,
-    level: input.level,
     remark: normalizeOptionalText(input.remark),
   } satisfies Prisma.CustomerUpdateInput;
 }
@@ -348,7 +345,7 @@ export async function updateCustomerProfile(
   actor: CustomerMutationActor,
   rawInput: UpdateCustomerProfileInput,
 ) {
-  const customerScope = getCustomerScope(actor.role, actor.id);
+  const customerScope = getCustomerScope(actor.role, actor.id, actor.teamId);
 
   if (!customerScope) {
     throw new Error("当前角色无权访问该客户。");
@@ -412,6 +409,83 @@ export async function updateCustomerProfile(
     return {
       customerId: updated.id,
       description,
+    };
+  });
+}
+
+export async function updateCustomerRemark(
+  actor: CustomerMutationActor,
+  rawInput: UpdateCustomerRemarkInput,
+) {
+  const customerScope = getCustomerScope(actor.role, actor.id, actor.teamId);
+
+  if (!customerScope) {
+    throw new Error("当前角色无权访问该客户。");
+  }
+
+  if (!canAccessCustomerModule(actor.role)) {
+    throw new Error("当前角色无权访问客户模块。");
+  }
+
+  const parsed = updateCustomerRemarkSchema.parse(rawInput);
+  const nextRemark = normalizeOptionalText(parsed.remark);
+
+  return prisma.$transaction(async (tx) => {
+    const customer = await tx.customer.findFirst({
+      where: {
+        id: parsed.customerId,
+        ...customerScope,
+      },
+      select: {
+        id: true,
+        remark: true,
+      },
+    });
+
+    if (!customer) {
+      throw new Error("客户不存在，或你无权编辑该客户。");
+    }
+
+    await assertCustomerNotInActiveRecycleBin(tx, customer.id);
+
+    if (customer.remark === nextRemark) {
+      return {
+        customerId: customer.id,
+        description: "备注未发生变化。",
+      };
+    }
+
+    const updated = await tx.customer.update({
+      where: { id: customer.id },
+      data: {
+        remark: nextRemark,
+      },
+      select: {
+        id: true,
+        remark: true,
+      },
+    });
+
+    await tx.operationLog.create({
+      data: {
+        actorId: actor.id,
+        module: OperationModule.CUSTOMER,
+        action: "customer.remark.updated",
+        targetType: OperationTargetType.CUSTOMER,
+        targetId: customer.id,
+        description: "更新客户备注",
+        beforeData: {
+          remark: customer.remark,
+        },
+        afterData: {
+          remark: updated.remark,
+        },
+      },
+    });
+
+    return {
+      customerId: updated.id,
+      description: "客户备注已更新。",
     };
   });
 }

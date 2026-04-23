@@ -37,6 +37,7 @@ export default async function GiftsPage({
     {
       id: session.user.id,
       role: session.user.role,
+      teamId: session.user.teamId,
     },
     resolvedSearchParams,
   );

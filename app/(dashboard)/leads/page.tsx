@@ -3,9 +3,11 @@ import { redirect } from "next/navigation";
 import { LeadsFilters } from "@/components/leads/leads-filters";
 import { LeadsTable } from "@/components/leads/leads-table";
 import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
-import { MetricCard } from "@/components/shared/metric-card";
 import { PageHeader } from "@/components/shared/page-header";
-import { StatusBadge } from "@/components/shared/status-badge";
+import {
+  PageSummaryStrip,
+  type PageSummaryStripItem,
+} from "@/components/shared/page-summary-strip";
 import {
   canAccessLeadModule,
   canManageLeadAssignments,
@@ -14,7 +16,9 @@ import {
 import { auth } from "@/lib/auth/session";
 import { getLeadListData } from "@/lib/leads/queries";
 
-function getLeadContextLabel(data: Awaited<ReturnType<typeof getLeadListData>>) {
+function getLeadContextLabel(
+  data: Awaited<ReturnType<typeof getLeadListData>>,
+) {
   if (data.filters.importBatchId && data.importBatch) {
     return `本批导入：${data.importBatch.fileName}`;
   }
@@ -28,6 +32,47 @@ function getLeadContextLabel(data: Awaited<ReturnType<typeof getLeadListData>>) 
   }
 
   return "全部未分配";
+}
+
+function buildSummaryItems(input: {
+  contextLabel: string;
+  importBatchFileName: string | null;
+  unassignedCount: number;
+  assignedCount: number;
+  totalVisibleCount: number;
+}): PageSummaryStripItem[] {
+  return [
+    {
+      key: "unassigned",
+      label: "未分配",
+      value: `${input.unassignedCount}`,
+      note: "当前待处理主工作区",
+      emphasis: "default",
+    },
+    {
+      key: "assigned",
+      label: "已分配",
+      value: `${input.assignedCount}`,
+      note: "结果回看与轻量修正",
+      emphasis: "info",
+    },
+    {
+      key: "scope",
+      label: "当前焦点",
+      value: input.contextLabel,
+      note: input.importBatchFileName
+        ? `批次 ${input.importBatchFileName}`
+        : "支持本次导入、今日导入与全部未分配",
+      emphasis: "default",
+    },
+    {
+      key: "visible",
+      label: "当前可见",
+      value: `${input.totalVisibleCount}`,
+      note: "当前上下文内可见线索总量",
+      emphasis: "success",
+    },
+  ];
 }
 
 export default async function LeadsPage({
@@ -50,6 +95,7 @@ export default async function LeadsPage({
     {
       id: session.user.id,
       role: session.user.role,
+      teamId: session.user.teamId,
     },
     resolvedSearchParams,
   );
@@ -60,28 +106,21 @@ export default async function LeadsPage({
     <WorkbenchLayout
       header={
         <PageHeader
-          eyebrow="Customer Operations / Lead Center"
+          eyebrow="线索中心"
           title="线索分配中心"
-          description="这里只承接导入后的复核、分配和审计。未分配作为主工作区，已分配用于结果回看和轻量修正。"
-          context={
-            data.importBatch ? (
-              <div className="crm-toolbar-cluster gap-1.5">
-                <StatusBadge label="当前导入上下文" variant="info" />
-                <StatusBadge label={data.importBatch.status} variant="neutral" />
-              </div>
-            ) : null
-          }
+          description="导入后的复核、分配与回看都在这里完成。"
           meta={
-            <>
-              <StatusBadge label="ADMIN / SUPERVISOR" variant="info" />
-              <StatusBadge
-                label={canAssign ? "支持批量分配" : "只读回看"}
-                variant={canAssign ? "success" : "warning"}
-              />
+            <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.06em] text-[var(--color-sidebar-muted)]">
+              <span>{contextLabel}</span>
+              <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+              <span>{canAssign ? "支持批量分配" : "只读回看"}</span>
               {data.importBatch ? (
-                <StatusBadge label={data.importBatch.fileName} variant="neutral" />
+                <>
+                  <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+                  <span>{data.importBatch.fileName}</span>
+                </>
               ) : null}
-            </>
+            </div>
           }
           actions={
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -106,36 +145,16 @@ export default async function LeadsPage({
         />
       }
       summary={
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <MetricCard
-            density="strip"
-            label="未分配"
-            value={`${data.unassigned.totalCount}`}
-            note="当前主工作区待分配线索数量"
-          />
-          <MetricCard
-            density="strip"
-            label="已分配"
-            value={`${data.assigned.totalCount}`}
-            note="结果回看区内已分配线索数量"
-          />
-          <MetricCard
-            density="strip"
-            label="当前焦点"
-            value={contextLabel}
-            note={
-              data.filters.importBatchId
-                ? "承接本次导入完成后的分配动作"
-                : "支持今日导入、全部未分配与已分配回看"
-            }
-          />
-          <MetricCard
-            density="strip"
-            label="当前可见"
-            value={`${data.summary.totalVisibleCount}`}
-            note="当前上下文内未分配与已分配线索总量"
-          />
-        </div>
+        <PageSummaryStrip
+          items={buildSummaryItems({
+            contextLabel,
+            importBatchFileName: data.importBatch?.fileName ?? null,
+            unassignedCount: data.unassigned.totalCount,
+            assignedCount: data.assigned.totalCount,
+            totalVisibleCount: data.summary.totalVisibleCount,
+          })}
+          className="gap-2.5"
+        />
       }
       toolbar={
         <LeadsFilters

@@ -19,7 +19,7 @@ export function LoadingState({
     <div
       className={cn(
         isCompact
-          ? "space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(255,255,255,0.84)] p-4 shadow-[0_10px_22px_rgba(18,24,31,0.04)]"
+          ? "crm-card-muted space-y-3 border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-4 shadow-[var(--color-shell-shadow-sm)]"
           : "crm-card space-y-4 p-5",
         className,
       )}

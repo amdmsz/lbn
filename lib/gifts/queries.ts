@@ -18,6 +18,7 @@ type SearchParamsValue = string | string[] | undefined;
 export type GiftViewer = {
   id: string;
   role: RoleCode;
+  teamId?: string | null;
 };
 
 export type GiftListFilters = {
@@ -56,7 +57,7 @@ export function parseGiftListFilters(
 }
 
 function buildGiftWhereInput(viewer: GiftViewer, filters: GiftListFilters) {
-  const scope = getGiftScope(viewer.role, viewer.id);
+  const scope = getGiftScope(viewer.role, viewer.id, viewer.teamId);
 
   if (!scope) {
     throw new Error("You do not have access to gift records.");
@@ -83,6 +84,10 @@ async function getVisibleCustomers(viewer: GiftViewer) {
   const scope =
     viewer.role === "SALES"
       ? { ownerId: viewer.id }
+      : viewer.role === "SUPERVISOR"
+        ? viewer.teamId
+          ? { owner: { is: { teamId: viewer.teamId } } }
+          : { id: "__missing_gift_customer_team_scope__" }
       : {};
 
   return prisma.customer.findMany({

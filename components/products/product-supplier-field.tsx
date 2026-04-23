@@ -26,6 +26,15 @@ type InlineSupplierResult =
       errorMessage: string;
     };
 
+const fieldSectionClassName =
+  "rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3.5";
+
+const dialogPanelClassName =
+  "flex max-h-[calc(100vh-4rem)] w-full max-w-[40rem] flex-col overflow-hidden rounded-[1.1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[0_24px_70px_rgba(15,23,42,0.18)]";
+
+const dialogSectionClassName =
+  "rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-4 shadow-[var(--color-shell-shadow-sm)]";
+
 function matchesSupplier(option: SupplierOption, keyword: string) {
   const normalizedKeyword = keyword.trim().toLowerCase();
 
@@ -60,13 +69,20 @@ export function ProductSupplierField({
   initialSelectedSupplierId: string;
   disabled?: boolean;
   canQuickCreateSupplier: boolean;
-  createInlineSupplierAction: (formData: FormData) => Promise<InlineSupplierResult>;
+  createInlineSupplierAction: (
+    formData: FormData,
+  ) => Promise<InlineSupplierResult>;
 }>) {
-  const [supplierOptions, setSupplierOptions] = useState(() => sortSuppliers(suppliers));
-  const [selectedSupplierId, setSelectedSupplierId] = useState(initialSelectedSupplierId);
+  const [supplierOptions, setSupplierOptions] = useState(() =>
+    sortSuppliers(suppliers),
+  );
+  const [selectedSupplierId, setSelectedSupplierId] = useState(
+    initialSelectedSupplierId,
+  );
   const [supplierSearch, setSupplierSearch] = useState(() => {
     const initialSupplier =
-      suppliers.find((supplier) => supplier.id === initialSelectedSupplierId) ?? null;
+      suppliers.find((supplier) => supplier.id === initialSelectedSupplierId) ??
+      null;
     return initialSupplier?.name ?? "";
   });
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -85,15 +101,17 @@ export function ProductSupplierField({
       matchesSupplier(supplier, supplierSearch),
   );
   const selectedSupplier =
-    supplierOptions.find((supplier) => supplier.id === selectedSupplierId) ?? null;
+    supplierOptions.find((supplier) => supplier.id === selectedSupplierId) ??
+    null;
   const visibleSuppliers =
-    selectedSupplier && !filteredSuppliers.some((supplier) => supplier.id === selectedSupplier.id)
+    selectedSupplier &&
+    !filteredSuppliers.some((supplier) => supplier.id === selectedSupplier.id)
       ? [selectedSupplier, ...filteredSuppliers]
       : filteredSuppliers;
 
   const dialogFooterHint = pending
-    ? "正在创建供应商，请保持当前补充面板打开。"
-    : "创建成功后会自动回填并选中，同时保留当前商品表单已输入的内容。";
+    ? "正在创建供应商。"
+    : "创建后会自动回填到当前商品。";
 
   function resetQuickSupplierForm() {
     setQuickCode("");
@@ -134,7 +152,9 @@ export function ProductSupplierField({
         enabled: true,
       };
 
-      const existing = supplierOptions.some((supplier) => supplier.id === createdSupplier.id);
+      const existing = supplierOptions.some(
+        (supplier) => supplier.id === createdSupplier.id,
+      );
       const nextSupplierOptions = existing
         ? supplierOptions.map((supplier) =>
             supplier.id === createdSupplier.id ? createdSupplier : supplier,
@@ -153,14 +173,14 @@ export function ProductSupplierField({
   return (
     <>
       <div className="space-y-3 xl:col-span-2">
-        <div className="rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.9)] p-3.5">
+        <div className={fieldSectionClassName}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <label className="min-w-0 flex-1 space-y-2">
               <span className="crm-label">搜索供应商</span>
               <input
                 value={supplierSearch}
                 onChange={(event) => setSupplierSearch(event.target.value)}
-                placeholder="按供应商名称或编码搜索"
+                placeholder="按名称或编码搜索"
                 className="crm-input"
                 disabled={disabled}
               />
@@ -187,7 +207,9 @@ export function ProductSupplierField({
               onChange={(event) => {
                 const nextSupplierId = event.target.value;
                 const nextSupplier =
-                  supplierOptions.find((supplier) => supplier.id === nextSupplierId) ?? null;
+                  supplierOptions.find(
+                    (supplier) => supplier.id === nextSupplierId,
+                  ) ?? null;
                 setSelectedSupplierId(nextSupplierId);
                 setSupplierSearch(nextSupplier?.name ?? supplierSearch);
               }}
@@ -198,15 +220,16 @@ export function ProductSupplierField({
               </option>
               {visibleSuppliers.map((supplier) => (
                 <option key={supplier.id} value={supplier.id}>
-                  {supplier.name} ({supplier.code}){supplier.enabled ? "" : " - 已停用"}
+                  {supplier.name} ({supplier.code})
+                  {supplier.enabled ? "" : " - 已停用"}
                 </option>
               ))}
             </select>
           </label>
 
           {visibleSuppliers.length === 0 ? (
-            <div className="mt-3 rounded-[0.9rem] border border-dashed border-black/10 bg-black/[0.02] px-3.5 py-3 text-[13px] leading-5 text-black/56">
-              当前关键字下没有匹配的供应商。可以直接内联新增，并保留当前商品表单已填写的内容。
+            <div className="mt-3 rounded-[0.9rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3.5 py-3 text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
+              当前没有匹配结果，可直接新建。
             </div>
           ) : null}
 
@@ -220,36 +243,38 @@ export function ProductSupplierField({
 
       {dialogOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(15,23,42,0.18)] backdrop-blur-[1.5px] px-4 py-8 lg:pl-[var(--dashboard-sidebar-width,0px)]"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(15,23,42,0.16)] backdrop-blur-[3px] px-4 py-8 lg:pl-[var(--dashboard-sidebar-width,0px)]"
           onClick={closeDialog}
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-label="内联新增供应商"
-            className="flex max-h-[calc(100vh-4rem)] w-full max-w-[40rem] flex-col overflow-hidden rounded-[1.1rem] border border-black/8 bg-[rgba(255,255,255,0.985)] shadow-[0_24px_70px_rgba(15,23,42,0.18)]"
+            className={dialogPanelClassName}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-4 border-b border-black/6 px-5 py-4 sm:px-6">
-              <div className="min-w-0 space-y-1.5">
+            <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-5 py-4 sm:px-6">
+              <div className="min-w-0 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/38">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--color-sidebar-muted)]">
                     Supplier
                   </p>
-                  <span className="rounded-full border border-black/8 bg-black/[0.03] px-2.5 py-1 text-[11px] font-medium text-black/52">
+                  <span className="rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
                     创建
                   </span>
                 </div>
-                <h3 className="text-[1.02rem] font-semibold text-black/84">内联新增供应商</h3>
-                <p className="max-w-[28rem] text-[13px] leading-5 text-black/56">
-                  无需离开当前商品表单即可补充供应商。创建成功后会自动回填并选中，不打断当前编辑。
+                <h3 className="text-[1.02rem] font-semibold text-[var(--foreground)]">
+                  新建供应商
+                </h3>
+                <p className="text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">
+                  创建后会自动回填到当前商品。
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={closeDialog}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-black/8 bg-white/92 text-black/50 transition-colors hover:bg-black/[0.03] hover:text-black/72"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] text-[var(--color-sidebar-muted)] transition-colors hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -265,14 +290,12 @@ export function ProductSupplierField({
                   disabled={pending}
                   className={`space-y-4 ${pending ? "opacity-80" : ""}`}
                 >
-                  <section className="rounded-[1rem] border border-black/8 bg-[linear-gradient(180deg,rgba(248,249,251,0.88),rgba(255,255,255,0.94))] p-4">
+                  <section className={dialogSectionClassName}>
                     <div className="space-y-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/42">
-                        主体身份
-                      </p>
-                      <p className="text-[13px] leading-5 text-black/56">
-                        先确认供应商编码和名称，保证商品与供应商的引用关系稳定清晰。
-                      </p>
+                      <p className="crm-detail-label text-[11px]">主体信息</p>
+                      <h4 className="text-[0.98rem] font-semibold text-[var(--foreground)]">
+                        编码与名称
+                      </h4>
                     </div>
 
                     <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -298,14 +321,12 @@ export function ProductSupplierField({
                     </div>
                   </section>
 
-                  <section className="rounded-[1rem] border border-black/7 bg-[rgba(252,252,253,0.92)] p-4">
+                  <section className={dialogSectionClassName}>
                     <div className="space-y-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/42">
-                        联系与备注
-                      </p>
-                      <p className="text-[13px] leading-5 text-black/56">
-                        联系人、电话和备注属于次级补充信息，默认保持轻量，不让补充面板压过主商品抽屉。
-                      </p>
+                      <p className="crm-detail-label text-[11px]">联系补充</p>
+                      <h4 className="text-[0.98rem] font-semibold text-[var(--foreground)]">
+                        联系人、电话与备注
+                      </h4>
                     </div>
 
                     <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -313,7 +334,9 @@ export function ProductSupplierField({
                         <span className="crm-label">联系人</span>
                         <input
                           value={quickContactName}
-                          onChange={(event) => setQuickContactName(event.target.value)}
+                          onChange={(event) =>
+                            setQuickContactName(event.target.value)
+                          }
                           className="crm-input"
                         />
                       </label>
@@ -322,7 +345,9 @@ export function ProductSupplierField({
                         <span className="crm-label">联系电话</span>
                         <input
                           value={quickContactPhone}
-                          onChange={(event) => setQuickContactPhone(event.target.value)}
+                          onChange={(event) =>
+                            setQuickContactPhone(event.target.value)
+                          }
                           className="crm-input"
                         />
                       </label>
@@ -341,21 +366,20 @@ export function ProductSupplierField({
                 </fieldset>
               </div>
 
-              <div className="flex flex-col gap-3 border-t border-black/6 bg-[rgba(250,250,252,0.92)] px-5 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-col gap-3 border-t border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-5 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
                 <div className="min-w-0 flex-1">
                   {dialogError ? (
-                    <ActionBanner tone="danger" density="compact" className="max-w-[28rem]">
+                    <ActionBanner
+                      tone="danger"
+                      density="compact"
+                      className="max-w-[28rem]"
+                    >
                       {dialogError}
                     </ActionBanner>
                   ) : (
-                    <div className="flex items-start gap-2 text-[13px] leading-5 text-black/56">
-                      <span
-                        className={`mt-[0.42rem] h-1.5 w-1.5 shrink-0 rounded-full ${
-                          pending ? "animate-pulse bg-[var(--color-accent)]" : "bg-black/20"
-                        }`}
-                      />
-                      <span>{dialogFooterHint}</span>
-                    </div>
+                    <p className="text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
+                      {dialogFooterHint}
+                    </p>
                   )}
                 </div>
 

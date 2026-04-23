@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Search } from "lucide-react";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { MasterDataRecycleDialog } from "@/components/products/master-data-recycle-dialog";
@@ -8,13 +9,12 @@ import { SupplierFormDrawer } from "@/components/suppliers/supplier-form-drawer"
 import { MasterDataStatusBadge } from "@/components/settings/master-data-status-badge";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { EmptyState } from "@/components/shared/empty-state";
-import { SectionCard } from "@/components/shared/section-card";
-import { StatusBadge } from "@/components/shared/status-badge";
 import { formatDateTime } from "@/lib/customers/metadata";
 import type {
   MasterDataRecycleGuard,
   MasterDataRecycleReasonCode,
 } from "@/lib/products/recycle-guards";
+import { cn } from "@/lib/utils";
 
 type SupplierItem = {
   id: string;
@@ -41,6 +41,15 @@ type SupplierActionResult = {
   message: string;
   recycleStatus?: "created" | "already_in_recycle_bin" | "blocked";
 };
+
+const supplierControlSurfaceClassName =
+  "rounded-[1.08rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3.5 py-3.5 shadow-[var(--color-shell-shadow-sm)]";
+
+const supplierMetricPillClassName =
+  "rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-sidebar-muted)]";
+
+const supplierQuietActionClassName =
+  "inline-flex min-h-0 items-center rounded-full border border-transparent px-2.5 py-2 text-sm font-medium text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color] hover:border-[var(--color-border-soft)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50";
 
 function buildSuppliersHref(
   filters: {
@@ -93,11 +102,14 @@ export function SuppliersSection({
 }>) {
   const router = useRouter();
   const [notice, setNotice] = useState<SupplierActionResult | null>(null);
-  const [drawerSupplier, setDrawerSupplier] = useState<SupplierItem | null>(null);
+  const [drawerSupplier, setDrawerSupplier] = useState<SupplierItem | null>(
+    null,
+  );
   const [drawerMode, setDrawerMode] = useState<"create" | "edit" | null>(
     initialCreateOpen ? "create" : null,
   );
-  const [initialDrawerPendingClose, setInitialDrawerPendingClose] = useState(initialCreateOpen);
+  const [initialDrawerPendingClose, setInitialDrawerPendingClose] =
+    useState(initialCreateOpen);
   const [recycleTarget, setRecycleTarget] = useState<SupplierItem | null>(null);
   const [recycleReason, setRecycleReason] =
     useState<MasterDataRecycleReasonCode>("mistaken_creation");
@@ -105,7 +117,20 @@ export function SuppliersSection({
 
   const hasActiveFilters = Boolean(filters.supplierQ || filters.supplierStatus);
   const enabledCount = items.filter((item) => item.enabled).length;
-  const totalProducts = items.reduce((sum, item) => sum + item._count.products, 0);
+  const totalProducts = items.reduce(
+    (sum, item) => sum + item._count.products,
+    0,
+  );
+  const totalOrders = items.reduce(
+    (sum, item) => sum + item._count.salesOrders,
+    0,
+  );
+  const visibleStatusLabel =
+    filters.supplierStatus === "enabled"
+      ? "仅启用"
+      : filters.supplierStatus === "disabled"
+        ? "仅停用"
+        : "全部状态";
 
   function openCreateDrawer() {
     setDrawerSupplier(null);
@@ -163,7 +188,10 @@ export function SuppliersSection({
       setNotice(result);
       closeRecycleDialog();
 
-      if (result.recycleStatus === "created" || result.recycleStatus === "already_in_recycle_bin") {
+      if (
+        result.recycleStatus === "created" ||
+        result.recycleStatus === "already_in_recycle_bin"
+      ) {
         router.refresh();
       }
 
@@ -180,56 +208,79 @@ export function SuppliersSection({
 
   return (
     <div className="space-y-4">
-      <SectionCard
-        density="compact"
-        title="筛选与控制"
-        description="供应商仍附属于商品域，只保留轻量筛选、快速维护和回跳商品主列表。"
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge label={`当前结果 ${items.length}`} variant="neutral" />
-            {canManage ? (
-              <button type="button" onClick={openCreateDrawer} className="crm-button crm-button-primary">
-                新增供应商
-              </button>
-            ) : null}
-          </div>
-        }
+      <form
+        method="get"
+        className={cn(supplierControlSurfaceClassName, "space-y-3")}
       >
-        <form method="get" className="flex flex-col gap-3 xl:flex-row xl:items-end">
-          <input type="hidden" name="tab" value="suppliers" />
+        <input type="hidden" name="tab" value="suppliers" />
 
-          <label className="min-w-0 flex-1 space-y-2">
-            <span className="crm-label">搜索</span>
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+          <label className="relative min-w-0 flex-1">
+            <span className="sr-only">搜索供应商</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-sidebar-muted)]" />
             <input
               name="supplierQ"
               defaultValue={filters.supplierQ}
-              placeholder="供应商名、编码、联系人或电话"
-              className="crm-input"
+              placeholder="输入供应商名、编码、联系人或电话"
+              className="crm-input min-h-[2.85rem] pl-10"
             />
           </label>
 
-          <label className="space-y-2 xl:w-[10rem]">
-            <span className="crm-label">状态</span>
-            <select name="supplierStatus" defaultValue={filters.supplierStatus} className="crm-select">
-              <option value="">全部</option>
-              <option value="enabled">启用</option>
-              <option value="disabled">停用</option>
-            </select>
-          </label>
+          <div className="grid gap-3 sm:grid-cols-[12rem_auto] xl:w-[19rem]">
+            <label className="space-y-1.5">
+              <span className="sr-only">供应商状态</span>
+              <select
+                name="supplierStatus"
+                defaultValue={filters.supplierStatus}
+                className="crm-select min-h-[2.85rem]"
+              >
+                <option value="">显示：全部状态</option>
+                <option value="enabled">显示：仅启用</option>
+                <option value="disabled">显示：仅停用</option>
+              </select>
+            </label>
 
-          <div className="flex flex-wrap gap-2 xl:justify-end">
-            <button type="submit" className="crm-button crm-button-primary">
-              应用筛选
-            </button>
-            <Link
-              href={buildSuppliersHref({ supplierQ: "", supplierStatus: "" })}
-              className="crm-button crm-button-secondary"
-            >
-              重置
-            </Link>
+            <div className="flex flex-wrap gap-2 xl:justify-end">
+              <button
+                type="submit"
+                className="crm-button crm-button-primary min-h-[2.85rem] px-4"
+              >
+                查看结果
+              </button>
+              <Link
+                href={buildSuppliersHref({
+                  supplierQ: "",
+                  supplierStatus: "",
+                })}
+                className="crm-button crm-button-secondary min-h-[2.85rem] px-3.5"
+              >
+                清空
+              </Link>
+            </div>
           </div>
-        </form>
-      </SectionCard>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border-soft)] pt-3">
+          <span className="text-[11px] font-medium tracking-[0.08em] text-[var(--color-sidebar-muted)]">
+            当前范围
+          </span>
+          <span className={supplierMetricPillClassName}>
+            {visibleStatusLabel}
+          </span>
+          <span className={supplierMetricPillClassName}>
+            供应商 {items.length}
+          </span>
+          <span className={supplierMetricPillClassName}>
+            启用 {enabledCount}
+          </span>
+          <span className={supplierMetricPillClassName}>
+            关联商品 {totalProducts}
+          </span>
+          <span className={supplierMetricPillClassName}>
+            成交 {totalOrders}
+          </span>
+        </div>
+      </form>
 
       {notice ? (
         <ActionBanner tone={notice.status === "success" ? "success" : "danger"}>
@@ -237,120 +288,199 @@ export function SuppliersSection({
         </ActionBanner>
       ) : null}
 
-      <SectionCard
-        density="compact"
-        title="供应商列表"
-        description={
-          hasActiveFilters
-            ? "优先按供应商名、状态和最近使用时间回看当前结果，再按需跳回商品主列表。"
-            : "供应商作为商品域次级主数据面，默认只保留轻量扫描和快速维护。"
-        }
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge label={`启用 ${enabledCount}`} variant="neutral" />
-            <StatusBadge label={`关联商品 ${totalProducts}`} variant="neutral" />
-          </div>
-        }
-        contentClassName="p-0"
-      >
+      <div className="rounded-[1.12rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-sm)]">
         {items.length > 0 ? (
-          <div className="divide-y divide-black/6">
-            {items.map((item) => (
-              <article
-                key={item.id}
-                className="group flex flex-col gap-3 px-4 py-3.5 md:px-5 xl:flex-row xl:items-start xl:justify-between"
-              >
-                <div className="min-w-0 flex-1 space-y-2.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <MasterDataStatusBadge isActive={item.enabled} />
-                    <span className="rounded-full border border-black/10 px-2.5 py-1 text-[11px] font-medium text-black/55">
-                      {item.code}
-                    </span>
-                  </div>
+          <div className="space-y-0 overflow-hidden">
+            <div className="flex flex-col gap-2 border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-1">
+                <p className="crm-detail-label text-[11px]">供应目录</p>
+                <h3 className="text-[0.96rem] font-semibold text-[var(--foreground)]">
+                  商品域次级供应商列表
+                </h3>
+              </div>
+              {canManage ? (
+                <button
+                  type="button"
+                  onClick={openCreateDrawer}
+                  className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
+                >
+                  新建供应商
+                </button>
+              ) : null}
+            </div>
 
-                  <div className="space-y-1">
-                    <div className="truncate text-[15px] font-semibold text-black/86">{item.name}</div>
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-black/58">
-                      <span>{item.contactName || "未填写联系人"}</span>
-                      <span className="text-black/24">/</span>
-                      <span>{item.contactPhone || "未填写电话"}</span>
-                    </div>
-                    {item.remark ? (
-                      <p className="line-clamp-1 text-[13px] leading-5 text-black/50">{item.remark}</p>
-                    ) : null}
-                  </div>
+            <div className="crm-table-shell overflow-x-auto rounded-none border-0 shadow-none">
+              <table className="crm-table min-w-[920px]">
+                <thead>
+                  <tr>
+                    <th>供应商</th>
+                    <th>联系信息</th>
+                    <th>使用范围</th>
+                    <th>状态</th>
+                    <th className="text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <div className="min-w-0 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="truncate text-sm font-semibold text-[var(--foreground)]">
+                              {item.name}
+                            </span>
+                            <span className="rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
+                              {item.code}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                            <span>创建 {formatDateTime(item.createdAt)}</span>
+                            <span>更新 {formatDateTime(item.updatedAt)}</span>
+                          </div>
+                          {item.remark ? (
+                            <p className="line-clamp-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                              {item.remark}
+                            </p>
+                          ) : null}
+                        </div>
+                      </td>
 
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] leading-5 text-black/48">
-                    <span>商品 {item._count.products}</span>
-                    <span>成交 {item._count.salesOrders}</span>
-                    <span>最近使用 {item.lastUsedAt ? formatDateTime(item.lastUsedAt) : "暂无"}</span>
-                    <span>最近更新 {formatDateTime(item.updatedAt)}</span>
-                  </div>
-                </div>
+                      <td>
+                        <div className="space-y-1.5">
+                          <p className="text-[13px] font-medium text-[var(--foreground)]">
+                            {item.contactName || "未填写联系人"}
+                          </p>
+                          <p className="text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                            {item.contactPhone || "未填写电话"}
+                          </p>
+                        </div>
+                      </td>
 
-                <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                  <Link
-                    href={`/products?supplierId=${item.id}`}
-                    className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-                  >
-                    关联商品
-                  </Link>
-                  {canManage ? (
-                    <button
-                      type="button"
-                      onClick={() => openEditDrawer(item)}
-                      className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-                    >
-                      编辑
-                    </button>
-                  ) : null}
-                  {canManage ? (
-                    <button
-                      type="button"
-                      onClick={() => handleToggle(item)}
-                      disabled={pendingAction}
-                      className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {item.enabled ? "停用" : "启用"}
-                    </button>
-                  ) : null}
-                  {canManage ? (
-                    <button
-                      type="button"
-                      onClick={() => setRecycleTarget(item)}
-                      className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84"
-                    >
-                      {item.recycleGuard.canMoveToRecycleBin
-                        ? "\u79fb\u5165\u56de\u6536\u7ad9"
-                        : "\u67e5\u770b\u5f15\u7528\u5173\u7cfb"}
-                    </button>
-                  ) : null}
-                </div>
-              </article>
-            ))}
+                      <td>
+                        <div className="space-y-1.5 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                          <p>
+                            商品 {item._count.products} · 成交{" "}
+                            {item._count.salesOrders}
+                          </p>
+                          <p>
+                            履约 {item._count.shippingTasks} · 导出{" "}
+                            {item._count.exportBatches}
+                          </p>
+                          <p>
+                            最近使用{" "}
+                            {item.lastUsedAt
+                              ? formatDateTime(item.lastUsedAt)
+                              : "暂无"}
+                          </p>
+                        </div>
+                      </td>
+
+                      <td>
+                        <div className="flex min-w-[7rem] flex-col items-start gap-2">
+                          {canManage ? (
+                            <button
+                              type="button"
+                              onClick={() => handleToggle(item)}
+                              disabled={pendingAction}
+                              aria-label={
+                                item.enabled ? "停用供应商" : "启用供应商"
+                              }
+                              className={cn(
+                                "relative inline-flex h-7 w-11 items-center rounded-full border p-[3px] transition-[border-color,background-color]",
+                                item.enabled
+                                  ? "border-[rgba(79,125,247,0.18)] bg-[rgba(79,125,247,0.12)]"
+                                  : "border-[var(--color-border-soft)] bg-[var(--color-shell-active)]",
+                                pendingAction &&
+                                  "cursor-not-allowed opacity-70",
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  "h-5 w-5 rounded-full bg-white shadow-[0_2px_8px_rgba(18,24,31,0.14)] transition-transform duration-200",
+                                  item.enabled
+                                    ? "translate-x-4"
+                                    : "translate-x-0",
+                                )}
+                              />
+                            </button>
+                          ) : (
+                            <MasterDataStatusBadge isActive={item.enabled} />
+                          )}
+                          <p className="text-[11px] font-medium text-[var(--color-sidebar-muted)]">
+                            {item.enabled ? "已启用" : "已停用"}
+                          </p>
+                        </div>
+                      </td>
+
+                      <td>
+                        <div className="flex justify-end gap-2">
+                          <Link
+                            href={`/products?supplierId=${item.id}`}
+                            className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                          >
+                            关联商品
+                          </Link>
+                          {canManage ? (
+                            <button
+                              type="button"
+                              onClick={() => openEditDrawer(item)}
+                              className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                            >
+                              编辑
+                            </button>
+                          ) : null}
+                          {canManage ? (
+                            <button
+                              type="button"
+                              onClick={() => setRecycleTarget(item)}
+                              className={supplierQuietActionClassName}
+                            >
+                              {item.recycleGuard.canMoveToRecycleBin
+                                ? "回收"
+                                : "查看引用"}
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : (
           <div className="p-4 md:p-5">
             <EmptyState
-              title={hasActiveFilters ? "当前筛选下没有供应商" : "供应商主数据还未建立"}
+              title={
+                hasActiveFilters
+                  ? "当前筛选下没有供应商"
+                  : "供应商主数据还未建立"
+              }
               description={
                 hasActiveFilters
-                  ? "调整搜索词或状态后继续定位供应商，避免把次级主数据面做成独立工作台。"
-                  : "先建立供应商，再从商品主列表或商品详情回到这里做轻量维护。"
+                  ? "调整搜索词或状态后继续定位供应商。"
+                  : "先建立供应商，再从商品主列表回到这里做轻量维护。"
               }
               action={
                 <div className="flex flex-wrap justify-center gap-2">
                   {hasActiveFilters ? (
                     <Link
-                      href={buildSuppliersHref({ supplierQ: "", supplierStatus: "" })}
+                      href={buildSuppliersHref({
+                        supplierQ: "",
+                        supplierStatus: "",
+                      })}
                       className="crm-button crm-button-secondary"
                     >
                       清空筛选
                     </Link>
                   ) : null}
                   {canManage ? (
-                    <button type="button" onClick={openCreateDrawer} className="crm-button crm-button-primary">
-                      新增供应商
+                    <button
+                      type="button"
+                      onClick={openCreateDrawer}
+                      className="crm-button crm-button-primary"
+                    >
+                      新建供应商
                     </button>
                   ) : null}
                 </div>
@@ -358,7 +488,7 @@ export function SuppliersSection({
             />
           </div>
         )}
-      </SectionCard>
+      </div>
 
       <SupplierFormDrawer
         open={drawerMode !== null}
@@ -384,14 +514,14 @@ export function SuppliersSection({
       <MasterDataRecycleDialog
         open={recycleTarget !== null}
         objectName={recycleTarget?.name ?? ""}
-        objectTypeLabel="\u4f9b\u5e94\u5546"
+        objectTypeLabel="供应商"
         secondaryLabel={recycleTarget?.code ?? ""}
-        domainLabel="\u5546\u54c1\u4e2d\u5fc3 / \u4f9b\u5e94\u5546"
+        domainLabel="商品中心 / 供应商"
         updatedAt={recycleTarget?.updatedAt ?? new Date()}
         guard={
           recycleTarget?.recycleGuard ?? {
             canMoveToRecycleBin: false,
-            fallbackActionLabel: "\u6539\u4e3a\u505c\u7528\u4f9b\u5e94\u5546",
+            fallbackActionLabel: "改为停用供应商",
             blockerSummary: "",
             blockers: [],
             futureRestoreBlockers: [],

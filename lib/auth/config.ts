@@ -68,6 +68,7 @@ async function findLatestAccessByUserId(userId: string) {
             code: true,
           },
         },
+        teamId: true,
         mustChangePassword: true,
         permissionGrants: {
           select: {
@@ -96,6 +97,7 @@ async function findLatestAccessByUserId(userId: string) {
             code: true,
           },
         },
+        teamId: true,
         mustChangePassword: true,
       },
     });
@@ -201,6 +203,7 @@ export const authOptions: NextAuthOptions = {
           username: user.username,
           role: user.role.code,
           roleName: roleLabels[user.role.code],
+          teamId: user.teamId ?? null,
           mustChangePassword: user.mustChangePassword,
           avatarPath: user.avatarPath ?? null,
           permissionCodes: normalizeExtraPermissionCodes(
@@ -217,6 +220,7 @@ export const authOptions: NextAuthOptions = {
         token.username = user.username;
         token.role = user.role;
         token.roleName = user.roleName;
+        token.teamId = user.teamId ?? null;
         token.mustChangePassword = user.mustChangePassword;
         token.avatarPath = user.avatarPath;
         token.permissionCodes = user.permissionCodes;
@@ -226,6 +230,7 @@ export const authOptions: NextAuthOptions = {
         if (latestAccess) {
           token.role = latestAccess.role.code;
           token.roleName = roleLabels[latestAccess.role.code];
+          token.teamId = latestAccess.teamId ?? null;
           token.mustChangePassword = latestAccess.mustChangePassword;
           token.permissionCodes = normalizeExtraPermissionCodes(
             latestAccess.permissionGrants.map((item) => item.permissionCode),
@@ -244,6 +249,7 @@ export const authOptions: NextAuthOptions = {
         session.user.username = token.username;
         session.user.role = token.role;
         session.user.roleName = token.roleName;
+        session.user.teamId = token.teamId ?? null;
         session.user.mustChangePassword = token.mustChangePassword;
         session.user.avatarPath = latestProfile?.avatarPath ?? token.avatarPath ?? null;
         session.user.permissionCodes =

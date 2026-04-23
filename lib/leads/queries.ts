@@ -32,6 +32,7 @@ type SearchParamsValue = string | string[] | undefined;
 export type LeadViewer = {
   id: string;
   role: RoleCode;
+  teamId?: string | null;
 };
 
 export type LeadListFilters = {
@@ -303,7 +304,7 @@ export function buildLeadBaseWhereInput(
   importedLeadIds: string[] = [],
   activeLeadIds: string[] = [],
 ) {
-  const scope = getLeadScope(viewer.role, viewer.id);
+  const scope = getLeadScope(viewer.role, viewer.id, viewer.teamId);
 
   if (!scope) {
     throw new Error("You do not have access to leads.");
@@ -627,6 +628,11 @@ export async function getLeadListData(
             role: {
               code: "SALES",
             },
+            ...(viewer.role === "SUPERVISOR"
+              ? viewer.teamId
+                ? { teamId: viewer.teamId }
+                : { id: "__missing_lead_sales_team_scope__" }
+              : {}),
           },
           orderBy: [{ name: "asc" }, { username: "asc" }],
           select: {
@@ -723,7 +729,7 @@ export async function getLeadDetail(viewer: LeadViewer, leadId: string) {
     throw new Error("You do not have access to leads.");
   }
 
-  const scope = getLeadScope(viewer.role, viewer.id);
+  const scope = getLeadScope(viewer.role, viewer.id, viewer.teamId);
 
   if (!scope) {
     throw new Error("You do not have access to leads.");

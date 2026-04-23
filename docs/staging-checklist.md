@@ -37,6 +37,7 @@
 - [ ] 执行 `npm run start`
 - [ ] 执行 `npm run worker:lead-imports`
 - [ ] 确认 Web 与 worker 是两个独立可运行进程
+- [ ] 执行 `REQUIRE_LEAD_IMPORT_WORKER=1 npm run check:lead-import-runtime`
 - [ ] 执行 `bash scripts/release-smoke.sh <staging-base-url>`
 
 ### 管理员初始化
@@ -96,6 +97,7 @@
 ### 异步导入主线
 
 - [ ] 从线索导入入口提交一批导入任务
+- [ ] `npm run check:lead-import-runtime` 能返回 Redis / queue / worker 正常状态
 - [ ] 导入批次进入排队 / 处理中状态
 - [ ] worker 能正常消费该批次
 - [ ] 成功批次能正常完成

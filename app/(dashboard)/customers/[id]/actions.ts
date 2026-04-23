@@ -320,6 +320,7 @@ export async function updateCustomerProfileAction(formData: FormData) {
       {
         id: session.user.id,
         role: session.user.role,
+        teamId: session.user.teamId,
       },
       {
         customerId,
@@ -330,7 +331,6 @@ export async function updateCustomerProfileAction(formData: FormData) {
         district: getFormValue(formData, "district"),
         address: getFormValue(formData, "address"),
         status: getFormValue(formData, "status"),
-        level: getFormValue(formData, "level"),
         remark: getFormValue(formData, "remark"),
       },
     );

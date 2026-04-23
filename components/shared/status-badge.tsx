@@ -1,14 +1,15 @@
 import { cn } from "@/lib/utils";
 
 const badgeVariants = {
-  neutral: "bg-[rgba(18,24,31,0.04)] text-black/68 border-black/10",
-  info: "bg-[rgba(54,95,135,0.10)] text-[var(--color-info)] border-[rgba(54,95,135,0.16)]",
+  neutral:
+    "bg-[var(--color-shell-surface-soft)] text-[var(--color-sidebar-muted)] border-[var(--color-border-soft)]",
+  info: "bg-[rgba(61,124,255,0.08)] text-[var(--color-info)] border-[rgba(61,124,255,0.12)]",
   success:
-    "bg-[rgba(47,107,71,0.10)] text-[var(--color-success)] border-[rgba(47,107,71,0.16)]",
+    "bg-[rgba(15,159,120,0.08)] text-[var(--color-success)] border-[rgba(15,159,120,0.12)]",
   warning:
-    "bg-[rgba(155,106,29,0.10)] text-[var(--color-warning)] border-[rgba(155,106,29,0.16)]",
+    "bg-[rgba(201,138,30,0.08)] text-[var(--color-warning)] border-[rgba(201,138,30,0.12)]",
   danger:
-    "bg-[rgba(141,59,51,0.10)] text-[var(--color-danger)] border-[rgba(141,59,51,0.16)]",
+    "bg-[rgba(209,91,118,0.08)] text-[var(--color-danger)] border-[rgba(209,91,118,0.12)]",
 } as const;
 
 export type StatusBadgeVariant = keyof typeof badgeVariants;
@@ -20,14 +21,19 @@ export function StatusBadge({
   label: string;
   variant?: StatusBadgeVariant;
 }>) {
+  const showIndicator = variant !== "neutral";
+
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold tracking-[0.08em] shadow-[0_4px_10px_rgba(31,35,41,0.02)]",
+        "inline-flex items-center rounded-full border px-2 py-[0.22rem] text-[10px] font-medium tracking-[0.04em]",
+        showIndicator ? "gap-1" : "",
         badgeVariants[variant],
       )}
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+      {showIndicator ? (
+        <span className="h-[0.22rem] w-[0.22rem] rounded-full bg-current opacity-75" />
+      ) : null}
       {label}
     </span>
   );

@@ -322,14 +322,14 @@ export function DashboardWorkbench({
               <Link
                 key={item.href}
                 href={item.href}
-                className="rounded-[1rem] border border-black/7 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,246,242,0.92))] px-4 py-4 transition-colors hover:border-[var(--color-accent)]/24 hover:bg-white"
+                className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-4 py-4 transition-colors hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)]"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-2">
-                    <p className="text-sm font-semibold text-black/84">{item.title}</p>
-                    <p className="text-sm leading-6 text-black/56">{item.description}</p>
+                    <p className="text-sm font-semibold text-[var(--foreground)]">{item.title}</p>
+                    <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">{item.description}</p>
                   </div>
-                  <ChevronRight className="mt-0.5 h-4 w-4 text-black/38" />
+                  <ChevronRight className="mt-0.5 h-4 w-4 text-[var(--color-sidebar-muted)]" />
                 </div>
               </Link>
             ))}
@@ -347,10 +347,10 @@ export function DashboardWorkbench({
               .map((group) => (
                 <div
                   key={group.key}
-                  className="rounded-[1rem] border border-black/7 bg-[rgba(247,248,250,0.82)] px-4 py-4"
+                  className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4"
                 >
-                  <p className="text-sm font-semibold text-black/84">{group.title}</p>
-                  <p className="mt-1 text-sm leading-6 text-black/56">{group.description}</p>
+                  <p className="text-sm font-semibold text-[var(--foreground)]">{group.title}</p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--color-sidebar-muted)]">{group.description}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {group.sections
                       .flatMap((section) => section.items)
@@ -359,7 +359,7 @@ export function DashboardWorkbench({
                         <Link
                           key={item.href}
                           href={item.href}
-                          className="rounded-full border border-black/8 bg-white px-3 py-1.5 text-xs text-black/72 transition-colors hover:border-[var(--color-accent)]/24 hover:text-[var(--color-accent)]"
+                          className="rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-1.5 text-xs text-[var(--crm-badge-neutral-text)] transition-colors hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--color-accent)]"
                         >
                           {item.title}
                         </Link>
@@ -416,15 +416,15 @@ export function DashboardWorkbench({
                 {
                   key: "rank",
                   title: "排名",
-                  render: (row) => <span className="font-semibold text-black/82">#{row.rank}</span>,
+                  render: (row) => <span className="font-semibold text-[var(--foreground)]">#{row.rank}</span>,
                 },
                 {
                   key: "member",
                   title: "成员",
                   render: (row) => (
                     <div>
-                      <p className="font-medium text-black/82">{row.name}</p>
-                      <p className="text-xs text-black/48">@{row.username}</p>
+                      <p className="font-medium text-[var(--foreground)]">{row.name}</p>
+                      <p className="text-xs text-[var(--color-sidebar-muted)]">@{row.username}</p>
                     </div>
                   ),
                 },
@@ -432,7 +432,7 @@ export function DashboardWorkbench({
                   key: "activity",
                   title: "活跃度",
                   render: (row) => (
-                    <div className="text-sm leading-6 text-black/64">
+                    <div className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
                       <div>跟进 {row.followUpCount}</div>
                       <div>邀约 {row.invitationCount}</div>
                     </div>
@@ -442,7 +442,7 @@ export function DashboardWorkbench({
                   key: "result",
                   title: "结果",
                   render: (row) => (
-                    <div className="text-sm leading-6 text-black/64">
+                    <div className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
                       <div>成交 {row.dealCount}</div>
                       <div>加微 {row.wechatAddedCount}</div>
                     </div>

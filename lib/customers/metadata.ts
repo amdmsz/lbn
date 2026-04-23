@@ -7,8 +7,8 @@ import type {
 import type { StatusBadgeVariant } from "@/components/shared/status-badge";
 import { getLeadSourceLabel } from "@/lib/leads/metadata";
 
-export const CUSTOMERS_PAGE_SIZE = 12;
-export const customerPageSizeOptions = [12, 20, 30, 50, 100] as const;
+export const CUSTOMERS_PAGE_SIZE = 10;
+export const customerPageSizeOptions = [10, 20, 30, 50, 100] as const;
 export const MAX_BATCH_CUSTOMER_ACTION_SIZE = 1000;
 export const customerManualCreateOperationAction = "customer.manual_created_by_sales";
 
@@ -26,6 +26,100 @@ export const customerLevelMeta: Record<CustomerLevel, { label: string }> = {
   NEW: { label: "新客户" },
   REGULAR: { label: "常规客户" },
   VIP: { label: "VIP" },
+};
+
+export const customerExecutionClassOptions = [
+  {
+    value: "A",
+    label: "A",
+    longLabel: "A 已复购",
+    description: "已形成复购结果。",
+  },
+  {
+    value: "B",
+    label: "B",
+    longLabel: "B 已加微信",
+    description: "已进入微信承接。",
+  },
+  {
+    value: "C",
+    label: "C",
+    longLabel: "C 已邀约",
+    description: "已形成直播邀约动作。",
+  },
+  {
+    value: "D",
+    label: "D",
+    longLabel: "D 未接通",
+    description: "还未建立有效联系。",
+  },
+  {
+    value: "E",
+    label: "E",
+    longLabel: "E 拒加",
+    description: "客户明确拒绝加微信。",
+  },
+] as const;
+
+export type CustomerExecutionClass = (typeof customerExecutionClassOptions)[number]["value"];
+
+export type CustomerExecutionDisplayInput = {
+  executionClass: CustomerExecutionClass;
+  newImported?: boolean | null;
+  pendingFirstCall?: boolean | null;
+};
+
+const customerExecutionClassMeta: Record<
+  CustomerExecutionClass,
+  {
+    label: string;
+    longLabel: string;
+    description: string;
+    variant: StatusBadgeVariant;
+  }
+> = {
+  A: {
+    label: "A",
+    longLabel: "A 已复购",
+    description: "已形成复购结果。",
+    variant: "success",
+  },
+  B: {
+    label: "B",
+    longLabel: "B 已加微信",
+    description: "已进入微信承接。",
+    variant: "info",
+  },
+  C: {
+    label: "C",
+    longLabel: "C 已邀约",
+    description: "已形成直播邀约动作。",
+    variant: "warning",
+  },
+  D: {
+    label: "D",
+    longLabel: "D 未接通",
+    description: "还未建立有效联系。",
+    variant: "neutral",
+  },
+  E: {
+    label: "E",
+    longLabel: "E 拒加",
+    description: "客户明确拒绝加微信。",
+    variant: "danger",
+  },
+};
+
+const temporaryImportedExecutionMeta = {
+  label: "新",
+  longLabel: "新导入",
+  description: "刚分配到客户池，首呼后进入 A-E 正式分类。",
+  variant: "info",
+} as const satisfies {
+  label: string;
+  longLabel: string;
+  description: string;
+  variant: StatusBadgeVariant;
 };
 
 export const customerQueueOptions = [
@@ -213,6 +307,52 @@ export function getCustomerStatusVariant(status: CustomerStatus) {
 
 export function getCustomerLevelLabel(level: CustomerLevel) {
   return customerLevelMeta[level].label;
+}
+
+export function getCustomerExecutionClassLabel(value: CustomerExecutionClass) {
+  return customerExecutionClassMeta[value].label;
+}
+
+export function getCustomerExecutionClassLongLabel(value: CustomerExecutionClass) {
+  return customerExecutionClassMeta[value].longLabel;
+}
+
+export function getCustomerExecutionClassDescription(value: CustomerExecutionClass) {
+  return customerExecutionClassMeta[value].description;
+}
+
+export function getCustomerExecutionClassVariant(value: CustomerExecutionClass) {
+  return customerExecutionClassMeta[value].variant;
+}
+
+export function isCustomerExecutionDisplayTemporary(
+  input: CustomerExecutionDisplayInput,
+) {
+  return Boolean(input.newImported && input.pendingFirstCall);
+}
+
+function getCustomerExecutionDisplayMeta(input: CustomerExecutionDisplayInput) {
+  if (isCustomerExecutionDisplayTemporary(input)) {
+    return temporaryImportedExecutionMeta;
+  }
+
+  return customerExecutionClassMeta[input.executionClass];
+}
+
+export function getCustomerExecutionDisplayLabel(input: CustomerExecutionDisplayInput) {
+  return getCustomerExecutionDisplayMeta(input).label;
+}
+
+export function getCustomerExecutionDisplayLongLabel(input: CustomerExecutionDisplayInput) {
+  return getCustomerExecutionDisplayMeta(input).longLabel;
+}
+
+export function getCustomerExecutionDisplayDescription(input: CustomerExecutionDisplayInput) {
+  return getCustomerExecutionDisplayMeta(input).description;
+}
+
+export function getCustomerExecutionDisplayVariant(input: CustomerExecutionDisplayInput) {
+  return getCustomerExecutionDisplayMeta(input).variant;
 }
 
 export function getCustomerQueueLabel(queue: CustomerQueueKey) {

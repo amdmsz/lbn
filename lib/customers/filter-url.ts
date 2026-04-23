@@ -26,21 +26,7 @@ export function buildCustomersHref(
 
   appendArrayParams(params, "productKeys", next.productKeys);
   appendArrayParams(params, "tagIds", next.tagIds);
-  appendArrayParams(params, "statuses", next.statuses);
-
-  if (next.statuses.length === 1) {
-    params.set("queue", next.statuses[0]);
-  } else if (next.queue !== "all" && next.statuses.length === 0) {
-    params.set("queue", next.queue);
-  }
-
-  if (next.importedFrom) {
-    params.set("importedFrom", next.importedFrom);
-  }
-
-  if (next.importedTo) {
-    params.set("importedTo", next.importedTo);
-  }
+  appendArrayParams(params, "executionClasses", next.executionClasses);
 
   if (next.assignedFrom) {
     params.set("assignedFrom", next.assignedFrom);

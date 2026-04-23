@@ -1,0 +1,108 @@
+name: Release Guardrails
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-guardrails-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-guardrails:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: lbn_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Prepare CI release env file
+        shell: bash
+        run: |
+          cat > .env.ci <<'EOF'
+          DATABASE_URL=mysql://root:root@127.0.0.1:3306/lbn_ci
+          NEXTAUTH_URL=http://127.0.0.1:3000
+          NEXTAUTH_SECRET=ci-release-guardrails-secret
+          NODE_ENV=production
+          REDIS_URL=redis://127.0.0.1:6379
+          EOF
+
+      - name: Run release preflight
+        shell: bash
+        env:
+          ENV_FILE: .env.ci
+        run: bash scripts/release-preflight.sh
+
+      - name: Apply Prisma migrations in CI
+        shell: bash
+        env:
+          ENV_FILE: .env.ci
+        run: npm run prisma:deploy:safe -- --skip-generate
+
+      - name: Start application
+        shell: bash
+        env:
+          ENV_FILE: .env.ci
+        run: |
+          set -a
+          . ./.env.ci
+          set +a
+          nohup npm run start -- --hostname 127.0.0.1 --port 3000 > release-smoke-app.log 2>&1 &
+
+      - name: Wait for app readiness
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:3000/login > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Application failed to become ready in time."
+          cat release-smoke-app.log || true
+          exit 1
+
+      - name: Run release smoke checks
+        shell: bash
+        run: bash scripts/release-smoke.sh http://127.0.0.1:3000
+
+      - name: Print app log on failure
+        if: failure()
+        shell: bash
+        run: cat release-smoke-app.log || true

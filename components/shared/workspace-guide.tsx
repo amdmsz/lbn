@@ -45,17 +45,17 @@ export function WorkspaceGuide({
               className={cn(
                 "group flex h-full flex-col transition-colors",
                 isCompact
-                  ? "rounded-[0.95rem] border border-black/7 bg-[rgba(255,255,255,0.74)] px-4 py-3.5 shadow-[0_8px_18px_rgba(18,24,31,0.03)] hover:border-[var(--color-accent)]/18 hover:bg-white"
+                  ? "rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)] hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)]"
                   : "crm-card-muted p-5 transition-transform hover:-translate-y-0.5 hover:border-[var(--color-accent)]/20",
               )}
             >
               <div className={cn("flex items-start justify-between", isCompact ? "gap-3" : "gap-4")}>
                 <div className={cn("min-w-0", isCompact ? "space-y-1" : "space-y-1.5")}>
-                  <h3 className={cn("font-semibold text-black/85", isCompact ? "text-[0.94rem]" : "text-base")}>
+                  <h3 className={cn("font-semibold text-[var(--foreground)]", isCompact ? "text-[0.94rem]" : "text-base")}>
                     {item.title}
                   </h3>
                   {item.valueLabel ? (
-                    <p className={cn("font-medium uppercase tracking-[0.14em] text-black/42", isCompact ? "text-[10px]" : "text-[11px]")}>
+                    <p className={cn("font-medium uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]", isCompact ? "text-[10px]" : "text-[11px]")}>
                       {item.valueLabel}
                     </p>
                   ) : null}
@@ -71,7 +71,7 @@ export function WorkspaceGuide({
                   {item.value ? (
                     <span
                       className={cn(
-                        "border border-black/8 bg-white/75 font-semibold text-black/78",
+                        "border border-[var(--crm-badge-neutral-border)] bg-[var(--crm-badge-neutral-bg)] font-semibold text-[var(--crm-badge-neutral-text)]",
                         isCompact
                           ? "rounded-full px-2.5 py-1 text-[12px]"
                           : "rounded-2xl px-3 py-1.5 text-sm",
@@ -85,7 +85,7 @@ export function WorkspaceGuide({
 
               <p
                 className={cn(
-                  "flex-1 text-black/60",
+                  "flex-1 text-[var(--color-sidebar-muted)]",
                   isCompact ? "mt-2.5 text-[13px] leading-5" : "mt-3 text-sm leading-6",
                 )}
               >
@@ -93,8 +93,8 @@ export function WorkspaceGuide({
               </p>
 
               {item.href ? (
-                <div className={cn("flex items-center justify-between gap-3 border-t border-black/6", isCompact ? "mt-3 pt-2.5" : "mt-4 pt-3")}>
-                  <span className={cn("uppercase tracking-[0.16em] text-black/38", isCompact ? "text-[10px]" : "text-[11px]")}>
+                <div className={cn("flex items-center justify-between gap-3 border-t border-[var(--color-border-soft)]", isCompact ? "mt-3 pt-2.5" : "mt-4 pt-3")}>
+                  <span className={cn("uppercase tracking-[0.16em] text-[var(--color-sidebar-muted)]", isCompact ? "text-[10px]" : "text-[11px]")}>
                     快捷入口
                   </span>
                   <span className={cn("crm-text-link inline-flex items-center", isCompact ? "text-[13px]" : "text-sm")}>

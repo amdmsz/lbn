@@ -1,6 +1,9 @@
-import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
-import { MetricCard } from "@/components/shared/metric-card";
+import {
+  PageSummaryStrip,
+  type PageSummaryStripItem,
+} from "@/components/shared/page-summary-strip";
+import { SectionCard } from "@/components/shared/section-card";
 import type {
   ConversionMetric,
   EmployeeRankingItem,
@@ -9,21 +12,70 @@ import type {
   SummaryCard,
 } from "@/lib/reports/queries";
 
-type ConversionSection =
-  | {
-      windowLabel: string;
-      scopeLabel: string;
-      metrics: ConversionMetric[];
-    }
-  | null;
+type ConversionSection = {
+  windowLabel: string;
+  scopeLabel: string;
+  metrics: ConversionMetric[];
+} | null;
 
-type RankingSection =
-  | {
-      windowLabel: string;
-      description: string;
-      items: EmployeeRankingItem[];
-    }
-  | null;
+type RankingSection = {
+  windowLabel: string;
+  description: string;
+  items: EmployeeRankingItem[];
+} | null;
+
+function toSummaryItems(
+  cards: SummaryCard[],
+  emphasis: PageSummaryStripItem["emphasis"] = "default",
+): PageSummaryStripItem[] {
+  return cards.map((card, index) => ({
+    key: `${card.label}-${index}`,
+    label: card.label,
+    value: card.value,
+    note: card.note,
+    href: card.href,
+    emphasis,
+  }));
+}
+
+function toConversionItems(
+  metrics: ConversionMetric[],
+): PageSummaryStripItem[] {
+  return metrics.map((metric, index) => ({
+    key: `${metric.label}-${index}`,
+    label: metric.label,
+    value: metric.value,
+    note: `${metric.note} · ${metric.numerator}/${metric.denominator}`,
+    emphasis: "default",
+  }));
+}
+
+function DomainSummaryCard({
+  title,
+  description,
+  summary,
+  emphasis = "default",
+}: Readonly<{
+  title: string;
+  description: string;
+  summary: PaymentSummaryData;
+  emphasis?: PageSummaryStripItem["emphasis"];
+}>) {
+  return (
+    <SectionCard
+      title={title}
+      description={description}
+      density="compact"
+      className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+      contentClassName="p-3 md:p-4"
+    >
+      <PageSummaryStrip
+        items={toSummaryItems(summary.cards, emphasis)}
+        className="gap-2.5 xl:grid-cols-3"
+      />
+    </SectionCard>
+  );
+}
 
 export function ReportOverview({
   cards,
@@ -47,91 +99,57 @@ export function ReportOverview({
   restrictedMessage?: string;
 }>) {
   return (
-    <div className="space-y-5">
-      <DataTableWrapper
-        title="核心摘要"
-        description={`按${scopeLabel}展示当前角色最常用的经营与执行指标。`}
-      >
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
-          {cards.map((card) => (
-            <MetricCard
-              key={card.label}
-              label={card.label}
-              value={card.value}
-              note={card.note}
-              href={card.href}
-            />
-          ))}
-        </div>
-      </DataTableWrapper>
+    <div className="space-y-4">
+      <PageSummaryStrip
+        items={toSummaryItems(cards)}
+        className="gap-2.5 2xl:grid-cols-5"
+      />
 
-      {fulfillmentSummary ? (
-        <DataTableWrapper title="履约摘要" description={fulfillmentSummary.description}>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {fulfillmentSummary.cards.map((card) => (
-              <MetricCard
-                key={card.label}
-                label={card.label}
-                value={card.value}
-                note={card.note}
-                href={card.href}
-              />
-            ))}
-          </div>
-        </DataTableWrapper>
-      ) : null}
+      <div className="grid gap-4 xl:grid-cols-3">
+        {fulfillmentSummary ? (
+          <DomainSummaryCard
+            title="履约摘要"
+            description={fulfillmentSummary.description}
+            summary={fulfillmentSummary}
+            emphasis="info"
+          />
+        ) : null}
 
-      {paymentSummary ? (
-        <DataTableWrapper title="支付层摘要" description={paymentSummary.description}>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {paymentSummary.cards.map((card) => (
-              <MetricCard
-                key={card.label}
-                label={card.label}
-                value={card.value}
-                note={card.note}
-                href={card.href}
-              />
-            ))}
-          </div>
-        </DataTableWrapper>
-      ) : null}
+        {paymentSummary ? (
+          <DomainSummaryCard
+            title="支付摘要"
+            description={paymentSummary.description}
+            summary={paymentSummary}
+            emphasis="success"
+          />
+        ) : null}
 
-      {financeSummary ? (
-        <DataTableWrapper title="财务预览" description={financeSummary.description}>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {financeSummary.cards.map((card) => (
-              <MetricCard
-                key={card.label}
-                label={card.label}
-                value={card.value}
-                note={card.note}
-                href={card.href}
-              />
-            ))}
-          </div>
-        </DataTableWrapper>
-      ) : null}
+        {financeSummary ? (
+          <DomainSummaryCard
+            title="财务预览"
+            description={financeSummary.description}
+            summary={financeSummary}
+            emphasis="warning"
+          />
+        ) : null}
+      </div>
 
-      <DataTableWrapper
-        title="基础转化指标"
+      <SectionCard
+        title="转化概览"
         description={
           conversions
-            ? `统计窗口：${conversions.windowLabel} / ${conversions.scopeLabel}`
+            ? `${conversions.windowLabel} · ${conversions.scopeLabel}`
             : `当前视角：${scopeLabel}`
         }
+        density="compact"
+        className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+        contentClassName="p-3 md:p-4"
       >
         {conversions ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {conversions.metrics.map((metric) => (
-              <MetricCard
-                key={metric.label}
-                label={metric.label}
-                value={metric.value}
-                note={`${metric.note} (${metric.numerator} / ${metric.denominator})`}
-              />
-            ))}
-          </div>
+          <PageSummaryStrip
+            items={toConversionItems(conversions.metrics)}
+            className="gap-2.5 xl:grid-cols-4"
+          />
         ) : (
           <EmptyState
             title="当前角色不展示完整销售转化指标"
@@ -141,15 +159,18 @@ export function ReportOverview({
             }
           />
         )}
-      </DataTableWrapper>
+      </SectionCard>
 
-      <DataTableWrapper
+      <SectionCard
         title="员工排行"
         description={
           ranking
-            ? `${ranking.windowLabel} / ${ranking.description}`
+            ? `${ranking.windowLabel} · ${ranking.description}`
             : `当前视角：${scopeLabel}`
         }
+        density="compact"
+        className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+        contentClassName="p-3 md:p-4"
       >
         {ranking && ranking.items.length > 0 ? (
           <div className="crm-table-shell">
@@ -167,10 +188,16 @@ export function ReportOverview({
               <tbody>
                 {ranking.items.map((item) => (
                   <tr key={item.userId}>
-                    <td className="font-medium text-black/80">#{item.rank}</td>
+                    <td className="font-medium text-[var(--foreground)]">
+                      #{item.rank}
+                    </td>
                     <td>
-                      <div>{item.name}</div>
-                      <div className="text-xs text-black/45">@{item.username}</div>
+                      <div className="font-medium text-[var(--foreground)]">
+                        {item.name}
+                      </div>
+                      <div className="text-xs text-[var(--color-sidebar-muted)]">
+                        @{item.username}
+                      </div>
                     </td>
                     <td>{item.followUpCount}</td>
                     <td>{item.dealCount}</td>
@@ -195,24 +222,32 @@ export function ReportOverview({
             }
           />
         )}
-      </DataTableWrapper>
+      </SectionCard>
 
       {definitions ? (
-        <DataTableWrapper
-          title="统计口径"
-          description="首页报表只基于现有正式模型做轻量聚合，不引入额外分析体系。"
+        <SectionCard
+          title="口径"
+          description="仅保留当前正式模型下的统计定义。"
+          density="compact"
+          className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+          contentClassName="p-3 md:p-4"
         >
-          <div className="space-y-3">
+          <div className="grid gap-2.5 md:grid-cols-2">
             {definitions.map((definition) => (
-              <div key={definition.label} className="crm-subtle-panel">
-                <p className="text-sm font-medium text-black/80">{definition.label}</p>
-                <p className="mt-2 text-sm leading-7 text-black/60">
+              <div
+                key={definition.label}
+                className="crm-subtle-panel rounded-[0.98rem] px-4 py-3"
+              >
+                <p className="text-sm font-medium text-[var(--foreground)]">
+                  {definition.label}
+                </p>
+                <p className="mt-1.5 text-[13px] leading-6 text-[var(--color-sidebar-muted)]">
                   {definition.description}
                 </p>
               </div>
             ))}
           </div>
-        </DataTableWrapper>
+        </SectionCard>
       ) : null}
     </div>
   );

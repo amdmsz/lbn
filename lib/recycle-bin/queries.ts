@@ -15,7 +15,6 @@ import {
 } from "@/lib/auth/access";
 import {
   formatDateTime,
-  getCustomerLevelLabel,
   getCustomerStatusLabel,
 } from "@/lib/customers/metadata";
 import { getCustomerOwnershipModeLabel } from "@/lib/customers/public-pool-metadata";
@@ -218,7 +217,6 @@ export type RecycleBinListItem = {
   isExpired: boolean;
   customerSummary?: {
     phone: string;
-    levelLabel: string;
     ownershipLabel: string;
     lastEffectiveFollowUpAtLabel: string | null;
     approvedTradeOrderCount: number;
@@ -1899,9 +1897,6 @@ function getCustomerListSummary(entry: RecycleBinListEntry) {
   const statusLabel = snapshot.status
     ? getCustomerStatusLabel(snapshot.status as never)
     : "未知状态";
-  const levelLabel = snapshot.level
-    ? getCustomerLevelLabel(snapshot.level as never)
-    : "未知等级";
   const ownershipLabel = snapshot.ownershipMode
     ? getCustomerOwnershipModeLabel(snapshot.ownershipMode as never)
     : "未知归属";
@@ -1909,10 +1904,9 @@ function getCustomerListSummary(entry: RecycleBinListEntry) {
   return {
     phone: snapshot.phone ?? entry.secondarySnapshot ?? "--",
     ownerLabel: snapshot.ownerLabel ?? "--",
-    statusLabel: `${statusLabel} / ${levelLabel} / ${ownershipLabel}`,
+    statusLabel: `${statusLabel} / ${ownershipLabel}`,
     customerSummary: {
       phone: snapshot.phone ?? entry.secondarySnapshot ?? "--",
-      levelLabel,
       ownershipLabel,
       lastEffectiveFollowUpAtLabel: snapshot.lastEffectiveFollowUpAt
         ? formatDateTime(new Date(snapshot.lastEffectiveFollowUpAt))

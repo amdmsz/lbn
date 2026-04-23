@@ -1,11 +1,14 @@
 import { EmptyState } from "@/components/shared/empty-state";
-import { MetricCard } from "@/components/shared/metric-card";
+import {
+  PageSummaryStrip,
+  type PageSummaryStripItem,
+} from "@/components/shared/page-summary-strip";
+import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import {
   getCollectionTaskStatusLabel,
   getCollectionTaskStatusVariant,
   getCollectionTaskTypeLabel,
-  getCollectionTaskTypeVariant,
   getPaymentCollectionChannelLabel,
   getPaymentPlanSubjectLabel,
   getPaymentSourceLabel,
@@ -34,10 +37,25 @@ type FinanceSourceBreakdownItem = {
 };
 
 type FinanceCollectionTaskBreakdownItem = {
-  taskType: "BALANCE_COLLECTION" | "COD_COLLECTION" | "FREIGHT_COLLECTION" | "GENERAL_COLLECTION";
+  taskType:
+    | "BALANCE_COLLECTION"
+    | "COD_COLLECTION"
+    | "FREIGHT_COLLECTION"
+    | "GENERAL_COLLECTION";
   status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELED";
   count: number;
 };
+
+function toSummaryItems(cards: FinanceCard[]): PageSummaryStripItem[] {
+  return cards.map((card, index) => ({
+    key: `${card.label}-${index}`,
+    label: card.label,
+    value: card.value,
+    note: card.note,
+    href: card.href,
+    emphasis: "default",
+  }));
+}
 
 export function FinanceReconciliationSection({
   scopeLabel,
@@ -55,131 +73,139 @@ export function FinanceReconciliationSection({
   collectionTaskBreakdown: FinanceCollectionTaskBreakdownItem[];
 }>) {
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {summaryCards.map((card) => (
-          <MetricCard key={card.label} label={card.label} value={card.value} note={card.note} href={card.href} />
-        ))}
-      </div>
+    <div className="space-y-4">
+      <PageSummaryStrip
+        items={toSummaryItems(summaryCards)}
+        className="gap-2.5 xl:grid-cols-4"
+      />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        {operationalCards.map((card) => (
-          <MetricCard key={card.label} label={card.label} value={card.value} note={card.note} href={card.href} />
-        ))}
-      </div>
+      <PageSummaryStrip
+        items={toSummaryItems(operationalCards)}
+        className="gap-2.5 xl:grid-cols-4"
+      />
 
-      <div className="crm-subtle-panel">
-        <div className="flex flex-wrap items-center gap-3">
-          <StatusBadge label={scopeLabel} variant="info" />
-          <StatusBadge label="只读对账预览" variant="warning" />
-        </div>
-      </div>
-
-      <section className="space-y-4">
-        <div className="crm-section-heading">
-          <p className="crm-eyebrow">对账口径</p>
-          <h2 className="crm-section-title">指标定义</h2>
-          <p className="crm-section-copy">
-            当前页面只提供 payment layer 与 fulfillment layer 的聚合视图，不承担完整财务记账。
-          </p>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2">
+      <SectionCard
+        title="指标口径"
+        description={`${scopeLabel} · 只读聚合 payment 与 collection。`}
+        density="compact"
+        className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+        contentClassName="p-3 md:p-4"
+      >
+        <div className="grid gap-2.5 md:grid-cols-2">
           {metricDefinitions.map((item) => (
-            <div key={item.label} className="crm-subtle-panel">
-              <p className="text-sm font-semibold text-black/82">{item.label}</p>
-              <p className="mt-2 text-sm leading-7 text-black/60">{item.description}</p>
+            <div
+              key={item.label}
+              className="rounded-[0.98rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 shadow-[var(--color-shell-shadow-sm)]"
+            >
+              <p className="text-sm font-medium text-[var(--foreground)]">
+                {item.label}
+              </p>
+              <p className="mt-1.5 text-[13px] leading-6 text-[var(--color-sidebar-muted)]">
+                {item.description}
+              </p>
             </div>
           ))}
         </div>
-      </section>
+      </SectionCard>
 
-      <section className="space-y-4">
-        <div className="crm-section-heading">
-          <p className="crm-eyebrow">计划拆分</p>
-          <h2 className="crm-section-title">PaymentPlan 聚合</h2>
-          <p className="crm-section-copy">
-            用来源、标的和收款渠道拆开看应收、已确认和待收，帮助人工预览对账结构。
-          </p>
-        </div>
-
+      <SectionCard
+        title="PaymentPlan 聚合"
+        description="按来源、标的与渠道查看应收、已确认与待收。"
+        density="compact"
+        className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+        contentClassName="p-3 md:p-4"
+      >
         {sourceBreakdown.length > 0 ? (
-          <div className="crm-table-shell">
-            <table className="crm-table">
-              <thead>
-                <tr>
-                  <th>来源</th>
-                  <th>标的</th>
-                  <th>渠道</th>
-                  <th>计划数</th>
-                  <th>应收金额</th>
-                  <th>已确认金额</th>
-                  <th>待收金额</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sourceBreakdown.map((item) => (
-                  <tr
-                    key={`${item.sourceType}-${item.subjectType}-${item.collectionChannel}`}
-                  >
-                    <td>{getPaymentSourceLabel(item.sourceType)}</td>
-                    <td>{getPaymentPlanSubjectLabel(item.subjectType)}</td>
-                    <td>{getPaymentCollectionChannelLabel(item.collectionChannel)}</td>
-                    <td>{item.count}</td>
-                    <td>{item.plannedAmount}</td>
-                    <td>{item.confirmedAmount}</td>
-                    <td>{item.remainingAmount}</td>
+          <div className="space-y-3">
+            <p className="text-[12px] text-[var(--color-sidebar-muted)]">
+              共 {sourceBreakdown.length} 个来源组合
+            </p>
+
+            <div className="crm-table-shell">
+              <table className="crm-table">
+                <thead>
+                  <tr>
+                    <th>来源</th>
+                    <th>标的</th>
+                    <th>渠道</th>
+                    <th>计划数</th>
+                    <th>应收金额</th>
+                    <th>已确认金额</th>
+                    <th>待收金额</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {sourceBreakdown.map((item) => (
+                    <tr
+                      key={`${item.sourceType}-${item.subjectType}-${item.collectionChannel}`}
+                    >
+                      <td className="font-medium text-[var(--foreground)]">
+                        {getPaymentSourceLabel(item.sourceType)}
+                      </td>
+                      <td>{getPaymentPlanSubjectLabel(item.subjectType)}</td>
+                      <td>
+                        {getPaymentCollectionChannelLabel(
+                          item.collectionChannel,
+                        )}
+                      </td>
+                      <td>{item.count}</td>
+                      <td>{item.plannedAmount}</td>
+                      <td>{item.confirmedAmount}</td>
+                      <td>{item.remainingAmount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : (
           <EmptyState
             title="暂无可对账计划"
-            description="当前范围内没有可用于 finance 对账预览的 PaymentPlan。"
+            description="当前范围内没有可用于对账预览的 PaymentPlan。"
           />
         )}
-      </section>
+      </SectionCard>
 
-      <section className="space-y-4">
-        <div className="crm-section-heading">
-          <p className="crm-eyebrow">任务拆分</p>
-          <h2 className="crm-section-title">CollectionTask 聚合</h2>
-          <p className="crm-section-copy">
-            这里不替代催收工作台，只展示对账视角下的任务数量分布。
-          </p>
-        </div>
-
+      <SectionCard
+        title="CollectionTask 聚合"
+        description="只看 finance 视角下的催收任务分布。"
+        density="compact"
+        className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+        contentClassName="p-3 md:p-4"
+      >
         {collectionTaskBreakdown.length > 0 ? (
-          <div className="crm-table-shell">
-            <table className="crm-table">
-              <thead>
-                <tr>
-                  <th>任务类型</th>
-                  <th>状态</th>
-                  <th>数量</th>
-                </tr>
-              </thead>
-              <tbody>
-                {collectionTaskBreakdown.map((item) => (
-                  <tr key={`${item.taskType}-${item.status}`}>
-                    <td>
-                      <StatusBadge
-                        label={getCollectionTaskTypeLabel(item.taskType)}
-                        variant={getCollectionTaskTypeVariant(item.taskType)}
-                      />
-                    </td>
-                    <td>
-                      <StatusBadge
-                        label={getCollectionTaskStatusLabel(item.status)}
-                        variant={getCollectionTaskStatusVariant(item.status)}
-                      />
-                    </td>
-                    <td>{item.count}</td>
+          <div className="space-y-3">
+            <p className="text-[12px] text-[var(--color-sidebar-muted)]">
+              共 {collectionTaskBreakdown.length} 个任务分组
+            </p>
+
+            <div className="crm-table-shell">
+              <table className="crm-table">
+                <thead>
+                  <tr>
+                    <th>任务类型</th>
+                    <th>状态</th>
+                    <th>数量</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {collectionTaskBreakdown.map((item) => (
+                    <tr key={`${item.taskType}-${item.status}`}>
+                      <td className="font-medium text-[var(--foreground)]">
+                        {getCollectionTaskTypeLabel(item.taskType)}
+                      </td>
+                      <td>
+                        <StatusBadge
+                          label={getCollectionTaskStatusLabel(item.status)}
+                          variant={getCollectionTaskStatusVariant(item.status)}
+                        />
+                      </td>
+                      <td>{item.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : (
           <EmptyState
@@ -187,7 +213,7 @@ export function FinanceReconciliationSection({
             description="当前范围内没有 CollectionTask，或全部任务已被排除在 finance scope 之外。"
           />
         )}
-      </section>
+      </SectionCard>
     </div>
   );
 }

@@ -15,8 +15,9 @@ export function TagPill({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold tracking-[0.05em] shadow-[0_4px_10px_rgba(31,35,41,0.03)]",
-        !useCustomColor && "border-black/10 bg-black/5 text-black/70",
+        "inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold tracking-[0.08em] shadow-[0_6px_12px_rgba(37,61,112,0.04)]",
+        !useCustomColor &&
+          "border-[var(--crm-badge-neutral-border)] bg-[var(--crm-badge-neutral-bg)] text-[var(--crm-badge-neutral-text)]",
         className,
       )}
       style={

@@ -107,6 +107,7 @@ async function getLeadActionActor() {
   return {
     id: session.user.id,
     role: session.user.role,
+    teamId: session.user.teamId,
     permissionCodes: session.user.permissionCodes,
   };
 }
@@ -350,6 +351,7 @@ async function resolveBatchAssignLeadSelection(input: {
       {
         id: input.actor.id,
         role: input.actor.role,
+        teamId: input.actor.teamId,
       },
       filters,
       importedLeadIds,
@@ -442,6 +444,7 @@ async function resolveBatchRecycleLeadSelection(input: {
       {
         id: input.actor.id,
         role: input.actor.role,
+        teamId: input.actor.teamId,
       },
       {
         ...filters,
@@ -505,7 +508,7 @@ async function resolveBatchRecycleLeadSelection(input: {
     });
   }
 
-  const scope = getLeadScope(input.actor.role, input.actor.id);
+  const scope = getLeadScope(input.actor.role, input.actor.id, input.actor.teamId);
 
   if (!scope) {
     return buildLeadBatchRecycleErrorResult({
@@ -576,7 +579,7 @@ export async function batchAssignLeadsAction(
     });
   }
 
-  const scope = getLeadScope(session.user.role, session.user.id);
+  const scope = getLeadScope(session.user.role, session.user.id, session.user.teamId);
 
   if (!scope) {
     return buildLeadBatchAssignErrorResult({
@@ -589,6 +592,7 @@ export async function batchAssignLeadsAction(
     actor: {
       id: session.user.id,
       role: session.user.role,
+      teamId: session.user.teamId,
       permissionCodes: session.user.permissionCodes,
     },
     selectionMode: parsed.data.selectionMode,

@@ -8,9 +8,10 @@ export function DataTableWrapper({
   children,
   emptyState,
   density = "compact",
+  headerMode = "default",
   className,
   contentClassName,
-  eyebrow = "数据工作区",
+  eyebrow,
 }: Readonly<{
   title: string;
   description?: string;
@@ -18,67 +19,76 @@ export function DataTableWrapper({
   children?: ReactNode;
   emptyState?: ReactNode;
   density?: "default" | "compact";
+  headerMode?: "default" | "hidden";
   className?: string;
   contentClassName?: string;
   eyebrow?: string;
 }>) {
   const isCompact = density === "compact";
+  const showHeader = headerMode !== "hidden";
 
   return (
     <section
       className={cn(
         isCompact
-          ? "overflow-hidden rounded-[1rem] border border-black/7 bg-[rgba(255,255,255,0.86)] shadow-[0_10px_22px_rgba(18,24,31,0.04)]"
-          : "crm-card overflow-hidden border border-black/7 bg-[rgba(255,255,255,0.92)] shadow-[0_18px_36px_rgba(18,24,31,0.05)]",
+          ? "crm-animate-enter overflow-hidden rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow]"
+          : "crm-card crm-animate-enter overflow-hidden border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-md)]",
         className,
       )}
     >
-      <div
-        className={cn(
-          "flex flex-col border-b border-black/8 lg:flex-row lg:justify-between",
-          isCompact
-            ? "gap-2.5 bg-[rgba(247,248,250,0.66)] px-4 py-3 md:px-5 md:py-3.5 lg:items-center"
-            : "gap-3 bg-[rgba(247,248,250,0.72)] px-5 py-4 lg:items-center",
-        )}
-      >
-        <div className="crm-section-heading">
-          <p className={cn("crm-eyebrow", isCompact ? "text-black/40" : "")}>{eyebrow}</p>
-          <h2
-            className={cn(
-              "crm-section-title",
-              isCompact ? "text-[0.95rem] text-black/84" : "",
-            )}
-          >
-            {title}
-          </h2>
-          {description ? (
-            <p
+      {showHeader ? (
+        <div
+          className={cn(
+            "flex flex-col border-b border-[var(--color-border-soft)] lg:flex-row lg:justify-between",
+            isCompact
+              ? "gap-2.5 bg-[var(--color-shell-surface-soft)] px-4 py-3 md:px-5 md:py-3.5 lg:items-center"
+              : "gap-3 bg-[var(--color-shell-surface)] px-5 py-4 lg:items-center",
+          )}
+        >
+          <div className="crm-section-heading">
+            {eyebrow ? <p className="crm-eyebrow">{eyebrow}</p> : null}
+            <h2
               className={cn(
-                "crm-section-copy",
-                isCompact ? "text-[12.5px] leading-5 text-black/54 md:text-[13px]" : "",
+                "crm-section-title",
+                isCompact ? "text-[0.95rem] text-[var(--foreground)]" : "",
               )}
             >
-              {description}
-            </p>
+              {title}
+            </h2>
+            {description ? (
+              <p
+                className={cn(
+                  "crm-section-copy",
+                  isCompact ? "text-[12.5px] leading-5 md:text-[13px]" : "",
+                )}
+              >
+                {description}
+              </p>
+            ) : null}
+          </div>
+          {toolbar ? (
+            <div
+              className={cn(
+                "crm-toolbar-cluster w-full min-w-0 lg:w-auto lg:justify-end",
+                isCompact ? "gap-1.5" : "",
+              )}
+            >
+              {toolbar}
+            </div>
           ) : null}
         </div>
-        {toolbar ? (
-          <div
-            className={cn(
-              "crm-toolbar-cluster w-full min-w-0 lg:w-auto lg:justify-end",
-              isCompact ? "gap-1.5" : "",
-            )}
-          >
-            {toolbar}
-          </div>
-        ) : null}
-      </div>
+      ) : null}
 
-      <div className={cn(isCompact ? "p-3.5 md:p-4" : "p-4 md:p-5", contentClassName)}>
+      <div
+        className={cn(
+          isCompact ? "p-3.5 md:p-4" : "p-4 md:p-5",
+          contentClassName,
+        )}
+      >
         {children ? (
           children
         ) : (
-          <div className="crm-empty-state text-sm leading-7 text-black/55">
+          <div className="crm-empty-state text-sm leading-7 text-[var(--color-sidebar-muted)]">
             {emptyState ?? "暂无数据。"}
           </div>
         )}

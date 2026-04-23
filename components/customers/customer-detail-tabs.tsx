@@ -51,9 +51,9 @@ export function CustomerDetailTabs({
   const activeGroup = getCustomerDetailTabGroupMeta(activeTab);
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-2">
       <div className="overflow-x-auto pb-1">
-        <div className="inline-flex min-w-max gap-1 rounded-[15px] border border-black/7 bg-[rgba(247,248,250,0.86)] p-1">
+        <div className="inline-flex min-w-max items-center gap-1 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)]/92 p-1 shadow-[var(--color-shell-shadow-sm)] backdrop-blur-sm">
           {customerDetailTabGroups.map((group) => {
             const isActive = group.tabs.some((tab) => tab === activeTab);
             const href = buildHref
@@ -72,20 +72,20 @@ export function CustomerDetailTabs({
                 href={href}
                 scrollTargetId={scrollTargetId}
                 className={cn(
-                  "inline-flex min-h-8 min-w-0 items-center gap-2 rounded-[11px] px-3 py-1.5 text-[13px] font-medium transition-[border-color,background-color,color,box-shadow] duration-150",
+                  "inline-flex min-h-8 min-w-0 items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] font-medium tracking-[-0.01em] text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color,box-shadow,transform] duration-150",
                   isActive
-                    ? "border border-black/8 bg-white text-black/86 shadow-[0_8px_18px_rgba(18,24,31,0.05)]"
-                    : "border border-transparent text-black/56 hover:border-black/7 hover:bg-white/84 hover:text-black/82",
+                    ? "border-[rgba(122,154,255,0.18)] bg-[var(--color-panel)] text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)]"
+                    : "border-transparent hover:border-[rgba(122,154,255,0.12)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]",
                 )}
               >
                 <span className="truncate">{group.label}</span>
                 {count > 0 ? (
                   <span
                     className={cn(
-                      "inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold leading-none",
+                      "tabular-nums text-[11px] leading-none",
                       isActive
-                        ? "bg-black/[0.05] text-black/62"
-                        : "bg-black/[0.04] text-black/46",
+                        ? "text-[var(--foreground)]/68"
+                        : "text-[var(--color-sidebar-muted)]",
                     )}
                   >
                     {count}
@@ -99,7 +99,7 @@ export function CustomerDetailTabs({
 
       {activeGroup.tabs.length > 1 ? (
         <div className="overflow-x-auto pb-1">
-          <div className="inline-flex min-w-max gap-1 rounded-[13px] border border-black/7 bg-white/74 p-1">
+          <div className="inline-flex min-w-max items-center gap-1">
             {customerDetailTabs
               .filter((tab) => activeGroup.tabs.some((item) => item === tab.value))
               .map((tab) => {
@@ -116,15 +116,22 @@ export function CustomerDetailTabs({
                     }
                     scrollTargetId={scrollTargetId}
                     className={cn(
-                      "inline-flex min-h-8 min-w-0 items-center gap-2 rounded-[10px] border px-3 py-1.5 text-[12px] transition-[border-color,background-color,color] duration-150",
+                      "inline-flex min-h-8 min-w-0 items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] font-medium tracking-[-0.01em] text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color] duration-150",
                       isActive
-                        ? "border-black/9 bg-[rgba(15,23,42,0.05)] text-black/82"
-                        : "border-transparent text-black/52 hover:border-black/8 hover:bg-white hover:text-black/78",
+                        ? "border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)]"
+                        : "border-transparent hover:border-[rgba(122,154,255,0.1)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]",
                     )}
                   >
                     <span className="truncate">{tab.label}</span>
                     {typeof count === "number" ? (
-                      <span className="text-[11px] font-semibold text-current/65">
+                      <span
+                        className={cn(
+                          "tabular-nums text-[11px] leading-none",
+                          isActive
+                            ? "text-[var(--foreground)]/66"
+                            : "text-[var(--color-sidebar-muted)]",
+                        )}
+                      >
                         {count}
                       </span>
                     ) : null}

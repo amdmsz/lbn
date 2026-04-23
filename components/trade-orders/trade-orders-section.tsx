@@ -8,7 +8,10 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { PaginationControls } from "@/components/shared/pagination-controls";
 import { RecordTabs } from "@/components/shared/record-tabs";
 import { SectionCard } from "@/components/shared/section-card";
-import { StatusBadge, type StatusBadgeVariant } from "@/components/shared/status-badge";
+import {
+  StatusBadge,
+  type StatusBadgeVariant,
+} from "@/components/shared/status-badge";
 import { TradeOrderRecycleDialog } from "@/components/trade-orders/trade-order-recycle-dialog";
 import { TradeOrderLogisticsCell } from "@/components/trade-orders/trade-order-logistics-cell";
 import { formatDateTime } from "@/lib/customers/metadata";
@@ -21,7 +24,10 @@ import {
   buildFulfillmentBatchesHref,
   buildFulfillmentShippingHref,
 } from "@/lib/fulfillment/navigation";
-import type { getTradeOrdersPageData, TradeOrderFilters } from "@/lib/trade-orders/queries";
+import type {
+  getTradeOrdersPageData,
+  TradeOrderFilters,
+} from "@/lib/trade-orders/queries";
 import type {
   TradeOrderRecycleGuard,
   TradeOrderRecycleReasonCode,
@@ -53,6 +59,27 @@ type RecycleDialogState = {
 
 const DESKTOP_COLUMNS =
   "xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1.05fr)_minmax(0,1.1fr)]";
+
+const tradeOrderCardClassName =
+  "overflow-hidden rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-sm)]";
+
+const tradeOrderHeaderClassName =
+  "flex flex-col gap-3 border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 lg:flex-row lg:items-start lg:justify-between";
+
+const tradeOrderMetaClassName =
+  "flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--color-sidebar-muted)]";
+
+const tradeOrderInsetClassName =
+  "rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)]";
+
+const tradeOrderQuietActionClassName =
+  "inline-flex min-h-0 items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-1.5 text-xs font-medium text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]";
+
+const tradeOrderMenuItemClassName =
+  "block rounded-[0.75rem] px-3 py-2 text-sm text-[var(--color-sidebar-muted)] transition-colors hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]";
+
+const tradeOrderMetricTileClassName =
+  "rounded-[0.82rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2.5 py-2";
 
 const tradeStatusMeta: Record<
   TradeOrderItem["tradeStatus"],
@@ -111,7 +138,10 @@ function getActiveFocusView(filters: TradeOrderFilters) {
     return filters.focusView;
   }
 
-  if (filters.statusView === "PENDING_REVIEW" || filters.statusView === "APPROVED") {
+  if (
+    filters.statusView === "PENDING_REVIEW" ||
+    filters.statusView === "APPROVED"
+  ) {
     return filters.statusView;
   }
 
@@ -125,7 +155,10 @@ function getShippingHref(item: TradeOrderItem) {
   }
 
   if (summary.exceptionSubOrderCount > 0) {
-    return buildFulfillmentShippingHref({ keyword: item.tradeNo, stageView: "EXCEPTION" });
+    return buildFulfillmentShippingHref({
+      keyword: item.tradeNo,
+      stageView: "EXCEPTION",
+    });
   }
 
   if (summary.pendingReportSubOrderCount > 0) {
@@ -142,7 +175,10 @@ function getShippingHref(item: TradeOrderItem) {
     });
   }
 
-  return buildFulfillmentShippingHref({ keyword: item.tradeNo, stageView: "SHIPPED" });
+  return buildFulfillmentShippingHref({
+    keyword: item.tradeNo,
+    stageView: "SHIPPED",
+  });
 }
 
 function getBatchHref(item: TradeOrderItem) {
@@ -152,8 +188,8 @@ function getBatchHref(item: TradeOrderItem) {
 }
 
 function getTraceTarget(item: TradeOrderItem) {
-  const tracked = item.salesOrders.filter(
-    (salesOrder) => salesOrder.shippingTask?.trackingNumber?.trim(),
+  const tracked = item.salesOrders.filter((salesOrder) =>
+    salesOrder.shippingTask?.trackingNumber?.trim(),
   );
 
   if (tracked.length === 1 && tracked[0].shippingTask) {
@@ -215,10 +251,15 @@ function TradeOrderRow({
   const traceTarget = getTraceTarget(item);
   const shippingHref = getShippingHref(item);
   const batchHref = getBatchHref(item);
-  const totalQty = item.items.reduce((sum, tradeItem) => sum + tradeItem.qty, 0);
-  const subOrderCount = item.executionSummary?.totalSubOrderCount ?? item.salesOrders.length;
+  const totalQty = item.items.reduce(
+    (sum, tradeItem) => sum + tradeItem.qty,
+    0,
+  );
+  const subOrderCount =
+    item.executionSummary?.totalSubOrderCount ?? item.salesOrders.length;
   const continueEditHref =
-    canCreate && (item.tradeStatus === "DRAFT" || item.tradeStatus === "REJECTED")
+    canCreate &&
+    (item.tradeStatus === "DRAFT" || item.tradeStatus === "REJECTED")
       ? `/customers/${item.customer.id}?tab=orders&createTradeOrder=1&tradeOrderId=${item.id}`
       : null;
   const latestBatchLabel = item.latestExportBatch
@@ -252,18 +293,20 @@ function TradeOrderRow({
   ];
 
   return (
-    <article className="overflow-hidden rounded-[1rem] border border-black/7 bg-[rgba(255,255,255,0.94)] shadow-[0_8px_20px_rgba(18,24,31,0.04)]">
-      <div className="flex flex-col gap-3 border-b border-black/7 bg-[rgba(251,252,253,0.94)] px-4 py-3 lg:flex-row lg:items-start lg:justify-between">
+    <article className={tradeOrderCardClassName}>
+      <div className={tradeOrderHeaderClassName}>
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-[15px] font-semibold tracking-tight text-black/86">
+            <h3 className="text-[15px] font-semibold tracking-tight text-[var(--foreground)]">
               {item.tradeNo}
             </h3>
             <StatusBadge
               label={tradeStatusMeta[item.tradeStatus].label}
               variant={tradeStatusMeta[item.tradeStatus].variant}
             />
-            <StatusBadge label={`子单 ${subOrderCount}`} variant="neutral" />
+            <span className="rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
+              子单 {subOrderCount}
+            </span>
             {(item.executionSummary?.exceptionSubOrderCount ?? 0) > 0 ? (
               <StatusBadge
                 label={`异常 ${item.executionSummary?.exceptionSubOrderCount ?? 0}`}
@@ -271,7 +314,7 @@ function TradeOrderRow({
               />
             ) : null}
           </div>
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-black/50">
+          <div className={tradeOrderMetaClassName}>
             <span>客户 {item.customer.name}</span>
             <span>销售 {getOwnerLabel(item)}</span>
             <span>下单 {formatDateTime(item.createdAt)}</span>
@@ -279,21 +322,21 @@ function TradeOrderRow({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-          <div className="rounded-[0.9rem] border border-black/7 bg-[rgba(247,248,250,0.76)] px-3 py-2 text-right">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">
+          <div className={cn(tradeOrderInsetClassName, "px-3 py-2 text-right")}>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
               成交金额
             </p>
-            <p className="mt-1 text-[1.02rem] font-semibold tracking-tight text-black/86">
+            <p className="mt-1 text-[1.02rem] font-semibold tracking-tight text-[var(--foreground)]">
               {formatCurrency(item.finalAmount)}
             </p>
-            <p className="text-xs text-black/52">
+            <p className="text-xs text-[var(--color-sidebar-muted)]">
               待收 {formatCurrency(item.remainingAmount)}
             </p>
           </div>
 
           <Link
             href={`/orders/${item.id}`}
-            className="inline-flex min-h-0 items-center rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-semibold text-black/76 transition hover:border-black/18 hover:bg-[rgba(247,248,250,0.96)]"
+            className={tradeOrderQuietActionClassName}
           >
             查看详情
           </Link>
@@ -301,27 +344,29 @@ function TradeOrderRow({
           {canReview ? (
             <Link
               href={shippingHref}
-              className="inline-flex min-h-0 items-center rounded-full border border-[rgba(54,95,135,0.14)] bg-[rgba(244,248,252,0.92)] px-3 py-1.5 text-xs font-medium text-[var(--color-info)] transition hover:border-[rgba(54,95,135,0.22)] hover:bg-white"
+              className={tradeOrderQuietActionClassName}
             >
               发货执行
             </Link>
           ) : null}
 
           <details className="relative">
-            <summary className="inline-flex cursor-pointer list-none items-center rounded-full border border-black/10 bg-[rgba(247,248,250,0.82)] px-3 py-1.5 text-xs font-medium text-black/62 transition hover:border-black/18 hover:bg-white">
+            <summary
+              className={cn(
+                tradeOrderQuietActionClassName,
+                "cursor-pointer list-none",
+              )}
+            >
               更多
             </summary>
-            <div className="absolute right-0 z-20 mt-2 w-40 rounded-[0.9rem] border border-black/8 bg-white/96 p-1.5 shadow-[0_12px_28px_rgba(18,24,31,0.10)]">
-              <Link
-                href={batchHref}
-                className="block rounded-[0.75rem] px-3 py-2 text-sm text-black/72 hover:bg-[rgba(247,248,250,0.9)]"
-              >
+            <div className="absolute right-0 z-20 mt-2 w-40 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-1.5 shadow-[var(--color-shell-shadow-sm)]">
+              <Link href={batchHref} className={tradeOrderMenuItemClassName}>
                 查看批次
               </Link>
               {continueEditHref ? (
                 <Link
                   href={continueEditHref}
-                  className="block rounded-[0.75rem] px-3 py-2 text-sm text-black/72 hover:bg-[rgba(247,248,250,0.9)]"
+                  className={tradeOrderMenuItemClassName}
                 >
                   继续编辑
                 </Link>
@@ -329,9 +374,11 @@ function TradeOrderRow({
               <button
                 type="button"
                 onClick={() => onOpenRecycleDialog(item)}
-                className="block w-full rounded-[0.75rem] px-3 py-2 text-left text-sm text-black/72 hover:bg-[rgba(247,248,250,0.9)]"
+                className={cn(tradeOrderMenuItemClassName, "w-full text-left")}
               >
-                {item.recycleGuard.canMoveToRecycleBin ? "移入回收站" : "查看阻断关系"}
+                {item.recycleGuard.canMoveToRecycleBin
+                  ? "移入回收站"
+                  : "查看阻断关系"}
               </button>
             </div>
           </details>
@@ -340,61 +387,69 @@ function TradeOrderRow({
 
       <div
         className={cn(
-          "grid gap-px bg-black/6 md:grid-cols-2 xl:grid-cols-none xl:grid",
+          "grid gap-px bg-[var(--color-border-soft)] md:grid-cols-2 xl:grid-cols-none xl:grid",
           DESKTOP_COLUMNS,
         )}
       >
-        <div className="bg-white/98 px-4 py-3">
+        <div className="bg-[var(--color-panel)] px-4 py-3">
           <div className="space-y-2">
             {product.lines.map((line) => (
               <div key={line.id} className="flex items-start gap-2">
-                <span className="mt-0.5 rounded-full border border-black/8 bg-[rgba(247,248,250,0.88)] px-2 py-0.5 text-[10px] text-black/58">
-                  {line.type === "GIFT" ? "赠品" : line.type === "BUNDLE" ? "套餐" : "商品"}
+                <span className="mt-0.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2 py-0.5 text-[10px] text-[var(--color-sidebar-muted)]">
+                  {line.type === "GIFT"
+                    ? "赠品"
+                    : line.type === "BUNDLE"
+                      ? "套餐"
+                      : "商品"}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-black/84">{line.label}</div>
-                  <div className="text-xs text-black/50">x {line.qty}</div>
+                  <div className="truncate text-sm font-medium text-[var(--foreground)]">
+                    {line.label}
+                  </div>
+                  <div className="text-xs text-[var(--color-sidebar-muted)]">
+                    x {line.qty}
+                  </div>
                 </div>
               </div>
             ))}
-            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-black/50">
+            <div className={tradeOrderMetaClassName}>
               <span>SKU {item.items.length}</span>
               <span>件数 {totalQty}</span>
               <span>最近批次 {latestBatchLabel}</span>
             </div>
             {product.rest > 0 ? (
-              <div className="text-xs text-black/48">其余 {product.rest} 项商品已收起</div>
+              <div className="text-xs text-[var(--color-sidebar-muted)]">
+                其余 {product.rest} 项商品已收起
+              </div>
             ) : null}
           </div>
         </div>
 
-        <div className="bg-white/98 px-4 py-3">
+        <div className="bg-[var(--color-panel)] px-4 py-3">
           <div className="flex flex-wrap gap-2">
             <StatusBadge
               label={getSalesOrderPaymentSchemeLabel(item.paymentScheme)}
               variant={getSalesOrderPaymentSchemeVariant(item.paymentScheme)}
             />
-            <StatusBadge label={`已收 ${formatCurrency(item.collectedAmount)}`} variant="neutral" />
+            <span className="rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
+              已收 {formatCurrency(item.collectedAmount)}
+            </span>
           </div>
           <div className="mt-2 grid grid-cols-2 gap-2">
             {fulfillmentSummary.map((entry) => (
-              <div
-                key={entry.label}
-                className="rounded-[0.78rem] border border-black/8 bg-[rgba(247,248,250,0.86)] px-2.5 py-2"
-              >
-                <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-black/42">
+              <div key={entry.label} className={tradeOrderMetricTileClassName}>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-sidebar-muted)]">
                   {entry.label}
                 </div>
-                <div className="mt-1 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-black/82">{entry.count}</span>
-                  <StatusBadge label={entry.label} variant={entry.variant} />
+                <div className="mt-1 text-sm font-semibold text-[var(--foreground)]">
+                  {entry.count}
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="bg-white/98 px-4 py-3">
+        <div className="bg-[var(--color-panel)] px-4 py-3">
           <TradeOrderLogisticsCell
             receiverName={item.receiverNameSnapshot}
             receiverPhone={item.receiverPhoneSnapshot}
@@ -408,38 +463,41 @@ function TradeOrderRow({
       </div>
 
       {canReview && item.tradeStatus === "PENDING_REVIEW" ? (
-        <details className="border-t border-black/7 bg-[rgba(247,248,250,0.72)]">
+        <details className="border-t border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)]">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
                 Review
               </p>
-              <p className="text-sm text-black/64">待审核父单，展开后处理通过或驳回。</p>
+              <p className="text-sm text-[var(--color-sidebar-muted)]">
+                待审核父单，展开后处理通过或驳回。
+              </p>
             </div>
-            <span className="inline-flex min-h-0 items-center rounded-full border border-black/10 bg-white px-3 py-1.5 text-xs font-medium text-black/62">
-              展开审核
-            </span>
+            <span className={tradeOrderQuietActionClassName}>展开审核</span>
           </summary>
 
           <div className="grid gap-3 px-4 pb-4 lg:grid-cols-2">
             <form
               action={reviewAction}
-              className="rounded-[0.95rem] border border-black/8 bg-white/86 px-3.5 py-3"
+              className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3.5 py-3"
             >
               <input type="hidden" name="tradeOrderId" value={item.id} />
               <input type="hidden" name="reviewStatus" value="APPROVED" />
               <input type="hidden" name="redirectTo" value={redirectTo} />
-              <p className="text-xs leading-5 text-black/55">
+              <p className="text-xs leading-5 text-[var(--color-sidebar-muted)]">
                 审核通过后，父单会进入正式履约与收款执行阶段。
               </p>
-              <button type="submit" className="crm-button crm-button-primary mt-3 w-full">
+              <button
+                type="submit"
+                className="crm-button crm-button-primary mt-3 w-full"
+              >
                 审核通过
               </button>
             </form>
 
             <form
               action={reviewAction}
-              className="rounded-[0.95rem] border border-black/8 bg-white/86 px-3.5 py-3"
+              className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3.5 py-3"
             >
               <input type="hidden" name="tradeOrderId" value={item.id} />
               <input type="hidden" name="reviewStatus" value="REJECTED" />
@@ -451,7 +509,10 @@ function TradeOrderRow({
                 placeholder="填写驳回原因"
                 className="crm-textarea"
               />
-              <button type="submit" className="crm-button crm-button-secondary mt-3 w-full">
+              <button
+                type="submit"
+                className="crm-button crm-button-secondary mt-3 w-full"
+              >
                 驳回父单
               </button>
             </form>
@@ -483,7 +544,9 @@ export function TradeOrdersSection({
   canCreate: boolean;
   canReview: boolean;
   reviewAction: (formData: FormData) => Promise<void>;
-  moveToRecycleBinAction: (formData: FormData) => Promise<TradeOrderRecycleActionResult>;
+  moveToRecycleBinAction: (
+    formData: FormData,
+  ) => Promise<TradeOrderRecycleActionResult>;
   basePath?: string;
   baseSearchParams?: Record<string, string>;
 }>) {
@@ -494,14 +557,16 @@ export function TradeOrdersSection({
     basePath,
     baseSearchParams,
   );
-  const [notice, setNotice] = useState<TradeOrderRecycleActionResult | null>(null);
-  const [recycleDialogState, setRecycleDialogState] = useState<RecycleDialogState>(null);
+  const [notice, setNotice] = useState<TradeOrderRecycleActionResult | null>(
+    null,
+  );
+  const [recycleDialogState, setRecycleDialogState] =
+    useState<RecycleDialogState>(null);
   const [recycleGuardOverrides, setRecycleGuardOverrides] = useState<
     Record<string, TradeOrderRecycleGuard>
   >({});
-  const [recycleFinalizePreviewOverrides, setRecycleFinalizePreviewOverrides] = useState<
-    Record<string, RecycleFinalizePreview | null>
-  >({});
+  const [recycleFinalizePreviewOverrides, setRecycleFinalizePreviewOverrides] =
+    useState<Record<string, RecycleFinalizePreview | null>>({});
   const [recycleReason, setRecycleReason] =
     useState<TradeOrderRecycleReasonCode>("mistaken_creation");
   const [recyclePending, startRecycleTransition] = useTransition();
@@ -514,10 +579,22 @@ export function TradeOrdersSection({
     href: string;
   }> = [
     { value: "", label: "全部", count: summary.focusCounts.all },
-    { value: "PENDING_REVIEW", label: "待审核", count: summary.focusCounts.pendingReview },
+    {
+      value: "PENDING_REVIEW",
+      label: "待审核",
+      count: summary.focusCounts.pendingReview,
+    },
     { value: "APPROVED", label: "已审核", count: summary.focusCounts.approved },
-    { value: "PENDING_REPORT", label: "待报单", count: summary.focusCounts.pendingReport },
-    { value: "PENDING_TRACKING", label: "待物流", count: summary.focusCounts.pendingTracking },
+    {
+      value: "PENDING_REPORT",
+      label: "待报单",
+      count: summary.focusCounts.pendingReport,
+    },
+    {
+      value: "PENDING_TRACKING",
+      label: "待物流",
+      count: summary.focusCounts.pendingTracking,
+    },
     { value: "SHIPPED", label: "已发货", count: summary.focusCounts.shipped },
     { value: "EXCEPTION", label: "异常", count: summary.focusCounts.exception },
   ].map(({ value, label, count }) => ({
@@ -553,7 +630,9 @@ export function TradeOrdersSection({
       updatedAt: item.updatedAt,
       guard: recycleGuardOverrides[item.id] ?? item.recycleGuard,
       finalizePreview:
-        recycleFinalizePreviewOverrides[item.id] ?? item.finalizePreview ?? null,
+        recycleFinalizePreviewOverrides[item.id] ??
+        item.finalizePreview ??
+        null,
     });
   }
 
@@ -604,7 +683,7 @@ export function TradeOrdersSection({
                 guard: blockedGuard,
                 finalizePreview:
                   result.finalizePreview !== undefined
-                    ? result.finalizePreview ?? null
+                    ? (result.finalizePreview ?? null)
                     : current.finalizePreview,
               }
             : current,
@@ -630,20 +709,11 @@ export function TradeOrdersSection({
         description="按焦点切换和筛选条组织当前父单池。先确定审核与履约关注范围，再进入更轻的父单总览列表。"
         density="compact"
         actions={
-          <div className="flex flex-wrap gap-1.5">
-            <StatusBadge
-              label={`待审核 ${summary.focusCounts.pendingReview}`}
-              variant={summary.focusCounts.pendingReview > 0 ? "warning" : "neutral"}
-            />
-            <StatusBadge
-              label={`已审核 ${summary.focusCounts.approved}`}
-              variant="success"
-            />
-            <StatusBadge
-              label={`异常 ${summary.focusCounts.exception}`}
-              variant={summary.focusCounts.exception > 0 ? "danger" : "neutral"}
-            />
-          </div>
+          <p className="text-[12px] text-[var(--color-sidebar-muted)]">
+            待审核 {summary.focusCounts.pendingReview} · 已审核{" "}
+            {summary.focusCounts.approved} · 异常{" "}
+            {summary.focusCounts.exception}
+          </p>
         }
       >
         <div className="space-y-4">
@@ -680,7 +750,11 @@ export function TradeOrdersSection({
 
             <label className="space-y-1.5">
               <span className="crm-label">审核状态</span>
-              <select name="statusView" defaultValue={filters.statusView} className="crm-select">
+              <select
+                name="statusView"
+                defaultValue={filters.statusView}
+                className="crm-select"
+              >
                 <option value="">全部审核状态</option>
                 <option value="DRAFT">草稿</option>
                 <option value="PENDING_REVIEW">待审核</option>
@@ -705,7 +779,11 @@ export function TradeOrdersSection({
 
             <label className="space-y-1.5">
               <span className="crm-label">排序</span>
-              <select name="sortBy" defaultValue={filters.sortBy} className="crm-select">
+              <select
+                name="sortBy"
+                defaultValue={filters.sortBy}
+                className="crm-select"
+              >
                 <option value="UPDATED_DESC">最近更新</option>
                 <option value="UPDATED_ASC">最早更新</option>
                 <option value="CREATED_DESC">最新创建</option>
@@ -714,7 +792,11 @@ export function TradeOrdersSection({
 
             <label className="space-y-1.5">
               <span className="crm-label">supplier</span>
-              <select name="supplierId" defaultValue={filters.supplierId} className="crm-select">
+              <select
+                name="supplierId"
+                defaultValue={filters.supplierId}
+                className="crm-select"
+              >
                 <option value="">全部 supplier</option>
                 {suppliers.map((supplier) => (
                   <option key={supplier.id} value={supplier.id}>
@@ -760,7 +842,7 @@ export function TradeOrdersSection({
           description="把状态、金额、履约摘要、物流与动作拆成更稳定的扫描节奏，次级动作与审核面板渐进展开。"
           density="compact"
           actions={
-            <div className="flex flex-wrap gap-2 text-xs text-black/52">
+            <div className="flex flex-wrap gap-2 text-xs text-[var(--color-sidebar-muted)]">
               <span>共 {pagination.totalCount} 张父单</span>
               <span>审核 {filters.statusView || "全部"}</span>
               <span>supplier 数 {filters.supplierCount || "全部"}</span>
@@ -771,14 +853,14 @@ export function TradeOrdersSection({
           <div className="space-y-3.5">
             <div
               className={cn(
-                "hidden gap-px overflow-hidden rounded-[0.92rem] border border-black/8 bg-black/7 xl:grid",
+                "hidden gap-px overflow-hidden rounded-[0.92rem] border border-[var(--color-border-soft)] bg-[var(--color-border-soft)] xl:grid",
                 DESKTOP_COLUMNS,
               )}
             >
               {["父单与商品", "履约摘要", "收件与物流"].map((label) => (
                 <div
                   key={label}
-                  className="bg-[rgba(247,248,250,0.9)] px-4 py-2 text-[11px] font-semibold tracking-[0.08em] text-black/44"
+                  className="bg-[var(--color-shell-surface-soft)] px-4 py-2 text-[11px] font-semibold tracking-[0.08em] text-[var(--color-sidebar-muted)]"
                 >
                   {label}
                 </div>
@@ -790,7 +872,9 @@ export function TradeOrdersSection({
                 <TradeOrderRow
                   key={item.id}
                   item={item}
-                  recycleGuard={recycleGuardOverrides[item.id] ?? item.recycleGuard}
+                  recycleGuard={
+                    recycleGuardOverrides[item.id] ?? item.recycleGuard
+                  }
                   redirectTo={currentPageHref}
                   canCreate={canCreate}
                   canReview={canReview}
@@ -808,7 +892,12 @@ export function TradeOrdersSection({
                 pagination.totalCount,
               )} 张父单，共 ${pagination.totalCount} 张`}
               buildHref={(pageNumber) =>
-                buildPageHref(filters, { page: pageNumber }, basePath, baseSearchParams)
+                buildPageHref(
+                  filters,
+                  { page: pageNumber },
+                  basePath,
+                  baseSearchParams,
+                )
               }
             />
           </div>

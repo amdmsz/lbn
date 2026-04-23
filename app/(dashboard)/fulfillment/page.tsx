@@ -61,6 +61,7 @@ export default async function FulfillmentPage({
   const viewer = {
     id: session.user.id,
     role: session.user.role,
+    teamId: session.user.teamId,
   } as const;
 
   const tradeOrdersData =

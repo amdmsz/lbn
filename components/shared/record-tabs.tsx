@@ -22,7 +22,7 @@ export function RecordTabs({
   return (
     <div
       className={cn(
-        "flex gap-2 overflow-x-auto rounded-[1rem] border border-black/7 bg-[rgba(255,255,255,0.84)] p-2 shadow-[0_8px_18px_rgba(18,24,31,0.04)] md:flex-wrap md:overflow-visible",
+        "crm-tabs overflow-x-auto p-1.5 md:flex-wrap md:overflow-visible",
         className,
       )}
     >
@@ -32,20 +32,20 @@ export function RecordTabs({
           href={item.href}
           scrollTargetId={scrollTargetId}
           className={cn(
-            "inline-flex min-h-9 min-w-0 shrink-0 items-center gap-2 rounded-[0.85rem] border px-3 py-2 text-sm transition-colors md:shrink",
+            "crm-tab min-h-8 min-w-0 shrink-0 px-3 py-1.5 text-[13px] md:shrink",
             item.value === activeValue
-              ? "border-[var(--color-accent)]/16 bg-[var(--color-accent)]/8 text-[var(--color-accent)]"
-              : "border-transparent bg-transparent text-black/64 hover:border-black/8 hover:bg-white hover:text-black/84",
+              ? "crm-tab-active text-[var(--foreground)]"
+              : "",
           )}
         >
-          <span className="max-w-[9rem] truncate md:max-w-[10rem]">{item.label}</span>
+          <span className="max-w-[9rem] truncate md:max-w-[10rem]">
+            {item.label}
+          </span>
           {typeof item.count === "number" ? (
             <span
               className={cn(
-                "rounded-full px-2 py-0.5 text-[11px]",
-                item.value === activeValue
-                  ? "bg-[var(--color-accent)]/10 text-[var(--color-accent)]"
-                  : "bg-black/5 text-black/52",
+                "crm-tab-count px-1.5 py-0.5 text-[10.5px]",
+                item.value === activeValue ? "text-[var(--foreground)]" : "",
               )}
             >
               {item.count}

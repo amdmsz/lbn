@@ -9,6 +9,7 @@ declare module "next-auth" {
       username: string;
       role: RoleCode;
       roleName: string;
+      teamId: string | null;
       mustChangePassword: boolean;
       avatarPath: string | null;
       permissionCodes: ExtraPermissionCode[];
@@ -20,6 +21,7 @@ declare module "next-auth" {
     username: string;
     role: RoleCode;
     roleName: string;
+    teamId: string | null;
     mustChangePassword: boolean;
     avatarPath: string | null;
     permissionCodes: ExtraPermissionCode[];
@@ -32,6 +34,7 @@ declare module "next-auth/jwt" {
     username: string;
     role: RoleCode;
     roleName: string;
+    teamId: string | null;
     mustChangePassword: boolean;
     avatarPath: string | null;
     permissionCodes: ExtraPermissionCode[];

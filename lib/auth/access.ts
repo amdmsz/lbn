@@ -476,9 +476,25 @@ export function canBatchMoveCustomersToRecycleBin(role: RoleCode) {
   return role === "ADMIN" || role === "SUPERVISOR";
 }
 
-export function getLeadScope(role: RoleCode, userId: string) {
-  if (canAccessAllData(role)) {
+function buildMissingScopeId(scope: string) {
+  return `__missing_${scope}_scope__`;
+}
+
+export function getLeadScope(role: RoleCode, userId: string, teamId?: string | null) {
+  if (role === "ADMIN") {
     return {};
+  }
+
+  if (role === "SUPERVISOR") {
+    return teamId
+      ? {
+          OR: [
+            { owner: { is: { teamId } } },
+            { customer: { is: { owner: { is: { teamId } } } } },
+            { assignments: { some: { toUser: { is: { teamId } } } } },
+          ],
+        }
+      : { id: buildMissingScopeId("lead_team") };
   }
 
   if (isOwnDataOnly(role)) {
@@ -488,9 +504,21 @@ export function getLeadScope(role: RoleCode, userId: string) {
   return null;
 }
 
-export function getCustomerScope(role: RoleCode, userId: string) {
-  if (canAccessAllData(role)) {
+export function getCustomerScope(role: RoleCode, userId: string, teamId?: string | null) {
+  if (role === "ADMIN") {
     return {};
+  }
+
+  if (role === "SUPERVISOR") {
+    return teamId
+      ? {
+          owner: {
+            is: {
+              teamId,
+            },
+          },
+        }
+      : { id: buildMissingScopeId("customer_team") };
   }
 
   if (isOwnDataOnly(role)) {
@@ -500,9 +528,20 @@ export function getCustomerScope(role: RoleCode, userId: string) {
   return null;
 }
 
-export function getOrderScope(role: RoleCode, userId: string) {
-  if (canAccessAllData(role)) {
+export function getOrderScope(role: RoleCode, userId: string, teamId?: string | null) {
+  if (role === "ADMIN") {
     return {};
+  }
+
+  if (role === "SUPERVISOR") {
+    return teamId
+      ? {
+          OR: [
+            { owner: { is: { teamId } } },
+            { customer: { owner: { is: { teamId } } } },
+          ],
+        }
+      : { id: buildMissingScopeId("order_team") };
   }
 
   if (isOwnDataOnly(role)) {
@@ -516,9 +555,20 @@ export function getOrderScope(role: RoleCode, userId: string) {
   return null;
 }
 
-export function getGiftScope(role: RoleCode, userId: string) {
-  if (canAccessAllData(role) || role === "OPS") {
+export function getGiftScope(role: RoleCode, userId: string, teamId?: string | null) {
+  if (role === "ADMIN" || role === "OPS") {
     return {};
+  }
+
+  if (role === "SUPERVISOR") {
+    return teamId
+      ? {
+          OR: [
+            { sales: { is: { teamId } } },
+            { customer: { owner: { is: { teamId } } } },
+          ],
+        }
+      : { id: buildMissingScopeId("gift_team") };
   }
 
   if (isOwnDataOnly(role)) {
@@ -532,9 +582,21 @@ export function getGiftScope(role: RoleCode, userId: string) {
   return null;
 }
 
-export function getShippingTaskScope(role: RoleCode, userId: string) {
-  if (canAccessAllData(role) || role === "SHIPPER") {
+export function getShippingTaskScope(role: RoleCode, userId: string, teamId?: string | null) {
+  if (role === "ADMIN" || role === "SHIPPER") {
     return {};
+  }
+
+  if (role === "SUPERVISOR") {
+    return teamId
+      ? {
+          OR: [
+            { customer: { owner: { is: { teamId } } } },
+            { salesOrder: { owner: { is: { teamId } } } },
+            { salesOrder: { customer: { owner: { is: { teamId } } } } },
+          ],
+        }
+      : { id: buildMissingScopeId("shipping_team") };
   }
 
   if (isOwnDataOnly(role)) {

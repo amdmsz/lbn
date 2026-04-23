@@ -20,7 +20,7 @@ function InitialsAvatar({
   return (
     <div
       className={cn(
-        "inline-flex items-center justify-center rounded-full bg-[linear-gradient(180deg,#d5a474,#a96636)] font-semibold text-white shadow-[0_10px_18px_rgba(154,97,51,0.18)]",
+        "inline-flex items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--color-accent)_0%,#73d2ff_100%)] font-semibold text-white shadow-[0_10px_18px_rgba(47,107,255,0.18)]",
         large ? "h-16 w-16 text-lg" : "h-11 w-11 text-sm",
       )}
     >

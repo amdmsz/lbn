@@ -1,9 +1,7 @@
 import { redirect } from "next/navigation";
 import { FinanceReconciliationSection } from "@/components/finance/finance-reconciliation-section";
 import { FinanceSubnav } from "@/components/finance/finance-subnav";
-import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { PageHeader } from "@/components/shared/page-header";
-import { StatusBadge } from "@/components/shared/status-badge";
 import {
   canAccessFinanceModule,
   getDefaultRouteForRole,
@@ -30,31 +28,28 @@ export default async function FinanceReconciliationPage() {
   return (
     <div className="crm-page">
       <PageHeader
-        title="财务对账预览"
-        description="基于 PaymentPlan / PaymentRecord / CollectionTask 的聚合结果，做首版 finance reconciliation preview。"
-        actions={
-          <>
-            <StatusBadge label={data.scopeLabel} variant="info" />
-            <StatusBadge label="只读对账" variant="warning" />
-          </>
+        eyebrow="财务中心"
+        title="对账预览"
+        description="只读聚合 payment / collection 当前口径。"
+        meta={
+          <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.06em] text-[var(--color-sidebar-muted)]">
+            <span>{data.scopeLabel}</span>
+            <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+            <span>只读对账</span>
+          </div>
         }
       />
 
       <FinanceSubnav active="reconciliation" />
 
-      <DataTableWrapper
-        title="对账口径与拆分"
-        description="展示应收、已确认、待确认、待收、COD 待回款和礼品运费待收的统一口径。"
-      >
-        <FinanceReconciliationSection
-          scopeLabel={data.scopeLabel}
-          summaryCards={data.summaryCards}
-          operationalCards={data.operationalCards}
-          metricDefinitions={data.metricDefinitions}
-          sourceBreakdown={data.sourceBreakdown}
-          collectionTaskBreakdown={data.collectionTaskBreakdown}
-        />
-      </DataTableWrapper>
+      <FinanceReconciliationSection
+        scopeLabel={data.scopeLabel}
+        summaryCards={data.summaryCards}
+        operationalCards={data.operationalCards}
+        metricDefinitions={data.metricDefinitions}
+        sourceBreakdown={data.sourceBreakdown}
+        collectionTaskBreakdown={data.collectionTaskBreakdown}
+      />
     </div>
   );
 }

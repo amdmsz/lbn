@@ -18,6 +18,15 @@ type SupplierDraft = {
   remark: string | null;
 };
 
+const drawerOverlayClassName =
+  "absolute inset-0 bg-[rgba(15,23,42,0.14)] backdrop-blur-[3px]";
+
+const drawerPanelClassName =
+  "absolute inset-y-0 right-0 flex w-full max-w-[42rem] flex-col border-l border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[-18px_0_48px_rgba(15,23,42,0.12)]";
+
+const drawerSectionClassName =
+  "rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-4 shadow-[var(--color-shell-shadow-sm)]";
+
 export function SupplierFormDrawer({
   open,
   mode,
@@ -43,10 +52,10 @@ export function SupplierFormDrawer({
   }
 
   const footerHint = pending
-    ? "正在保存供应商主数据，请保持当前抽屉打开。"
+    ? "正在保存供应商。"
     : mode === "create"
-      ? "先确认供应商主体身份，再补充联系人与备注，保持产品域次级面足够轻。"
-      : "这里只维护供应商主数据，不把 supplier 扩成独立一级工作台。";
+      ? "先确认主体信息，再补联系补充。"
+      : "当前只维护供应商主档。";
 
   return (
     <div className="fixed inset-0 z-50">
@@ -54,37 +63,37 @@ export function SupplierFormDrawer({
         type="button"
         aria-label="关闭供应商抽屉"
         onClick={onClose}
-        className="absolute inset-0 bg-[rgba(15,23,42,0.22)] backdrop-blur-[1.5px]"
+        className={drawerOverlayClassName}
       />
 
       <div
         role="dialog"
         aria-modal="true"
         aria-label={mode === "create" ? "新建供应商" : "编辑供应商"}
-        className="absolute inset-y-0 right-0 flex w-full max-w-[42rem] flex-col border-l border-black/8 bg-[rgba(255,255,255,0.985)] shadow-[-18px_0_42px_rgba(15,23,42,0.12)]"
+        className={drawerPanelClassName}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-black/6 px-5 py-4 sm:px-6">
-          <div className="min-w-0 space-y-1.5">
+        <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-5 py-3.5 sm:px-6">
+          <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/38">
+              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--color-sidebar-muted)]">
                 Supplier
               </p>
-              <span className="rounded-full border border-black/8 bg-black/[0.03] px-2.5 py-1 text-[11px] font-medium text-black/52">
+              <span className="rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
                 {mode === "create" ? "创建" : "编辑"}
               </span>
             </div>
-            <h3 className="text-[1.05rem] font-semibold text-black/84">
+            <h3 className="text-[1.02rem] font-semibold text-[var(--foreground)]">
               {mode === "create" ? "新建供应商" : "编辑供应商"}
             </h3>
-            <p className="max-w-[30rem] text-[13px] leading-5 text-black/56">
-              这里只维护产品域的供应商主数据。主体身份优先确认，联系人和备注作为后置补充信息。
+            <p className="text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">
+              保持为商品域的轻量次级主数据。
             </p>
           </div>
 
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-black/8 bg-white/92 text-black/50 transition-colors hover:bg-black/[0.03] hover:text-black/72"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] text-[var(--color-sidebar-muted)] transition-colors hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]"
           >
             <X className="h-4 w-4" />
           </button>
@@ -114,17 +123,15 @@ export function SupplierFormDrawer({
               disabled={pending}
               className={`space-y-4 ${pending ? "opacity-80" : ""}`}
             >
-              <section className="rounded-[1rem] border border-black/8 bg-[linear-gradient(180deg,rgba(248,249,251,0.88),rgba(255,255,255,0.94))] p-4">
+              <section className={drawerSectionClassName}>
                 <div className="space-y-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/42">
-                    主体身份
-                  </p>
-                  <p className="text-[13px] leading-5 text-black/56">
-                    先锁定供应商编码和名称，保证商品域的供应商引用关系清晰稳定。
-                  </p>
+                  <p className="crm-detail-label text-[11px]">主体信息</p>
+                  <h4 className="text-[0.98rem] font-semibold text-[var(--foreground)]">
+                    编码与名称
+                  </h4>
                 </div>
 
-                <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <label className="space-y-2">
                     <span className="crm-label">供应商编码</span>
                     <input
@@ -147,17 +154,15 @@ export function SupplierFormDrawer({
                 </div>
               </section>
 
-              <section className="rounded-[1rem] border border-black/7 bg-[rgba(252,252,253,0.92)] p-4">
+              <section className={drawerSectionClassName}>
                 <div className="space-y-1">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/42">
-                    联系与备注
-                  </p>
-                  <p className="text-[13px] leading-5 text-black/56">
-                    联系人、电话和备注属于次级补充信息，默认保持克制，不让轻量表单变成说明页。
-                  </p>
+                  <p className="crm-detail-label text-[11px]">联系补充</p>
+                  <h4 className="text-[0.98rem] font-semibold text-[var(--foreground)]">
+                    联系人与备注
+                  </h4>
                 </div>
 
-                <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <label className="space-y-2">
                     <span className="crm-label">联系人</span>
                     <input
@@ -190,7 +195,7 @@ export function SupplierFormDrawer({
             </fieldset>
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-black/6 bg-[rgba(250,250,252,0.92)] px-5 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-3 border-t border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-5 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
             <div className="min-w-0 flex-1">
               {notice ? (
                 <ActionBanner
@@ -200,14 +205,9 @@ export function SupplierFormDrawer({
                   {notice.message}
                 </ActionBanner>
               ) : (
-                <div className="flex items-start gap-2 text-[13px] leading-5 text-black/56">
-                  <span
-                    className={`mt-[0.42rem] h-1.5 w-1.5 shrink-0 rounded-full ${
-                      pending ? "animate-pulse bg-[var(--color-accent)]" : "bg-black/20"
-                    }`}
-                  />
-                  <span>{footerHint}</span>
-                </div>
+                <p className="text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
+                  {footerHint}
+                </p>
               )}
             </div>
 
@@ -224,7 +224,11 @@ export function SupplierFormDrawer({
                 disabled={pending}
                 className="crm-button crm-button-primary w-full sm:w-auto"
               >
-                {pending ? "保存中..." : mode === "create" ? "创建供应商" : "保存供应商"}
+                {pending
+                  ? "保存中..."
+                  : mode === "create"
+                    ? "创建供应商"
+                    : "保存供应商"}
               </button>
             </div>
           </div>

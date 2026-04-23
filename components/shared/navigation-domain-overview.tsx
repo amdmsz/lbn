@@ -32,14 +32,14 @@ export function NavigationDomainOverview({
           const itemCount = countGroupItems(group);
 
           return (
-            <div key={group.key} className="crm-card-muted flex h-full flex-col p-5">
+            <div key={group.key} className="crm-card-muted flex h-full flex-col border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-5">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 space-y-1.5">
-                  <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-black/42">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--color-sidebar-muted)]">
                     业务域
                   </p>
-                  <h3 className="text-lg font-semibold text-black/85">{group.title}</h3>
-                  <p className="text-sm leading-6 text-black/58">{group.description}</p>
+                  <h3 className="text-lg font-semibold text-[var(--foreground)]">{group.title}</h3>
+                  <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">{group.description}</p>
                 </div>
                 <StatusBadge
                   label={`${itemCount} 个入口`}
@@ -52,17 +52,17 @@ export function NavigationDomainOverview({
                   <div
                     key={`${group.key}-${section.title ?? index}`}
                     className={cn(
-                      "rounded-2xl border border-black/8 bg-white/55 p-3",
+                      "rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3",
                       section.title ? "space-y-3" : "space-y-2",
                     )}
                   >
                     {section.title ? (
                       <div className="space-y-1">
-                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-black/42">
+                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-sidebar-muted)]">
                           {section.title}
                         </p>
                         {section.description ? (
-                          <p className="text-sm leading-6 text-black/56">
+                          <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
                             {section.description}
                           </p>
                         ) : null}
@@ -74,13 +74,13 @@ export function NavigationDomainOverview({
                         <Link
                           key={item.href}
                           href={item.href}
-                          className="rounded-2xl border border-black/8 bg-white/70 px-3.5 py-3 transition-colors hover:border-[var(--color-accent)]/20 hover:bg-[rgba(154,97,51,0.05)]"
+                          className="rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3.5 py-3 transition-colors hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)]"
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm font-medium text-black/82">{item.title}</p>
+                            <p className="text-sm font-medium text-[var(--foreground)]">{item.title}</p>
                             <span className="crm-text-link text-xs">进入</span>
                           </div>
-                          <p className="mt-1.5 text-sm leading-6 text-black/58">
+                          <p className="mt-1.5 text-sm leading-6 text-[var(--color-sidebar-muted)]">
                             {item.description}
                           </p>
                         </Link>

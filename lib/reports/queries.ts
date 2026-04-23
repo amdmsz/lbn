@@ -70,6 +70,7 @@ const PENDING_V2_SHIPPING_STATUSES: ShippingFulfillmentStatus[] = [
 export type ReportViewer = {
   id: string;
   role: RoleCode;
+  teamId?: string | null;
   permissionCodes?: ExtraPermissionCode[];
 };
 
@@ -186,6 +187,10 @@ async function getViewerTeamId(viewer: ReportViewer) {
     return null;
   }
 
+  if (viewer.teamId !== undefined) {
+    return viewer.teamId ?? null;
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: viewer.id },
     select: { teamId: true },
@@ -199,7 +204,7 @@ function getScopedLeadWhere(viewer: ReportViewer): Prisma.LeadWhereInput | null 
     return null;
   }
 
-  return withVisibleLeadWhere(getLeadScope(viewer.role, viewer.id));
+  return withVisibleLeadWhere(getLeadScope(viewer.role, viewer.id, viewer.teamId));
 }
 
 function getScopedCustomerWhere(viewer: ReportViewer): Prisma.CustomerWhereInput | null {
@@ -207,7 +212,7 @@ function getScopedCustomerWhere(viewer: ReportViewer): Prisma.CustomerWhereInput
     return null;
   }
 
-  return getCustomerScope(viewer.role, viewer.id);
+  return getCustomerScope(viewer.role, viewer.id, viewer.teamId);
 }
 
 function getScopedGiftWhere(viewer: ReportViewer): Prisma.GiftRecordWhereInput | null {
@@ -215,7 +220,7 @@ function getScopedGiftWhere(viewer: ReportViewer): Prisma.GiftRecordWhereInput |
     return null;
   }
 
-  return getGiftScope(viewer.role, viewer.id);
+  return getGiftScope(viewer.role, viewer.id, viewer.teamId);
 }
 
 function getScopedShippingWhere(viewer: ReportViewer): Prisma.ShippingTaskWhereInput | null {
@@ -223,11 +228,27 @@ function getScopedShippingWhere(viewer: ReportViewer): Prisma.ShippingTaskWhereI
     return null;
   }
 
-  return getShippingTaskScope(viewer.role, viewer.id);
+  return getShippingTaskScope(viewer.role, viewer.id, viewer.teamId);
 }
 
 function getActionFilter(viewer: ReportViewer) {
-  return viewer.role === "SALES" ? { salesId: viewer.id } : {};
+  if (viewer.role === "SALES") {
+    return { salesId: viewer.id };
+  }
+
+  if (viewer.role === "SUPERVISOR") {
+    return viewer.teamId
+      ? {
+          sales: {
+            is: {
+              teamId: viewer.teamId,
+            },
+          },
+        }
+      : { id: "__missing_action_team_scope__" };
+  }
+
+  return {};
 }
 
 function getSalesOrderAttributionFilter(viewer: ReportViewer): Prisma.SalesOrderWhereInput {
@@ -235,6 +256,17 @@ function getSalesOrderAttributionFilter(viewer: ReportViewer): Prisma.SalesOrder
     return {
       OR: [{ ownerId: viewer.id }, { customer: { ownerId: viewer.id } }],
     };
+  }
+
+  if (viewer.role === "SUPERVISOR") {
+    return viewer.teamId
+      ? {
+          OR: [
+            { owner: { is: { teamId: viewer.teamId } } },
+            { customer: { owner: { is: { teamId: viewer.teamId } } } },
+          ],
+        }
+      : { id: "__missing_sales_order_team_scope__" };
   }
 
   return {};
@@ -1061,6 +1093,12 @@ async function getEmployeeRanking(viewer: ReportViewer) {
   }
 
   const range = getRollingRange(REPORT_WINDOW_DAYS);
+  const supervisorTeamFilter =
+    viewer.role === "SUPERVISOR"
+      ? viewer.teamId
+        ? { teamId: viewer.teamId }
+        : { id: "__missing_sales_team_scope__" }
+      : {};
 
   const [
     salesUsers,
@@ -1076,6 +1114,7 @@ async function getEmployeeRanking(viewer: ReportViewer) {
         role: {
           code: "SALES",
         },
+        ...supervisorTeamFilter,
       },
       orderBy: {
         name: "asc",
@@ -1093,6 +1132,11 @@ async function getEmployeeRanking(viewer: ReportViewer) {
           gte: range.start,
           lte: range.end,
         },
+        ...(viewer.role === "SUPERVISOR"
+          ? viewer.teamId
+            ? { sales: { is: { teamId: viewer.teamId } } }
+            : { id: "__missing_call_team_scope__" }
+          : {}),
       },
       _count: {
         _all: true,
@@ -1105,6 +1149,11 @@ async function getEmployeeRanking(viewer: ReportViewer) {
           gte: range.start,
           lte: range.end,
         },
+        ...(viewer.role === "SUPERVISOR"
+          ? viewer.teamId
+            ? { sales: { is: { teamId: viewer.teamId } } }
+            : { id: "__missing_wechat_team_scope__" }
+          : {}),
       },
       _count: {
         _all: true,
@@ -1118,6 +1167,11 @@ async function getEmployeeRanking(viewer: ReportViewer) {
           lte: range.end,
         },
         addedStatus: "ADDED",
+        ...(viewer.role === "SUPERVISOR"
+          ? viewer.teamId
+            ? { sales: { is: { teamId: viewer.teamId } } }
+            : { id: "__missing_wechat_added_team_scope__" }
+          : {}),
       },
       _count: {
         _all: true,
@@ -1133,6 +1187,11 @@ async function getEmployeeRanking(viewer: ReportViewer) {
         invitationStatus: {
           in: INVITED_STATUSES,
         },
+        ...(viewer.role === "SUPERVISOR"
+          ? viewer.teamId
+            ? { sales: { is: { teamId: viewer.teamId } } }
+            : { id: "__missing_invitation_team_scope__" }
+          : {}),
       },
       _count: {
         _all: true,
@@ -1146,6 +1205,16 @@ async function getEmployeeRanking(viewer: ReportViewer) {
           lte: range.end,
         },
         reviewStatus: SalesOrderReviewStatus.APPROVED,
+        ...(viewer.role === "SUPERVISOR"
+          ? viewer.teamId
+            ? {
+                OR: [
+                  { owner: { is: { teamId: viewer.teamId } } },
+                  { customer: { owner: { is: { teamId: viewer.teamId } } } },
+                ],
+              }
+            : { id: "__missing_deal_team_scope__" }
+          : {}),
       },
       _count: {
         _all: true,

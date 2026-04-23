@@ -23,6 +23,7 @@ import {
   CUSTOMERS_PAGE_SIZE,
   customerManualCreateOperationAction,
   customerPageSizeOptions,
+  type CustomerExecutionClass,
   type CustomerDetailTab,
   type CustomerPageSize,
   type CustomerQueueKey,
@@ -67,11 +68,16 @@ type CustomerSnapshot = Prisma.CustomerGetPayload<{
   select: typeof customerSnapshotSelect;
 }>;
 
+type CustomerDashboardSnapshot = Prisma.CustomerGetPayload<{
+  select: typeof customerDashboardSnapshotSelect;
+}>;
+
 type CustomerSnapshotState = {
   latestLeadAt: Date | null;
   latestFollowUpAt: Date | null;
   latestCustomerImportAt: Date | null;
   assignedAt: Date | null;
+  executionClass: CustomerExecutionClass;
   newImported: boolean;
   pendingFirstCall: boolean;
   pendingFollowUp: boolean;
@@ -84,6 +90,48 @@ type CustomerSnapshotState = {
   latestPurchasedProduct: string | null;
   productKeys: string[];
   tagIds: string[];
+};
+
+type CustomerDashboardState = Omit<
+  CustomerSnapshotState,
+  "latestInterestedProduct" | "latestPurchasedProduct" | "productKeys" | "tagIds"
+>;
+
+type CustomerStateSource = {
+  id: string;
+  createdAt: Date;
+  lastEffectiveFollowUpAt: Date | null;
+  ownerId: string | null;
+  leads: Array<{
+    id: string;
+    createdAt: Date;
+    status: LeadStatus;
+    nextFollowUpAt: Date | null;
+  }>;
+  followUpTasks: Array<{
+    createdAt: Date;
+    dueAt: Date;
+    completedAt: Date | null;
+    status: FollowUpTaskStatus;
+  }>;
+  callRecords: Array<{
+    callTime: Date;
+    result: CallResult | null;
+    nextFollowUpAt: Date | null;
+  }>;
+  wechatRecords: Array<{
+    createdAt: Date;
+    addedAt: Date | null;
+    addedStatus: WechatAddStatus;
+    nextFollowUpAt: Date | null;
+  }>;
+  liveInvitations: Array<{
+    createdAt: Date;
+    invitedAt: Date | null;
+  }>;
+  salesOrders: Array<{
+    reviewStatus: SalesOrderReviewStatus;
+  }>;
 };
 
 type CustomerProductFilterSource = "interested" | "purchased";
@@ -104,19 +152,18 @@ export type CustomerTagFilterOption = ActiveTagOption & {
 export type CustomerViewer = {
   id: string;
   role: RoleCode;
+  teamId?: string | null;
 };
 
 export type CustomerCenterFilters = {
   queue: CustomerQueueKey;
-  statuses: CustomerWorkStatusKey[];
+  executionClasses: CustomerExecutionClass[];
   teamId: string;
   salesId: string;
   search: string;
   productKeys: string[];
   productKeyword: string;
   tagIds: string[];
-  importedFrom: string;
-  importedTo: string;
   assignedFrom: string;
   assignedTo: string;
   page: number;
@@ -127,12 +174,14 @@ export type CustomerSummaryStats = {
   customerCount: number;
   todayNewCustomerCount: number;
   todayNewImportedCount: number;
+  todayAssignedCount: number;
   pendingFirstCallCount: number;
   pendingFollowUpCount: number;
   pendingWechatCount: number;
   pendingInvitationCount: number;
   pendingDealCount: number;
   migrationPendingFollowUpCount: number;
+  executionClassCounts: Record<CustomerExecutionClass, number>;
   latestFollowUpAt: Date | null;
 };
 
@@ -190,8 +239,12 @@ export type CustomerListItem = {
   latestTradeAt: Date | null;
   lifetimeTradeAmount: string;
   approvedTradeOrderCount: number;
+  executionClass: CustomerExecutionClass;
+  newImported: boolean;
+  pendingFirstCall: boolean;
   latestInterestedProduct: string | null;
   latestPurchasedProduct: string | null;
+  remark: string | null;
   workingStatuses: CustomerWorkStatusKey[];
   recycleGuard: RecycleMoveGuard;
   recycleFinalizePreview: RecycleFinalizePreview | null;
@@ -258,6 +311,44 @@ export type CustomerCenterData = {
   };
 };
 
+export type CustomerOperatingDashboardMetric = {
+  label: string;
+  value: string;
+  note: string;
+  emphasis?: "default" | "info" | "success" | "warning";
+};
+
+export type CustomerOperatingDashboardEmployeeRow = {
+  userId: string;
+  name: string;
+  username: string;
+  teamId: string | null;
+  teamName: string | null;
+  customerCount: number;
+  todayAssignedCount: number;
+  todayCallCount: number;
+  connectedAssignedCount: number;
+  connectRate: string;
+  todayWechatAddedCount: number;
+  historicalWechatAddedCount: number;
+  historicalWechatAddedRate: string;
+  todayAssignedWechatCount: number;
+  todayAssignedWechatRate: string;
+  todayInvitationCount: number;
+  todayDealCount: number;
+  todayRevenueAmount: number;
+  todayRevenue: string;
+  executionClassCounts: Record<CustomerExecutionClass, number>;
+  latestFollowUpAt: Date | null;
+};
+
+export type CustomerOperatingDashboardData = {
+  scopeLabel: string;
+  asOfDateLabel: string;
+  summary: CustomerOperatingDashboardMetric[];
+  employees: CustomerOperatingDashboardEmployeeRow[];
+};
+
 const customerQueueValues = [
   "all",
   "new_imported",
@@ -279,6 +370,8 @@ const customerWorkStatusValues = [
   "migration_pending_follow_up",
 ] as const satisfies CustomerWorkStatusKey[];
 
+const customerExecutionClassValues = ["A", "B", "C", "D", "E"] as const satisfies CustomerExecutionClass[];
+
 const pendingFirstCallLeadStatuses: LeadStatus[] = [
   LeadStatus.NEW,
   LeadStatus.ASSIGNED,
@@ -290,6 +383,23 @@ const pendingDealLeadStatuses: LeadStatus[] = [
   LeadStatus.LIVE_WATCHED,
   LeadStatus.ORDERED,
 ];
+
+const connectedCallResults: CallResult[] = [
+  CallResult.CONNECTED_NO_TALK,
+  CallResult.INTERESTED,
+  CallResult.WECHAT_PENDING,
+  CallResult.WECHAT_ADDED,
+  CallResult.REFUSED_WECHAT,
+  CallResult.NEED_CALLBACK,
+  CallResult.REFUSED_TO_BUY,
+  CallResult.BLACKLIST,
+];
+
+const nonConnectedCallResultCodes = [
+  "NOT_CONNECTED",
+  "INVALID_NUMBER",
+  "HUNG_UP",
+] as const;
 
 const activeCustomerOwnershipModes = [
   CustomerOwnershipMode.PRIVATE,
@@ -311,15 +421,13 @@ const legacyQueueAliasMap: Partial<Record<string, CustomerQueueKey>> = {
 
 const customerCenterFiltersSchema = z.object({
   queue: z.enum(customerQueueValues).default("all"),
-  statuses: z.array(z.enum(customerWorkStatusValues)).default([]),
+  executionClasses: z.array(z.enum(customerExecutionClassValues)).default([]),
   teamId: z.string().trim().default(""),
   salesId: z.string().trim().default(""),
   search: z.string().trim().default(""),
   productKeys: z.array(z.string().trim().min(1)).default([]),
   productKeyword: z.string().trim().default(""),
   tagIds: z.array(z.string().trim().min(1)).default([]),
-  importedFrom: z.string().trim().default(""),
-  importedTo: z.string().trim().default(""),
   assignedFrom: z.string().trim().default(""),
   assignedTo: z.string().trim().default(""),
   page: z.coerce.number().int().min(1).default(1),
@@ -434,6 +542,56 @@ const customerSnapshotSelect = {
   },
 } satisfies Prisma.CustomerSelect;
 
+const customerDashboardSnapshotSelect = {
+  id: true,
+  createdAt: true,
+  lastEffectiveFollowUpAt: true,
+  ownerId: true,
+  leads: {
+    where: buildVisibleLeadWhereInput(),
+    select: {
+      id: true,
+      createdAt: true,
+      status: true,
+      nextFollowUpAt: true,
+    },
+  },
+  followUpTasks: {
+    select: {
+      createdAt: true,
+      dueAt: true,
+      completedAt: true,
+      status: true,
+    },
+  },
+  callRecords: {
+    select: {
+      callTime: true,
+      result: true,
+      nextFollowUpAt: true,
+    },
+  },
+  wechatRecords: {
+    select: {
+      createdAt: true,
+      addedAt: true,
+      addedStatus: true,
+      nextFollowUpAt: true,
+    },
+  },
+  liveInvitations: {
+    select: {
+      createdAt: true,
+      invitedAt: true,
+    },
+  },
+  salesOrders: {
+    select: {
+      reviewStatus: true,
+    },
+  },
+} satisfies Prisma.CustomerSelect;
+
 function getParamValue(value: SearchParamsValue) {
   if (Array.isArray(value)) {
     return value[0] ?? "";
@@ -538,7 +696,9 @@ async function getLatestCustomerImportMap(customerIds: string[]) {
   return latestMap;
 }
 
-async function getLatestCustomerAssignmentMap(customerSnapshots: CustomerSnapshot[]) {
+async function getLatestCustomerAssignmentMap<
+  T extends Pick<CustomerStateSource, "id" | "ownerId" | "leads">,
+>(customerSnapshots: T[]) {
   if (customerSnapshots.length === 0) {
     return new Map<string, Date>();
   }
@@ -689,6 +849,54 @@ function buildProductFilterKey(source: CustomerProductFilterSource, label: strin
   return `${source}:${normalizeTextValue(label).toLowerCase()}`;
 }
 
+function formatPercentValue(numerator: number, denominator: number) {
+  if (denominator === 0) {
+    return "0%";
+  }
+
+  return `${((numerator / denominator) * 100).toFixed(1)}%`;
+}
+
+function formatCurrencyValue(value: number) {
+  return new Intl.NumberFormat("zh-CN", {
+    style: "currency",
+    currency: "CNY",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatDashboardDate(value: Date) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(value);
+}
+
+function createExecutionClassCountMap() {
+  return customerExecutionClassValues.reduce<Record<CustomerExecutionClass, number>>(
+    (result, value) => {
+      result[value] = 0;
+      return result;
+    },
+    {} as Record<CustomerExecutionClass, number>,
+  );
+}
+
+function isConnectedCallRecord(record: {
+  result: CallResult | null;
+  resultCode: string | null;
+}) {
+  if (record.resultCode) {
+    return !nonConnectedCallResultCodes.includes(
+      record.resultCode as (typeof nonConnectedCallResultCodes)[number],
+    );
+  }
+
+  return record.result ? connectedCallResults.includes(record.result) : false;
+}
+
 function getCustomerVisibilityWhereInput(actor: CustomerCenterActor): Prisma.CustomerWhereInput {
   if (actor.role === "ADMIN") {
     return {
@@ -804,32 +1012,30 @@ function parseCustomerCenterFilters(
     getParamValue(rawSearchParams?.search) ||
     getParamValue(rawSearchParams?.name) ||
     getParamValue(rawSearchParams?.phone);
-  const rawStatuses = getParamValues(rawSearchParams?.statuses).filter(
-    (value): value is CustomerWorkStatusKey =>
-      customerWorkStatusValues.includes(value as CustomerWorkStatusKey),
+  const executionClasses = getParamValues(rawSearchParams?.executionClasses).filter(
+    (value): value is CustomerExecutionClass =>
+      customerExecutionClassValues.includes(value as CustomerExecutionClass),
   );
-  const statuses =
-    rawStatuses.length > 0
-      ? [...new Set(rawStatuses)]
-      : rawQueue !== "all" && customerWorkStatusValues.includes(rawQueue as CustomerWorkStatusKey)
-        ? [rawQueue as CustomerWorkStatusKey]
-        : [];
+  const rawPageSize = Number(getParamValue(rawSearchParams?.pageSize) || CUSTOMERS_PAGE_SIZE);
+  const pageSize = customerPageSizeOptions.includes(rawPageSize as CustomerPageSize)
+    ? rawPageSize
+    : CUSTOMERS_PAGE_SIZE;
 
   return customerCenterFiltersSchema.parse({
-    queue: statuses.length === 1 ? statuses[0] : rawQueue,
-    statuses,
+    queue: rawQueue,
+    executionClasses: [...new Set(executionClasses)],
     teamId: getParamValue(rawSearchParams?.teamId),
     salesId: getParamValue(rawSearchParams?.salesId),
     search,
     productKeys: getParamValues(rawSearchParams?.productKeys),
     productKeyword: getParamValue(rawSearchParams?.productKeyword),
     tagIds: getParamValues(rawSearchParams?.tagIds),
-    importedFrom: getParamValue(rawSearchParams?.importedFrom),
-    importedTo: getParamValue(rawSearchParams?.importedTo),
-    assignedFrom: getParamValue(rawSearchParams?.assignedFrom),
-    assignedTo: getParamValue(rawSearchParams?.assignedTo),
+    assignedFrom:
+      getParamValue(rawSearchParams?.assignedFrom) || getParamValue(rawSearchParams?.importedFrom),
+    assignedTo:
+      getParamValue(rawSearchParams?.assignedTo) || getParamValue(rawSearchParams?.importedTo),
     page: getParamValue(rawSearchParams?.page) || "1",
-    pageSize: getParamValue(rawSearchParams?.pageSize) || String(CUSTOMERS_PAGE_SIZE),
+    pageSize,
   });
 }
 
@@ -958,15 +1164,13 @@ async function getCustomerCenterWorkspaceBase(
   })();
   const filters: CustomerCenterFilters = {
     queue: parsedFilters.queue,
-    statuses: parsedFilters.statuses,
+    executionClasses: parsedFilters.executionClasses,
     teamId,
     salesId,
     search: parsedFilters.search,
     productKeys: parsedFilters.productKeys,
     productKeyword: parsedFilters.productKeyword,
     tagIds: parsedFilters.tagIds,
-    importedFrom: parsedFilters.importedFrom,
-    importedTo: parsedFilters.importedTo,
     assignedFrom: parsedFilters.assignedFrom,
     assignedTo: parsedFilters.assignedTo,
     page: parsedFilters.page,
@@ -1024,7 +1228,10 @@ function getCustomerCenterFilteredSnapshots(input: {
   return input.scopeSnapshots
     .filter((snapshot) => matchesCustomerSearch(snapshot, input.filters.search))
     .filter((snapshot) =>
-      matchesCustomerStatuses(input.stateMap.get(snapshot.id), input.filters.statuses),
+      matchesCustomerExecutionClasses(
+        input.stateMap.get(snapshot.id),
+        input.filters.executionClasses,
+      ),
     )
     .filter((snapshot) =>
       matchesCustomerProducts(
@@ -1035,13 +1242,6 @@ function getCustomerCenterFilteredSnapshots(input: {
       ),
     )
     .filter((snapshot) => matchesCustomerTags(input.stateMap.get(snapshot.id), input.filters.tagIds))
-    .filter((snapshot) =>
-      matchesImportedDateRange(
-        input.stateMap.get(snapshot.id),
-        input.filters.importedFrom,
-        input.filters.importedTo,
-      ),
-    )
     .filter((snapshot) =>
       matchesAssignedDateRange(
         input.stateMap.get(snapshot.id),
@@ -1107,7 +1307,7 @@ export async function listFilteredCustomerCenterCustomerIds(
   }).map((snapshot) => snapshot.id);
 }
 
-function buildPendingFollowUpMatcher(snapshot: CustomerSnapshot, now: Date) {
+function buildPendingFollowUpMatcher(snapshot: CustomerStateSource, now: Date) {
   return (
     snapshot.followUpTasks.some(
       (task) =>
@@ -1128,11 +1328,66 @@ function buildPendingFollowUpMatcher(snapshot: CustomerSnapshot, now: Date) {
   );
 }
 
-function buildSuccessfulWechatMatcher(snapshot: CustomerSnapshot) {
+function buildSuccessfulWechatMatcher(snapshot: CustomerStateSource) {
   return (
     snapshot.wechatRecords.some((record) => record.addedStatus === WechatAddStatus.ADDED) ||
     snapshot.callRecords.some((record) => record.result === CallResult.WECHAT_ADDED)
   );
+}
+
+function getLatestCallResult(snapshot: CustomerStateSource) {
+  const latestRecord = snapshot.callRecords.reduce<(typeof snapshot.callRecords)[number] | null>(
+    (currentLatest, candidate) => {
+      if (!candidate.result) {
+        return currentLatest;
+      }
+
+      if (!currentLatest || candidate.callTime.getTime() > currentLatest.callTime.getTime()) {
+        return candidate;
+      }
+
+      return currentLatest;
+    },
+    null,
+  );
+
+  return latestRecord?.result ?? null;
+}
+
+function deriveCustomerExecutionClassFromSignals(input: {
+  approvedSalesOrderCount: number;
+  hasLiveInvitation: boolean;
+  hasSuccessfulWechatSignal: boolean;
+  latestCallResult: CallResult | null;
+}): CustomerExecutionClass {
+  if (input.approvedSalesOrderCount >= 2) {
+    return "A";
+  }
+
+  if (input.hasLiveInvitation) {
+    return "C";
+  }
+
+  if (input.hasSuccessfulWechatSignal) {
+    return "B";
+  }
+
+  if (input.latestCallResult === CallResult.REFUSED_WECHAT) {
+    return "E";
+  }
+
+  return "D";
+}
+
+function deriveCustomerExecutionClass(snapshot: CustomerStateSource): CustomerExecutionClass {
+  return deriveCustomerExecutionClassFromSignals({
+    approvedSalesOrderCount: snapshot.salesOrders.filter(
+      (record) => record.reviewStatus === SalesOrderReviewStatus.APPROVED,
+    ).length,
+    hasLiveInvitation: snapshot.liveInvitations.length > 0,
+    hasSuccessfulWechatSignal: buildSuccessfulWechatMatcher(snapshot),
+    latestCallResult: getLatestCallResult(snapshot),
+  });
 }
 
 function getLatestInterestedProduct(snapshot: CustomerSnapshot) {
@@ -1224,14 +1479,14 @@ function getSnapshotProductEntries(snapshot: CustomerSnapshot) {
   return [...entries.values()];
 }
 
-function getCustomerSnapshotState(
-  snapshot: CustomerSnapshot,
+function getCustomerSnapshotCoreState(
+  snapshot: CustomerStateSource,
   latestCustomerImportAt: Date | null,
   assignedAt: Date | null,
   now: Date,
   todayStart: Date,
   todayEnd: Date,
-): CustomerSnapshotState {
+): CustomerDashboardState {
   const latestLeadAt = getMaxDate(snapshot.leads.map((lead) => lead.createdAt));
   const latestFollowUpAt = getMaxDate([
     ...snapshot.followUpTasks.map((task) => task.completedAt ?? task.createdAt),
@@ -1260,6 +1515,7 @@ function getCustomerSnapshotState(
     !hasApprovedSalesOrder &&
     (hasInvitation ||
       snapshot.leads.some((lead) => pendingDealLeadStatuses.includes(lead.status)));
+  const executionClass = deriveCustomerExecutionClass(snapshot);
   const migrationPendingFollowUp = Boolean(
     latestCustomerImportAt &&
       (!snapshot.lastEffectiveFollowUpAt ||
@@ -1285,16 +1541,12 @@ function getCustomerSnapshotState(
         return false;
     }
   });
-  const latestInterestedProduct = getLatestInterestedProduct(snapshot);
-  const latestPurchasedProduct = getLatestPurchasedProduct(snapshot);
-  const productKeys = getSnapshotProductEntries(snapshot).map((item) => item.key);
-  const tagIds = [...new Set(snapshot.customerTags.map((item) => item.tagId))];
-
   return {
     latestLeadAt,
     latestFollowUpAt,
     latestCustomerImportAt,
     assignedAt,
+    executionClass,
     newImported,
     pendingFirstCall,
     pendingFollowUp,
@@ -1303,10 +1555,30 @@ function getCustomerSnapshotState(
     pendingDeal,
     migrationPendingFollowUp,
     workingStatuses,
-    latestInterestedProduct,
-    latestPurchasedProduct,
-    productKeys,
-    tagIds,
+  };
+}
+
+function getCustomerSnapshotState(
+  snapshot: CustomerSnapshot,
+  latestCustomerImportAt: Date | null,
+  assignedAt: Date | null,
+  now: Date,
+  todayStart: Date,
+  todayEnd: Date,
+): CustomerSnapshotState {
+  return {
+    ...getCustomerSnapshotCoreState(
+      snapshot,
+      latestCustomerImportAt,
+      assignedAt,
+      now,
+      todayStart,
+      todayEnd,
+    ),
+    latestInterestedProduct: getLatestInterestedProduct(snapshot),
+    latestPurchasedProduct: getLatestPurchasedProduct(snapshot),
+    productKeys: getSnapshotProductEntries(snapshot).map((item) => item.key),
+    tagIds: [...new Set(snapshot.customerTags.map((item) => item.tagId))],
   };
 }
 
@@ -1332,18 +1604,32 @@ function getQueueMatch(state: CustomerSnapshotState, queue: CustomerQueueKey) {
   }
 }
 
-function buildSummaryStats(
-  snapshots: CustomerSnapshot[],
-  stateMap: Map<string, CustomerSnapshotState>,
+function buildSummaryStats<T extends Pick<CustomerStateSource, "id" | "createdAt">>(
+  snapshots: T[],
+  stateMap: Map<string, CustomerDashboardState | CustomerSnapshotState>,
   todayStart: Date,
   todayEnd: Date,
 ): CustomerSummaryStats {
+  const executionClassCounts = createExecutionClassCountMap();
+
+  for (const snapshot of snapshots) {
+    const executionClass = stateMap.get(snapshot.id)?.executionClass;
+
+    if (executionClass) {
+      executionClassCounts[executionClass] += 1;
+    }
+  }
+
   return {
     customerCount: snapshots.length,
     todayNewCustomerCount: snapshots.filter((item) =>
       isWithinToday(item.createdAt, todayStart, todayEnd),
     ).length,
     todayNewImportedCount: snapshots.filter((item) => stateMap.get(item.id)?.newImported).length,
+    todayAssignedCount: snapshots.filter((item) => {
+      const assignedAt = stateMap.get(item.id)?.assignedAt;
+      return assignedAt ? isWithinToday(assignedAt, todayStart, todayEnd) : false;
+    }).length,
     pendingFirstCallCount: snapshots.filter((item) => stateMap.get(item.id)?.pendingFirstCall)
       .length,
     pendingFollowUpCount: snapshots.filter((item) => stateMap.get(item.id)?.pendingFollowUp)
@@ -1355,6 +1641,7 @@ function buildSummaryStats(
     migrationPendingFollowUpCount: snapshots.filter(
       (item) => stateMap.get(item.id)?.migrationPendingFollowUp,
     ).length,
+    executionClassCounts,
     latestFollowUpAt: getMaxDate(
       snapshots.map((item) => stateMap.get(item.id)?.latestFollowUpAt ?? null),
     ),
@@ -1374,11 +1661,11 @@ function buildQueueCounts(
   }, {} as Record<CustomerQueueKey, number>);
 }
 
-function matchesCustomerStatuses(
+function matchesCustomerExecutionClasses(
   state: CustomerSnapshotState | undefined,
-  statuses: CustomerWorkStatusKey[],
+  executionClasses: CustomerExecutionClass[],
 ) {
-  if (statuses.length === 0) {
+  if (executionClasses.length === 0) {
     return true;
   }
 
@@ -1386,7 +1673,7 @@ function matchesCustomerStatuses(
     return false;
   }
 
-  return statuses.some((status) => state.workingStatuses.includes(status));
+  return executionClasses.includes(state.executionClass);
 }
 
 function matchesCustomerProducts(
@@ -1432,38 +1719,6 @@ function matchesCustomerTags(state: CustomerSnapshotState | undefined, tagIds: s
   return tagIds.some((tagId) => state.tagIds.includes(tagId));
 }
 
-function matchesImportedDateRange(
-  state: CustomerSnapshotState | undefined,
-  importedFrom: string,
-  importedTo: string,
-) {
-  if (!importedFrom && !importedTo) {
-    return true;
-  }
-
-  const importedAt = getMaxDate([
-    state?.latestLeadAt ?? null,
-    state?.latestCustomerImportAt ?? null,
-  ]);
-
-  if (!importedAt) {
-    return false;
-  }
-
-  const from = parseDateOnly(importedFrom, "start");
-  const to = parseDateOnly(importedTo, "end");
-
-  if (from && importedAt.getTime() < from.getTime()) {
-    return false;
-  }
-
-  if (to && importedAt.getTime() > to.getTime()) {
-    return false;
-  }
-
-  return true;
-}
-
 function matchesAssignedDateRange(
   state: CustomerSnapshotState | undefined,
   assignedFrom: string,
@@ -1474,7 +1729,6 @@ function matchesAssignedDateRange(
   }
 
   const assignedAt = state?.assignedAt ?? null;
-
   if (!assignedAt) {
     return false;
   }
@@ -1642,6 +1896,7 @@ async function fetchCustomerListItems(
         city: true,
         district: true,
         address: true,
+        remark: true,
         status: true,
         ownershipMode: true,
         createdAt: true,
@@ -1797,8 +2052,12 @@ async function fetchCustomerListItems(
         latestTradeAt: tradeOrderSummary?.latestTradeAt ?? null,
         lifetimeTradeAmount: tradeOrderSummary?.lifetimeTradeAmount ?? "0",
         approvedTradeOrderCount: tradeOrderSummary?.approvedTradeOrderCount ?? 0,
+        executionClass: state?.executionClass ?? "D",
+        newImported: state?.newImported ?? false,
+        pendingFirstCall: state?.pendingFirstCall ?? false,
         latestInterestedProduct: state?.latestInterestedProduct ?? null,
         latestPurchasedProduct: state?.latestPurchasedProduct ?? null,
+        remark: item.remark,
         workingStatuses: state?.workingStatuses ?? [],
         recycleGuard: recycleSnapshot?.recycleGuard ?? fallbackRecycleGuard,
         recycleFinalizePreview: recycleSnapshot?.recycleFinalizePreview ?? null,
@@ -2069,6 +2328,477 @@ export async function getCustomerCenterData(
       totalPages,
     },
   } satisfies CustomerCenterData;
+}
+
+export async function getCustomerOperatingDashboardData(
+  viewer: CustomerViewer,
+): Promise<CustomerOperatingDashboardData> {
+  if (!canAccessCustomerModule(viewer.role)) {
+    throw new Error("You do not have access to customers.");
+  }
+
+  const actor = await getCustomerCenterActor(viewer.id);
+  const visibleWhere = getCustomerVisibilityWhereInput(actor);
+  const recycledCustomerIds = await listActiveCustomerIds(prisma);
+  const [teams, salesUsers, customerSnapshots] = await Promise.all([
+    actor.role === "ADMIN"
+      ? prisma.team.findMany({
+          orderBy: [{ name: "asc" }, { createdAt: "asc" }],
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            description: true,
+            supervisor: {
+              select: {
+                id: true,
+                name: true,
+                username: true,
+              },
+            },
+          },
+        })
+      : actor.teamId
+        ? prisma.team.findMany({
+            where: { id: actor.teamId },
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              description: true,
+              supervisor: {
+                select: {
+                  id: true,
+                  name: true,
+                  username: true,
+                },
+              },
+            },
+          })
+        : Promise.resolve([]),
+    prisma.user.findMany({
+      where: {
+        role: {
+          code: "SALES",
+        },
+        userStatus: "ACTIVE",
+        ...(actor.role === "ADMIN"
+          ? {}
+          : actor.teamId
+            ? { teamId: actor.teamId }
+            : { id: "__missing_team_scope__" }),
+      },
+      orderBy: [{ name: "asc" }, { username: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        teamId: true,
+        team: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+        },
+      },
+    }),
+    prisma.customer.findMany({
+      where: {
+        AND: [
+          visibleWhere,
+          ...(recycledCustomerIds.length > 0
+            ? [
+                {
+                  id: {
+                    notIn: recycledCustomerIds,
+                  },
+                } satisfies Prisma.CustomerWhereInput,
+              ]
+            : []),
+        ],
+      },
+      select: customerDashboardSnapshotSelect,
+    }),
+  ]);
+  const [latestCustomerImportMap, latestCustomerAssignmentMap] = await Promise.all([
+    getLatestCustomerImportMap(customerSnapshots.map((snapshot) => snapshot.id)),
+    getLatestCustomerAssignmentMap(customerSnapshots),
+  ]);
+  const now = new Date();
+  const todayStart = startOfDay(now);
+  const todayEnd = endOfDay(now);
+  const stateMap = new Map(
+    customerSnapshots.map((snapshot) => [
+      snapshot.id,
+      getCustomerSnapshotCoreState(
+        snapshot,
+        latestCustomerImportMap.get(snapshot.id)?.createdAt ?? null,
+        latestCustomerAssignmentMap.get(snapshot.id) ?? null,
+        now,
+        todayStart,
+        todayEnd,
+      ),
+    ]),
+  );
+  const scopeSalesUsers =
+    actor.role === "ADMIN" || actor.role === "SUPERVISOR" ? salesUsers : [];
+  const scopeLabel =
+    actor.role === "ADMIN" ? "组织范围" : teams[0]?.name ?? "团队范围";
+  const asOfDateLabel = formatDashboardDate(todayStart);
+
+  if (scopeSalesUsers.length === 0) {
+    return {
+      scopeLabel,
+      asOfDateLabel,
+      summary: [
+        {
+          label: "今日分配",
+          value: "0",
+          note: `${asOfDateLabel} 暂无在岗销售进入驾驶舱统计口径。`,
+          emphasis: "info",
+        },
+      ],
+      employees: [],
+    };
+  }
+
+  const salesUserIds = scopeSalesUsers.map((item) => item.id);
+  const [todayCallRecords, todayWechatRecords, todayLiveInvitations, todayTradeOrders] =
+    await Promise.all([
+      prisma.callRecord.findMany({
+        where: {
+          salesId: {
+            in: salesUserIds,
+          },
+          callTime: {
+            gte: todayStart,
+            lte: todayEnd,
+          },
+        },
+        select: {
+          salesId: true,
+          customerId: true,
+          result: true,
+          resultCode: true,
+        },
+      }),
+      prisma.wechatRecord.findMany({
+        where: {
+          salesId: {
+            in: salesUserIds,
+          },
+          addedStatus: WechatAddStatus.ADDED,
+          OR: [
+            {
+              addedAt: {
+                gte: todayStart,
+                lte: todayEnd,
+              },
+            },
+            {
+              createdAt: {
+                gte: todayStart,
+                lte: todayEnd,
+              },
+            },
+          ],
+        },
+        select: {
+          salesId: true,
+          customerId: true,
+        },
+      }),
+      prisma.liveInvitation.findMany({
+        where: {
+          salesId: {
+            in: salesUserIds,
+          },
+          OR: [
+            {
+              invitedAt: {
+                gte: todayStart,
+                lte: todayEnd,
+              },
+            },
+            {
+              createdAt: {
+                gte: todayStart,
+                lte: todayEnd,
+              },
+            },
+          ],
+        },
+        select: {
+          salesId: true,
+          customerId: true,
+        },
+      }),
+      prisma.tradeOrder.findMany({
+        where: {
+          ownerId: {
+            in: salesUserIds,
+          },
+          tradeStatus: TradeOrderStatus.APPROVED,
+          createdAt: {
+            gte: todayStart,
+            lte: todayEnd,
+          },
+        },
+        select: {
+          ownerId: true,
+          finalAmount: true,
+        },
+      }),
+    ]);
+
+  const customerSnapshotsByOwnerId = new Map<string, CustomerDashboardSnapshot[]>();
+  const todayAssignedCustomerIdsByOwnerId = new Map<string, Set<string>>();
+
+  for (const snapshot of customerSnapshots) {
+    if (!snapshot.ownerId) {
+      continue;
+    }
+
+    const ownerSnapshots = customerSnapshotsByOwnerId.get(snapshot.ownerId) ?? [];
+    ownerSnapshots.push(snapshot);
+    customerSnapshotsByOwnerId.set(snapshot.ownerId, ownerSnapshots);
+
+    const assignedAt = stateMap.get(snapshot.id)?.assignedAt;
+    if (!assignedAt || !isWithinToday(assignedAt, todayStart, todayEnd)) {
+      continue;
+    }
+
+    const assignedIds = todayAssignedCustomerIdsByOwnerId.get(snapshot.ownerId) ?? new Set<string>();
+    assignedIds.add(snapshot.id);
+    todayAssignedCustomerIdsByOwnerId.set(snapshot.ownerId, assignedIds);
+  }
+
+  const todayCallCountBySalesId = new Map<string, number>();
+  const connectedAssignedCustomerIdsBySalesId = new Map<string, Set<string>>();
+
+  for (const record of todayCallRecords) {
+    todayCallCountBySalesId.set(
+      record.salesId,
+      (todayCallCountBySalesId.get(record.salesId) ?? 0) + 1,
+    );
+
+    if (!record.customerId) {
+      continue;
+    }
+
+    const assignedCustomerIds = todayAssignedCustomerIdsByOwnerId.get(record.salesId);
+    if (!assignedCustomerIds?.has(record.customerId) || !isConnectedCallRecord(record)) {
+      continue;
+    }
+
+    const connectedIds =
+      connectedAssignedCustomerIdsBySalesId.get(record.salesId) ?? new Set<string>();
+    connectedIds.add(record.customerId);
+    connectedAssignedCustomerIdsBySalesId.set(record.salesId, connectedIds);
+  }
+
+  const todayWechatCustomerIdsBySalesId = new Map<string, Set<string>>();
+
+  for (const record of todayWechatRecords) {
+    if (!record.customerId) {
+      continue;
+    }
+
+    const customerIds = todayWechatCustomerIdsBySalesId.get(record.salesId) ?? new Set<string>();
+    customerIds.add(record.customerId);
+    todayWechatCustomerIdsBySalesId.set(record.salesId, customerIds);
+  }
+
+  const todayInvitationCustomerIdsBySalesId = new Map<string, Set<string>>();
+
+  for (const record of todayLiveInvitations) {
+    if (!record.customerId) {
+      continue;
+    }
+
+    const customerIds =
+      todayInvitationCustomerIdsBySalesId.get(record.salesId) ?? new Set<string>();
+    customerIds.add(record.customerId);
+    todayInvitationCustomerIdsBySalesId.set(record.salesId, customerIds);
+  }
+
+  const todayDealCountBySalesId = new Map<string, number>();
+  const todayRevenueBySalesId = new Map<string, number>();
+
+  for (const record of todayTradeOrders) {
+    if (!record.ownerId) {
+      continue;
+    }
+
+    todayDealCountBySalesId.set(
+      record.ownerId,
+      (todayDealCountBySalesId.get(record.ownerId) ?? 0) + 1,
+    );
+    todayRevenueBySalesId.set(
+      record.ownerId,
+      (todayRevenueBySalesId.get(record.ownerId) ?? 0) + Number(record.finalAmount ?? 0),
+    );
+  }
+
+  const employees = scopeSalesUsers
+    .map<CustomerOperatingDashboardEmployeeRow>((sales) => {
+      const salesSnapshots = customerSnapshotsByOwnerId.get(sales.id) ?? [];
+      const stats = buildSummaryStats(salesSnapshots, stateMap, todayStart, todayEnd);
+      const todayAssignedCustomerIds =
+        todayAssignedCustomerIdsByOwnerId.get(sales.id) ?? new Set<string>();
+      const connectedAssignedCustomerIds =
+        connectedAssignedCustomerIdsBySalesId.get(sales.id) ?? new Set<string>();
+      const todayWechatCustomerIds =
+        todayWechatCustomerIdsBySalesId.get(sales.id) ?? new Set<string>();
+      const historicalWechatAddedCount = [...todayWechatCustomerIds].filter(
+        (customerId) => !todayAssignedCustomerIds.has(customerId),
+      ).length;
+      const todayAssignedWechatCount = [...todayWechatCustomerIds].filter((customerId) =>
+        todayAssignedCustomerIds.has(customerId),
+      ).length;
+      const todayInvitationCount =
+        todayInvitationCustomerIdsBySalesId.get(sales.id)?.size ?? 0;
+      const todayDealCount = todayDealCountBySalesId.get(sales.id) ?? 0;
+      const todayRevenue = todayRevenueBySalesId.get(sales.id) ?? 0;
+
+      return {
+        userId: sales.id,
+        name: sales.name,
+        username: sales.username,
+        teamId: sales.teamId,
+        teamName: sales.team?.name ?? null,
+        customerCount: stats.customerCount,
+        todayAssignedCount: stats.todayAssignedCount,
+        todayCallCount: todayCallCountBySalesId.get(sales.id) ?? 0,
+        connectedAssignedCount: connectedAssignedCustomerIds.size,
+        connectRate: formatPercentValue(
+          connectedAssignedCustomerIds.size,
+          stats.todayAssignedCount,
+        ),
+        todayWechatAddedCount: todayWechatCustomerIds.size,
+        historicalWechatAddedCount,
+        historicalWechatAddedRate: formatPercentValue(
+          historicalWechatAddedCount,
+          todayWechatCustomerIds.size,
+        ),
+        todayAssignedWechatCount,
+        todayAssignedWechatRate: formatPercentValue(
+          todayAssignedWechatCount,
+          stats.todayAssignedCount,
+        ),
+        todayInvitationCount,
+        todayDealCount,
+        todayRevenueAmount: todayRevenue,
+        todayRevenue: formatCurrencyValue(todayRevenue),
+        executionClassCounts: stats.executionClassCounts,
+        latestFollowUpAt: stats.latestFollowUpAt,
+      };
+    })
+    .sort((left, right) => {
+      if (right.todayAssignedCount !== left.todayAssignedCount) {
+        return right.todayAssignedCount - left.todayAssignedCount;
+      }
+
+      if (right.todayCallCount !== left.todayCallCount) {
+        return right.todayCallCount - left.todayCallCount;
+      }
+
+      if (right.todayDealCount !== left.todayDealCount) {
+        return right.todayDealCount - left.todayDealCount;
+      }
+
+      if (right.customerCount !== left.customerCount) {
+        return right.customerCount - left.customerCount;
+      }
+
+      return left.name.localeCompare(right.name, "zh-CN");
+    });
+
+  const totals = employees.reduce(
+    (result, row) => {
+      result.todayAssignedCount += row.todayAssignedCount;
+      result.connectedAssignedCount += row.connectedAssignedCount;
+      result.todayWechatAddedCount += row.todayWechatAddedCount;
+      result.historicalWechatAddedCount += row.historicalWechatAddedCount;
+      result.todayAssignedWechatCount += row.todayAssignedWechatCount;
+      result.todayInvitationCount += row.todayInvitationCount;
+      result.todayDealCount += row.todayDealCount;
+      result.todayRevenue += row.todayRevenueAmount;
+      return result;
+    },
+    {
+      todayAssignedCount: 0,
+      connectedAssignedCount: 0,
+      todayWechatAddedCount: 0,
+      historicalWechatAddedCount: 0,
+      todayAssignedWechatCount: 0,
+      todayInvitationCount: 0,
+      todayDealCount: 0,
+      todayRevenue: 0,
+    },
+  );
+
+  return {
+    scopeLabel,
+    asOfDateLabel,
+    summary: [
+      {
+        label: "今日分配",
+        value: String(totals.todayAssignedCount),
+        note: `${asOfDateLabel} 分配到当前统计范围销售名下`,
+        emphasis: "info",
+      },
+      {
+        label: "接通率",
+        value: formatPercentValue(
+          totals.connectedAssignedCount,
+          totals.todayAssignedCount,
+        ),
+        note: `按已分配客户计算 · 已接通 ${totals.connectedAssignedCount} / ${totals.todayAssignedCount}`,
+      },
+      {
+        label: "加微数",
+        value: String(totals.todayWechatAddedCount),
+        note: `${asOfDateLabel} 今日形成 ADDED`,
+      },
+      {
+        label: "历史加微率",
+        value: formatPercentValue(
+          totals.historicalWechatAddedCount,
+          totals.todayWechatAddedCount,
+        ),
+        note: `非当日分配但今日加微 ${totals.historicalWechatAddedCount} / ${totals.todayWechatAddedCount}`,
+      },
+      {
+        label: "邀约进场",
+        value: String(totals.todayInvitationCount),
+        note: "直播邀约口径",
+        emphasis: "success",
+      },
+      {
+        label: "出单",
+        value: String(totals.todayDealCount),
+        note: "今日审批通过主单",
+        emphasis: "success",
+      },
+      {
+        label: "销售额",
+        value: formatCurrencyValue(totals.todayRevenue),
+        note: "今日审批通过主单金额",
+      },
+      {
+        label: "当日线索加微率",
+        value: formatPercentValue(
+          totals.todayAssignedWechatCount,
+          totals.todayAssignedCount,
+        ),
+        note: `今日分配客户中已加微 ${totals.todayAssignedWechatCount} / ${totals.todayAssignedCount}`,
+        emphasis: "warning",
+      },
+    ],
+    employees,
+  };
 }
 
 export async function getCustomerDetail(viewer: CustomerViewer, customerId: string) {
@@ -2880,10 +3610,13 @@ export async function getCustomerDetailShell(
     latestCall,
     latestWechat,
     latestLive,
+    successfulWechatRecord,
+    successfulWechatCall,
     operationLogCount,
     logisticsFollowUpCount,
     approvedTradeOrderSummary,
     approvedTradeOrderCount,
+    approvedSalesOrderCount,
   ] =
     await Promise.all([
       prisma.lead.findFirst({
@@ -2899,7 +3632,7 @@ export async function getCustomerDetailShell(
       prisma.callRecord.findFirst({
         where: { customerId: detail.customer.id },
         orderBy: { callTime: "desc" },
-        select: { callTime: true },
+        select: { callTime: true, result: true },
       }),
       prisma.wechatRecord.findFirst({
         where: { customerId: detail.customer.id },
@@ -2910,6 +3643,20 @@ export async function getCustomerDetailShell(
         where: { customerId: detail.customer.id },
         orderBy: { createdAt: "desc" },
         select: { invitedAt: true },
+      }),
+      prisma.wechatRecord.findFirst({
+        where: {
+          customerId: detail.customer.id,
+          addedStatus: WechatAddStatus.ADDED,
+        },
+        select: { id: true },
+      }),
+      prisma.callRecord.findFirst({
+        where: {
+          customerId: detail.customer.id,
+          result: CallResult.WECHAT_ADDED,
+        },
+        select: { id: true },
       }),
       prisma.operationLog.count({
         where: await buildCustomerDetailOperationLogWhere(detail.customer.id),
@@ -2937,11 +3684,34 @@ export async function getCustomerDetailShell(
           tradeStatus: TradeOrderStatus.APPROVED,
         },
       }),
+      prisma.salesOrder.count({
+        where: {
+          customerId: detail.customer.id,
+          reviewStatus: SalesOrderReviewStatus.APPROVED,
+        },
+      }),
     ]);
+
+  const executionClass = deriveCustomerExecutionClassFromSignals({
+    approvedSalesOrderCount,
+    hasLiveInvitation: Boolean(latestLive),
+    hasSuccessfulWechatSignal: Boolean(successfulWechatRecord || successfulWechatCall),
+    latestCallResult: latestCall?.result ?? null,
+  });
+  const now = new Date();
+  const todayStart = startOfDay(now);
+  const todayEnd = endOfDay(now);
+  const newImported = Boolean(
+    latestLead?.createdAt && isWithinToday(latestLead.createdAt, todayStart, todayEnd),
+  );
+  const pendingFirstCall = !latestCall;
 
   return {
     ...detail.customer,
     viewerScope: detail.actor.role,
+    executionClass,
+    newImported,
+    pendingFirstCall,
     latestFollowUpAt: getMaxDate([
       latestCall?.callTime ?? null,
       latestWechat?.addedAt ?? null,

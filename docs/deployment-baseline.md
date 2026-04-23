@@ -60,6 +60,7 @@ staging 验收请看：[docs/staging-checklist.md](./staging-checklist.md)
 - GitHub Actions 发布护栏工作流：[.github/workflows/release-guardrails.yml](../.github/workflows/release-guardrails.yml)
 - 单机更新脚本模板：[scripts/deploy-update.sh](../scripts/deploy-update.sh)
 - lead import worker 入口脚本：[scripts/lead-import-worker.ts](../scripts/lead-import-worker.ts)
+- lead import runtime 自检脚本：[scripts/check-lead-import-runtime.ts](../scripts/check-lead-import-runtime.ts)
 - recycle auto finalize runbook：[docs/recycle-auto-finalize-runbook.md](./recycle-auto-finalize-runbook.md)
 - 首个管理员初始化脚本：[scripts/bootstrap-admin.mjs](../scripts/bootstrap-admin.mjs)
 - 旧环境 migration metadata 对齐脚本：[scripts/reconcile-prisma-migration-baseline.mjs](../scripts/reconcile-prisma-migration-baseline.mjs)
@@ -198,6 +199,7 @@ npm run db:migration-baseline:reconcile -- --apply
 4. 空库首发时再执行 `npm run admin:bootstrap -- --username admin --name "Platform Admin" --password "replace-with-strong-password"`
 5. 启动或重启 Web service 与 worker service
 6. `bash scripts/release-smoke.sh <base-url>`
+7. `REQUIRE_LEAD_IMPORT_WORKER=1 npm run check:lead-import-runtime`
 
 其中 `release-preflight.sh` 已固定包含：
 
@@ -218,6 +220,7 @@ npm run db:migration-baseline:reconcile -- --apply
 - `npm run start` 与 `npm run worker:lead-imports` 是两个独立进程
 - 正式环境不能只起 Web，不起 worker
 - 如果通过 systemd 启动，则这两个进程应由两个独立 service 托管
+- 推荐在 Web 与 worker 重启完成后，再执行一次 `REQUIRE_LEAD_IMPORT_WORKER=1 npm run check:lead-import-runtime`，把 Redis 连通性、queue 状态和 worker presence 一次性确认掉
 
 staging -> production 推荐执行顺序
 A. staging 预演
@@ -314,6 +317,13 @@ sudo systemctl status jiuzhuang-crm-import-worker --no-pager
 查看日志：
 
 sudo journalctl -u jiuzhuang-crm-import-worker -f
+
+运行时自检：
+
+```bash
+cd /srv/jiuzhuang-crm/current
+REQUIRE_LEAD_IMPORT_WORKER=1 npm run check:lead-import-runtime
+```
 9. Nginx 反向代理
 
 模板文件：

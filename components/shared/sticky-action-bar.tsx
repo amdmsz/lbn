@@ -20,17 +20,17 @@ export function StickyActionBar({
     <section
       className={cn(
         isCompact
-          ? "lg:sticky lg:top-[var(--crm-sticky-top)] z-20 rounded-[0.95rem] border border-black/8 bg-[rgba(255,255,255,0.84)] px-4 py-2.5 backdrop-blur shadow-[0_10px_22px_rgba(18,24,31,0.05)]"
-          : "lg:sticky lg:top-[var(--crm-sticky-top)] z-20 rounded-[1rem] border border-black/8 bg-[rgba(255,255,255,0.88)] px-4 py-3 backdrop-blur shadow-[0_16px_36px_rgba(18,24,31,0.08)]",
+          ? "crm-subtle-panel lg:sticky lg:top-[var(--crm-sticky-top)] z-20 px-4 py-2.5 backdrop-blur"
+          : "crm-subtle-panel lg:sticky lg:top-[var(--crm-sticky-top)] z-20 px-4 py-3 backdrop-blur",
         className,
       )}
     >
       <div className={cn("flex flex-col lg:flex-row lg:justify-between", isCompact ? "gap-2.5 lg:items-center" : "gap-3 lg:items-center")}>
         {(title || description) ? (
           <div className={cn(isCompact ? "space-y-0.5" : "space-y-1")}>
-            {title ? <p className={cn("font-semibold text-black/84", isCompact ? "text-[0.94rem]" : "text-sm")}>{title}</p> : null}
+            {title ? <p className={cn("font-semibold text-[var(--foreground)]", isCompact ? "text-[0.94rem]" : "text-sm")}>{title}</p> : null}
             {description ? (
-              <p className={cn(isCompact ? "text-[12.5px] leading-5 text-black/54 md:text-[13px]" : "text-sm leading-6 text-black/56")}>
+              <p className={cn(isCompact ? "text-[12.5px] leading-5 text-[var(--color-sidebar-muted)] md:text-[13px]" : "text-sm leading-6 text-[var(--color-sidebar-muted)]")}>
                 {description}
               </p>
             ) : null}

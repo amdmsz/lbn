@@ -12,6 +12,10 @@ import {
   SquarePen,
   Trash2,
 } from "lucide-react";
+import {
+  CustomerFollowUpDialog,
+  getCustomerExecutionClassQuickResult,
+} from "@/components/customers/customer-follow-up-dialog";
 import { CustomerCallRecordForm } from "@/components/customers/customer-call-record-form";
 import { CustomerCallRecordHistory } from "@/components/customers/customer-call-record-history";
 import {
@@ -22,13 +26,14 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import type { CallResultOption } from "@/lib/calls/metadata";
 import { startMobileCallFollowUpDial } from "@/lib/calls/mobile-call-followup";
 import {
+  getCustomerExecutionDisplayLongLabel,
+  getCustomerExecutionDisplayVariant,
   formatDateTime,
   formatRelativeDateTime,
   formatRegion,
   getCustomerStatusLabel,
   getCustomerWorkStatusLabel,
   getCustomerWorkStatusVariant,
-  type CustomerWorkStatusKey,
 } from "@/lib/customers/metadata";
 import { getCustomerOwnershipModeLabel } from "@/lib/customers/public-pool-metadata";
 import type { CustomerListItem } from "@/lib/customers/queries";
@@ -60,10 +65,6 @@ function getOwnerLabel(item: CustomerListItem) {
   return item.owner ? `${item.owner.name} (@${item.owner.username})` : "未分配负责人";
 }
 
-function getPrimaryWorkStatus(item: CustomerListItem): CustomerWorkStatusKey | null {
-  return item.workingStatuses[0] ?? null;
-}
-
 function buildCustomerTradeOrderHref(customerId: string) {
   return `/customers/${customerId}?tab=orders&createTradeOrder=1`;
 }
@@ -92,13 +93,13 @@ function CustomerActionButton({
         }
       }}
       className={cn(
-        "inline-flex min-w-0 items-center justify-center font-medium outline-none transition-[border-color,background-color,color,opacity] duration-150 focus-visible:ring-2 focus-visible:ring-black/8",
+        "inline-flex min-w-0 items-center justify-center font-medium outline-none transition-[border-color,background-color,color,opacity,box-shadow] duration-150 focus-visible:ring-2 focus-visible:ring-[rgba(122,154,255,0.16)]",
         fullWidth
-          ? "h-9 w-full justify-start gap-2 rounded-[13px] border px-3.5 text-[13px]"
-          : "h-7 gap-1.5 rounded-[9px] border px-2.5 text-[11px]",
+          ? "h-9 w-full justify-start gap-2 rounded-[12px] border px-3 text-[13px] sm:px-3.5"
+          : "h-7 gap-1 rounded-[8px] border px-2 text-[10.5px] sm:h-7.5 sm:gap-1.5 sm:rounded-[9px] sm:px-2.5 sm:text-[11px]",
         disabled
-          ? "cursor-not-allowed border-black/5 bg-black/[0.03] text-black/32"
-          : "border-black/8 bg-white/92 text-black/72 hover:border-black/12 hover:bg-white hover:text-black/84",
+          ? "cursor-not-allowed border-[var(--color-border-soft)] bg-[var(--color-shell-active)] text-[var(--color-sidebar-muted)] opacity-55"
+          : "border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] text-[var(--foreground)] hover:border-[rgba(122,154,255,0.18)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)] hover:shadow-[var(--color-shell-shadow-sm)]",
       )}
     >
       <Icon className={cn("shrink-0", fullWidth ? "h-[14px] w-[14px]" : "h-[13px] w-[13px]")} />
@@ -126,21 +127,23 @@ function CustomerModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/28 px-4 py-8 lg:pl-[var(--dashboard-sidebar-width,0px)]"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,5,10,0.62)] px-4 py-8 backdrop-blur-[14px] lg:pl-[var(--dashboard-sidebar-width,0px)]"
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="crm-card flex max-h-[calc(100vh-4rem)] w-full max-w-2xl flex-col overflow-hidden"
+        className="flex max-h-[calc(100vh-4rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[1.3rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-lg)]"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="border-b border-black/6 px-5 py-4">
+        <div className="border-b border-[var(--color-border-soft)] px-5 py-4">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1.5">
-              <h3 className="text-lg font-semibold text-black/84">{title}</h3>
-              <p className="text-sm leading-6 text-black/58">{description}</p>
+              <h3 className="text-lg font-semibold text-[var(--foreground)]">{title}</h3>
+              <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
+                {description}
+              </p>
             </div>
             <button
               type="button"
@@ -165,8 +168,8 @@ function CustomerIdentity({
   phone: string;
 }>) {
   return (
-    <div className="mb-4 rounded-[0.9rem] border border-black/7 bg-[rgba(255,255,255,0.82)] px-4 py-3 text-sm leading-6 text-black/62">
-      <p className="font-medium text-black/78">{name}</p>
+    <div className="mb-4 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-sm leading-6 text-[var(--color-sidebar-muted)]">
+      <p className="font-medium text-[var(--foreground)]">{name}</p>
       <p>{phone}</p>
     </div>
   );
@@ -199,6 +202,9 @@ export function CustomerListCard({
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const [callDialogOpen, setCallDialogOpen] = useState(false);
   const [callHistoryDialogOpen, setCallHistoryDialogOpen] = useState(false);
+  const [followUpDialogOpen, setFollowUpDialogOpen] = useState(false);
+  const [followUpInitialResult, setFollowUpInitialResult] = useState("");
+  const [followUpRemarkAutoFocus, setFollowUpRemarkAutoFocus] = useState(false);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
 
   const detailHref = `/customers/${item.id}`;
@@ -206,7 +212,6 @@ export function CustomerListCard({
   const latestTradeAt = normalizeDate(item.latestTradeAt);
   const address = getCardAddress(item);
   const hasLifetimeTrade = Number(item.lifetimeTradeAmount) > 0.009;
-  const primaryStatus = getPrimaryWorkStatus(item);
   const recentInterest = getRecentInterest(item);
   const phoneText = item.phone?.trim() || "暂无电话";
   const recycleEntryProps = {
@@ -283,6 +288,21 @@ export function CustomerListCard({
     setCallHistoryDialogOpen(true);
   }
 
+  function openFollowUpDialog(options: {
+    initialResult?: string;
+    remarkAutoFocus?: boolean;
+  } = {}) {
+    setMobileActionsOpen(false);
+    setFollowUpInitialResult(
+      options.initialResult ??
+        (item.newImported && item.pendingFirstCall
+          ? ""
+          : item.callRecords[0]?.resultCode ?? getCustomerExecutionClassQuickResult(item.executionClass)),
+    );
+    setFollowUpRemarkAutoFocus(options.remarkAutoFocus ?? false);
+    setFollowUpDialogOpen(true);
+  }
+
   function openCreateTradeOrder() {
     if (!canCreateSalesOrder) {
       return;
@@ -311,9 +331,9 @@ export function CustomerListCard({
         onClick={() => navigateTo(detailHref)}
         onKeyDown={handleCardKeyDown}
         className={cn(
-          "group relative flex cursor-pointer flex-col overflow-hidden rounded-[18px] border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(249,247,244,0.92))] px-4 py-3.5 shadow-[0_6px_16px_rgba(15,23,42,0.03)] outline-none transition-[border-color,background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
-          "focus-visible:ring-2 focus-visible:ring-black/8 focus-visible:ring-offset-0",
-          "min-[960px]:hover:-translate-y-px min-[960px]:hover:border-[rgba(15,23,42,0.12)] min-[960px]:hover:bg-white min-[960px]:hover:shadow-[0_12px_24px_rgba(15,23,42,0.05)]",
+          "group relative flex cursor-pointer flex-col overflow-hidden rounded-[18px] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)] outline-none transition-[border-color,background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
+          "focus-visible:ring-2 focus-visible:ring-[rgba(122,154,255,0.16)] focus-visible:ring-offset-0",
+          "min-[960px]:hover:-translate-y-px min-[960px]:hover:border-[rgba(122,154,255,0.16)] min-[960px]:hover:bg-[var(--color-shell-hover)] min-[960px]:hover:shadow-[var(--color-shell-shadow-md)]",
         )}
       >
         <div className="flex items-start justify-between gap-3">
@@ -325,35 +345,58 @@ export function CustomerListCard({
                   checked={selected}
                   onChange={() => onToggleSelected?.()}
                   aria-label={`选择客户 ${item.name}`}
-                  className="h-4 w-4 rounded border border-black/18 text-black focus:ring-black/15"
+                  className="h-4 w-4 rounded border border-[var(--color-border)] bg-[var(--color-shell-surface)] text-[var(--color-accent)] focus:ring-[rgba(122,154,255,0.16)]"
                 />
               </div>
             ) : null}
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="truncate text-[18px] font-semibold leading-5 tracking-[-0.03em] text-[#0f172a]">
+                <h3 className="truncate text-[18px] font-semibold leading-5 tracking-[-0.03em] text-[var(--foreground)]">
                   {item.name}
                 </h3>
-                <StatusBadge
-                  label={
-                    primaryStatus
-                      ? getCustomerWorkStatusLabel(primaryStatus)
-                      : getCustomerStatusLabel(item.status)
-                  }
-                  variant={
-                    primaryStatus ? getCustomerWorkStatusVariant(primaryStatus) : "neutral"
-                  }
-                />
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openFollowUpDialog({
+                      initialResult:
+                        (item.newImported && item.pendingFirstCall
+                          ? ""
+                          : getCustomerExecutionClassQuickResult(item.executionClass)) ||
+                        item.callRecords[0]?.resultCode ||
+                        "",
+                    });
+                  }}
+                  className="rounded-full outline-none transition-transform duration-150 hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-[rgba(122,154,255,0.16)]"
+                >
+                  <StatusBadge
+                    label={getCustomerExecutionDisplayLongLabel({
+                      executionClass: item.executionClass,
+                      newImported: item.newImported,
+                      pendingFirstCall: item.pendingFirstCall,
+                    })}
+                    variant={getCustomerExecutionDisplayVariant({
+                      executionClass: item.executionClass,
+                      newImported: item.newImported,
+                      pendingFirstCall: item.pendingFirstCall,
+                    })}
+                  />
+                </button>
               </div>
 
-              <p className="mt-1.5 text-[18px] font-semibold leading-none tracking-[0.02em] text-[#0f172a] tabular-nums">
+              <p className="mt-1.5 text-[18px] font-semibold leading-none tracking-[0.02em] text-[var(--foreground)] tabular-nums">
                 {phoneText}
               </p>
 
-              <div className="mt-2.5 flex items-start gap-2 text-[12px] leading-5 text-black/56">
-                <span className="shrink-0 font-medium text-black/38">最近意向</span>
-                <p title={recentInterest} className="min-w-0 truncate font-medium text-black/76">
+              <div className="mt-2.5 flex items-start gap-2 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                <span className="shrink-0 font-medium text-[var(--color-sidebar-muted)]">
+                  最近意向
+                </span>
+                <p
+                  title={recentInterest}
+                  className="min-w-0 truncate font-medium text-[var(--foreground)]"
+                >
                   {recentInterest}
                 </p>
               </div>
@@ -361,14 +404,14 @@ export function CustomerListCard({
           </div>
 
           <div ref={mobileMenuRef} className="relative z-20 flex shrink-0 items-start gap-2">
-            <div className="rounded-[14px] border border-black/7 bg-[rgba(255,255,255,0.78)] px-3 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
-              <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-black/34">
+            <div className="rounded-[14px] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
                 累计成交
               </p>
               <p
                 className={cn(
-                  "mt-1 text-[0.95rem] font-semibold leading-none tracking-[-0.04em] text-[#0f172a]",
-                  !hasLifetimeTrade && "text-black/44",
+                  "mt-1 text-[0.95rem] font-semibold leading-none tracking-[-0.04em] text-[var(--foreground)]",
+                  !hasLifetimeTrade && "text-[var(--color-sidebar-muted)]",
                 )}
               >
                 {formatCurrency(item.lifetimeTradeAmount)}
@@ -383,14 +426,14 @@ export function CustomerListCard({
                 event.stopPropagation();
                 setMobileActionsOpen((current) => !current);
               }}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-[11px] border border-black/8 bg-white/94 text-[#64748B] transition hover:border-black/12 hover:text-[#334155] min-[960px]:hidden"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[11px] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] text-[var(--color-sidebar-muted)] transition hover:border-[rgba(122,154,255,0.16)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)] min-[960px]:hidden"
             >
               <MoreHorizontal className="h-4 w-4" />
             </button>
 
             <div
               className={cn(
-                "absolute right-0 top-10 z-30 w-[11rem] rounded-[14px] border border-black/8 bg-[rgba(255,255,255,0.98)] p-1.5 shadow-[0_10px_24px_rgba(15,23,42,0.08)] min-[960px]:hidden",
+                "absolute right-0 top-10 z-30 w-[11rem] rounded-[14px] border border-[var(--color-border-soft)] bg-[var(--color-panel-strong)] p-1.5 shadow-[var(--color-shell-shadow-md)] min-[960px]:hidden",
                 mobileActionsOpen ? "block" : "hidden",
               )}
               onClick={stopCardNavigation}
@@ -418,7 +461,7 @@ export function CustomerListCard({
                 />
                 <CustomerActionButton
                   icon={FilePlus2}
-                  label="创建成交主单"
+                  label="订单"
                   onClick={openCreateTradeOrder}
                   disabled={!canCreateSalesOrder}
                   fullWidth
@@ -428,15 +471,17 @@ export function CustomerListCard({
                     {...recycleEntryProps}
                     moveToRecycleBinAction={moveToRecycleBinAction}
                     renderTrigger={({ canMoveToRecycleBin, openDialog }) => (
-                      <CustomerActionButton
-                        icon={Trash2}
-                        label={canMoveToRecycleBin ? "移入回收站" : "查看回收判断"}
-                        onClick={() => {
-                          setMobileActionsOpen(false);
-                          openDialog();
-                        }}
-                        fullWidth
-                      />
+                      canMoveToRecycleBin ? (
+                        <CustomerActionButton
+                          icon={Trash2}
+                          label="移入回收站"
+                          onClick={() => {
+                            setMobileActionsOpen(false);
+                            openDialog();
+                          }}
+                          fullWidth
+                        />
+                      ) : null
                     )}
                   />
                 ) : null}
@@ -446,17 +491,20 @@ export function CustomerListCard({
         </div>
 
         <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-          {item.workingStatuses.slice(primaryStatus ? 1 : 0, 2).map((status) => (
+          {item.workingStatuses.slice(0, 2).map((status) => (
             <StatusBadge
               key={status}
               label={getCustomerWorkStatusLabel(status)}
               variant={getCustomerWorkStatusVariant(status)}
             />
           ))}
+          {item.workingStatuses.length === 0 ? (
+            <StatusBadge label={getCustomerStatusLabel(item.status)} variant="neutral" />
+          ) : null}
           <StatusBadge label={getOwnerLabel(item)} variant="neutral" />
         </div>
 
-        <div className="mt-2.5 space-y-1.5 text-[12px] leading-5 text-black/52">
+        <div className="mt-2.5 space-y-1.5 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
           <p className="truncate" title={address}>
             {address}
           </p>
@@ -475,7 +523,7 @@ export function CustomerListCard({
         </div>
 
         <div className="pointer-events-none absolute inset-x-4 bottom-3 hidden justify-end min-[960px]:flex">
-          <div className="flex items-center gap-1 rounded-[11px] border border-white/75 bg-[rgba(255,255,255,0.82)] p-1 shadow-[0_10px_18px_rgba(15,23,42,0.08)] opacity-0 backdrop-blur-[8px] transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:pointer-events-auto group-hover:-translate-y-0.5 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:-translate-y-0.5 group-focus-within:opacity-100">
+          <div className="flex items-center gap-1 rounded-[11px] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-strong)] p-1 shadow-[var(--color-shell-shadow-sm)] opacity-0 backdrop-blur-[8px] transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:pointer-events-auto group-hover:-translate-y-0.5 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:-translate-y-0.5 group-focus-within:opacity-100">
             <CustomerActionButton
               icon={SquarePen}
               label="记录通话"
@@ -486,7 +534,7 @@ export function CustomerListCard({
             {canCreateSalesOrder ? (
               <CustomerActionButton
                 icon={FilePlus2}
-                label="成交主单"
+                label="订单"
                 onClick={openCreateTradeOrder}
                 disabled={!canCreateSalesOrder}
               />
@@ -496,11 +544,13 @@ export function CustomerListCard({
                 {...recycleEntryProps}
                 moveToRecycleBinAction={moveToRecycleBinAction}
                 renderTrigger={({ canMoveToRecycleBin, openDialog }) => (
-                  <CustomerActionButton
-                    icon={Trash2}
-                    label={canMoveToRecycleBin ? "移入回收站" : "查看回收判断"}
-                    onClick={openDialog}
-                  />
+                  canMoveToRecycleBin ? (
+                    <CustomerActionButton
+                      icon={Trash2}
+                      label="移入回收站"
+                      onClick={openDialog}
+                    />
+                  ) : null
                 )}
               />
             ) : null}
@@ -531,6 +581,18 @@ export function CustomerListCard({
         <CustomerIdentity name={item.name} phone={phoneText} />
         <CustomerCallRecordHistory records={item.callRecords} />
       </CustomerModal>
+
+      <CustomerFollowUpDialog
+        open={followUpDialogOpen}
+        item={item}
+        resultOptions={callResultOptions}
+        canCreateCallRecord={canCreateCallRecord}
+        canCreateSalesOrder={canCreateSalesOrder}
+        initialResult={followUpInitialResult}
+        remarkAutoFocus={followUpRemarkAutoFocus}
+        triggerSource="card"
+        onClose={() => setFollowUpDialogOpen(false)}
+      />
     </>
   );
 }

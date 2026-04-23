@@ -12,6 +12,7 @@ type SearchParamsValue = string | string[] | undefined;
 export type OrderViewer = {
   id: string;
   role: RoleCode;
+  teamId?: string | null;
 };
 
 export type OrderListFilters = {
@@ -53,7 +54,7 @@ export function parseOrderListFilters(
 }
 
 function buildOrderWhereInput(viewer: OrderViewer, filters: OrderListFilters) {
-  const scope = getOrderScope(viewer.role, viewer.id);
+  const scope = getOrderScope(viewer.role, viewer.id, viewer.teamId);
 
   if (!scope) {
     throw new Error("You do not have access to orders.");
@@ -81,7 +82,14 @@ function buildOrderWhereInput(viewer: OrderViewer, filters: OrderListFilters) {
 }
 
 async function getVisibleCustomers(viewer: OrderViewer) {
-  const scope = viewer.role === "SALES" ? { ownerId: viewer.id } : {};
+  const scope =
+    viewer.role === "SALES"
+      ? { ownerId: viewer.id }
+      : viewer.role === "SUPERVISOR"
+        ? viewer.teamId
+          ? { owner: { is: { teamId: viewer.teamId } } }
+          : { id: "__missing_order_customer_team_scope__" }
+        : {};
 
   return prisma.customer.findMany({
     where: scope,
