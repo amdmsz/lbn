@@ -94,35 +94,33 @@ export default async function RecycleBinPage({
   return (
     <WorkbenchLayout
       header={
-        <div className="mb-4">
-          <PageHeader
-            eyebrow="回收站治理工作台"
-            title="回收站"
-            description={
-              isHistoryView
-                ? `${activeTabLabel} tab 已切到 ${activeEntryStatusLabel} 历史终态视角：这里只读展示删除与解决审计，不提供历史恢复或历史 purge。`
-                : isFinalizeTab
-                ? `${activeTabLabel} tab 已切到双终态 finalize 视角：move 只代表进入 3 天冷静期，到期后再按最新服务端真相收口为 PURGE 或 ARCHIVE。`
-                : "统一治理已移入回收站的商品主数据、直播场次、线索、客户与交易订单。当前保留恢复、最终处理入口、基础筛选和治理详情。"
-            }
-            meta={
-              <>
-                <StatusBadge label={activeTabLabel} variant="info" />
-                <StatusBadge label={activeEntryStatusLabel} variant="neutral" />
-                <StatusBadge
-                  label={`当前条目 ${data.summary.totalCount}`}
-                  variant="neutral"
-                />
-                {data.hasActiveFilters ? (
-                  <StatusBadge label="已应用筛选" variant="warning" />
-                ) : null}
-              </>
-            }
-          />
-        </div>
+        <PageHeader
+          eyebrow="回收站治理工作台"
+          title="回收站"
+          description={
+            isHistoryView
+              ? `${activeTabLabel} tab 已切到 ${activeEntryStatusLabel} 历史终态视角：这里只读展示删除与解决审计，不提供历史恢复或历史 purge。`
+              : isFinalizeTab
+              ? `${activeTabLabel} tab 已切到双终态 finalize 视角：move 只代表进入 3 天冷静期，到期后再按最新服务端真相收口为 PURGE 或 ARCHIVE。`
+              : "统一治理已移入回收站的商品主数据、直播场次、线索、客户与交易订单。当前保留恢复、最终处理入口、基础筛选和治理详情。"
+          }
+          meta={
+            <>
+              <StatusBadge label={activeTabLabel} variant="info" />
+              <StatusBadge label={activeEntryStatusLabel} variant="neutral" />
+              <StatusBadge
+                label={`当前条目 ${data.summary.totalCount}`}
+                variant="neutral"
+              />
+              {data.hasActiveFilters ? (
+                <StatusBadge label="已应用筛选" variant="warning" />
+              ) : null}
+            </>
+          }
+        />
       }
       summary={
-        <div className="mb-5 grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
           <MetricCard
             label={isHistoryView ? "历史条目" : "当前条目"}
             value={String(data.summary.totalCount)}
@@ -178,7 +176,7 @@ export default async function RecycleBinPage({
         </div>
       }
       toolbar={
-        <div className="space-y-3">
+        <div className="space-y-2">
           <RecordTabs items={data.statusTabs} activeValue={data.filters.entryStatus} />
           <RecordTabs items={data.tabs} activeValue={data.activeTab} />
           <RecycleBinFilterBar

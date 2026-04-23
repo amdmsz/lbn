@@ -53,7 +53,7 @@ function SummaryTile({
     <div
       className={cn(
         isCompact
-          ? "group flex h-full min-h-[82px] flex-col justify-between rounded-[1.02rem] border px-3.5 py-2.5 transition-[transform,border-color,background-color,box-shadow] duration-200 md:min-h-[86px] md:py-3"
+          ? "group flex h-full min-h-[68px] flex-col justify-between rounded-[0.98rem] border px-3 py-2 transition-[transform,border-color,background-color,box-shadow] duration-200 md:min-h-[72px] md:py-2.5"
           : "group h-full rounded-[1.08rem] border px-4 py-3 transition-[transform,border-color,background-color,box-shadow] duration-200",
         emphasis.surface,
         item.href
@@ -65,7 +65,7 @@ function SummaryTile({
       <p
         className={cn(
           isCompact
-            ? "text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]"
+            ? "text-[9.5px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]"
             : "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]",
         )}
       >
@@ -74,7 +74,7 @@ function SummaryTile({
       <div
         className={cn(
           isCompact
-            ? "mt-1.25 text-[1.14rem] font-semibold tracking-[-0.04em] md:text-[1.32rem]"
+            ? "mt-1 text-[1.02rem] font-semibold tracking-[-0.04em] md:text-[1.16rem]"
             : "mt-2 text-[1.62rem] font-semibold tracking-[-0.045em]",
           emphasis.value,
         )}
@@ -86,7 +86,7 @@ function SummaryTile({
           title={typeof item.note === "string" ? item.note : undefined}
           className={cn(
             isCompact
-              ? "mt-0.5 line-clamp-2 text-[10.5px] leading-4 text-[var(--color-sidebar-muted)]"
+              ? "mt-0.5 line-clamp-2 text-[10px] leading-[0.95rem] text-[var(--color-sidebar-muted)]"
               : "mt-1.5 text-[13px] leading-5 text-[var(--color-sidebar-muted)]",
           )}
         >
@@ -124,7 +124,7 @@ export function PageSummaryStrip({
     <div
       className={cn(
         density === "compact"
-          ? "grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4"
+          ? "grid grid-cols-1 gap-1.5 sm:grid-cols-2 xl:grid-cols-4"
           : "grid gap-3 md:grid-cols-2 2xl:grid-cols-4",
         className,
       )}

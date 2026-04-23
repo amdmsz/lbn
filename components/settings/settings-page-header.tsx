@@ -30,7 +30,7 @@ export function SettingsPageHeader({
   trail?: string[];
 }>) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <SummaryHeader
         context={
           <PageContextLink
@@ -47,7 +47,7 @@ export function SettingsPageHeader({
         metrics={metrics}
       />
 
-      <div className="crm-subtle-panel">
+      <div className="crm-subtle-panel px-3 py-2.5">
         <SettingsWorkspaceNav activeValue={activeValue} />
       </div>
     </div>

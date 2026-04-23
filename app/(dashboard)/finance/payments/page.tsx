@@ -39,7 +39,7 @@ export default async function FinancePaymentsPage({
       <PageHeader
         eyebrow="财务中心"
         title="收款视图"
-        description="按收款记录回看来源与确认轨迹。"
+        description={undefined}
         meta={
           <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.06em] text-[var(--color-sidebar-muted)]">
             <span>{data.scopeLabel}</span>
@@ -50,11 +50,12 @@ export default async function FinancePaymentsPage({
         actions={
           <a
             href={buildFinancePaymentsExportHref(data.filters)}
-            className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+            className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-[13px]"
           >
             导出当前筛选结果
           </a>
         }
+        className="px-4 py-2 md:px-5 md:py-2.5"
       />
 
       <FinanceSubnav active="payments" />

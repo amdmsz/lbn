@@ -30,7 +30,7 @@ export default async function FinanceReconciliationPage() {
       <PageHeader
         eyebrow="财务中心"
         title="对账预览"
-        description="只读聚合 payment / collection 当前口径。"
+        description={undefined}
         meta={
           <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.06em] text-[var(--color-sidebar-muted)]">
             <span>{data.scopeLabel}</span>
@@ -38,6 +38,7 @@ export default async function FinanceReconciliationPage() {
             <span>只读对账</span>
           </div>
         }
+        className="px-4 py-2 md:px-5 md:py-2.5"
       />
 
       <FinanceSubnav active="reconciliation" />

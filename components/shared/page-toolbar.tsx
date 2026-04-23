@@ -33,17 +33,17 @@ export function PageToolbar({
         className={cn(
           "flex flex-col lg:flex-row lg:justify-between",
           isCompact
-            ? "gap-2.5 px-4 py-3 md:px-4.5 md:py-3.5 lg:items-center"
+            ? "gap-2 px-4 py-2.5 md:px-4.5 md:py-3 lg:items-center"
             : "gap-4 px-4 py-4 md:px-5 lg:items-start",
         )}
       >
-        <div className={cn("min-w-0", isCompact ? "space-y-1.5" : "space-y-2")}>
+        <div className={cn("min-w-0", isCompact ? "space-y-1" : "space-y-2")}>
           <p className="crm-eyebrow">{eyebrow}</p>
           {title ? (
             <h2
               className={cn(
                 "font-semibold text-[var(--foreground)]",
-                isCompact ? "text-[0.92rem]" : "text-base",
+                isCompact ? "text-[0.89rem]" : "text-base",
               )}
             >
               {title}
@@ -53,7 +53,7 @@ export function PageToolbar({
             <p
               className={cn(
                 isCompact
-                  ? "max-w-3xl text-[12.5px] leading-5 text-[var(--color-sidebar-muted)] md:text-[13px]"
+                  ? "max-w-3xl text-[11.5px] leading-[1.1rem] text-[var(--color-sidebar-muted)] md:text-[12px]"
                   : "max-w-3xl text-sm leading-6 text-[var(--color-sidebar-muted)]",
               )}
             >
@@ -77,7 +77,7 @@ export function PageToolbar({
           className={cn(
             "border-t border-[var(--color-border-soft)]",
             isCompact
-              ? "bg-[var(--color-shell-surface-soft)] px-4 py-2.5 md:px-4.5"
+              ? "bg-[var(--color-shell-surface-soft)] px-4 py-2 md:px-4.5"
               : "bg-[var(--color-shell-surface)] px-4 py-3 md:px-5",
           )}
         >

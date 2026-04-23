@@ -20,7 +20,7 @@ import type {
 
 const workspaceShellClassName = "crm-workspace-shell";
 const dashboardActionClassName =
-  "inline-flex h-8 items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 text-[12px] font-medium text-[var(--color-sidebar-muted)] shadow-[var(--color-shell-shadow-sm)] transition-[border-color,color,background-color] duration-200 hover:border-[rgba(111,141,255,0.2)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]";
+  "inline-flex h-7 items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-2.5 text-[11px] font-medium text-[var(--color-sidebar-muted)] shadow-[var(--color-shell-shadow-sm)] transition-[border-color,color,background-color] duration-200 hover:border-[rgba(111,141,255,0.2)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]";
 
 function getRoleMeta(role: RoleCode) {
   if (role === "ADMIN") {
@@ -97,7 +97,7 @@ export function ManagementDashboardWorkbench({
           <PageHeader
             eyebrow={meta.eyebrow}
             title={meta.title}
-            description={meta.description}
+            description={undefined}
             meta={
               <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.06em] text-[var(--color-sidebar-muted)]">
                 <span>{data.scopeLabel}</span>
@@ -115,20 +115,19 @@ export function ManagementDashboardWorkbench({
                 </Link>
               </div>
             }
-            className="rounded-[1.05rem] bg-[var(--color-shell-surface)] px-4 py-3 shadow-[var(--color-shell-shadow-sm)] md:px-4 md:py-3.5"
+            className="rounded-[1rem] bg-[var(--color-shell-surface)] px-4 py-2.5 shadow-[var(--color-shell-shadow-sm)] md:px-4 md:py-3"
           />
         </div>
       }
       summary={
         <div className={workspaceShellClassName}>
-          <PageSummaryStrip items={buildSummaryItems(data)} className="gap-2.5" />
+          <PageSummaryStrip items={buildSummaryItems(data)} className="gap-1.5" />
         </div>
       }
     >
       <div className={workspaceShellClassName}>
         <SectionCard
           title="员工执行表"
-          description="点击员工直接进入客户池，表内保留当前 ABCDE 分布。"
           className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
           contentClassName="p-3 md:p-4"
         >

@@ -38,7 +38,7 @@ export function PageShell({
         className={cn(
           hasSidebar
             ? "grid gap-4 xl:gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)] 2xl:grid-cols-[minmax(0,1fr)_360px]"
-            : "space-y-4",
+            : "space-y-3",
           hasSidebar ? layoutClassName : null,
         )}
       >
@@ -52,7 +52,7 @@ export function PageShell({
             {sidebar}
           </aside>
         ) : null}
-        <div className={cn("min-w-0 space-y-4 md:space-y-5", contentClassName)}>{children}</div>
+        <div className={cn("min-w-0 space-y-3 md:space-y-4", contentClassName)}>{children}</div>
         {hasSidebar && sidebarPosition === "right" ? (
           <aside
             className={cn(

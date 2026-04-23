@@ -3,10 +3,6 @@ import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { SettingsWorkspaceNav } from "@/components/settings/settings-workspace-nav";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { DetailSidebar } from "@/components/shared/detail-sidebar";
-import {
-  PageSummaryStrip,
-  type PageSummaryStripItem,
-} from "@/components/shared/page-summary-strip";
 import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { SummaryHeader } from "@/components/shared/summary-header";
@@ -19,40 +15,6 @@ type SettingsData = Awaited<ReturnType<typeof getMasterDataOverviewData>> & {
     customCount: number;
   };
 };
-
-function buildSummaryItems(data: SettingsData): PageSummaryStripItem[] {
-  return [
-    {
-      label: "账号",
-      value: String(data.overview.userCount),
-      note: `启用 ${data.overview.activeUserCount}`,
-      emphasis: "info",
-    },
-    {
-      label: "团队",
-      value: String(data.overview.teamCount),
-      note: "组织结构与负责人",
-      emphasis: "success",
-    },
-    {
-      label: "标签资产",
-      value: String(data.overview.tagCount),
-      note: `${data.overview.tagGroupCount} 个标签组`,
-      emphasis: "warning",
-    },
-    {
-      label: "字典项",
-      value: String(data.overview.dictionaryItemCount),
-      note: `${data.overview.dictionaryTypeCount} 个类型`,
-    },
-    {
-      label: "通话结果",
-      value: String(data.callResultsSummary.totalCount),
-      note: `启用 ${data.callResultsSummary.enabledCount} / 自定义 ${data.callResultsSummary.customCount}`,
-      emphasis: "info",
-    },
-  ];
-}
 
 function EntryList({
   items,
@@ -223,7 +185,6 @@ export function SettingsControlCenter({
           ]}
         />
       }
-      summary={<PageSummaryStrip items={buildSummaryItems(data)} />}
       sidebar={
         <DetailSidebar
           sections={[

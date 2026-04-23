@@ -300,34 +300,33 @@ export function DashboardWorkbench({
         <PageHeader
           eyebrow={meta.eyebrow}
           title={meta.title}
-          description={meta.description}
+          description={undefined}
           meta={
             <>
               <StatusBadge label={meta.roleNote} variant="info" />
               <StatusBadge label={meta.boundary} variant="neutral" />
             </>
           }
+          className="px-4 py-2 md:px-5 md:py-2.5"
         />
       }
-      summary={<PageSummaryStrip items={buildSummaryItems(cards)} />}
+      summary={<PageSummaryStrip items={buildSummaryItems(cards)} className="gap-1.5" />}
     >
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
         <SectionCard
-          eyebrow="当前重点"
-          title="角色关键入口"
-          description="首屏只保留当前角色最需要使用的业务入口，避免把所有信息平铺出来。"
+          title="关键入口"
         >
           <div className="grid gap-3 md:grid-cols-2">
             {quickEntries.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-4 py-4 transition-colors hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)]"
+                className="rounded-[0.96rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-3.5 py-3 transition-colors hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)]"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <p className="text-sm font-semibold text-[var(--foreground)]">{item.title}</p>
-                    <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">{item.description}</p>
+                    <p className="text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">{item.description}</p>
                   </div>
                   <ChevronRight className="mt-0.5 h-4 w-4 text-[var(--color-sidebar-muted)]" />
                 </div>
@@ -337,21 +336,19 @@ export function DashboardWorkbench({
         </SectionCard>
 
         <SectionCard
-          eyebrow="业务域导航"
-          title="工作树概览"
-          description="一级导航按业务域组织，二级入口按当前岗位裁剪。"
+          title="业务域"
         >
-          <div className="space-y-4">
+          <div className="space-y-3">
             {navigationGroups
               .filter((group) => group.key !== "workspace")
               .map((group) => (
                 <div
                   key={group.key}
-                  className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4"
+                  className="rounded-[0.96rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3"
                 >
                   <p className="text-sm font-semibold text-[var(--foreground)]">{group.title}</p>
-                  <p className="mt-1 text-sm leading-6 text-[var(--color-sidebar-muted)]">{group.description}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <p className="mt-1 text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">{group.description}</p>
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
                     {group.sections
                       .flatMap((section) => section.items)
                       .slice(0, 4)
@@ -359,7 +356,7 @@ export function DashboardWorkbench({
                         <Link
                           key={item.href}
                           href={item.href}
-                          className="rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-1.5 text-xs text-[var(--crm-badge-neutral-text)] transition-colors hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--color-accent)]"
+                          className="rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2.5 py-1 text-[11px] text-[var(--crm-badge-neutral-text)] transition-colors hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--color-accent)]"
                         >
                           {item.title}
                         </Link>
@@ -371,7 +368,7 @@ export function DashboardWorkbench({
         </SectionCard>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
         <SectionCard
           eyebrow="经营转化"
           title="核心转化指标"

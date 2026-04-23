@@ -1,8 +1,14 @@
 "use client";
 
-import { type FormEvent, useState, useTransition } from "react";
+import {
+  type FormEvent,
+  useEffect,
+  useState,
+  useTransition,
+} from "react";
 import { X } from "lucide-react";
 import { ActionBanner } from "@/components/shared/action-banner";
+import { cn } from "@/lib/utils";
 
 export type SupplierOption = {
   id: string;
@@ -64,6 +70,8 @@ export function ProductSupplierField({
   disabled,
   canQuickCreateSupplier,
   createInlineSupplierAction,
+  embedded = false,
+  onSelectedSupplierChange,
 }: Readonly<{
   suppliers: SupplierOption[];
   initialSelectedSupplierId: string;
@@ -72,6 +80,8 @@ export function ProductSupplierField({
   createInlineSupplierAction: (
     formData: FormData,
   ) => Promise<InlineSupplierResult>;
+  embedded?: boolean;
+  onSelectedSupplierChange?: (supplier: SupplierOption | null) => void;
 }>) {
   const [supplierOptions, setSupplierOptions] = useState(() =>
     sortSuppliers(suppliers),
@@ -112,6 +122,10 @@ export function ProductSupplierField({
   const dialogFooterHint = pending
     ? "正在创建供应商。"
     : "创建后会自动回填到当前商品。";
+
+  useEffect(() => {
+    onSelectedSupplierChange?.(selectedSupplier);
+  }, [onSelectedSupplierChange, selectedSupplier]);
 
   function resetQuickSupplierForm() {
     setQuickCode("");
@@ -172,8 +186,8 @@ export function ProductSupplierField({
 
   return (
     <>
-      <div className="space-y-3 xl:col-span-2">
-        <div className={fieldSectionClassName}>
+      <div className={cn("space-y-3", !embedded && "xl:col-span-2")}>
+        <div className={embedded ? "space-y-3" : fieldSectionClassName}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <label className="min-w-0 flex-1 space-y-2">
               <span className="crm-label">搜索供应商</span>
@@ -228,7 +242,14 @@ export function ProductSupplierField({
           </label>
 
           {visibleSuppliers.length === 0 ? (
-            <div className="mt-3 rounded-[0.9rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3.5 py-3 text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
+            <div
+              className={cn(
+                "mt-3 rounded-[0.9rem] border border-dashed border-[var(--color-border-soft)] px-3.5 py-3 text-[13px] leading-5 text-[var(--color-sidebar-muted)]",
+                embedded
+                  ? "bg-[var(--color-shell-surface-soft)]"
+                  : "bg-[var(--color-shell-surface)]",
+              )}
+            >
               当前没有匹配结果，可直接新建。
             </div>
           ) : null}

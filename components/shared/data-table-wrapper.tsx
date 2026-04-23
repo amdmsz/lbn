@@ -41,7 +41,7 @@ export function DataTableWrapper({
           className={cn(
             "flex flex-col border-b border-[var(--color-border-soft)] lg:flex-row lg:justify-between",
             isCompact
-              ? "gap-2.5 bg-[var(--color-shell-surface-soft)] px-4 py-3 md:px-5 md:py-3.5 lg:items-center"
+              ? "gap-2 bg-[var(--color-shell-surface-soft)] px-4 py-2.5 md:px-5 md:py-3 lg:items-center"
               : "gap-3 bg-[var(--color-shell-surface)] px-5 py-4 lg:items-center",
           )}
         >
@@ -50,7 +50,7 @@ export function DataTableWrapper({
             <h2
               className={cn(
                 "crm-section-title",
-                isCompact ? "text-[0.95rem] text-[var(--foreground)]" : "",
+                isCompact ? "text-[0.91rem] text-[var(--foreground)]" : "",
               )}
             >
               {title}
@@ -59,7 +59,7 @@ export function DataTableWrapper({
               <p
                 className={cn(
                   "crm-section-copy",
-                  isCompact ? "text-[12.5px] leading-5 md:text-[13px]" : "",
+                  isCompact ? "text-[11.5px] leading-[1.1rem] md:text-[12px]" : "",
                 )}
               >
                 {description}
@@ -81,7 +81,7 @@ export function DataTableWrapper({
 
       <div
         className={cn(
-          isCompact ? "p-3.5 md:p-4" : "p-4 md:p-5",
+          isCompact ? "p-3 md:p-3.5" : "p-4 md:p-5",
           contentClassName,
         )}
       >

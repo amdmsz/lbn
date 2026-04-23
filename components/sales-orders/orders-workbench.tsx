@@ -140,7 +140,7 @@ export function OrdersWorkbench({
       header={
         <PageHeader
           eyebrow={meta.eyebrow}
-        title="订单中心"
+          title="订单中心"
           description={meta.description}
           meta={
             <>
@@ -167,9 +167,7 @@ export function OrdersWorkbench({
       summary={<PageSummaryStrip items={getSummaryItems(data)} />}
       toolbar={
         <PageToolbar
-          eyebrow="交易结构"
-          title="审核与协同边界"
-          description="订单页只承接交易主单、审核状态和结果回流。支付与履约继续留在独立业务层，不在这里混成一张长页面。"
+          eyebrow="快速筛选"
           secondary={
             <>
               <StatusBadge label={`COD 订单 ${data.summary.codOrderCount}`} variant="neutral" />

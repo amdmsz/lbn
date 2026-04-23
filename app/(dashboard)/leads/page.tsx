@@ -108,7 +108,7 @@ export default async function LeadsPage({
         <PageHeader
           eyebrow="线索中心"
           title="线索分配中心"
-          description="导入后的复核、分配与回看都在这里完成。"
+          description={undefined}
           meta={
             <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.06em] text-[var(--color-sidebar-muted)]">
               <span>{contextLabel}</span>
@@ -127,7 +127,7 @@ export default async function LeadsPage({
               <Link
                 href="/lead-imports"
                 scroll={false}
-                className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-[13px]"
               >
                 返回导入中心
               </Link>
@@ -135,13 +135,14 @@ export default async function LeadsPage({
                 <Link
                   href={`/lead-imports/${data.importBatch.id}`}
                   scroll={false}
-                  className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
+                  className="crm-button crm-button-primary min-h-0 px-3 py-1.5 text-[13px]"
                 >
                   查看当前批次
                 </Link>
               ) : null}
             </div>
           }
+          className="px-4 py-2 md:px-5 md:py-2.5"
         />
       }
       summary={
@@ -153,7 +154,7 @@ export default async function LeadsPage({
             assignedCount: data.assigned.totalCount,
             totalVisibleCount: data.summary.totalVisibleCount,
           })}
-          className="gap-2.5"
+          className="gap-1.5"
         />
       }
       toolbar={

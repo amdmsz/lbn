@@ -6,6 +6,12 @@ import { ProductSkusSection } from "@/components/products/product-skus-section";
 import { ProductsSection } from "@/components/products/products-section";
 import { SuppliersSection } from "@/components/suppliers/suppliers-section";
 import { ActionBanner } from "@/components/shared/action-banner";
+import { PageHeader } from "@/components/shared/page-header";
+import {
+  PageSummaryStrip,
+  type PageSummaryStripItem,
+} from "@/components/shared/page-summary-strip";
+import { StatusBadge } from "@/components/shared/status-badge";
 import { getParamValue } from "@/lib/action-notice";
 import {
   canAccessProductModule,
@@ -305,43 +311,76 @@ export default async function ProductsPage({
             ]
           : [];
 
+  const summaryItems: PageSummaryStripItem[] =
+    activeTab === "products"
+      ? []
+      : topSummaryItems.map((item) => ({
+          label: item.label,
+          value: item.value,
+          note: item.note,
+          emphasis:
+            item.label === "启用"
+              ? "success"
+              : item.label === "引用"
+                ? "info"
+                : "default",
+        }));
+
+  const headerMeta =
+    activeTab === "products" ? null : (
+      <>
+        <StatusBadge label={activeStatusLabel} variant="neutral" />
+        {activeTab !== "suppliers" && productFilters.supplierId ? (
+          <StatusBadge label="已限定供应商" variant="warning" />
+        ) : null}
+        <StatusBadge label={activeViewLabel} variant="info" />
+      </>
+    );
+
+  const viewTabLinks = viewTabs.map((item) => (
+    <Link
+      key={item.value}
+      href={item.href}
+      className={cn(
+        "inline-flex min-h-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[12.5px] font-medium transition-[border-color,background-color,color]",
+        item.value === activeTab
+          ? "border border-[rgba(111,141,255,0.16)] bg-[rgba(111,141,255,0.08)] text-[var(--foreground)]"
+          : "border border-transparent text-[var(--color-sidebar-muted)] hover:border-[var(--color-border-soft)] hover:bg-[var(--color-panel)] hover:text-[var(--foreground)]",
+      )}
+    >
+      <span>{item.label}</span>
+      {typeof item.count === "number" ? (
+        <span
+          className={cn(
+            "rounded-full px-1.5 py-0.5 text-[10.5px]",
+            item.value === activeTab
+              ? "bg-[rgba(111,141,255,0.12)] text-[var(--color-accent-strong)]"
+              : "bg-[var(--color-shell-surface)] text-[var(--color-sidebar-muted)]",
+          )}
+        >
+          {item.count}
+        </span>
+      ) : null}
+    </Link>
+  ));
+
   return (
     <WorkbenchLayout
       header={
-        <section className="mb-4 rounded-[1.12rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-4 shadow-[var(--color-shell-shadow-sm)] sm:px-5 sm:py-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div className="min-w-0 space-y-2.5">
-              <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
-                <span>商品中心</span>
-                <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-                <span>{activeViewLabel}</span>
-                <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-                <span>{activeStatusLabel}</span>
-                {activeTab !== "suppliers" && productFilters.supplierId ? (
-                  <>
-                    <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-                    <span>已限定供应商</span>
-                  </>
-                ) : null}
-              </div>
-
-              <div className="space-y-1.5">
-                <h1 className="text-[1.2rem] font-semibold tracking-[-0.04em] text-[var(--foreground)] sm:text-[1.42rem]">
-                  {headerTitle}
-                </h1>
-                <p className="max-w-2xl text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">
-                  {headerDescription}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2 xl:justify-end">
+        <PageHeader
+          eyebrow="商品中心"
+          title={headerTitle}
+          description={activeTab === "suppliers" ? headerDescription : undefined}
+          meta={headerMeta}
+          className="px-4 py-2 md:px-5 md:py-2 [&_.crm-eyebrow]:hidden"
+          actions={
+            <div className="crm-toolbar-cluster">
               {activeTab !== "suppliers" && canCreate ? (
                 <Link
                   href={buildProductCenterHref(productFilters, {
                     createProduct: "1",
                   })}
-                  className="crm-button crm-button-primary min-h-0 gap-2 px-3.5 py-2 text-sm"
+                  className="crm-button crm-button-primary min-h-0 gap-1.5 px-3 py-1.5 text-[13px]"
                 >
                   <Plus className="h-4 w-4" />
                   添加商品
@@ -350,7 +389,7 @@ export default async function ProductsPage({
               {activeTab !== "suppliers" && canAccessSupplierTab ? (
                 <Link
                   href={supplierWorkspaceHref}
-                  className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                  className="crm-button crm-button-secondary min-h-0 px-2.5 py-1.5 text-[13px]"
                 >
                   供应商目录
                 </Link>
@@ -360,65 +399,27 @@ export default async function ProductsPage({
                   href={buildSupplierCenterHref(supplierFilters, {
                     createSupplier: "1",
                   })}
-                  className="crm-button crm-button-primary min-h-0 gap-2 px-3.5 py-2 text-sm"
+                  className="crm-button crm-button-primary min-h-0 gap-1.5 px-3 py-1.5 text-[13px]"
                 >
                   <Plus className="h-4 w-4" />
                   新建供应商
                 </Link>
               ) : null}
             </div>
+          }
+        />
+      }
+      summary={
+        summaryItems.length > 0 ? (
+          <PageSummaryStrip items={summaryItems} className="gap-2" />
+        ) : undefined
+      }
+      toolbar={
+        <div className="overflow-x-auto">
+          <div className="inline-flex min-w-max items-center gap-1 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-1 shadow-[var(--color-shell-shadow-xs)]">
+            {viewTabLinks}
           </div>
-
-          <div className="mt-4 flex flex-wrap gap-2 rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-2">
-            {viewTabs.map((item) => (
-              <Link
-                key={item.value}
-                href={item.href}
-                className={cn(
-                  "inline-flex min-h-[2.4rem] items-center gap-2 rounded-full px-3.5 py-2 text-[13px] font-medium transition-[border-color,background-color,color]",
-                  item.value === activeTab
-                    ? "border border-[rgba(111,141,255,0.14)] bg-[rgba(111,141,255,0.08)] text-[var(--foreground)]"
-                    : "border border-transparent text-[var(--color-sidebar-muted)] hover:border-[var(--color-border-soft)] hover:bg-[var(--color-panel)] hover:text-[var(--foreground)]",
-                )}
-              >
-                <span>{item.label}</span>
-                {typeof item.count === "number" ? (
-                  <span
-                    className={cn(
-                      "rounded-full px-1.5 py-0.5 text-[10.5px]",
-                      item.value === activeTab
-                        ? "bg-[rgba(111,141,255,0.12)] text-[var(--color-accent-strong)]"
-                        : "bg-[var(--color-panel)] text-[var(--color-sidebar-muted)]",
-                    )}
-                  >
-                    {item.count}
-                  </span>
-                ) : null}
-              </Link>
-            ))}
-          </div>
-
-          {topSummaryItems.length > 0 ? (
-            <div className="mt-4 grid grid-cols-2 gap-2.5 xl:grid-cols-4">
-              {topSummaryItems.map((item) => (
-                <div
-                  key={item.label}
-                  className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3"
-                >
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
-                    {item.label}
-                  </p>
-                  <p className="mt-1.5 text-[1.08rem] font-semibold tracking-[-0.04em] text-[var(--foreground)]">
-                    {item.value}
-                  </p>
-                  <p className="mt-0.5 text-[10.5px] leading-4 text-[var(--color-sidebar-muted)]">
-                    {item.note}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </section>
+        </div>
       }
     >
       {notice ? (

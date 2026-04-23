@@ -32,7 +32,7 @@ export function PageHeader({
     <header
       className={cn(
         isCompact
-          ? "relative overflow-hidden rounded-[1.05rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3 shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow] md:px-5 md:py-3.5"
+          ? "relative overflow-hidden rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-2.5 shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow] md:px-5 md:py-3"
           : "crm-card relative overflow-hidden border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4.5 shadow-[var(--color-shell-shadow-md)] md:p-5",
         className,
       )}
@@ -40,13 +40,13 @@ export function PageHeader({
       <div
         className={cn(
           "flex flex-col lg:flex-row lg:justify-between",
-          isCompact ? "gap-3.5 lg:items-start" : "gap-5 lg:items-start",
+          isCompact ? "gap-2.5 lg:items-start" : "gap-5 lg:items-start",
         )}
       >
         <div
           className={cn(
             "min-w-0",
-            isCompact ? "max-w-3xl space-y-2" : "max-w-4xl space-y-3",
+            isCompact ? "max-w-3xl space-y-1.5" : "max-w-4xl space-y-3",
           )}
         >
           {context ? <div>{context}</div> : null}
@@ -79,7 +79,7 @@ export function PageHeader({
             className={cn(
               "font-semibold tracking-tight text-[var(--foreground)]",
               isCompact
-                ? "text-[1.18rem] md:text-[1.38rem]"
+                ? "text-[1.08rem] md:text-[1.28rem]"
                 : "text-[1.64rem] md:text-[1.92rem]",
             )}
           >
@@ -89,7 +89,7 @@ export function PageHeader({
             <p
               className={cn(
                 isCompact
-                  ? "max-w-2xl text-[12px] leading-5 text-[var(--color-sidebar-muted)]"
+                  ? "max-w-2xl text-[11.5px] leading-[1.15rem] text-[var(--color-sidebar-muted)]"
                   : "max-w-4xl text-sm leading-6 text-[var(--color-sidebar-muted)] md:text-[0.92rem]",
               )}
             >
@@ -100,7 +100,7 @@ export function PageHeader({
             <div
               className={cn(
                 "crm-toolbar-cluster",
-                isCompact ? "gap-1.5 pt-0" : "pt-0.5",
+                isCompact ? "gap-1.25 pt-0" : "pt-0.5",
               )}
             >
               {meta}

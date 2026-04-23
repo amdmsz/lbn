@@ -20,7 +20,6 @@ import { formatDateTime } from "@/lib/customers/metadata";
 import { formatCurrency } from "@/lib/fulfillment/metadata";
 import {
   PRODUCT_CENTER_EMPTY_FILTERS,
-  PRODUCT_CENTER_SYSTEM_VIEWS,
   type ProductCenterDictionaryOption,
   type ProductCenterFilters,
 } from "@/lib/products/metadata";
@@ -142,7 +141,7 @@ const EMPTY_DICTIONARIES = {
 };
 
 const productMetaPillClassName =
-  "rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-sidebar-muted)]";
+  "rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-2 py-0.75 text-[10.5px] font-medium text-[var(--color-sidebar-muted)]";
 
 const productCompactMetaClassName =
   "flex flex-wrap gap-x-3 gap-y-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]";
@@ -151,7 +150,7 @@ const productQuietActionClassName =
   "inline-flex min-h-0 items-center rounded-full border border-transparent px-2.5 py-2 text-sm font-medium text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color] hover:border-[var(--color-border-soft)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50";
 
 const productControlSurfaceClassName =
-  "rounded-[1.08rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3.5 py-3.5 shadow-[var(--color-shell-shadow-sm)]";
+  "rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-2.5 shadow-[var(--color-shell-shadow-sm)]";
 
 const productTableShellClassName =
   "crm-table-shell overflow-hidden rounded-[1.12rem]";
@@ -396,10 +395,6 @@ export function ProductsSection({
       ? Math.min(pagination.page * pagination.pageSize, pagination.totalCount)
       : 0;
   const activeFilters = hasAnyFilters(filters);
-  const activePreset =
-    PRODUCT_CENTER_SYSTEM_VIEWS.find(
-      (preset) => preset.id === filters.preset,
-    ) ?? null;
   const maxReferenceCount = items.reduce(
     (max, item) => Math.max(max, item._count.salesOrderItems),
     0,
@@ -465,15 +460,15 @@ export function ProductsSection({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <form
         method="get"
-        className={cn(productControlSurfaceClassName, "space-y-3")}
+        className={cn(productControlSurfaceClassName, "space-y-2.5")}
       >
         <input type="hidden" name="preset" value={filters.preset} />
         <input type="hidden" name="savedViewId" value={filters.savedViewId} />
 
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+        <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center">
           <label className="relative min-w-0 flex-1">
             <span className="sr-only">搜索商品</span>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-sidebar-muted)]" />
@@ -485,13 +480,13 @@ export function ProductsSection({
                   ? "输入商品名、编码、品牌、系列、SKU 或供应商"
                   : "输入商品名、编码、品牌、系列或 SKU"
               }
-              className="crm-input min-h-[2.85rem] pl-10"
+              className="crm-input min-h-[2.6rem] pl-10"
             />
           </label>
 
           <div
             className={cn(
-              "grid gap-3 sm:grid-cols-2",
+              "grid gap-2.5 sm:grid-cols-2",
               canViewSupplyIdentity ? "xl:w-[25rem]" : "xl:w-[11.5rem]",
             )}
           >
@@ -500,7 +495,7 @@ export function ProductsSection({
               <select
                 name="status"
                 defaultValue={filters.status}
-                className="crm-select min-h-[2.85rem]"
+                className="crm-select min-h-[2.6rem]"
               >
                 <option value="">显示：全部状态</option>
                 <option value="enabled">显示：仅启用</option>
@@ -514,7 +509,7 @@ export function ProductsSection({
                 <select
                   name="supplierId"
                   defaultValue={filters.supplierId}
-                  className="crm-select min-h-[2.85rem]"
+                  className="crm-select min-h-[2.6rem]"
                 >
                   <option value="">供应商：全部</option>
                   {suppliers.map((supplier) => (
@@ -532,58 +527,28 @@ export function ProductsSection({
             <button
               type="button"
               onClick={() => setAdvancedOpen((current) => !current)}
-              className="crm-button crm-button-secondary min-h-[2.85rem] gap-2 px-3.5"
+              className="crm-button crm-button-secondary min-h-[2.6rem] gap-1.5 px-3"
             >
               <SlidersHorizontal className="h-4 w-4" />
               {advancedOpen ? "收起筛选" : "筛选"}
             </button>
             <button
               type="submit"
-              className="crm-button crm-button-primary min-h-[2.85rem] px-4"
+              className="crm-button crm-button-primary min-h-[2.6rem] px-3.5"
             >
               查看结果
             </button>
             <Link
               href={buildProductCenterHref(PRODUCT_CENTER_EMPTY_FILTERS)}
-              className="crm-button crm-button-secondary min-h-[2.85rem] px-3.5"
+              className="crm-button crm-button-secondary min-h-[2.6rem] px-3"
             >
               清空
             </Link>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border-soft)] pt-3">
-          <span className="text-[11px] font-medium tracking-[0.08em] text-[var(--color-sidebar-muted)]">
-            快速查看
-          </span>
-          {PRODUCT_CENTER_SYSTEM_VIEWS.map((preset) => {
-            const active = filters.preset === preset.id;
-            return (
-              <Link
-                key={preset.id}
-                href={buildProductCenterHref(filters, {
-                  preset: active ? "" : preset.id,
-                  savedViewId: "",
-                  page: 1,
-                  detail: "",
-                  detailSku: "",
-                })}
-                title={preset.description}
-                className={cn(
-                  productMetaPillClassName,
-                  active
-                    ? "border-[rgba(79,125,247,0.14)] bg-[rgba(79,125,247,0.08)] text-[var(--color-accent-strong)]"
-                    : "",
-                )}
-              >
-                {preset.label}
-              </Link>
-            );
-          })}
-        </div>
-
         {advancedOpen ? (
-          <div className="grid gap-3 rounded-[0.98rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3.5 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-2.5 rounded-[0.94rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3 md:grid-cols-2 xl:grid-cols-3">
             <label className="space-y-2">
               <span className="crm-label">品牌</span>
               <input
@@ -686,31 +651,14 @@ export function ProductsSection({
       ) : null}
 
       <div className={productTableShellClassName}>
-        <div className="flex flex-col gap-3 border-b border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="crm-eyebrow">Product Catalog</p>
-              {activePreset ? (
-                <span className={productMetaPillClassName}>
-                  {activePreset.label}
-                </span>
-              ) : null}
-            </div>
-            <h3 className="text-[1.02rem] font-semibold tracking-[-0.02em] text-[var(--foreground)]">
-              商品列表
-            </h3>
-            <p className="text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">
-              本页 {pageStart}-{pageEnd} · 共 {pagination.totalCount} 个商品
-            </p>
-          </div>
+        <div className="flex flex-col gap-2 border-b border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">
+            本页 {pageStart}-{pageEnd} · 共 {pagination.totalCount} 个商品
+          </p>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <span className={productMetaPillClassName}>
               显示 {visibleStatusLabel}
-            </span>
-            <span className={productMetaPillClassName}>排序 最新维护</span>
-            <span className={productMetaPillClassName}>
-              启用 {summary.enabledCount}
             </span>
             <span className={productMetaPillClassName}>
               SKU {summary.skuCount}

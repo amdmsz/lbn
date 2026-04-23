@@ -5,7 +5,6 @@ import { ActionBanner } from "@/components/shared/action-banner";
 import { MetricCard } from "@/components/shared/metric-card";
 import { PageHeader } from "@/components/shared/page-header";
 import { RecordTabs } from "@/components/shared/record-tabs";
-import { SectionCard } from "@/components/shared/section-card";
 import { ShippingExportBatchesSection } from "@/components/shipping/shipping-export-batches-section";
 import { ShippingOperationsSection } from "@/components/shipping/shipping-operations-section";
 import { TradeOrdersSection } from "@/components/trade-orders/trade-orders-section";
@@ -165,14 +164,6 @@ export function OrderFulfillmentCenter({
     batchData?.notice ??
     null;
 
-  const headerDescription = isTradeOrdersView
-    ? "以 TradeOrder 为父单主叙事，统一承接审核、履约摘要和跨执行视图跳转，不回退到子单主视角。"
-    : isShippingView
-      ? "按阶段和 supplier 组织发货执行工作面，保留统一入口与导航语义，只收口执行层级与信息密度。"
-      : isBatchesView
-        ? "批次视图只承接冻结结果、文件状态与审计回看，不重新做成第一执行入口。"
-        : roleMeta.description;
-
   const headerMeta = isTradeOrdersView ? (
     <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.06em] text-[var(--color-sidebar-muted)]">
       <span>{roleMeta.scope}</span>
@@ -303,81 +294,48 @@ export function OrderFulfillmentCenter({
   ) : undefined;
 
   const toolbar = isTradeOrdersView ? (
-    <SectionCard
-      eyebrow="TradeOrder Workbench"
-      title="父单总览工作台"
-      description="先按焦点切换，再在当前父单池里完成审核、履约概览和跨执行视图跳转。默认态更利于扫描，次级动作后置。"
-      density="compact"
-      className="rounded-[1.05rem] border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]"
-      actions={
-        <p className="text-[12px] text-[var(--color-sidebar-muted)]">
-          待审核 {tradeOrdersData.summary.pendingReviewCount} · 已审核{" "}
-          {tradeOrdersData.summary.approvedCount} ·{" "}
-          {canAccessSalesOrderModule(role) ? "保留父单主叙事" : "只读总览视角"}
-        </p>
-      }
-    >
-      <div className="space-y-3">
-        <RecordTabs activeValue={activeView} items={viewTabs} />
-        <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3 text-sm leading-6 text-[var(--color-sidebar-muted)]">
-          当前焦点为 {getTradeOrdersFocusLabel(tradeOrdersData)}，审核筛选为{" "}
-          {tradeOrdersData.filters.statusView || "全部"}。保留 parent-first
-          详情语义和 `/orders/[id]` 兼容跳转，只收口父单列表层级与动作优先级。
-        </div>
+    <div className="space-y-2">
+      <RecordTabs activeValue={activeView} items={viewTabs} />
+      <div className="crm-subtle-panel flex flex-wrap items-center gap-2 px-3 py-2 text-[11px] font-medium tracking-[0.04em] text-[var(--color-sidebar-muted)]">
+        <span>焦点 {getTradeOrdersFocusLabel(tradeOrdersData)}</span>
+        <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+        <span>审核 {tradeOrdersData.filters.statusView || "全部"}</span>
+        <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+        <span>待审核 {tradeOrdersData.summary.pendingReviewCount}</span>
+        <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+        <span>{canAccessSalesOrderModule(role) ? "parent-first" : "只读总览"}</span>
       </div>
-    </SectionCard>
+    </div>
   ) : isShippingView ? (
-    <SectionCard
-      eyebrow="Supplier Workbench"
-      title="发货执行工作面"
-      description="先按阶段切换，再进入具体 supplier 工作池。批量动作和明细表保持在同一条执行语境里。"
-      density="compact"
-      className="rounded-[1.05rem] border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]"
-      actions={
-        <p className="text-[12px] text-[var(--color-sidebar-muted)]">
-          可见视图 {accessibleViews.length} ·{" "}
+    <div className="space-y-2">
+      <RecordTabs activeValue={activeView} items={viewTabs} />
+      <div className="crm-subtle-panel flex flex-wrap items-center gap-2 px-3 py-2 text-[11px] font-medium tracking-[0.04em] text-[var(--color-sidebar-muted)]">
+        <span>阶段 {shippingData.filters.stageView}</span>
+        <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+        <span>{shippingData.activeSupplier?.supplier.name ?? "待选择 supplier"}</span>
+        <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+        <span>
           {shippingData.activeBatch
-            ? `当前批次 ${shippingData.activeBatch.exportNo}`
-            : "当前未锁定批次"}{" "}
-          · {canAccessSalesOrderModule(role) ? "保留父单叙事" : "仅执行视角"}
-        </p>
-      }
-    >
-      <div className="space-y-3">
-        <RecordTabs activeValue={activeView} items={viewTabs} />
-        <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3 text-sm leading-6 text-[var(--color-sidebar-muted)]">
-          当前聚焦阶段 {shippingData.filters.stageView}，supplier 为{" "}
-          {shippingData.activeSupplier?.supplier.name ?? "待选择"}。保留
-          tab、stageView、 supplierViewId
-          等导航参数语义不变，只收口执行层级与信息密度。
-        </div>
+            ? `批次 ${shippingData.activeBatch.exportNo}`
+            : "当前未锁定批次"}
+        </span>
+        <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+        <span>{canAccessSalesOrderModule(role) ? "保留父单叙事" : "仅执行视角"}</span>
       </div>
-    </SectionCard>
+    </div>
   ) : isBatchesView ? (
-    <SectionCard
-      eyebrow="Frozen Result Workbench"
-      title="冻结结果与审计回看"
-      description="统一回看冻结快照、文件状态和跨视图追溯入口，但不把批次页重新做成执行主入口。"
-      density="compact"
-      className="rounded-[1.05rem] border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]"
-      actions={
-        <p className="text-[12px] text-[var(--color-sidebar-muted)]">
-          当前过滤 {getBatchFileViewLabel(batchData.filters.fileView)} ·
-          文件就绪 {getBatchReadyCount(batchData)} · 待补文件{" "}
-          {getBatchPendingCount(batchData)}
-          {" · "}历史批次 {getBatchLegacyCount(batchData)}
-        </p>
-      }
-    >
-      <div className="space-y-3">
-        <RecordTabs activeValue={activeView} items={viewTabs} />
-        <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3 text-sm leading-6 text-[var(--color-sidebar-muted)]">
-          当前文件过滤为 {getBatchFileViewLabel(batchData.filters.fileView)}
-          。保留 `/fulfillment?tab=batches` 的结果 /
-          审计定位，以及回到发货执行、回看来源父单的既有导航语义。
-        </div>
+    <div className="space-y-2">
+      <RecordTabs activeValue={activeView} items={viewTabs} />
+      <div className="crm-subtle-panel flex flex-wrap items-center gap-2 px-3 py-2 text-[11px] font-medium tracking-[0.04em] text-[var(--color-sidebar-muted)]">
+        <span>{getBatchFileViewLabel(batchData.filters.fileView)}</span>
+        <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+        <span>文件就绪 {getBatchReadyCount(batchData)}</span>
+        <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+        <span>待补文件 {getBatchPendingCount(batchData)}</span>
+        <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+        <span>历史批次 {getBatchLegacyCount(batchData)}</span>
       </div>
-    </SectionCard>
+    </div>
   ) : undefined;
 
   return (
@@ -386,14 +344,15 @@ export function OrderFulfillmentCenter({
         <PageHeader
           eyebrow="订单履约业务域"
           title="订单中心"
-          description={headerDescription}
+          description={undefined}
           meta={headerMeta}
+          className="px-4 py-2 md:px-5 md:py-2.5"
           actions={
             <div className="crm-toolbar-cluster">
               {canCreateTradeOrder ? (
                 <Link
                   href="/customers"
-                  className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
+                  className="crm-button crm-button-primary min-h-0 px-3 py-1.5 text-[13px]"
                 >
                   去客户中心建单
                 </Link>
@@ -401,7 +360,7 @@ export function OrderFulfillmentCenter({
               {canAccessShippingModule(role) ? (
                 <Link
                   href={buildOrderFulfillmentHref("shipping")}
-                  className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                  className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-[13px]"
                 >
                   切到发货执行
                 </Link>

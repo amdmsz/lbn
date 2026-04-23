@@ -22,7 +22,7 @@ export function RecordTabs({
   return (
     <div
       className={cn(
-        "crm-tabs overflow-x-auto p-1.5 md:flex-wrap md:overflow-visible",
+        "crm-tabs overflow-x-auto p-1 md:flex-wrap md:overflow-visible",
         className,
       )}
     >
@@ -32,7 +32,7 @@ export function RecordTabs({
           href={item.href}
           scrollTargetId={scrollTargetId}
           className={cn(
-            "crm-tab min-h-8 min-w-0 shrink-0 px-3 py-1.5 text-[13px] md:shrink",
+            "crm-tab min-h-7 min-w-0 shrink-0 px-2.5 py-1.25 text-[12.5px] md:shrink",
             item.value === activeValue
               ? "crm-tab-active text-[var(--foreground)]"
               : "",
@@ -44,7 +44,7 @@ export function RecordTabs({
           {typeof item.count === "number" ? (
             <span
               className={cn(
-                "crm-tab-count px-1.5 py-0.5 text-[10.5px]",
+                "crm-tab-count px-1.25 py-0.5 text-[10px]",
                 item.value === activeValue ? "text-[var(--foreground)]" : "",
               )}
             >
