@@ -29,7 +29,7 @@ export default function RootLayout({
       lang="zh-CN"
       suppressHydrationWarning
       data-appearance="system"
-      data-theme="light"
+      data-theme="paper"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
