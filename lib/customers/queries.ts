@@ -406,6 +406,12 @@ const nonConnectedCallResultCodes = [
   "HUNG_UP",
 ] as const;
 
+const disconnectedExecutionCallResults: CallResult[] = [
+  CallResult.NOT_CONNECTED,
+  CallResult.INVALID_NUMBER,
+  CallResult.HUNG_UP,
+];
+
 const activeCustomerOwnershipModes = [
   CustomerOwnershipMode.PRIVATE,
   CustomerOwnershipMode.LOCKED,
@@ -1419,16 +1425,23 @@ function deriveCustomerExecutionClassFromSignals(input: {
     return "A";
   }
 
+  if (input.latestCallResult === CallResult.REFUSED_WECHAT) {
+    return "E";
+  }
+
+  if (
+    input.latestCallResult &&
+    disconnectedExecutionCallResults.includes(input.latestCallResult)
+  ) {
+    return "D";
+  }
+
   if (input.hasLiveInvitation) {
     return "C";
   }
 
   if (input.hasSuccessfulWechatSignal) {
     return "B";
-  }
-
-  if (input.latestCallResult === CallResult.REFUSED_WECHAT) {
-    return "E";
   }
 
   return "D";
@@ -1557,7 +1570,10 @@ function getCustomerSnapshotCoreState(
     snapshot.leads.some((lead) => pendingFirstCallLeadStatuses.includes(lead.status));
   const pendingFollowUp = buildPendingFollowUpMatcher(snapshot, now);
   const successfulWechat = buildSuccessfulWechatMatcher(snapshot);
+  const executionClass = deriveCustomerExecutionClass(snapshot);
+  const hasActiveWechatProgress = executionClass !== "D" && executionClass !== "E";
   const pendingWechat =
+    hasActiveWechatProgress &&
     !successfulWechat &&
     (snapshot.wechatRecords.some((record) => record.addedStatus === WechatAddStatus.PENDING) ||
       snapshot.callRecords.some((record) => record.result === CallResult.WECHAT_PENDING));
@@ -1565,12 +1581,13 @@ function getCustomerSnapshotCoreState(
   const hasApprovedSalesOrder = snapshot.salesOrders.some(
     (record) => record.reviewStatus === SalesOrderReviewStatus.APPROVED,
   );
-  const pendingInvitation = successfulWechat && !hasInvitation && !hasApprovedSalesOrder;
+  const pendingInvitation =
+    hasActiveWechatProgress && successfulWechat && !hasInvitation && !hasApprovedSalesOrder;
   const pendingDeal =
     !hasApprovedSalesOrder &&
+    hasActiveWechatProgress &&
     (hasInvitation ||
       snapshot.leads.some((lead) => pendingDealLeadStatuses.includes(lead.status)));
-  const executionClass = deriveCustomerExecutionClass(snapshot);
   const migrationPendingFollowUp = Boolean(
     latestCustomerImportAt &&
       (!snapshot.lastEffectiveFollowUpAt ||
