@@ -2,6 +2,12 @@
 
 # dependencies
 /node_modules
+/apps/*/node_modules
+/apps/desktop/dist
+/apps/mobile/dist
+/apps/mobile/android/.gradle
+/apps/mobile/android/app/build
+/apps/mobile/android/build
 /.pnp
 .pnp.*
 .yarn/*

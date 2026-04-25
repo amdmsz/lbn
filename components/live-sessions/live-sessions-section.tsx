@@ -1,8 +1,9 @@
-"use client";
+﻿"use client";
 
 import type { LiveSessionStatus } from "@prisma/client";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   createLiveSessionAction,
   moveLiveSessionToRecycleBinAction,
@@ -35,7 +36,6 @@ type LiveSessionItem = {
   hostName: string;
   startAt: Date;
   roomId: string | null;
-  roomLink: string | null;
   targetProduct: string | null;
   remark: string | null;
   status: LiveSessionStatus;
@@ -169,38 +169,36 @@ export function LiveSessionsSection({
   }
 
   return (
-    <div className="space-y-6">
-      {canManage ? (
-        <section className="crm-section-card">
+    <div className="space-y-5">
+      <section className="crm-section-card">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge label="\u573a\u6b21\u7ef4\u62a4" variant="info" />
-              <StatusBadge label="\u53d6\u6d88 / \u5f52\u6863 / \u5220\u9664\u9884\u68c0" variant="neutral" />
+              <StatusBadge label="手动场次" variant="info" />
+              <StatusBadge label="邀约回到客户详情记录" variant="success" />
             </div>
             <h3 className="text-lg font-semibold text-black/85">
-              {"\u521b\u5efa\u76f4\u64ad\u573a\u6b21"}
+              创建直播场次
             </h3>
-            <p className="text-sm leading-7 text-black/60">
-              {
-                "\u5148\u628a\u573a\u6b21\u4f5c\u4e3a\u8fd0\u8425\u4e0a\u4e0b\u6587\u5efa\u597d\uff0c\u540e\u7eed\u518d\u7531\u5ba2\u6237\u8be6\u60c5\u9875\u57fa\u4e8e\u8fd9\u4e9b\u573a\u6b21\u5904\u7406\u9080\u7ea6\u3001\u89c2\u770b\u548c\u793c\u54c1\u8d44\u683c\u3002"
-              }
+            <p className="max-w-3xl text-sm leading-7 text-black/60">
+              这里只维护直播主题、开播时间和目标产品。员工邀约客户后，回到客户详情页的“直播记录”选择该场次并保存邀约结果。
             </p>
           </div>
+          <Link href="/customers" className="crm-button crm-button-secondary whitespace-nowrap">
+            去客户中心记录邀约
+          </Link>
+        </div>
 
-          <form ref={formRef} onSubmit={handleSubmit} className="mt-6 space-y-4">
-            <div className="grid gap-4 lg:grid-cols-2">
-              <label className="space-y-2">
-                <span className="crm-label">{"\u76f4\u64ad\u4e3b\u9898"}</span>
+        {canManage ? (
+          <form ref={formRef} onSubmit={handleSubmit} className="mt-5 space-y-4">
+            <div className="grid gap-4 lg:grid-cols-3">
+              <label className="space-y-2 lg:col-span-1">
+                <span className="crm-label">直播主题</span>
                 <input name="title" required maxLength={120} className="crm-input" />
               </label>
 
               <label className="space-y-2">
-                <span className="crm-label">{"\u4e3b\u64ad\u540d\u79f0"}</span>
-                <input name="hostName" required maxLength={100} className="crm-input" />
-              </label>
-
-              <label className="space-y-2">
-                <span className="crm-label">{"\u5f00\u64ad\u65f6\u95f4"}</span>
+                <span className="crm-label">开播时间</span>
                 <input
                   type="datetime-local"
                   name="startAt"
@@ -211,36 +209,10 @@ export function LiveSessionsSection({
               </label>
 
               <label className="space-y-2">
-                <span className="crm-label">{"\u623f\u95f4 ID"}</span>
-                <input name="roomId" maxLength={100} className="crm-input" />
-              </label>
-
-              <label className="space-y-2">
-                <span className="crm-label">{"\u76f4\u64ad\u94fe\u63a5"}</span>
-                <input
-                  name="roomLink"
-                  maxLength={500}
-                  placeholder="https://"
-                  className="crm-input"
-                />
-              </label>
-
-              <label className="space-y-2">
-                <span className="crm-label">{"\u76ee\u6807\u4ea7\u54c1"}</span>
+                <span className="crm-label">目标产品</span>
                 <input name="targetProduct" maxLength={120} className="crm-input" />
               </label>
             </div>
-
-            <label className="block space-y-2">
-              <span className="crm-label">{"\u5907\u6ce8"}</span>
-              <textarea
-                name="remark"
-                rows={4}
-                maxLength={1000}
-                placeholder="\u8bb0\u5f55\u4e3b\u63a8\u5356\u70b9\u3001\u8fd0\u8425\u811a\u672c\u6216\u5176\u4ed6\u8865\u5145\u8bf4\u660e"
-                className="crm-textarea"
-              />
-            </label>
 
             {notice.message ? (
               <ActionBanner tone={notice.status === "success" ? "success" : "danger"}>
@@ -254,40 +226,29 @@ export function LiveSessionsSection({
                 disabled={createPending}
                 className="crm-button crm-button-primary"
               >
-                {createPending
-                  ? "\u4fdd\u5b58\u4e2d..."
-                  : "\u521b\u5efa\u76f4\u64ad\u573a\u6b21"}
+                {createPending ? "保存中..." : "创建直播场次"}
               </button>
             </div>
           </form>
-        </section>
-      ) : (
-        <section className="crm-section-card">
-          <h3 className="text-lg font-semibold text-black/85">
-            {"\u76f4\u64ad\u573a\u6b21"}
-          </h3>
-          <p className="mt-2 text-sm leading-7 text-black/60">
-            {
-              "\u5f53\u524d\u89d2\u8272\u53ef\u4ee5\u67e5\u770b\u573a\u6b21\u4e0a\u4e0b\u6587\uff0c\u4f46\u4e0d\u63d0\u4f9b\u5168\u5c40\u573a\u6b21\u7ef4\u62a4\u5165\u53e3\u3002"
-            }
+        ) : (
+          <p className="mt-4 text-sm leading-7 text-black/55">
+            当前角色可以查看场次并在客户详情中记录邀约，但不能维护全局场次。
           </p>
-        </section>
-      )}
+        )}
+      </section>
 
       {items.length > 0 ? (
         <div className="crm-table-shell">
           <table className="crm-table">
             <thead>
               <tr>
-                <th>{"\u76f4\u64ad\u4e3b\u9898"}</th>
-                <th>{"\u4e3b\u64ad"}</th>
-                <th>{"\u5f00\u64ad\u65f6\u95f4"}</th>
-                <th>{"\u72b6\u6001"}</th>
-                <th>{"\u623f\u95f4\u4fe1\u606f"}</th>
-                <th>{"\u76ee\u6807\u4ea7\u54c1"}</th>
-                <th>{"\u9080\u7ea6 / \u793c\u54c1"}</th>
-                <th>{"\u521b\u5efa\u4eba"}</th>
-                {canManage ? <th>{"\u52a8\u4f5c"}</th> : null}
+                <th>直播主题</th>
+                <th>开播时间</th>
+                <th>目标产品</th>
+                <th>状态</th>
+                <th>邀约记录</th>
+                <th>创建信息</th>
+                {canManage ? <th>动作</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -297,7 +258,7 @@ export function LiveSessionsSection({
                 return (
                   <tr key={item.id}>
                     <td className="text-black/80">
-                      <div className="space-y-2">
+                      <div className="space-y-1">
                         <div className="font-medium">{item.title}</div>
                         {item.remark ? (
                           <p className="max-w-md text-sm leading-6 text-black/55">
@@ -306,8 +267,8 @@ export function LiveSessionsSection({
                         ) : null}
                       </div>
                     </td>
-                    <td>{item.hostName}</td>
                     <td className="whitespace-nowrap">{formatDateTime(item.startAt)}</td>
+                    <td>{item.targetProduct || "未填写"}</td>
                     <td>
                       <StatusBadge
                         label={getLiveSessionStatusLabel(item.status)}
@@ -315,45 +276,22 @@ export function LiveSessionsSection({
                       />
                     </td>
                     <td>
-                      <div>{item.roomId || "\u672a\u586b\u5199\u623f\u95f4 ID"}</div>
-                      {item.roomLink ? (
-                        <a
-                          href={item.roomLink}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="crm-text-link text-xs"
-                        >
-                          {"\u6253\u5f00\u76f4\u64ad\u94fe\u63a5"}
-                        </a>
-                      ) : (
-                        <div className="text-xs text-black/45">
-                          {"\u672a\u586b\u5199\u94fe\u63a5"}
-                        </div>
-                      )}
-                    </td>
-                    <td>{item.targetProduct || "\u672a\u586b\u5199"}</td>
-                    <td>
-                      <div>{item._count.invitations} {"\u6761\u9080\u7ea6\u8bb0\u5f55"}</div>
+                      <div>{item._count.invitations} 条邀约记录</div>
                       <div className="text-xs text-black/45">
-                        {item._count.giftRecords} {"\u6761\u793c\u54c1\u8bb0\u5f55"}
-                        {" \u00b7 "}
-                        {"\u7ed3\u679c "}
-                        {item.engagementResultCount}
+                        有结果 {item.engagementResultCount} · 礼品 {item._count.giftRecords}
                       </div>
                     </td>
                     <td>
                       {item.createdBy ? (
                         <div>
                           <div>{item.createdBy.name}</div>
-                          <div className="text-xs text-black/45">
-                            @{item.createdBy.username}
-                          </div>
+                          <div className="text-xs text-black/45">@{item.createdBy.username}</div>
                         </div>
                       ) : (
-                        "\u7cfb\u7edf"
+                        "系统"
                       )}
                       <div className="mt-1 text-xs text-black/45">
-                        {"\u521b\u5efa\u4e8e "} {formatDateTime(item.createdAt)}
+                        创建于 {formatDateTime(item.createdAt)}
                       </div>
                     </td>
                     {canManage ? (
@@ -362,9 +300,7 @@ export function LiveSessionsSection({
                           {lifecycleAction ? (
                             <button
                               type="button"
-                              onClick={() =>
-                                openLifecycleDialog(item, lifecycleAction.intent)
-                              }
+                              onClick={() => openLifecycleDialog(item, lifecycleAction.intent)}
                               className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
                             >
                               {lifecycleAction.label}
@@ -372,8 +308,8 @@ export function LiveSessionsSection({
                           ) : (
                             <span className="text-xs leading-5 text-black/45">
                               {item.status === "CANCELED"
-                                ? "\u5f53\u524d\u573a\u6b21\u5df2\u53d6\u6d88"
-                                : "\u5f53\u524d\u573a\u6b21\u4fdd\u7559\u4e3a\u5386\u53f2\u573a\u6b21"}
+                                ? "当前场次已取消"
+                                : "当前场次已归档"}
                             </span>
                           )}
                           <button
@@ -382,8 +318,8 @@ export function LiveSessionsSection({
                             className="inline-flex min-h-0 items-center rounded-full px-2.5 py-2 text-sm font-medium text-black/56 transition-colors hover:bg-black/[0.03] hover:text-black/84"
                           >
                             {item.recycleGuard.canMoveToRecycleBin
-                              ? "\u79fb\u5165\u56de\u6536\u7ad9"
-                              : "\u67e5\u770b\u5f15\u7528\u5173\u7cfb"}
+                              ? "移入回收站"
+                              : "查看引用关系"}
                           </button>
                         </div>
                       </td>
@@ -396,8 +332,8 @@ export function LiveSessionsSection({
         </div>
       ) : (
         <EmptyState
-          title="\u6682\u65e0\u76f4\u64ad\u573a\u6b21"
-          description="\u5148\u521b\u5efa\u4e00\u573a\u76f4\u64ad\uff0c\u5ba2\u6237\u8be6\u60c5\u9875\u91cc\u7684\u76f4\u64ad\u9080\u7ea6\u8bb0\u5f55\u624d\u80fd\u9009\u62e9\u5177\u4f53\u573a\u6b21\u3002"
+          title="暂无直播场次"
+          description="先创建直播主题、开播时间和目标产品；员工再到客户详情页记录已邀约客户。"
         />
       )}
 

@@ -1,0 +1,10 @@
+{
+  "version": "0.1.0",
+  "notes": "当前是 Lbn CRM 内网客户端初始版本。",
+  "windows": {
+    "downloadUrl": "https://github.com/amdmsz/lbn/releases/latest/download/Lbn-CRM-Setup.exe"
+  },
+  "android": {
+    "downloadUrl": "https://github.com/amdmsz/lbn/releases/latest/download/Lbn-CRM-Android-debug.apk"
+  }
+}

@@ -1,0 +1,50 @@
+{
+    "name":  "lbn-crm-desktop",
+    "version":  "0.1.0",
+    "private":  true,
+    "description":  "Lbn CRM Windows desktop shell for intranet deployment.",
+    "main":  "main.cjs",
+    "scripts":  {
+                    "dev":  "electron .",
+                    "pack":  "electron-builder --dir",
+                    "dist":  "electron-builder --win nsis"
+                },
+    "dependencies":  {
+
+                     },
+    "devDependencies":  {
+                            "electron":  "^38.0.0",
+                            "electron-builder":  "^26.0.12"
+                        },
+    "build":  {
+                  "appId":  "com.lbn.crm.desktop",
+                  "productName":  "Lbn CRM",
+                  "artifactName":  "Lbn-CRM-${version}-${arch}.${ext}",
+                  "directories":  {
+                                      "output":  "dist"
+                                  },
+                  "files":  [
+                                "main.cjs",
+                                "preload.cjs",
+                                "package.json"
+                            ],
+                  "win":  {
+                              "target":  [
+                                             {
+                                                 "target":  "nsis",
+                                                 "arch":  [
+                                                              "x64"
+                                                          ]
+                                             }
+                                         ],
+                              "signAndEditExecutable":  false
+                          },
+                  "nsis":  {
+                               "oneClick":  false,
+                               "allowToChangeInstallationDirectory":  true,
+                               "createDesktopShortcut":  true,
+                               "createStartMenuShortcut":  true,
+                               "shortcutName":  "Lbn CRM"
+                           }
+              }
+}

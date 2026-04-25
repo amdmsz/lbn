@@ -27,7 +27,14 @@
     "db:backfill-trade-order:report": "node scripts/backfill-phase2-trade-order.mjs --report-only",
     "db:backfill-trade-order:preview": "node scripts/backfill-phase2-trade-order.mjs --dry-run",
     "db:backfill-trade-order": "node scripts/backfill-phase2-trade-order.mjs --apply",
-    "db:import-legacy-customers": "node scripts/import-legacy-customers.mjs"
+    "db:import-legacy-customers": "node scripts/import-legacy-customers.mjs",
+    "desktop:install": "npm install --prefix apps/desktop",
+    "desktop:dev": "npm run dev --prefix apps/desktop",
+    "desktop:dist": "npm run dist --prefix apps/desktop",
+    "mobile:install": "npm install --prefix apps/mobile",
+    "mobile:add:android": "npm run add:android --prefix apps/mobile",
+    "mobile:sync": "npm run sync --prefix apps/mobile",
+    "mobile:open:android": "npm run open:android --prefix apps/mobile"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

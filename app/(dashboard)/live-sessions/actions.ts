@@ -9,6 +9,13 @@ import {
   createLiveSession,
   updateLiveSessionLifecycle,
 } from "@/lib/live-sessions/mutations";
+import {
+  confirmLiveAudienceRecord,
+  ignoreLiveAudienceRecord,
+  syncCurrentWecomLiveSessionByUser,
+  syncExistingWecomLiveSession,
+  syncWecomLiveSessionByLivingId,
+} from "@/lib/live-sessions/wecom-sync";
 
 type ActionState = {
   status: "idle" | "success" | "error";
@@ -78,7 +85,7 @@ export async function createLiveSessionAction(
       },
       {
         title: String(formData.get("title") ?? ""),
-        hostName: String(formData.get("hostName") ?? ""),
+        hostName: String(formData.get("hostName") ?? "直播场次") || "直播场次",
         startAt: String(formData.get("startAt") ?? ""),
         roomId: String(formData.get("roomId") ?? ""),
         roomLink: String(formData.get("roomLink") ?? ""),
@@ -221,6 +228,157 @@ export async function moveLiveSessionToRecycleBinAction(
         error instanceof Error
           ? error.message
           : "移入回收站时发生未知错误。",
+    };
+  }
+}
+
+export async function syncWecomLiveSessionAction(formData: FormData): Promise<ActionState> {
+  const session = await auth();
+
+  if (!session?.user) {
+    return {
+      status: "error",
+      message: "登录已失效，请重新登录后再试。",
+    };
+  }
+
+  try {
+    const liveSessionId = String(formData.get("id") ?? "").trim();
+    const livingid = String(formData.get("livingid") ?? "").trim();
+    const actor = {
+      id: session.user.id,
+      role: session.user.role,
+      permissionCodes: session.user.permissionCodes,
+      teamId: session.user.teamId ?? null,
+    };
+    const result = liveSessionId
+      ? await syncExistingWecomLiveSession(actor, { liveSessionId })
+      : await syncWecomLiveSessionByLivingId(actor, { livingid });
+
+    revalidatePath("/live-sessions");
+
+    return {
+      status: "success",
+      message: `企业微信直播已同步：${result.viewerCount} 位观众，${result.autoMatched} 位自动匹配，${result.pending} 位待确认。`,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "同步企业微信直播时发生未知错误。",
+    };
+  }
+}
+
+export async function syncCurrentWecomLiveSessionAction(
+  formData: FormData,
+): Promise<ActionState> {
+  const session = await auth();
+
+  if (!session?.user) {
+    return {
+      status: "error",
+      message: "登录已失效，请重新登录后再试。",
+    };
+  }
+
+  try {
+    const result = await syncCurrentWecomLiveSessionByUser(
+      {
+        id: session.user.id,
+        role: session.user.role,
+        permissionCodes: session.user.permissionCodes,
+        teamId: session.user.teamId ?? null,
+      },
+      { userid: String(formData.get("userid") ?? "") },
+    );
+
+    revalidatePath("/live-sessions");
+
+    return {
+      status: "success",
+      message: `已同步当前直播：${result.liveSession.title}，${result.viewerCount} 位观众，${result.pending} 位待确认。`,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "同步当前直播时发生未知错误。",
+    };
+  }
+}
+
+export async function confirmLiveAudienceRecordAction(
+  formData: FormData,
+): Promise<ActionState> {
+  const session = await auth();
+
+  if (!session?.user) {
+    return {
+      status: "error",
+      message: "登录已失效，请重新登录后再试。",
+    };
+  }
+
+  try {
+    await confirmLiveAudienceRecord(
+      {
+        id: session.user.id,
+        role: session.user.role,
+        permissionCodes: session.user.permissionCodes,
+        teamId: session.user.teamId ?? null,
+      },
+      { audienceRecordId: String(formData.get("audienceRecordId") ?? "") },
+    );
+
+    revalidatePath("/live-sessions");
+
+    return {
+      status: "success",
+      message: "观众匹配已确认，并已写入客户直播记录。",
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "确认观众匹配时发生未知错误。",
+    };
+  }
+}
+
+export async function ignoreLiveAudienceRecordAction(
+  formData: FormData,
+): Promise<ActionState> {
+  const session = await auth();
+
+  if (!session?.user) {
+    return {
+      status: "error",
+      message: "登录已失效，请重新登录后再试。",
+    };
+  }
+
+  try {
+    await ignoreLiveAudienceRecord(
+      {
+        id: session.user.id,
+        role: session.user.role,
+        permissionCodes: session.user.permissionCodes,
+        teamId: session.user.teamId ?? null,
+      },
+      {
+        audienceRecordId: String(formData.get("audienceRecordId") ?? ""),
+        reason: String(formData.get("reason") ?? ""),
+      },
+    );
+
+    revalidatePath("/live-sessions");
+
+    return {
+      status: "success",
+      message: "候选观众匹配已忽略。",
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "忽略观众匹配时发生未知错误。",
     };
   }
 }

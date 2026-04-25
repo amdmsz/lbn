@@ -1,0 +1,12 @@
+{
+  "appId": "com.lbn.crm",
+  "appName": "Lbn CRM",
+  "webDir": "www",
+  "server": {
+    "url": "http://crm.cclbn.com",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

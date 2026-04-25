@@ -189,6 +189,35 @@ enum AttendanceStatus {
   LEFT_EARLY
 }
 
+enum LiveSessionSource {
+  MANUAL
+  WECOM
+}
+
+enum LiveSyncStatus {
+  NEVER_SYNCED
+  SYNCING
+  SYNCED
+  FAILED
+}
+
+enum LiveAudienceMatchStatus {
+  UNMATCHED
+  AUTO_MATCHED_CUSTOMER
+  PENDING_CONFIRMATION
+  CONFIRMED_CUSTOMER
+  IGNORED
+  CONFLICT
+}
+
+enum LiveAudienceMatchMethod {
+  WECOM_EXTERNAL_USER_ID
+  WECOM_USER_ID
+  PHONE_EXACT
+  PHONE_MANUAL
+  MANUAL_SEARCH
+}
+
 enum OrderType {
   NORMAL_ORDER
   GIFT_FREIGHT_ORDER
@@ -657,6 +686,7 @@ model User {
   wechatRecords           WechatRecord[]   @relation("WechatRecordSales")
   createdLiveSessions     LiveSession[]    @relation("LiveSessionCreator")
   liveInvitations         LiveInvitation[] @relation("LiveInvitationSales")
+  confirmedLiveAudienceRecords LiveAudienceRecord[] @relation("LiveAudienceRecordConfirmedBy")
   ownedOrders             Order[]          @relation("OrderOwner")
   ownedSalesOrders        SalesOrder[]     @relation("SalesOrderOwner")
   createdSalesOrders      SalesOrder[]     @relation("SalesOrderCreatedBy")
@@ -830,6 +860,8 @@ model Customer {
   callRecords     CallRecord[]
   wechatRecords   WechatRecord[]
   liveInvitations LiveInvitation[]
+  liveAudienceRecords LiveAudienceRecord[]
+  candidateLiveAudienceRecords LiveAudienceRecord[] @relation("LiveAudienceCandidateCustomer")
   orders          Order[]
   salesOrders     SalesOrder[]
   tradeOrders     TradeOrder[]
@@ -996,23 +1028,39 @@ model WechatRecord {
 }
 
 model LiveSession {
-  id            String            @id @default(cuid())
-  title         String
-  hostName      String
-  startAt       DateTime
-  roomId        String?
-  roomLink      String?
-  targetProduct String?
-  remark        String?           @db.Text
-  status        LiveSessionStatus @default(DRAFT)
-  createdById   String?
-  createdBy     User?             @relation("LiveSessionCreator", fields: [createdById], references: [id])
-  invitations   LiveInvitation[]
-  giftRecords   GiftRecord[]
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  id                         String            @id @default(cuid())
+  title                      String
+  hostName                   String
+  startAt                    DateTime
+  roomId                     String?
+  roomLink                   String?
+  targetProduct              String?
+  remark                     String?           @db.Text
+  status                     LiveSessionStatus @default(DRAFT)
+  source                     LiveSessionSource @default(MANUAL)
+  wecomLivingId              String?           @unique
+  wecomAnchorUserId          String?
+  wecomLiveStatus            String?
+  actualStartAt              DateTime?
+  actualEndAt                DateTime?
+  viewerCount                Int?
+  totalWatchDurationSeconds  Int?
+  peakOnlineCount            Int?
+  lastSyncedAt               DateTime?
+  syncStatus                 LiveSyncStatus    @default(NEVER_SYNCED)
+  syncError                  String?           @db.Text
+  wecomRaw                   Json?
+  createdById                String?
+  createdBy                  User?             @relation("LiveSessionCreator", fields: [createdById], references: [id])
+  invitations                LiveInvitation[]
+  audienceRecords            LiveAudienceRecord[]
+  giftRecords                GiftRecord[]
+  createdAt                  DateTime          @default(now())
+  updatedAt                  DateTime          @updatedAt
 
   @@index([status, startAt])
+  @@index([source, startAt])
+  @@index([syncStatus, lastSyncedAt])
   @@index([createdById])
 }
 
@@ -1035,10 +1083,54 @@ model LiveInvitation {
   remark               String?          @db.Text
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
+  audienceRecords      LiveAudienceRecord[]
 
   @@index([liveSessionId, salesId])
   @@index([leadId])
   @@index([customerId])
+}
+
+model LiveAudienceRecord {
+  id                       String                  @id @default(cuid())
+  liveSessionId            String
+  liveSession              LiveSession             @relation(fields: [liveSessionId], references: [id])
+  wecomLivingId            String
+  wecomUserId              String?
+  wecomExternalUserId      String?
+  viewerPhoneMasked        String?
+  viewerPhoneEncrypted     String?                 @db.Text
+  phoneHash                String?
+  nickname                 String?
+  watchDurationSeconds     Int?
+  firstEnterAt             DateTime?
+  lastLeaveAt              DateTime?
+  raw                      Json?
+  matchStatus              LiveAudienceMatchStatus @default(UNMATCHED)
+  matchMethod              LiveAudienceMatchMethod?
+  candidateCustomerId      String?
+  candidateCustomer        Customer?               @relation("LiveAudienceCandidateCustomer", fields: [candidateCustomerId], references: [id])
+  candidateConfidence      Int?
+  confirmedById            String?
+  confirmedBy              User?                   @relation("LiveAudienceRecordConfirmedBy", fields: [confirmedById], references: [id])
+  confirmedAt              DateTime?
+  customerId               String?
+  customer                 Customer?               @relation(fields: [customerId], references: [id])
+  liveInvitationId         String?
+  liveInvitation           LiveInvitation?         @relation(fields: [liveInvitationId], references: [id])
+  matchNote                String?                 @db.Text
+  dedupeKey                String                  @unique
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+
+  @@index([liveSessionId, matchStatus])
+  @@index([wecomLivingId])
+  @@index([wecomExternalUserId])
+  @@index([wecomUserId])
+  @@index([phoneHash])
+  @@index([candidateCustomerId, matchStatus])
+  @@index([customerId, matchStatus])
+  @@index([liveInvitationId])
+  @@index([confirmedById, confirmedAt])
 }
 
 model Supplier {
