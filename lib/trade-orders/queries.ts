@@ -741,7 +741,7 @@ export async function getTradeOrdersPageData(
   rawSearchParams?: Record<string, string | string[] | undefined>,
 ) {
   if (!canAccessSalesOrderModule(viewer.role)) {
-    throw new Error("褰撳墠瑙掕壊鏃犳潈璁块棶鎴愪氦涓诲崟妯″潡銆?");
+    throw new Error("当前角色无权访问成交主单模块。");
   }
 
   const teamId = await getViewerTeamId(viewer);
@@ -1125,7 +1125,7 @@ export async function getTradeOrderDetail(
   tradeOrderId: string,
 ) {
   if (!canAccessSalesOrderModule(viewer.role)) {
-    throw new Error("褰撳墠瑙掕壊鏃犳潈璁块棶鎴愪氦涓诲崟妯″潡銆?");
+    throw new Error("当前角色无权访问成交主单模块。");
   }
 
   const recycleEntry = await findActiveTradeOrderRecycleEntry(prisma, tradeOrderId);

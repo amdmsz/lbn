@@ -52,6 +52,7 @@ export default async function LeadImportTemplatesPage({
   const data = await getLeadImportTemplatePageData({
     id: session.user.id,
     role: session.user.role,
+    teamId: session.user.teamId,
   });
   const backHref =
     requestedMode === "customer_continuation"

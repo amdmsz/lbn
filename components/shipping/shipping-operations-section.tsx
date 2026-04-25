@@ -27,6 +27,7 @@ import {
 } from "@/lib/fulfillment/metadata";
 import { COMMON_LOGISTICS_PROVIDERS } from "@/lib/logistics/metadata";
 import { buildShippingExportBatchDownloadHref } from "@/lib/shipping/download";
+import { buildShippingProductSummary } from "@/lib/shipping/product-summary";
 import type {
   ShippingOperationsFilters,
   ShippingOperationsItem,
@@ -167,14 +168,10 @@ function getExecutionIdentity(item: ShippingOperationsItem) {
     supplierName,
   };
 }
-
 function getProductSummary(item: ShippingOperationsItem) {
   return (
-    item.salesOrder?.items
-      .map(
-        (orderItem) => `${orderItem.skuNameSnapshot}${orderItem.specSnapshot}`,
-      )
-      .join(" + ") || "暂无商品行"
+    buildShippingProductSummary(item.salesOrder?.items ?? []).replace(/\+/g, " + ") ||
+    "暂无商品明细"
   );
 }
 
@@ -184,6 +181,20 @@ function getPieceCount(item: ShippingOperationsItem) {
       (total, orderItem) => total + orderItem.qty,
       0,
     ) ?? 0
+  );
+}
+
+function getCustomerOwnerLabel(item: ShippingOperationsItem) {
+  return item.customer.owner
+    ? `${item.customer.owner.name} (@${item.customer.owner.username})`
+    : "暂无负责人";
+}
+
+function CustomerOwnerHint({ item }: Readonly<{ item: ShippingOperationsItem }>) {
+  return (
+    <div className="mt-1 inline-flex items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
+      负责人：{getCustomerOwnerLabel(item)}
+    </div>
   );
 }
 
@@ -229,7 +240,7 @@ function getBatchStatusMeta(
       return {
         label: "文件缺失",
         variant: "danger",
-        note: "批次快照仍在，导出文件需要重生成。",
+        note: "批次快照仍在，导出文件需要重新生成。",
       };
     case "PENDING":
       return {
@@ -452,7 +463,7 @@ function CurrentReportWorkspace({
             <div>
               {activeSupplier.latestHistoryBatch
                 ? `${activeSupplier.latestHistoryBatch.exportNo} · ${formatDateTime(activeSupplier.latestHistoryBatch.exportedAt)}`
-                : "当前 supplier 尚无历史批次"}
+                : "当前 supplier 暂无历史批次"}
             </div>
             <div>
               {latestHistoryBatchMeta?.note ??
@@ -476,7 +487,7 @@ function CurrentReportWorkspace({
       {items.length === 0 ? (
         <EmptyState
           title="当前 supplier 暂无可报单订单"
-          description="试试切换供应商或清空搜索条件。"
+          description="尝试切换供应商或清空搜索条件。"
         />
       ) : (
         <>
@@ -551,8 +562,11 @@ function CurrentReportWorkspace({
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          {item.salesOrder?.receiverNameSnapshot ||
-                            item.customer.name}
+                          <div>
+                            {item.salesOrder?.receiverNameSnapshot ||
+                              item.customer.name}
+                          </div>
+                          <CustomerOwnerHint item={item} />
                         </td>
                         <td className="px-4 py-3">
                           {item.salesOrder?.receiverPhoneSnapshot ||
@@ -781,8 +795,7 @@ function PendingLogisticsWorkspace({
         </div>
       ) : (
         <div className={workspaceHintClassName}>
-          当前 supplier
-          暂无可切换的待填物流批次。若有遗留待填物流订单但未挂到批次，请在异常队列核对。
+          当前 supplier 暂无可切换的待填物流批次。若有遗留待填物流订单但未挂到批次，请在异常队列核对。
         </div>
       )}
 
@@ -834,7 +847,7 @@ function PendingLogisticsWorkspace({
                   className="crm-button crm-button-secondary"
                 >
                   {activeBatch.fileState === "READY"
-                    ? "重生成当前批次文件"
+                    ? "重新生成当前批次文件"
                     : "生成当前批次文件"}
                 </button>
               </form>
@@ -879,7 +892,7 @@ function PendingLogisticsWorkspace({
       {items.length === 0 ? (
         <EmptyState
           title="当前批次暂无待填物流订单"
-          description="试试切换批次、切换 supplier，或去异常队列核对未挂批次的记录。"
+          description="尝试切换批次、切换 supplier，或去异常队列核对未挂批次的记录。"
         />
       ) : (
         <>
@@ -971,6 +984,7 @@ function PendingLogisticsWorkspace({
                           <div className="mt-1 text-xs text-[var(--color-sidebar-muted)]">
                             {receiverPhone}
                           </div>
+                          <CustomerOwnerHint item={item} />
                         </td>
                         <td className="max-w-[16rem] px-4 py-3 text-[var(--color-sidebar-muted)]">
                           <div className="line-clamp-2">{receiverAddress}</div>
@@ -1138,7 +1152,7 @@ function ShippedAndExceptionWorkspace({
               ? "当前 supplier 暂无履约异常"
               : "当前 supplier 暂无已发货记录"
           }
-          description="试试切换 supplier、切换阶段，或清空搜索条件。"
+          description="尝试切换 supplier、切换阶段，或清空搜索条件。"
         />
       ) : (
         <>
@@ -1200,6 +1214,7 @@ function ShippedAndExceptionWorkspace({
                         <div className="mt-1 text-sm text-[var(--color-sidebar-muted)]">
                           {receiverName}
                         </div>
+                        <CustomerOwnerHint item={item} />
                       </div>
                       <div className="grid gap-3 text-sm text-[var(--color-sidebar-muted)] md:grid-cols-3">
                         <div>承运商：{item.shippingProvider || "未填写"}</div>
@@ -1613,7 +1628,7 @@ export function ShippingOperationsSection({
       {supplierSummaries.length === 0 ? (
         <EmptyState
           title="当前阶段没有可处理的供应商"
-          description="试试切换主阶段，或清空供应商 / 订单搜索条件。"
+          description="尝试切换主阶段，或清空供应商 / 订单搜索条件。"
           action={
             <Link href={pageBaseHref} className="crm-button crm-button-primary">
               回到当前工作面

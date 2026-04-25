@@ -431,6 +431,7 @@ enum LeadImportRowStatus {
 
 enum LeadDedupType {
   EXISTING_LEAD
+  EXISTING_CUSTOMER
   BATCH_DUPLICATE
 }
 

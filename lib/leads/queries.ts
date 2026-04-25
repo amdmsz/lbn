@@ -314,6 +314,8 @@ export function buildLeadBaseWhereInput(
 
   if ("ownerId" in scope) {
     andClauses.push({ ownerId: scope.ownerId });
+  } else if (Object.keys(scope).length > 0) {
+    andClauses.push(scope);
   }
 
   if (filters.name) {

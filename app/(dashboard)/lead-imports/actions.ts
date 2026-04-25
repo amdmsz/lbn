@@ -85,6 +85,7 @@ export async function deleteImportedCustomersFromBatchAction(
 
   try {
     const result = await deleteImportedCustomersDirect(actor, {
+      sourceBatchId: parsed.data.batchId,
       customerIds: parsed.data.customerIds,
       reason: parsed.data.reason,
     });
@@ -191,6 +192,7 @@ async function getActor() {
   return {
     id: session.user.id,
     role: session.user.role,
+    teamId: session.user.teamId,
   };
 }
 

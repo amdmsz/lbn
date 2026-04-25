@@ -205,7 +205,7 @@ function getBatchFileStateMeta(fileUrl: string | null) {
   }
 
   return {
-    label: "待重生成",
+    label: "待重新生成",
     variant: "warning" as const,
   };
 }
@@ -233,13 +233,13 @@ function getTradeItemHeadline(item: TradeOrderDetail["items"][number]) {
     item.bundleNameSnapshot ||
     item.productNameSnapshot ||
     item.skuNameSnapshot ||
-    `商品行 ${item.lineNo}`
+    `成交行 ${item.lineNo}`
   );
 }
 
 function getTradeItemSubline(item: TradeOrderDetail["items"][number]) {
   const parts = [item.productNameSnapshot, item.skuNameSnapshot, item.specSnapshot].filter(Boolean);
-  return parts.length > 0 ? parts.join(" / ") : "成交行快照";
+  return parts.length > 0 ? parts.join(" / ") : "暂无商品摘要";
 }
 
 function getLatestBatchReferences(order: TradeOrderDetail) {
@@ -341,7 +341,63 @@ function getShippingSummaryText(salesOrder: SalesOrderItem, executionSummary?: S
     segments.push("存在执行异常");
   }
 
-  return segments.join(" · ");
+  return segments.join(" / ");
+}
+
+function getTradeOrderNextAction(summary: TradeOrderDetail["executionSummary"]) {
+  if (!summary) {
+    return {
+      label: "待审核",
+      description: "父单审核后会物化 supplier 子单，并生成履约执行摘要。",
+      variant: "neutral" as const,
+    };
+  }
+
+  if (summary.exceptionSubOrderCount > 0) {
+    return {
+      label: "异常优先",
+      description: "存在取消、文件缺失或状态冲突，建议先进入发货执行异常队列。",
+      variant: "danger" as const,
+    };
+  }
+
+  if (summary.pendingReportSubOrderCount > 0) {
+    return {
+      label: `待报单 ${summary.pendingReportSubOrderCount}`,
+      description: "还有 supplier 子单未冻结导出，下一步进入发货执行报单池。",
+      variant: "warning" as const,
+    };
+  }
+
+  if (summary.pendingTrackingSubOrderCount > 0) {
+    return {
+      label: `待填物流 ${summary.pendingTrackingSubOrderCount}`,
+      description: "已导出的 supplier 子单需要按各自物流单号分别回填。",
+      variant: "warning" as const,
+    };
+  }
+
+  if (summary.openCollectionSubOrderCount > 0) {
+    return {
+      label: `催收中 ${summary.openCollectionSubOrderCount}`,
+      description: "履约推进后仍有打开中的催收任务，建议进入催收工作面。",
+      variant: "info" as const,
+    };
+  }
+
+  if (summary.allShipped) {
+    return {
+      label: "已全部发货",
+      description: "所有 supplier 子单均已发货，可继续关注签收、COD 与回款结果。",
+      variant: "success" as const,
+    };
+  }
+
+  return {
+    label: "持续跟进中",
+    description: "父单已进入执行链路，请按 supplier 子单分别推进履约与收款。",
+    variant: "info" as const,
+  };
 }
 
 function OverviewCard({
@@ -356,13 +412,635 @@ function OverviewCard({
   footer?: ReactNode;
 }>) {
   return (
-    <div className="rounded-[1rem] border border-black/8 bg-white/78 px-4 py-3.5">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/42">
+    <div className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)]">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
         {eyebrow}
       </div>
-      <div className="mt-2 text-base font-semibold text-black/84">{title}</div>
-      <div className="mt-3 space-y-1.5 text-sm leading-6 text-black/66">{children}</div>
-      {footer ? <div className="mt-3 border-t border-black/6 pt-3 text-xs text-black/56">{footer}</div> : null}
+      <div className="mt-2 text-base font-semibold text-[var(--foreground)]">{title}</div>
+      <div className="mt-3 space-y-1.5 text-sm leading-6 text-[var(--color-sidebar-muted)]">
+        {children}
+      </div>
+      {footer ? (
+        <div className="mt-3 border-t border-[var(--color-border-soft)] pt-3 text-xs text-[var(--color-sidebar-muted)]">
+          {footer}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function TradeOrderItemsSection({
+  order,
+  bundleCount,
+  giftCount,
+}: Readonly<{
+  order: TradeOrderDetail;
+  bundleCount: number;
+  giftCount: number;
+}>) {
+  return (
+    <section className="crm-section-card">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-2">
+          <h3 className="text-lg font-semibold text-[var(--foreground)]">父单商品与成交信息</h3>
+          <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
+            这里回答“这笔成交卖了什么”。页面按 TradeOrderItem 展示销售语义，套餐和赠品只做轻量识别，
+            supplier 执行拆分留在下一层查看。
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {order.discountAmount !== "0" ? (
+            <StatusBadge label={`折扣 ${formatCurrency(order.discountAmount)}`} variant="warning" />
+          ) : null}
+          {bundleCount > 0 ? <StatusBadge label={`套餐 ${bundleCount}`} variant="info" /> : null}
+          {giftCount > 0 ? <StatusBadge label={`赠品 ${giftCount}`} variant="neutral" /> : null}
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3">
+        {order.items.map((item) => (
+          <div key={item.id} className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-[var(--foreground)]">
+                    閻?{item.lineNo} / {getTradeItemHeadline(item)}
+                  </span>
+                  <StatusBadge
+                    label={getTradeItemTypeLabel(item.itemType)}
+                    variant={getTradeItemTypeVariant(item.itemType)}
+                  />
+                </div>
+                <div className="text-xs leading-6 text-[var(--color-sidebar-muted)]">{getTradeItemSubline(item)}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-base font-semibold text-[var(--foreground)]">
+                  {formatCurrency(item.subtotal)}
+                </div>
+                <div className="text-xs text-[var(--color-sidebar-muted)]">
+                  成交价 {formatCurrency(item.dealUnitPriceSnapshot)} / 原价{" "}
+                  {formatCurrency(item.listUnitPriceSnapshot)}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-[var(--color-sidebar-muted)]">
+              <span>
+                数量：{item.qty}
+                {item.unitSnapshot || ""}
+              </span>
+              <span>折扣：{formatCurrency(item.discountAmount)}</span>
+              {item.itemType === "BUNDLE" && item.bundleCodeSnapshot ? (
+                <span>套餐编码：{item.bundleCodeSnapshot}</span>
+              ) : null}
+              {item.itemType === "BUNDLE" && item.bundleVersionSnapshot !== null ? (
+                <span>套餐版本：{item.bundleVersionSnapshot}</span>
+              ) : null}
+            </div>
+
+            {item.remark ? (
+              <div className="mt-3 rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2 text-xs leading-6 text-[var(--color-sidebar-muted)]">
+                备注：{item.remark}
+              </div>
+            ) : null}
+
+            {item.components.length > 0 ? (
+              <div className="mt-3 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
+                  {item.itemType === "BUNDLE" ? "执行组件" : "执行去向"}
+                </div>
+                <div className="mt-3 grid gap-2">
+                  {item.components.map((component) => {
+                    const mappedSalesOrder = component.salesOrderItems[0]?.salesOrder ?? null;
+                    return (
+                      <div
+                        key={component.id}
+                        className="rounded-[0.8rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-2.5 text-xs text-[var(--color-sidebar-muted)]"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="font-medium text-[var(--foreground)]">
+                            {component.productNameSnapshot}
+                            {component.skuNameSnapshot ? ` / ${component.skuNameSnapshot}` : ""}
+                          </div>
+                          <div>{component.supplierNameSnapshot}</div>
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                          <span>
+                            数量：{component.qty}
+                            {component.unitSnapshot || ""}
+                          </span>
+                          <span>拆分小计：{formatCurrency(component.allocatedSubtotal)}</span>
+                          <span>
+                            去向：{" "}
+                            {mappedSalesOrder
+                              ? `${order.tradeNo} / ${mappedSalesOrder.subOrderNo || mappedSalesOrder.orderNo} / ${mappedSalesOrder.supplier.name}`
+                              : "待物化子单"}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SupplierExecutionSection({
+  order,
+  totalSubOrders,
+  plannedSupplierCount,
+  actualSupplierCount,
+  executionSummaryBySalesOrderId,
+  plannedSupplierGroups,
+}: Readonly<{
+  order: TradeOrderDetail;
+  totalSubOrders: number;
+  plannedSupplierCount: number;
+  actualSupplierCount: number;
+  executionSummaryBySalesOrderId: Map<string, SalesOrderExecutionItem>;
+  plannedSupplierGroups: Array<{
+    supplierId: string;
+    supplierName: string;
+    lineCount: number;
+    subtotal: number;
+  }>;
+}>) {
+  return (
+    <section className="crm-section-card">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-2">
+          <h3 className="text-lg font-semibold text-[var(--foreground)]">supplier 子单执行总览</h3>
+          <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
+            这里不展开完整子单详情，只回答“拆成了哪些 supplier 子单、各自推进到哪、下一步去哪里处理”。
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <StatusBadge label={`子单 ${totalSubOrders || plannedSupplierCount}`} variant="info" />
+          <StatusBadge label={`supplier ${actualSupplierCount || plannedSupplierCount}`} variant="neutral" />
+        </div>
+      </div>
+
+      {order.salesOrders.length > 0 ? (
+        <div className="mt-5 grid gap-4">
+          {order.salesOrders.map((salesOrder) => {
+            const salesOrderExecution = executionSummaryBySalesOrderId.get(salesOrder.id);
+            const latestSalesOrderBatch = salesOrder.shippingTask?.exportBatch ?? null;
+            const salesOrderShippingHref = buildFulfillmentShippingHref({
+              keyword: order.tradeNo,
+              supplierViewId: salesOrder.supplier.id,
+              stageView: getSalesOrderShippingStage(salesOrderExecution),
+            });
+            const salesOrderBatchHref = buildFulfillmentBatchesHref({
+              keyword: latestSalesOrderBatch?.exportNo || order.tradeNo,
+              supplierId: salesOrder.supplier.id,
+            });
+
+            return (
+              <div
+                key={salesOrder.id}
+                className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="text-sm font-semibold text-[var(--foreground)]">
+                      {salesOrder.supplier.name}
+                    </div>
+                    <div className="text-xs text-[var(--color-sidebar-muted)]">
+                      {order.tradeNo} / {salesOrder.subOrderNo || salesOrder.orderNo}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <StatusBadge
+                      label={getSalesOrderReviewStatusLabel(salesOrder.reviewStatus)}
+                      variant={getSalesOrderReviewStatusVariant(salesOrder.reviewStatus)}
+                    />
+                    {salesOrder.shippingTask ? (
+                      <>
+                        <StatusBadge
+                          label={getShippingReportStatusLabel(salesOrder.shippingTask.reportStatus)}
+                          variant={getShippingReportStatusVariant(salesOrder.shippingTask.reportStatus)}
+                        />
+                        <StatusBadge
+                          label={getShippingFulfillmentStatusLabel(salesOrder.shippingTask.shippingStatus)}
+                          variant={getShippingFulfillmentStatusVariant(
+                            salesOrder.shippingTask.shippingStatus,
+                          )}
+                        />
+                      </>
+                    ) : (
+                      <StatusBadge label="待初始化发货" variant="neutral" />
+                    )}
+                    {salesOrderExecution?.hasException ? (
+                      <StatusBadge label="执行异常" variant="danger" />
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)_minmax(0,0.95fr)]">
+                  <div className="rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
+                      商品摘要
+                    </div>
+                    <div className="mt-2 text-sm font-medium leading-6 text-[var(--foreground)]">
+                      {getSalesOrderProductSummary(salesOrder.items)}
+                    </div>
+                    <div className="mt-2 text-xs leading-6 text-[var(--color-sidebar-muted)]">
+                      子单状态：{formatSubOrderStatus(salesOrder.subOrderStatus)}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
+                      金额与支付
+                    </div>
+                    <div className="mt-2 space-y-1.5 text-sm leading-6 text-[var(--color-sidebar-muted)]">
+                      <div>子单金额：{formatCurrency(salesOrder.finalAmount)}</div>
+                      <div>已录金额：{formatCurrency(salesOrder.collectedAmount)}</div>
+                      <div>待收金额：{formatCurrency(salesOrder.remainingAmount)}</div>
+                      <div>支付方案：{getSalesOrderPaymentSchemeLabel(salesOrder.paymentScheme)}</div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
+                      发货与物流
+                    </div>
+                    <div className="mt-2 space-y-1.5 text-sm leading-6 text-[var(--color-sidebar-muted)]">
+                      <div>{getShippingSummaryText(salesOrder, salesOrderExecution)}</div>
+                      <div>
+                        收款记录：{salesOrderExecution?.paymentRecordCount ?? 0}
+                        <span className="mx-1 text-[var(--color-border-strong)]">/</span>
+                        催收中：{salesOrderExecution?.openCollectionTaskCount ?? 0}
+                      </div>
+                      <div>
+                        最近批次：
+                        {latestSalesOrderBatch
+                          ? `${latestSalesOrderBatch.exportNo} / ${formatDateTime(
+                              latestSalesOrderBatch.exportedAt,
+                            )}`
+                          : "暂无批次"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
+                  <Link href={salesOrderShippingHref} className="crm-text-link">
+                    去发货执行
+                  </Link>
+                  <Link href={`/orders/${salesOrder.id}`} className="crm-text-link">
+                    查看子单详情
+                  </Link>
+                  <Link href={salesOrderBatchHref} className="crm-text-link">
+                    {latestSalesOrderBatch ? "看最近批次" : "看批次记录"}
+                  </Link>
+                  {latestSalesOrderBatch ? (
+                    <StatusBadge
+                      label={getBatchFileStateMeta(latestSalesOrderBatch.fileUrl).label}
+                      variant={getBatchFileStateMeta(latestSalesOrderBatch.fileUrl).variant}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mt-5 space-y-3">
+          <div className="rounded-[0.95rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4 text-sm leading-7 text-[var(--color-sidebar-muted)]">
+            当前父单尚未物化 supplier 子单。通常在提交审核后，系统才会根据 supplier 规划自动拆出
+            SalesOrder 子单。
+          </div>
+          {plannedSupplierGroups.length > 0 ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              {plannedSupplierGroups.map((group) => (
+                <div
+                  key={group.supplierId}
+                  className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3.5"
+                >
+                  <div className="text-sm font-medium text-[var(--foreground)]">{group.supplierName}</div>
+                  <div className="mt-2 text-xs leading-6 text-[var(--color-sidebar-muted)]">
+                    妫板嫯顓搁幏鍡樺灇 1 瀵姴鐡欓敓?/ 缂佸嫪娆?{group.lineCount} 閿?/ 妫板嫯顓搁柌鎴︻杺{" "}
+                    {formatCurrency(String(group.subtotal))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function FulfillmentSummaryCards({
+  order,
+  executionSummary,
+  totalSubOrders,
+  totalChildCollectedAmount,
+  totalChildRemainingAmount,
+  confirmedPaymentRecordCount,
+  openCollectionTaskCount,
+  primaryShippingHref,
+  batchHref,
+  latestBatch,
+  latestBatchReferences,
+}: Readonly<{
+  order: TradeOrderDetail;
+  executionSummary: TradeOrderDetail["executionSummary"];
+  totalSubOrders: number;
+  totalChildCollectedAmount: number;
+  totalChildRemainingAmount: number;
+  confirmedPaymentRecordCount: number;
+  openCollectionTaskCount: number;
+  primaryShippingHref: string;
+  batchHref: string;
+  latestBatch: BatchReference | null;
+  latestBatchReferences: BatchReference[];
+}>) {
+  return (
+    <section className="grid gap-4 xl:grid-cols-3">
+      <OverviewCard
+        eyebrow="支付与催收摘要"
+        title={formatCurrency(order.remainingAmount)}
+        footer={
+          <div className="flex flex-wrap items-center gap-3">
+            <Link href={buildTradeOrderPaymentHref(order.tradeNo)} className="crm-text-link">
+              去支付记录
+            </Link>
+            <Link
+              href={buildTradeOrderCollectionHref(order.tradeNo, { statusView: "OPEN" })}
+              className="crm-text-link"
+            >
+              去催收任务
+            </Link>
+          </div>
+        }
+      >
+        <div>已录金额：{formatCurrency(order.collectedAmount)}</div>
+        <div>子单已录：{formatCurrency(String(totalChildCollectedAmount))}</div>
+        <div>确认收款记录：{confirmedPaymentRecordCount}</div>
+        <div>子单待收：{formatCurrency(String(totalChildRemainingAmount))}</div>
+        <div>催收中：{openCollectionTaskCount}</div>
+      </OverviewCard>
+
+      <OverviewCard
+        eyebrow="发货与物流摘要"
+        title={`${executionSummary?.reportedSubOrderCount ?? 0} / ${executionSummary?.totalSubOrderCount ?? totalSubOrders} 已报单`}
+        footer={
+          <div className="flex flex-wrap items-center gap-3">
+            <Link href={primaryShippingHref} className="crm-text-link">
+              去发货执行
+            </Link>
+            <Link
+              href={buildFulfillmentShippingHref({
+                keyword: order.tradeNo,
+                stageView: "EXCEPTION",
+              })}
+              className="crm-text-link"
+            >
+            </Link>
+              查看异常队列
+          </div>
+        }
+      >
+        <div>待报单：{executionSummary?.pendingReportSubOrderCount ?? 0}</div>
+        <div>待物流：{executionSummary?.pendingTrackingSubOrderCount ?? 0}</div>
+        <div>已发货：{executionSummary?.shippedSubOrderCount ?? 0}</div>
+        <div>物流异常：{executionSummary?.exceptionSubOrderCount ?? 0}</div>
+      </OverviewCard>
+
+      <OverviewCard
+        eyebrow="批次记录摘要"
+        title={latestBatch ? latestBatch.exportNo : "暂无批次"}
+        footer={
+          <div className="flex flex-wrap items-center gap-3">
+            <Link href={batchHref} className="crm-text-link">
+              去批次记录
+            </Link>
+            {latestBatch ? (
+              <Link
+                href={buildFulfillmentBatchesHref({ keyword: latestBatch.exportNo })}
+                className="crm-text-link"
+              >
+                看最近批次
+              </Link>
+            ) : null}
+          </div>
+        }
+      >
+        <div>相关批次数：{latestBatchReferences.length}</div>
+        <div>最近导出：{latestBatch ? formatDateTime(latestBatch.exportedAt) : "暂无"}</div>
+        <div>最近 supplier：{latestBatch?.supplierName || "暂无"}</div>
+        <div>
+          文件状态：{latestBatch ? getBatchFileStateMeta(latestBatch.fileUrl).label : "暂无文件"}
+        </div>
+      </OverviewCard>
+    </section>
+  );
+}
+
+function ParentOrderAlertsSection({
+  order,
+  unreportedSubOrders,
+  shippedWithoutPaymentSubOrders,
+  openCollectionSubOrders,
+  isClearlySplit,
+  primaryShippingHref,
+}: Readonly<{
+  order: TradeOrderDetail;
+  unreportedSubOrders: SalesOrderExecutionItem[];
+  shippedWithoutPaymentSubOrders: SalesOrderExecutionItem[];
+  openCollectionSubOrders: SalesOrderExecutionItem[];
+  isClearlySplit: boolean;
+  primaryShippingHref: string;
+}>) {
+  if (
+    unreportedSubOrders.length === 0 &&
+    shippedWithoutPaymentSubOrders.length === 0 &&
+    openCollectionSubOrders.length === 0 &&
+    !isClearlySplit
+  ) {
+    return null;
+  }
+
+  return (
+    <section className="crm-section-card">
+      <div className="space-y-2">
+        <h3 className="text-lg font-semibold text-[var(--foreground)]">父单级提醒</h3>
+        <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
+          这里只做父单层的异常与推进提醒，真正的处理仍回到对应执行页面完成。
+        </p>
+      </div>
+      <div className="mt-5 grid gap-3">
+        {unreportedSubOrders.length > 0 ? (
+          <div className="rounded-[0.95rem] border border-[rgba(155,106,29,0.16)] bg-[rgba(255,251,242,0.84)] px-4 py-3.5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-[var(--foreground)]">仍有子单未报单</div>
+                <div className="text-xs leading-6 text-[var(--color-sidebar-muted)]">
+                  {unreportedSubOrders.length} 个子单还未进入 supplier 报单批次。
+                </div>
+              </div>
+              <Link
+                href={buildFulfillmentShippingHref({
+                  keyword: order.tradeNo,
+                  stageView: "PENDING_REPORT",
+                })}
+                className="crm-text-link text-xs"
+              >
+                去看待报单子单
+              </Link>
+            </div>
+          </div>
+        ) : null}
+
+        {shippedWithoutPaymentSubOrders.length > 0 ? (
+          <div className="rounded-[0.95rem] border border-[rgba(141,59,51,0.14)] bg-[rgba(255,247,246,0.84)] px-4 py-3.5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-[var(--foreground)]">已发货但未见收款</div>
+                <div className="text-xs leading-6 text-[var(--color-sidebar-muted)]">
+                  {shippedWithoutPaymentSubOrders.length} 个子单已发货，但当前父单下还没有对应收款记录。
+                </div>
+              </div>
+              <Link href={buildTradeOrderPaymentHref(order.tradeNo)} className="crm-text-link text-xs">
+                去看收款记录
+              </Link>
+            </div>
+          </div>
+        ) : null}
+
+        {openCollectionSubOrders.length > 0 ? (
+          <div className="rounded-[0.95rem] border border-[rgba(155,106,29,0.16)] bg-[rgba(255,251,242,0.84)] px-4 py-3.5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-[var(--foreground)]">仍有催收任务进行中</div>
+                <div className="text-xs leading-6 text-[var(--color-sidebar-muted)]">
+                  {openCollectionSubOrders.length} 个子单仍在催收链路里，建议优先确认是否已收款未回填。
+                </div>
+              </div>
+              <Link
+                href={buildTradeOrderCollectionHref(order.tradeNo, { statusView: "OPEN" })}
+                className="crm-text-link text-xs"
+              >
+                去看催收任务
+              </Link>
+            </div>
+          </div>
+        ) : null}
+
+        {isClearlySplit ? (
+          <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3.5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-1">
+                <div className="text-sm font-medium text-[var(--foreground)]">父单内推进状态分裂明显</div>
+                <div className="text-xs leading-6 text-[var(--color-sidebar-muted)]">
+                  同一 tradeNo 下的子单已出现待报单、已发货、收款和催收状态并行的情况。
+                </div>
+              </div>
+              <Link href={primaryShippingHref} className="crm-text-link text-xs">
+                去执行工作台继续看
+              </Link>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function TimelineAndOperationLogSection({
+  timelineEntries,
+  operationLogs,
+}: Readonly<{
+  timelineEntries: Array<{
+    id: string;
+    occurredAt: Date;
+    title: string;
+    detail: string;
+    href: string;
+  }>;
+  operationLogs: OperationLogItem[];
+}>) {
+  return (
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,0.94fr)_minmax(0,1.06fr)]">
+      <section className="crm-section-card">
+        <div className="space-y-2">
+          <h3 className="text-lg font-semibold text-[var(--foreground)]">关键时间线</h3>
+          <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
+            这里只聚合审核、子单报单、发货、收款与催收关键事件，用来快速理解这单整体推进到哪。
+          </p>
+        </div>
+        <div className="mt-5 grid gap-3">
+          {timelineEntries.length > 0 ? (
+            timelineEntries.map((entry) => (
+              <div
+                key={entry.id}
+                className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3.5"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="text-sm font-medium text-[var(--foreground)]">{entry.title}</div>
+                    <div className="text-xs leading-6 text-[var(--color-sidebar-muted)]">{entry.detail}</div>
+                  </div>
+                  <div className="space-y-1 text-right text-xs text-[var(--color-sidebar-muted)]">
+                    <div>{formatDateTime(entry.occurredAt)}</div>
+                    <Link href={entry.href} className="crm-text-link">
+                      查看上下文
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-[0.95rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4 text-sm text-[var(--color-sidebar-muted)]">
+              当前还没有可展示的关键动作时间线。
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="crm-section-card">
+        <div className="space-y-2">
+          <h3 className="text-lg font-semibold text-[var(--foreground)]">操作日志</h3>
+          <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
+            这里聚合父单、supplier 子单和已生成发货任务的关键操作，保证从成交到执行的链路可追踪。
+          </p>
+        </div>
+        <div className="mt-5 grid gap-3">
+          {operationLogs.length > 0 ? (
+            operationLogs.map((record) => (
+              <div
+                key={record.id}
+                className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3.5"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-sm font-medium text-[var(--foreground)]">
+                    {record.module} / {record.action}
+                  </div>
+                  <div className="text-xs text-[var(--color-sidebar-muted)]">{formatDateTime(record.createdAt)}</div>
+                </div>
+                <div className="mt-2 text-sm leading-6 text-[var(--color-sidebar-muted)]">
+                  {record.description || "无描述"}
+                </div>
+                <div className="mt-2 text-xs text-[var(--color-sidebar-muted)]">
+                  操作人：{record.actor?.name || record.actor?.username || "系统"}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-[0.95rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4 text-sm text-[var(--color-sidebar-muted)]">
+              当前还没有操作日志记录。
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
@@ -464,7 +1142,7 @@ export function TradeOrderDetailSection({
           id: `review-result-${reviewDecisionLog.id}`,
           occurredAt: reviewDecisionLog.createdAt,
           title: reviewDecisionLog.action === "trade_order.approved" ? "审核通过" : "审核驳回",
-          detail: reviewDecisionLog.description || `${order.tradeNo} 的审核结论已更新`,
+          detail: reviewDecisionLog.description || `${order.tradeNo} 审核状态已更新`,
           href: `/orders/${order.id}`,
         }
       : null,
@@ -543,6 +1221,7 @@ export function TradeOrderDetailSection({
     stageView: getTradeOrderShippingStage(executionSummary),
   });
   const batchHref = buildFulfillmentBatchesHref({ keyword: order.tradeNo });
+  const nextAction = getTradeOrderNextAction(executionSummary);
   const recycleGuard =
     notice?.recycleStatus === "blocked" && notice.guard ? notice.guard : order.recycleGuard;
   const finalizePreview =
@@ -624,21 +1303,20 @@ export function TradeOrderDetailSection({
               ) : null}
             </div>
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black/42">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
                 父单身份
               </div>
-              <h2 className="mt-1 text-[1.55rem] font-semibold tracking-[-0.03em] text-black/88">
+              <h2 className="mt-1 text-[1.55rem] font-semibold tracking-[-0.03em] text-[var(--foreground)]">
                 {order.tradeNo}
               </h2>
-              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-black/64">
+              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-[var(--color-sidebar-muted)]">
                 <span>客户：{order.customer.name}</span>
                 <span>
-                  销售：
-                  {order.customer.owner?.name || order.customer.owner?.username || "未分配"}
+                  归属销售：{order.customer.owner?.name || order.customer.owner?.username || "暂无"}
                 </span>
                 <span>下单时间：{formatDateTime(order.createdAt)}</span>
                 <span>最近更新：{formatDateTime(order.updatedAt)}</span>
-                {order.reviewedAt ? <span>审核时间：{formatDateTime(order.reviewedAt)}</span> : null}
+                <span>parent-first / supplier-split</span>
               </div>
             </div>
           </div>
@@ -653,7 +1331,7 @@ export function TradeOrderDetailSection({
               去发货执行
             </Link>
             <Link href={batchHref} className="crm-button crm-button-secondary">
-              {latestBatch ? `查看批次 ${latestBatch.exportNo}` : "查看批次记录"}
+              看批次记录
             </Link>
             <button
               type="button"
@@ -666,31 +1344,58 @@ export function TradeOrderDetailSection({
         </div>
       </section>
 
+      <section className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)]">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge label={nextAction.label} variant={nextAction.variant} />
+              <span className="text-xs font-medium text-[var(--color-sidebar-muted)]">
+                Parent-first execution hint
+              </span>
+            </div>
+            <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
+              {nextAction.description}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href={primaryShippingHref} className="crm-button crm-button-secondary">
+              去发货执行
+            </Link>
+            <Link
+              href={buildTradeOrderCollectionHref(order.tradeNo, { statusView: "OPEN" })}
+              className="crm-button crm-button-secondary"
+            >
+              看催收任务
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <section className="grid gap-3 xl:grid-cols-4">
         <OverviewCard
           eyebrow="成交摘要"
           title={formatCurrency(order.finalAmount)}
           footer={
             <>
-              <span>成交金额</span>
-              <span className="mx-2 text-black/30">·</span>
+              <span>成交父单</span>
+              <span className="mx-2 text-[var(--color-border-strong)]">/</span>
               <span>{getSalesOrderPaymentSchemeLabel(order.paymentScheme)}</span>
             </>
           }
         >
-          <div>商品总件数：{totalItemQty}</div>
+          <div>商品总数：{totalItemQty}</div>
           <div>成交行数：{order.items.length}</div>
           <div>折扣金额：{formatCurrency(order.discountAmount)}</div>
           <div>已录金额：{formatCurrency(order.collectedAmount)}</div>
         </OverviewCard>
 
         <OverviewCard
-          eyebrow="拆单摘要"
+          eyebrow="子单摘要"
           title={`${totalSubOrders || plannedSupplierCount} 张子单`}
           footer={
             <>
               <span>supplier 数：{actualSupplierCount || plannedSupplierCount}</span>
-              <span className="mx-2 text-black/30">·</span>
+              <span className="mx-2 text-[var(--color-border-strong)]">/</span>
               <span>{totalSubOrders > 0 ? "已物化执行子单" : "按规划待物化"}</span>
             </>
           }
@@ -708,7 +1413,7 @@ export function TradeOrderDetailSection({
             latestBatch ? (
               <>
                 <span>最近批次：{latestBatch.exportNo}</span>
-                <span className="mx-2 text-black/30">·</span>
+                <span className="mx-2 text-[var(--color-border-strong)]">/</span>
                 <span>{formatDateTime(latestBatch.exportedAt)}</span>
               </>
             ) : (
@@ -737,11 +1442,11 @@ export function TradeOrderDetailSection({
         canContinueEdit ||
         (canReview && order.tradeStatus === "PENDING_REVIEW")) && (
         <section className="grid gap-4 xl:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
-          <div className="rounded-[1rem] border border-black/8 bg-[rgba(249,250,252,0.82)] px-4 py-3.5">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/42">
+          <div className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3.5">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
               备注与说明
             </div>
-            <div className="mt-3 space-y-2.5 text-sm leading-6 text-black/66">
+            <div className="mt-3 space-y-2.5 text-sm leading-6 text-[var(--color-sidebar-muted)]">
               {order.remark ? <div>父单备注：{order.remark}</div> : null}
               {order.rejectReason ? <div>驳回原因：{order.rejectReason}</div> : null}
               {order.tradeStatus === "APPROVED" ? (
@@ -760,9 +1465,9 @@ export function TradeOrderDetailSection({
 
           <div className="space-y-3">
             {canContinueEdit && continueEditHref ? (
-              <div className="rounded-[1rem] border border-black/8 bg-white/78 px-4 py-3.5">
-                <div className="text-sm font-medium text-black/84">回到客户详情继续编辑</div>
-                <div className="mt-1 text-xs leading-6 text-black/56">
+              <div className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3.5">
+                <div className="text-sm font-medium text-[var(--foreground)]">回到客户详情继续编辑</div>
+                <div className="mt-1 text-xs leading-6 text-[var(--color-sidebar-muted)]">
                   适用于草稿或驳回父单，编辑完成后再重新提交审核。
                 </div>
                 <div className="mt-3">
@@ -777,13 +1482,13 @@ export function TradeOrderDetailSection({
               <div className="grid gap-3 md:grid-cols-2">
                 <form
                   action={reviewAction}
-                  className="rounded-[1rem] border border-black/8 bg-white/78 px-4 py-3.5"
+                  className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3.5"
                 >
                   <input type="hidden" name="tradeOrderId" value={order.id} />
                   <input type="hidden" name="reviewStatus" value="APPROVED" />
                   <input type="hidden" name="redirectTo" value={`/orders/${order.id}`} />
-                  <div className="text-sm font-medium text-black/84">审核通过</div>
-                  <div className="mt-1 text-xs leading-5 text-black/56">
+                  <div className="text-sm font-medium text-[var(--foreground)]">审核通过</div>
+                  <div className="mt-1 text-xs leading-5 text-[var(--color-sidebar-muted)]">
                     通过后会同步子单镜像状态，并只初始化一次 shipping / payment artifacts。
                   </div>
                   <button type="submit" className="crm-button crm-button-primary mt-3 w-full">
@@ -793,12 +1498,12 @@ export function TradeOrderDetailSection({
 
                 <form
                   action={reviewAction}
-                  className="rounded-[1rem] border border-black/8 bg-white/78 px-4 py-3.5"
+                  className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3.5"
                 >
                   <input type="hidden" name="tradeOrderId" value={order.id} />
                   <input type="hidden" name="reviewStatus" value="REJECTED" />
                   <input type="hidden" name="redirectTo" value={`/orders/${order.id}`} />
-                  <div className="text-sm font-medium text-black/84">驳回父单</div>
+                  <div className="text-sm font-medium text-[var(--foreground)]">驳回父单</div>
                   <textarea
                     name="rejectReason"
                     rows={3}
@@ -815,530 +1520,49 @@ export function TradeOrderDetailSection({
           </div>
         </section>
       )}
+      <TradeOrderItemsSection
+        order={order}
+        bundleCount={bundleCount}
+        giftCount={giftCount}
+      />
+      <SupplierExecutionSection
+        order={order}
+        totalSubOrders={totalSubOrders}
+        plannedSupplierCount={plannedSupplierCount}
+        actualSupplierCount={actualSupplierCount}
+        executionSummaryBySalesOrderId={executionSummaryBySalesOrderId}
+        plannedSupplierGroups={plannedSupplierGroups}
+      />
 
-      <section className="crm-section-card">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-2">
-            <h3 className="text-lg font-semibold text-black/86">父单商品与成交信息</h3>
-            <p className="text-sm leading-6 text-black/58">
-              这里回答“这笔成交卖了什么”。页面按 TradeOrderItem 展示销售语义，套餐和赠品只做轻量识别，
-              supplier 执行拆分留在下一层查看。
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {order.discountAmount !== "0" ? (
-              <StatusBadge label={`折扣 ${formatCurrency(order.discountAmount)}`} variant="warning" />
-            ) : null}
-            {bundleCount > 0 ? <StatusBadge label={`套餐 ${bundleCount}`} variant="info" /> : null}
-            {giftCount > 0 ? <StatusBadge label={`赠品 ${giftCount}`} variant="neutral" /> : null}
-          </div>
-        </div>
 
-        <div className="mt-5 grid gap-3">
-          {order.items.map((item) => (
-            <div key={item.id} className="rounded-[0.95rem] border border-black/8 bg-white/78 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-black/84">
-                      行 {item.lineNo} / {getTradeItemHeadline(item)}
-                    </span>
-                    <StatusBadge
-                      label={getTradeItemTypeLabel(item.itemType)}
-                      variant={getTradeItemTypeVariant(item.itemType)}
-                    />
-                  </div>
-                  <div className="text-xs leading-6 text-black/56">{getTradeItemSubline(item)}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-base font-semibold text-black/84">
-                    {formatCurrency(item.subtotal)}
-                  </div>
-                  <div className="text-xs text-black/48">
-                    成交价 {formatCurrency(item.dealUnitPriceSnapshot)} / 原价{" "}
-                    {formatCurrency(item.listUnitPriceSnapshot)}
-                  </div>
-                </div>
-              </div>
+      <FulfillmentSummaryCards
+        order={order}
+        executionSummary={executionSummary}
+        totalSubOrders={totalSubOrders}
+        totalChildCollectedAmount={totalChildCollectedAmount}
+        totalChildRemainingAmount={totalChildRemainingAmount}
+        confirmedPaymentRecordCount={confirmedPaymentRecordCount}
+        openCollectionTaskCount={openCollectionTaskCount}
+        primaryShippingHref={primaryShippingHref}
+        batchHref={batchHref}
+        latestBatch={latestBatch}
+        latestBatchReferences={latestBatchReferences}
+      />
 
-              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-black/64">
-                <span>
-                  数量：{item.qty}
-                  {item.unitSnapshot || ""}
-                </span>
-                <span>折扣：{formatCurrency(item.discountAmount)}</span>
-                {item.itemType === "BUNDLE" && item.bundleCodeSnapshot ? (
-                  <span>套餐编码：{item.bundleCodeSnapshot}</span>
-                ) : null}
-                {item.itemType === "BUNDLE" && item.bundleVersionSnapshot !== null ? (
-                  <span>套餐版本：V{item.bundleVersionSnapshot}</span>
-                ) : null}
-              </div>
+      <ParentOrderAlertsSection
+        order={order}
+        unreportedSubOrders={unreportedSubOrders}
+        shippedWithoutPaymentSubOrders={shippedWithoutPaymentSubOrders}
+        openCollectionSubOrders={openCollectionSubOrders}
+        isClearlySplit={isClearlySplit}
+        primaryShippingHref={primaryShippingHref}
+      />
 
-              {item.remark ? (
-                <div className="mt-3 rounded-[0.85rem] border border-black/7 bg-[rgba(249,250,252,0.78)] px-3 py-2 text-xs leading-6 text-black/58">
-                  备注：{item.remark}
-                </div>
-              ) : null}
+      <TimelineAndOperationLogSection
+        timelineEntries={timelineEntries}
+        operationLogs={operationLogs}
+      />
 
-              {item.components.length > 0 ? (
-                <div className="mt-3 rounded-[0.9rem] border border-black/7 bg-[rgba(249,250,252,0.76)] px-3 py-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/40">
-                    {item.itemType === "BUNDLE" ? "执行组件" : "执行去向"}
-                  </div>
-                  <div className="mt-3 grid gap-2">
-                    {item.components.map((component) => {
-                      const mappedSalesOrder = component.salesOrderItems[0]?.salesOrder ?? null;
-                      return (
-                        <div
-                          key={component.id}
-                          className="rounded-[0.8rem] border border-black/8 bg-white/86 px-3 py-2.5 text-xs text-black/60"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="font-medium text-black/76">
-                              {component.productNameSnapshot}
-                              {component.skuNameSnapshot ? ` / ${component.skuNameSnapshot}` : ""}
-                            </div>
-                            <div>{component.supplierNameSnapshot}</div>
-                          </div>
-                          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
-                            <span>
-                              数量：{component.qty}
-                              {component.unitSnapshot || ""}
-                            </span>
-                            <span>分摊小计：{formatCurrency(component.allocatedSubtotal)}</span>
-                            <span>
-                              去向：
-                              {mappedSalesOrder
-                                ? `${order.tradeNo} / ${mappedSalesOrder.subOrderNo || mappedSalesOrder.orderNo} / ${mappedSalesOrder.supplier.name}`
-                                : "待物化子单"}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="crm-section-card">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-2">
-            <h3 className="text-lg font-semibold text-black/86">supplier 子单执行总览</h3>
-            <p className="text-sm leading-6 text-black/58">
-              这里不展开完整子单详情，只回答“拆成了哪些 supplier 子单、各自推进到哪、下一步去哪里处理”。
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <StatusBadge label={`子单 ${totalSubOrders || plannedSupplierCount}`} variant="info" />
-            <StatusBadge label={`supplier ${actualSupplierCount || plannedSupplierCount}`} variant="neutral" />
-          </div>
-        </div>
-
-        {order.salesOrders.length > 0 ? (
-          <div className="mt-5 grid gap-4">
-            {order.salesOrders.map((salesOrder) => {
-              const salesOrderExecution = executionSummaryBySalesOrderId.get(salesOrder.id);
-              const latestSalesOrderBatch = salesOrder.shippingTask?.exportBatch ?? null;
-              const salesOrderShippingHref = buildFulfillmentShippingHref({
-                keyword: order.tradeNo,
-                supplierViewId: salesOrder.supplier.id,
-                stageView: getSalesOrderShippingStage(salesOrderExecution),
-              });
-              const salesOrderBatchHref = buildFulfillmentBatchesHref({
-                keyword: latestSalesOrderBatch?.exportNo || order.tradeNo,
-                supplierId: salesOrder.supplier.id,
-              });
-
-              return (
-                <div
-                  key={salesOrder.id}
-                  className="rounded-[1rem] border border-black/8 bg-white/80 px-4 py-4"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="text-sm font-semibold text-black/84">
-                        {salesOrder.supplier.name}
-                      </div>
-                      <div className="text-xs text-black/52">
-                        {order.tradeNo} / {salesOrder.subOrderNo || salesOrder.orderNo}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <StatusBadge
-                        label={getSalesOrderReviewStatusLabel(salesOrder.reviewStatus)}
-                        variant={getSalesOrderReviewStatusVariant(salesOrder.reviewStatus)}
-                      />
-                      {salesOrder.shippingTask ? (
-                        <>
-                          <StatusBadge
-                            label={getShippingReportStatusLabel(salesOrder.shippingTask.reportStatus)}
-                            variant={getShippingReportStatusVariant(salesOrder.shippingTask.reportStatus)}
-                          />
-                          <StatusBadge
-                            label={getShippingFulfillmentStatusLabel(salesOrder.shippingTask.shippingStatus)}
-                            variant={getShippingFulfillmentStatusVariant(
-                              salesOrder.shippingTask.shippingStatus,
-                            )}
-                          />
-                        </>
-                      ) : (
-                        <StatusBadge label="待初始化发货" variant="neutral" />
-                      )}
-                      {salesOrderExecution?.hasException ? (
-                        <StatusBadge label="执行异常" variant="danger" />
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)_minmax(0,0.95fr)]">
-                    <div className="rounded-[0.85rem] border border-black/7 bg-[rgba(249,250,252,0.78)] px-3 py-3">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/42">
-                        商品摘要
-                      </div>
-                      <div className="mt-2 text-sm font-medium leading-6 text-black/76">
-                        {getSalesOrderProductSummary(salesOrder.items)}
-                      </div>
-                      <div className="mt-2 text-xs leading-6 text-black/56">
-                        子单状态：{formatSubOrderStatus(salesOrder.subOrderStatus)}
-                      </div>
-                    </div>
-
-                    <div className="rounded-[0.85rem] border border-black/7 bg-[rgba(249,250,252,0.78)] px-3 py-3">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/42">
-                        金额与支付
-                      </div>
-                      <div className="mt-2 space-y-1.5 text-sm leading-6 text-black/64">
-                        <div>子单金额：{formatCurrency(salesOrder.finalAmount)}</div>
-                        <div>已录金额：{formatCurrency(salesOrder.collectedAmount)}</div>
-                        <div>待收金额：{formatCurrency(salesOrder.remainingAmount)}</div>
-                        <div>
-                          支付方案：
-                          {getSalesOrderPaymentSchemeLabel(salesOrder.paymentScheme)}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-[0.85rem] border border-black/7 bg-[rgba(249,250,252,0.78)] px-3 py-3">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/42">
-                        发货与物流
-                      </div>
-                      <div className="mt-2 space-y-1.5 text-sm leading-6 text-black/64">
-                        <div>{getShippingSummaryText(salesOrder, salesOrderExecution)}</div>
-                        <div>
-                          收款记录：
-                          {salesOrderExecution?.paymentRecordCount ?? 0}
-                          <span className="mx-1 text-black/28">·</span>
-                          催收中：
-                          {salesOrderExecution?.openCollectionTaskCount ?? 0}
-                        </div>
-                        <div>
-                          最近批次：
-                          {latestSalesOrderBatch
-                            ? `${latestSalesOrderBatch.exportNo} / ${formatDateTime(
-                                latestSalesOrderBatch.exportedAt,
-                              )}`
-                            : "暂无批次"}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
-                    <Link href={salesOrderShippingHref} className="crm-text-link">
-                      去发货执行
-                    </Link>
-                    <Link href={`/orders/${salesOrder.id}`} className="crm-text-link">
-                      看子单详情
-                    </Link>
-                    <Link href={salesOrderBatchHref} className="crm-text-link">
-                      {latestSalesOrderBatch ? "看最近批次" : "看批次记录"}
-                    </Link>
-                    {latestSalesOrderBatch ? (
-                      <StatusBadge
-                        label={getBatchFileStateMeta(latestSalesOrderBatch.fileUrl).label}
-                        variant={getBatchFileStateMeta(latestSalesOrderBatch.fileUrl).variant}
-                      />
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="mt-5 space-y-3">
-            <div className="rounded-[0.95rem] border border-dashed border-black/10 bg-[rgba(249,250,252,0.7)] px-4 py-4 text-sm leading-7 text-black/56">
-              当前父单尚未物化 supplier 子单。通常在提交审核后，系统才会根据 supplier 规划自动拆出
-              SalesOrder 子单。
-            </div>
-            {plannedSupplierGroups.length > 0 ? (
-              <div className="grid gap-3 md:grid-cols-2">
-                {plannedSupplierGroups.map((group) => (
-                  <div
-                    key={group.supplierId}
-                    className="rounded-[0.95rem] border border-black/8 bg-white/80 px-4 py-3.5"
-                  >
-                    <div className="text-sm font-medium text-black/82">{group.supplierName}</div>
-                    <div className="mt-2 text-xs leading-6 text-black/56">
-                      预计拆成 1 张子单 / 组件 {group.lineCount} 条 / 预计金额{" "}
-                      {formatCurrency(String(group.subtotal))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        )}
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-3">
-        <OverviewCard
-          eyebrow="支付与催收摘要"
-          title={formatCurrency(order.remainingAmount)}
-          footer={
-            <div className="flex flex-wrap items-center gap-3">
-              <Link href={buildTradeOrderPaymentHref(order.tradeNo)} className="crm-text-link">
-                去支付记录
-              </Link>
-              <Link
-                href={buildTradeOrderCollectionHref(order.tradeNo, { statusView: "OPEN" })}
-                className="crm-text-link"
-              >
-                去催收任务
-              </Link>
-            </div>
-          }
-        >
-          <div>已录金额：{formatCurrency(order.collectedAmount)}</div>
-          <div>子单已录：{formatCurrency(String(totalChildCollectedAmount))}</div>
-          <div>确认收款记录：{confirmedPaymentRecordCount}</div>
-          <div>子单待收：{formatCurrency(String(totalChildRemainingAmount))}</div>
-          <div>催收中：{openCollectionTaskCount}</div>
-        </OverviewCard>
-
-        <OverviewCard
-          eyebrow="发货与物流摘要"
-          title={`${executionSummary?.reportedSubOrderCount ?? 0} / ${executionSummary?.totalSubOrderCount ?? totalSubOrders} 已报单`}
-          footer={
-            <div className="flex flex-wrap items-center gap-3">
-              <Link href={primaryShippingHref} className="crm-text-link">
-                去发货执行
-              </Link>
-              <Link
-                href={buildFulfillmentShippingHref({
-                  keyword: order.tradeNo,
-                  stageView: "EXCEPTION",
-                })}
-                className="crm-text-link"
-              >
-                看异常子单
-              </Link>
-            </div>
-          }
-        >
-          <div>待报单：{executionSummary?.pendingReportSubOrderCount ?? 0}</div>
-          <div>待物流：{executionSummary?.pendingTrackingSubOrderCount ?? 0}</div>
-          <div>已发货：{executionSummary?.shippedSubOrderCount ?? 0}</div>
-          <div>物流异常：{executionSummary?.exceptionSubOrderCount ?? 0}</div>
-        </OverviewCard>
-
-        <OverviewCard
-          eyebrow="批次记录摘要"
-          title={latestBatch ? latestBatch.exportNo : "暂无批次"}
-          footer={
-            <div className="flex flex-wrap items-center gap-3">
-              <Link href={batchHref} className="crm-text-link">
-                去批次记录
-              </Link>
-              {latestBatch ? (
-                <Link
-                  href={buildFulfillmentBatchesHref({ keyword: latestBatch.exportNo })}
-                  className="crm-text-link"
-                >
-                  看最近批次
-                </Link>
-              ) : null}
-            </div>
-          }
-        >
-          <div>相关批次数：{latestBatchReferences.length}</div>
-          <div>最近导出：{latestBatch ? formatDateTime(latestBatch.exportedAt) : "暂无"}</div>
-          <div>最近 supplier：{latestBatch?.supplierName || "暂无"}</div>
-          <div>
-            文件状态：
-            {latestBatch ? getBatchFileStateMeta(latestBatch.fileUrl).label : "未生成"}
-          </div>
-        </OverviewCard>
-      </section>
-
-      {(unreportedSubOrders.length > 0 ||
-        shippedWithoutPaymentSubOrders.length > 0 ||
-        openCollectionSubOrders.length > 0 ||
-        isClearlySplit) && (
-        <section className="crm-section-card">
-          <div className="space-y-2">
-            <h3 className="text-lg font-semibold text-black/86">父单级提醒</h3>
-            <p className="text-sm leading-6 text-black/58">
-              这里只做父单层的异常与推进提醒，真正的处理仍回到对应执行页面完成。
-            </p>
-          </div>
-          <div className="mt-5 grid gap-3">
-            {unreportedSubOrders.length > 0 ? (
-              <div className="rounded-[0.95rem] border border-[rgba(155,106,29,0.16)] bg-[rgba(255,251,242,0.84)] px-4 py-3.5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium text-black/84">仍有子单未报单</div>
-                    <div className="text-xs leading-6 text-black/60">
-                      {unreportedSubOrders.length} 个子单还未进入 supplier 报单批次。
-                    </div>
-                  </div>
-                  <Link
-                    href={buildFulfillmentShippingHref({
-                      keyword: order.tradeNo,
-                      stageView: "PENDING_REPORT",
-                    })}
-                    className="crm-text-link text-xs"
-                  >
-                    去看待报单子单
-                  </Link>
-                </div>
-              </div>
-            ) : null}
-
-            {shippedWithoutPaymentSubOrders.length > 0 ? (
-              <div className="rounded-[0.95rem] border border-[rgba(141,59,51,0.14)] bg-[rgba(255,247,246,0.84)] px-4 py-3.5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium text-black/84">已发货但未见收款</div>
-                    <div className="text-xs leading-6 text-black/60">
-                      {shippedWithoutPaymentSubOrders.length} 个子单已发货，但当前父单下还没有对应收款记录。
-                    </div>
-                  </div>
-                  <Link
-                    href={buildTradeOrderPaymentHref(order.tradeNo)}
-                    className="crm-text-link text-xs"
-                  >
-                    去看收款记录
-                  </Link>
-                </div>
-              </div>
-            ) : null}
-
-            {openCollectionSubOrders.length > 0 ? (
-              <div className="rounded-[0.95rem] border border-[rgba(155,106,29,0.16)] bg-[rgba(255,251,242,0.84)] px-4 py-3.5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium text-black/84">仍有催收任务进行中</div>
-                    <div className="text-xs leading-6 text-black/60">
-                      {openCollectionSubOrders.length} 个子单仍在催收链路里，建议优先确认是否已收款未回填。
-                    </div>
-                  </div>
-                  <Link
-                    href={buildTradeOrderCollectionHref(order.tradeNo, { statusView: "OPEN" })}
-                    className="crm-text-link text-xs"
-                  >
-                    去看催收任务
-                  </Link>
-                </div>
-              </div>
-            ) : null}
-
-            {isClearlySplit ? (
-              <div className="rounded-[0.95rem] border border-black/8 bg-[rgba(249,250,252,0.82)] px-4 py-3.5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium text-black/84">父单内推进状态分裂明显</div>
-                    <div className="text-xs leading-6 text-black/60">
-                      同一 tradeNo 下的子单已出现待报单、已发货、收款和催收状态并行的情况。
-                    </div>
-                  </div>
-                  <Link href={primaryShippingHref} className="crm-text-link text-xs">
-                    去执行工作台继续看
-                  </Link>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </section>
-      )}
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,0.94fr)_minmax(0,1.06fr)]">
-        <section className="crm-section-card">
-          <div className="space-y-2">
-            <h3 className="text-lg font-semibold text-black/86">关键时间线</h3>
-            <p className="text-sm leading-6 text-black/58">
-              这里只聚合审核、子单报单、发货、收款与催收关键事件，用来快速理解这单整体推进到哪。
-            </p>
-          </div>
-          <div className="mt-5 grid gap-3">
-            {timelineEntries.length > 0 ? (
-              timelineEntries.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="rounded-[0.95rem] border border-black/8 bg-white/80 px-4 py-3.5"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="text-sm font-medium text-black/84">{entry.title}</div>
-                      <div className="text-xs leading-6 text-black/60">{entry.detail}</div>
-                    </div>
-                    <div className="space-y-1 text-right text-xs text-black/48">
-                      <div>{formatDateTime(entry.occurredAt)}</div>
-                      <Link href={entry.href} className="crm-text-link">
-                        查看上下文
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-[0.95rem] border border-dashed border-black/10 bg-[rgba(249,250,252,0.68)] px-4 py-4 text-sm text-black/56">
-                当前还没有可展示的关键动作时间线。
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="crm-section-card">
-          <div className="space-y-2">
-            <h3 className="text-lg font-semibold text-black/86">操作记录</h3>
-            <p className="text-sm leading-6 text-black/58">
-              这里聚合父单、supplier 子单和已生成发货任务的关键操作，保证从成交到执行的链路可追踪。
-            </p>
-          </div>
-          <div className="mt-5 grid gap-3">
-            {operationLogs.length > 0 ? (
-              operationLogs.map((record) => (
-                <div
-                  key={record.id}
-                  className="rounded-[0.95rem] border border-black/8 bg-white/80 px-4 py-3.5"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-sm font-medium text-black/84">
-                      {record.module} / {record.action}
-                    </div>
-                    <div className="text-xs text-black/48">{formatDateTime(record.createdAt)}</div>
-                  </div>
-                  <div className="mt-2 text-sm leading-6 text-black/62">
-                    {record.description || "无描述"}
-                  </div>
-                  <div className="mt-2 text-xs text-black/46">
-                    操作人：{record.actor?.name || record.actor?.username || "系统"}
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-[0.95rem] border border-dashed border-black/10 bg-[rgba(249,250,252,0.68)] px-4 py-4 text-sm text-black/56">
-                当前还没有操作日志记录。
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
 
       <TradeOrderRecycleDialog
         open={recycleDialogOpen}

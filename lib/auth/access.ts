@@ -489,12 +489,13 @@ export function getLeadScope(role: RoleCode, userId: string, teamId?: string | n
     return teamId
       ? {
           OR: [
+            { ownerId: null },
             { owner: { is: { teamId } } },
             { customer: { is: { owner: { is: { teamId } } } } },
             { assignments: { some: { toUser: { is: { teamId } } } } },
           ],
         }
-      : { id: buildMissingScopeId("lead_team") };
+      : { ownerId: null };
   }
 
   if (isOwnDataOnly(role)) {

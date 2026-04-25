@@ -187,7 +187,9 @@ export function CustomerListCard({
   moveToRecycleBinAction,
   selectable = false,
   selected = false,
+  focused = false,
   onToggleSelected,
+  onFocusCustomer,
 }: Readonly<{
   item: CustomerListItem;
   callResultOptions: CallResultOption[];
@@ -196,7 +198,9 @@ export function CustomerListCard({
   moveToRecycleBinAction?: MoveCustomerToRecycleBinAction;
   selectable?: boolean;
   selected?: boolean;
+  focused?: boolean;
   onToggleSelected?: () => void;
+  onFocusCustomer?: () => void;
 }>) {
   const router = useRouter();
   const mobileMenuRef = useRef<HTMLDivElement>(null);
@@ -256,6 +260,7 @@ export function CustomerListCard({
   }, [mobileActionsOpen]);
 
   function navigateTo(href: string) {
+    onFocusCustomer?.();
     setMobileActionsOpen(false);
     router.push(href);
   }
@@ -265,6 +270,7 @@ export function CustomerListCard({
       return;
     }
 
+    onFocusCustomer?.();
     setMobileActionsOpen(false);
     setCallDialogOpen(true);
   }
@@ -274,6 +280,7 @@ export function CustomerListCard({
       return;
     }
 
+    onFocusCustomer?.();
     setMobileActionsOpen(false);
     startMobileCallFollowUpDial({
       customerId: item.id,
@@ -292,6 +299,7 @@ export function CustomerListCard({
     initialResult?: string;
     remarkAutoFocus?: boolean;
   } = {}) {
+    onFocusCustomer?.();
     setMobileActionsOpen(false);
     setFollowUpInitialResult(
       options.initialResult ??
@@ -325,6 +333,7 @@ export function CustomerListCard({
   return (
     <>
       <article
+        id={`customer-row-${item.id}`}
         role="link"
         tabIndex={0}
         aria-label={`进入 ${item.name} 详情页`}
@@ -334,6 +343,8 @@ export function CustomerListCard({
           "group relative flex cursor-pointer flex-col overflow-hidden rounded-[18px] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)] outline-none transition-[border-color,background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
           "focus-visible:ring-2 focus-visible:ring-[rgba(122,154,255,0.16)] focus-visible:ring-offset-0",
           "min-[960px]:hover:-translate-y-px min-[960px]:hover:border-[rgba(122,154,255,0.16)] min-[960px]:hover:bg-[var(--color-shell-hover)] min-[960px]:hover:shadow-[var(--color-shell-shadow-md)]",
+          focused &&
+            "scroll-mt-28 border-[rgba(79,125,247,0.32)] bg-[linear-gradient(180deg,rgba(248,250,255,0.98),rgba(255,255,255,0.96))] shadow-[inset_3px_0_0_var(--color-accent),var(--color-shell-shadow-md)]",
         )}
       >
         <div className="flex items-start justify-between gap-3">

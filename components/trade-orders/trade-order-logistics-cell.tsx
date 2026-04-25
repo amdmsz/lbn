@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 
 const logisticsButtonVariants = {
   neutral:
-    "border-black/10 bg-[rgba(18,24,31,0.04)] text-black/68 hover:border-black/16 hover:bg-[rgba(18,24,31,0.06)]",
+    "border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] text-[var(--color-sidebar-muted)] hover:border-[var(--color-border)] hover:bg-[var(--color-panel)]",
   info:
     "border-[rgba(54,95,135,0.16)] bg-[rgba(54,95,135,0.10)] text-[var(--color-info)] hover:border-[rgba(54,95,135,0.24)] hover:bg-[rgba(54,95,135,0.14)]",
   success:
@@ -141,14 +141,14 @@ export function TradeOrderLogisticsCell({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="truncate text-sm font-medium text-black/82">
+              <span className="truncate text-sm font-medium text-[var(--foreground)]">
                 {receiverName || "未填写收件人"}
               </span>
-              <span className="text-xs text-black/52">
+              <span className="text-xs text-[var(--color-sidebar-muted)]">
                 {receiverPhone || "暂无手机号"}
               </span>
             </div>
-            <div className="mt-1 line-clamp-1 text-xs leading-5 text-black/48">
+            <div className="mt-1 line-clamp-1 text-xs leading-5 text-[var(--color-sidebar-muted)]">
               {receiverAddress || "未填写收件地址"}
             </div>
           </div>
@@ -174,9 +174,9 @@ export function TradeOrderLogisticsCell({
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-black/50">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--color-sidebar-muted)]">
           <span className="truncate">{providerLabel}</span>
-          <span className="font-mono tabular-nums tracking-[0.01em] text-black/58">
+          <span className="font-mono tabular-nums tracking-[0.01em] text-[var(--color-sidebar-muted)]">
             {normalizedTrackingNumber || "未回填单号"}
           </span>
         </div>
@@ -184,7 +184,7 @@ export function TradeOrderLogisticsCell({
 
       {isHoverOpen && hoverCardPosition ? (
         <div
-          className="fixed z-40 w-56 rounded-[0.9rem] border border-black/8 bg-white/98 px-3 py-2.5 shadow-[0_14px_32px_rgba(18,24,31,0.10)]"
+          className="fixed z-40 w-56 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-2.5 shadow-[0_14px_32px_rgba(18,24,31,0.10)]"
           style={{
             top: hoverCardPosition.top,
             left: hoverCardPosition.left,
@@ -194,10 +194,10 @@ export function TradeOrderLogisticsCell({
           onMouseEnter={openHoverCard}
           onMouseLeave={scheduleCloseHoverCard}
         >
-          <div className="text-[11px] font-semibold tracking-[0.08em] text-black/40">
+          <div className="text-[11px] font-semibold tracking-[0.08em] text-[var(--color-sidebar-muted)]">
             物流信息
           </div>
-          <div className="mt-2 space-y-1.5 text-sm text-black/66">
+          <div className="mt-2 space-y-1.5 text-sm text-[var(--color-sidebar-muted)]">
             <div>快递公司：{providerLabel}</div>
             <div className="flex items-start gap-2">
               <span className="shrink-0">物流单号：</span>
@@ -219,28 +219,28 @@ export function TradeOrderLogisticsCell({
                 ) : null}
               </div>
             </div>
-            <div className="text-xs text-black/48">点击状态标签可查看完整轨迹。</div>
+            <div className="text-xs text-[var(--color-sidebar-muted)]">点击状态标签可查看完整轨迹。</div>
           </div>
         </div>
       ) : null}
 
       {isOpen ? (
-        <div className="fixed inset-0 z-40 flex justify-end bg-black/16">
+        <div className="fixed inset-0 z-40 flex justify-end bg-[rgba(18,24,31,0.18)]">
           <div
-            className="h-full w-full max-w-[26rem] overflow-y-auto border-l border-black/8 bg-white px-5 py-5 shadow-[0_24px_56px_rgba(18,24,31,0.18)]"
+            className="h-full w-full max-w-[26rem] overflow-y-auto border-l border-[var(--color-border-soft)] bg-[var(--color-panel)] px-5 py-5 shadow-[0_24px_56px_rgba(18,24,31,0.18)]"
             role="dialog"
             aria-modal="true"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <h3 className="text-base font-semibold text-black/84">物流轨迹</h3>
-                <p className="mt-1 truncate text-sm text-black/55">
+                <h3 className="text-base font-semibold text-[var(--foreground)]">物流轨迹</h3>
+                <p className="mt-1 truncate text-sm text-[var(--color-sidebar-muted)]">
                   {providerLabel} / {normalizedTrackingNumber || "物流单号未知"}
                 </p>
               </div>
               <button
                 type="button"
-                className="rounded-full border border-black/10 px-3 py-1.5 text-xs text-black/58 hover:border-black/18 hover:bg-[rgba(247,248,250,0.92)]"
+                className="rounded-full border border-[var(--color-border-soft)] px-3 py-1.5 text-xs text-[var(--color-sidebar-muted)] hover:border-[var(--color-border)] hover:bg-[var(--color-shell-surface-soft)]"
                 onClick={() => setIsOpen(false)}
               >
                 关闭

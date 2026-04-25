@@ -9,6 +9,7 @@ import {
   canExecuteLeadImportBatchHardDelete,
   canExecuteLeadImportBatchRollback,
 } from "@/lib/auth/access";
+import { buildLeadImportBatchVisibilityWhere } from "@/lib/lead-imports/access";
 import {
   executeImportedCustomerDeletionTx,
   findImportedCustomerForDeletionByIdTx,
@@ -30,6 +31,7 @@ import {
 type RollbackViewer = {
   id: string;
   role: RoleCode;
+  teamId?: string | null;
 };
 
 type RollbackStatusVariant = "neutral" | "success" | "danger" | "warning" | "info";
@@ -389,9 +391,12 @@ function assertRollbackPermission(
 async function loadRollbackBatchTx(
   tx: Prisma.TransactionClient | typeof prisma,
   batchId: string,
+  actor: ImportedCustomerDeletionActor,
 ) {
-  return tx.leadImportBatch.findUnique({
-    where: { id: batchId },
+  return tx.leadImportBatch.findFirst({
+    where: {
+      AND: [{ id: batchId }, buildLeadImportBatchVisibilityWhere(actor)],
+    },
     select: rollbackBatchSelect,
   });
 }
@@ -1000,7 +1005,7 @@ async function prepareBatchRollbackTx(
   batchId: string,
   mode: LeadImportBatchRollbackMode,
 ): Promise<PreparedBatchRollback> {
-  const batch = await loadRollbackBatchTx(tx, batchId);
+  const batch = await loadRollbackBatchTx(tx, batchId, actor);
 
   if (!batch) {
     throw new Error("导入批次不存在。");

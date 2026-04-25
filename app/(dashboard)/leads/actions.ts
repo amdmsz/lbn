@@ -519,11 +519,15 @@ async function resolveBatchRecycleLeadSelection(input: {
 
   const visibleLeadIds = await prisma.lead.findMany({
     where: {
-      id: {
-        in: uniqueLeadIds,
-      },
-      ownerId: null,
-      ...scope,
+      AND: [
+        {
+          id: {
+            in: uniqueLeadIds,
+          },
+          ownerId: null,
+        },
+        scope,
+      ],
     },
     select: {
       id: true,
@@ -613,6 +617,11 @@ export async function batchAssignLeadsAction(
       role: {
         code: "SALES",
       },
+      ...(session.user.role === "SUPERVISOR"
+        ? session.user.teamId
+          ? { teamId: session.user.teamId }
+          : { id: "__missing_lead_assign_sales_team_scope__" }
+        : {}),
     },
     select: {
       id: true,
@@ -635,10 +644,14 @@ export async function batchAssignLeadsAction(
 
   const leads = await prisma.lead.findMany({
     where: {
-      id: {
-        in: uniqueLeadIds,
-      },
-      ...scope,
+      AND: [
+        {
+          id: {
+            in: uniqueLeadIds,
+          },
+        },
+        scope,
+      ],
     },
     select: {
       id: true,

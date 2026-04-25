@@ -35,18 +35,18 @@ function getRoleMeta(role: RoleCode) {
   switch (role) {
     case "SHIPPER":
       return {
-        scope: "发货执行默认入口",
-        description: "统一查看交易单、发货执行与批次结果。",
+        scope: "发货执行视角",
+        description: "按 supplier 子单处理报单、导出、物流回填和异常跟进。",
       };
     case "SALES":
       return {
-        scope: "交易单默认入口",
-        description: "统一回看成交父单与履约结果。",
+        scope: "我的成交与履约",
+        description: "查看自己成交父单的审核、收款和履约进度。",
       };
     default:
       return {
-        scope: "域级总览入口",
-        description: "统一承接交易、发货与批次回看。",
+        scope: "订单履约总览",
+        description: "父单保留成交真相，supplier 子单分别执行发货和物流。",
       };
   }
 }
@@ -107,6 +107,21 @@ function getBatchLegacyCount(batchData: BatchData) {
   return batchData.items.filter((item) => item.fileState === "LEGACY").length;
 }
 
+function ContextStrip({ items }: Readonly<{ items: string[] }>) {
+  return (
+    <div className="crm-subtle-panel flex flex-wrap items-center gap-2 px-3 py-2 text-[11px] font-medium tracking-[0.04em] text-[var(--color-sidebar-muted)]">
+      {items.map((item, index) => (
+        <span key={`${item}-${index}`} className="contents">
+          {index > 0 ? (
+            <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+          ) : null}
+          <span>{item}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function OrderFulfillmentCenter({
   role,
   activeView,
@@ -164,45 +179,17 @@ export function OrderFulfillmentCenter({
     batchData?.notice ??
     null;
 
-  const headerMeta = isTradeOrdersView ? (
-    <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.06em] text-[var(--color-sidebar-muted)]">
-      <span>{roleMeta.scope}</span>
-      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-      <span>{getOrderFulfillmentViewLabel(activeView)}</span>
-      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-      <span>焦点 {getTradeOrdersFocusLabel(tradeOrdersData)}</span>
-      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-      <span>parent-first</span>
-    </div>
-  ) : isShippingView ? (
-    <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.06em] text-[var(--color-sidebar-muted)]">
-      <span>{roleMeta.scope}</span>
-      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-      <span>{getOrderFulfillmentViewLabel(activeView)}</span>
-      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-      <span>
-        {shippingData.activeSupplier?.supplier.name ?? "待选择 supplier"}
-      </span>
-      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-      <span>stage {shippingData.filters.stageView}</span>
-    </div>
-  ) : isBatchesView ? (
-    <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.06em] text-[var(--color-sidebar-muted)]">
-      <span>{roleMeta.scope}</span>
-      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-      <span>{getOrderFulfillmentViewLabel(activeView)}</span>
-      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-      <span>{getBatchFileViewLabel(batchData.filters.fileView)}</span>
-      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-      <span>结果 / 审计</span>
-    </div>
-  ) : (
-    <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.06em] text-[var(--color-sidebar-muted)]">
-      <span>{roleMeta.scope}</span>
-      <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-      <span>{getOrderFulfillmentViewLabel(activeView)}</span>
-    </div>
-  );
+  const headerItems = [roleMeta.scope, getOrderFulfillmentViewLabel(activeView)];
+  if (isTradeOrdersView) {
+    headerItems.push(`焦点 ${getTradeOrdersFocusLabel(tradeOrdersData)}`, "parent-first");
+  } else if (isShippingView) {
+    headerItems.push(
+      shippingData.activeSupplier?.supplier.name ?? "待选择 supplier",
+      `阶段 ${shippingData.filters.stageView}`,
+    );
+  } else if (isBatchesView) {
+    headerItems.push(getBatchFileViewLabel(batchData.filters.fileView), "结果 / 审计");
+  }
 
   const summary = isTradeOrdersView ? (
     <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
@@ -219,20 +206,20 @@ export function OrderFulfillmentCenter({
         density="strip"
       />
       <MetricCard
-        label="已审核"
-        value={String(tradeOrdersData.summary.approvedCount)}
-        note="已进入履约与收款执行"
+        label="履约异常"
+        value={String(tradeOrdersData.summary.focusCounts.exception)}
+        note="优先排查报单、物流或状态冲突"
         density="strip"
       />
       <MetricCard
-        label="待回收金额"
-        value={formatCurrency(tradeOrdersData.summary.totalRemainingAmount)}
-        note="支付与催收仍在执行链路中"
+        label="成交金额"
+        value={formatCurrency(tradeOrdersData.summary.totalFinalAmount)}
+        note="父单成交金额，子单按 supplier 执行"
         density="strip"
       />
     </div>
   ) : isShippingView ? (
-    <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-5">
+    <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
       <MetricCard
         label="当前阶段"
         value={String(getShippingStageCount(shippingData))}
@@ -240,9 +227,9 @@ export function OrderFulfillmentCenter({
         density="strip"
       />
       <MetricCard
-        label="supplier 池"
-        value={String(shippingData.summary.supplierCount)}
-        note="当前筛选范围内可见 supplier 数量"
+        label="待报单"
+        value={String(shippingData.summary.pendingReportCount)}
+        note="尚未冻结导出给供货商的子单"
         density="strip"
       />
       <MetricCard
@@ -252,22 +239,16 @@ export function OrderFulfillmentCenter({
         density="strip"
       />
       <MetricCard
-        label="已发货"
-        value={String(shippingData.summary.shippedCount)}
-        note="已进入签收与回款关注阶段"
-        density="strip"
-      />
-      <MetricCard
-        label="履约异常"
+        label="异常"
         value={String(shippingData.summary.exceptionCount)}
-        note="优先处理取消、文件异常和状态冲突"
+        note="取消、文件异常或履约状态冲突"
         density="strip"
       />
     </div>
   ) : isBatchesView ? (
     <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
       <MetricCard
-        label="批次总数"
+        label="批次数"
         value={String(batchData.pagination.totalCount)}
         note="当前可见范围内的冻结导出批次"
         density="strip"
@@ -293,48 +274,35 @@ export function OrderFulfillmentCenter({
     </div>
   ) : undefined;
 
-  const toolbar = isTradeOrdersView ? (
-    <div className="space-y-2">
-      <RecordTabs activeValue={activeView} items={viewTabs} />
-      <div className="crm-subtle-panel flex flex-wrap items-center gap-2 px-3 py-2 text-[11px] font-medium tracking-[0.04em] text-[var(--color-sidebar-muted)]">
-        <span>焦点 {getTradeOrdersFocusLabel(tradeOrdersData)}</span>
-        <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-        <span>审核 {tradeOrdersData.filters.statusView || "全部"}</span>
-        <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-        <span>待审核 {tradeOrdersData.summary.pendingReviewCount}</span>
-        <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-        <span>{canAccessSalesOrderModule(role) ? "parent-first" : "只读总览"}</span>
-      </div>
-    </div>
-  ) : isShippingView ? (
-    <div className="space-y-2">
-      <RecordTabs activeValue={activeView} items={viewTabs} />
-      <div className="crm-subtle-panel flex flex-wrap items-center gap-2 px-3 py-2 text-[11px] font-medium tracking-[0.04em] text-[var(--color-sidebar-muted)]">
-        <span>阶段 {shippingData.filters.stageView}</span>
-        <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-        <span>{shippingData.activeSupplier?.supplier.name ?? "待选择 supplier"}</span>
-        <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-        <span>
-          {shippingData.activeBatch
+  const toolbarItems = isTradeOrdersView
+    ? [
+        `焦点 ${getTradeOrdersFocusLabel(tradeOrdersData)}`,
+        `审核 ${tradeOrdersData.filters.statusView || "全部"}`,
+        `待审核 ${tradeOrdersData.summary.pendingReviewCount}`,
+        canAccessSalesOrderModule(role) ? "parent-first" : "只读总览",
+      ]
+    : isShippingView
+      ? [
+          `阶段 ${shippingData.filters.stageView}`,
+          shippingData.activeSupplier?.supplier.name ?? "待选择 supplier",
+          shippingData.activeBatch
             ? `批次 ${shippingData.activeBatch.exportNo}`
-            : "当前未锁定批次"}
-        </span>
-        <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-        <span>{canAccessSalesOrderModule(role) ? "保留父单叙事" : "仅执行视角"}</span>
-      </div>
-    </div>
-  ) : isBatchesView ? (
+            : "当前未锁定批次",
+          canAccessSalesOrderModule(role) ? "保留父单叙事" : "执行视角",
+        ]
+      : isBatchesView
+        ? [
+            getBatchFileViewLabel(batchData.filters.fileView),
+            `文件就绪 ${getBatchReadyCount(batchData)}`,
+            `待补文件 ${getBatchPendingCount(batchData)}`,
+            `历史批次 ${getBatchLegacyCount(batchData)}`,
+          ]
+        : [];
+
+  const toolbar = toolbarItems.length ? (
     <div className="space-y-2">
       <RecordTabs activeValue={activeView} items={viewTabs} />
-      <div className="crm-subtle-panel flex flex-wrap items-center gap-2 px-3 py-2 text-[11px] font-medium tracking-[0.04em] text-[var(--color-sidebar-muted)]">
-        <span>{getBatchFileViewLabel(batchData.filters.fileView)}</span>
-        <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-        <span>文件就绪 {getBatchReadyCount(batchData)}</span>
-        <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-        <span>待补文件 {getBatchPendingCount(batchData)}</span>
-        <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-        <span>历史批次 {getBatchLegacyCount(batchData)}</span>
-      </div>
+      <ContextStrip items={toolbarItems} />
     </div>
   ) : undefined;
 
@@ -344,8 +312,8 @@ export function OrderFulfillmentCenter({
         <PageHeader
           eyebrow="订单履约业务域"
           title="订单中心"
-          description={undefined}
-          meta={headerMeta}
+          description={roleMeta.description}
+          meta={<ContextStrip items={headerItems} />}
           className="px-4 py-2 md:px-5 md:py-2.5"
           actions={
             <div className="crm-toolbar-cluster">

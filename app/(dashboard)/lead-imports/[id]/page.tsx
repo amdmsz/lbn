@@ -348,7 +348,7 @@ export default async function LeadImportDetailPage({
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const batch = await getLeadImportDetailData(
-    { id: session.user.id, role: session.user.role },
+    { id: session.user.id, role: session.user.role, teamId: session.user.teamId },
     id,
     getRequestedRollbackMode(resolvedSearchParams),
   );

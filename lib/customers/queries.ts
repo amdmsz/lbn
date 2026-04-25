@@ -345,6 +345,11 @@ export type CustomerOperatingDashboardEmployeeRow = {
 export type CustomerOperatingDashboardData = {
   scopeLabel: string;
   asOfDateLabel: string;
+  periodLabel: string;
+  filters: {
+    from: string;
+    to: string;
+  };
   summary: CustomerOperatingDashboardMetric[];
   employees: CustomerOperatingDashboardEmployeeRow[];
 };
@@ -874,6 +879,54 @@ function formatDashboardDate(value: Date) {
   }).format(value);
 }
 
+function formatDateInputValue(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseDashboardDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function parseDashboardDateRange(
+  rawSearchParams: Record<string, SearchParamsValue> | undefined,
+) {
+  const today = new Date();
+  const rawFrom = getParamValue(rawSearchParams?.from);
+  const rawTo = getParamValue(rawSearchParams?.to);
+  const parsedFrom = parseDashboardDate(rawFrom);
+  const parsedTo = parseDashboardDate(rawTo);
+  const baseDate = parsedFrom ?? parsedTo ?? today;
+  let rangeStart = startOfDay(parsedFrom ?? baseDate);
+  let rangeEnd = endOfDay(parsedTo ?? baseDate);
+
+  if (rangeStart.getTime() > rangeEnd.getTime()) {
+    [rangeStart, rangeEnd] = [startOfDay(rangeEnd), endOfDay(rangeStart)];
+  }
+
+  const from = formatDateInputValue(rangeStart);
+  const to = formatDateInputValue(rangeEnd);
+  const periodLabel =
+    from === to
+      ? formatDashboardDate(rangeStart)
+      : `${formatDashboardDate(rangeStart)} - ${formatDashboardDate(rangeEnd)}`;
+
+  return {
+    rangeStart,
+    rangeEnd,
+    from,
+    to,
+    periodLabel,
+  };
+}
+
 function createExecutionClassCountMap() {
   return customerExecutionClassValues.reduce<Record<CustomerExecutionClass, number>>(
     (result, value) => {
@@ -1094,9 +1147,11 @@ async function getCustomerCenterWorkspaceBase(
         userStatus: "ACTIVE",
         ...(actor.role === "ADMIN"
           ? {}
-          : actor.teamId
-            ? { teamId: actor.teamId }
-            : { id: "__missing_team_scope__" }),
+          : actor.role === "SUPERVISOR"
+            ? actor.teamId
+              ? { teamId: actor.teamId }
+              : { id: "__missing_team_scope__" }
+            : { id: actor.id }),
       },
       orderBy: [{ name: "asc" }, { username: "asc" }],
       select: {
@@ -2332,6 +2387,7 @@ export async function getCustomerCenterData(
 
 export async function getCustomerOperatingDashboardData(
   viewer: CustomerViewer,
+  rawSearchParams?: Record<string, SearchParamsValue> | undefined,
 ): Promise<CustomerOperatingDashboardData> {
   if (!canAccessCustomerModule(viewer.role)) {
     throw new Error("You do not have access to customers.");
@@ -2426,8 +2482,9 @@ export async function getCustomerOperatingDashboardData(
     getLatestCustomerAssignmentMap(customerSnapshots),
   ]);
   const now = new Date();
-  const todayStart = startOfDay(now);
-  const todayEnd = endOfDay(now);
+  const dashboardRange = parseDashboardDateRange(rawSearchParams);
+  const todayStart = dashboardRange.rangeStart;
+  const todayEnd = dashboardRange.rangeEnd;
   const stateMap = new Map(
     customerSnapshots.map((snapshot) => [
       snapshot.id,
@@ -2441,16 +2498,24 @@ export async function getCustomerOperatingDashboardData(
       ),
     ]),
   );
-  const scopeSalesUsers =
-    actor.role === "ADMIN" || actor.role === "SUPERVISOR" ? salesUsers : [];
+  const scopeSalesUsers = salesUsers;
   const scopeLabel =
-    actor.role === "ADMIN" ? "组织范围" : teams[0]?.name ?? "团队范围";
-  const asOfDateLabel = formatDashboardDate(todayStart);
+    actor.role === "ADMIN"
+      ? "组织范围"
+      : actor.role === "SUPERVISOR"
+        ? teams[0]?.name ?? "团队范围"
+        : "个人范围";
+  const asOfDateLabel = dashboardRange.periodLabel;
 
   if (scopeSalesUsers.length === 0) {
     return {
       scopeLabel,
       asOfDateLabel,
+      periodLabel: dashboardRange.periodLabel,
+      filters: {
+        from: dashboardRange.from,
+        to: dashboardRange.to,
+      },
       summary: [
         {
           label: "今日分配",
@@ -2742,6 +2807,11 @@ export async function getCustomerOperatingDashboardData(
   return {
     scopeLabel,
     asOfDateLabel,
+    periodLabel: dashboardRange.periodLabel,
+    filters: {
+      from: dashboardRange.from,
+      to: dashboardRange.to,
+    },
     summary: [
       {
         label: "今日分配",

@@ -1,13 +1,18 @@
 import { redirect } from "next/navigation";
 import { DashboardWorkbench } from "@/components/dashboard/dashboard-workbench";
 import { ManagementDashboardWorkbench } from "@/components/dashboard/management-dashboard-workbench";
+import { SalesDashboardWorkbench } from "@/components/dashboard/sales-dashboard-workbench";
 import { getDefaultRouteForRole } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
 import { getCustomerOperatingDashboardData } from "@/lib/customers/queries";
 import { getNavigationGroupsForRole } from "@/lib/navigation";
 import { getDashboardData } from "@/lib/reports/queries";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: Readonly<{
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}>) {
   const session = await auth();
 
   if (!session?.user) {
@@ -15,10 +20,7 @@ export default async function DashboardPage() {
   }
 
   const role = session.user.role;
-
-  if (role === "SALES") {
-    redirect("/customers");
-  }
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
 
   const navigationGroups = getNavigationGroupsForRole(
     role,
@@ -34,9 +36,19 @@ export default async function DashboardPage() {
       id: session.user.id,
       role,
       teamId: session.user.teamId,
-    });
+    }, resolvedSearchParams);
 
     return <ManagementDashboardWorkbench role={role} data={data} />;
+  }
+
+  if (role === "SALES") {
+    const data = await getCustomerOperatingDashboardData({
+      id: session.user.id,
+      role,
+      teamId: session.user.teamId,
+    }, resolvedSearchParams);
+
+    return <SalesDashboardWorkbench data={data} />;
   }
 
   const data = await getDashboardData({

@@ -17,6 +17,7 @@ import {
 import { prisma } from "@/lib/db/prisma";
 import { syncShippingCollectionTasks } from "@/lib/payments/mutations";
 import { generateShippingExportCsvForBatch } from "@/lib/shipping/export";
+import { buildShippingProductSummary } from "@/lib/shipping/product-summary";
 
 export type ShippingActor = {
   id: string;
@@ -200,18 +201,6 @@ function getShippingExportFailureMessage(error: unknown) {
 
 */
 
-function buildExportProductSummary(
-  items: Array<{
-    skuNameSnapshot: string;
-    specSnapshot: string;
-    qty: number;
-  }>,
-) {
-  return items
-    .map((item) => `${item.skuNameSnapshot}${item.specSnapshot}`)
-    .join("+");
-}
-
 function getShippingExportFailureMessage(error: unknown) {
   return error instanceof Error ? error.message : "Export file generation failed. Please retry.";
 }
@@ -368,7 +357,7 @@ async function buildShippingExportLineDrafts(
       receiverNameSnapshot,
       receiverPhoneSnapshot,
       receiverAddressSnapshot,
-      productSummarySnapshot: buildExportProductSummary(task.salesOrder.items),
+      productSummarySnapshot: buildShippingProductSummary(task.salesOrder.items),
       pieceCountSnapshot: task.salesOrder.items.reduce((total, item) => total + item.qty, 0),
       codAmountSnapshot: task.codAmount.toString(),
       insuranceRequiredSnapshot: task.insuranceRequired,
@@ -644,7 +633,7 @@ async function buildShippingExportLineDrafts(
       receiverNameSnapshot,
       receiverPhoneSnapshot,
       receiverAddressSnapshot,
-      productSummarySnapshot: buildExportProductSummary(task.salesOrder.items),
+      productSummarySnapshot: buildShippingProductSummary(task.salesOrder.items),
       pieceCountSnapshot: task.salesOrder.items.reduce((total, item) => total + item.qty, 0),
       codAmountSnapshot: task.codAmount.toString(),
       insuranceRequiredSnapshot: task.insuranceRequired,

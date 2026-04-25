@@ -74,7 +74,15 @@ type FollowUpDialogState = {
   initialResult: string;
 };
 
+type FocusedCustomerState = {
+  id: string;
+  name: string;
+  phone: string;
+  touchedAt: string;
+};
+
 const customerViewStorageKey = "customer-center-view-mode";
+const customerFocusStorageKey = "customer-center-last-focused-customer";
 const initialBatchTagNoticeState =
   createInitialCustomerBatchActionNoticeState("已有标签");
 const initialBatchRecycleNoticeState =
@@ -490,6 +498,25 @@ export function CustomersTable({
     item: null,
     initialResult: "",
   });
+  const [focusedCustomer, setFocusedCustomer] = useState<FocusedCustomerState | null>(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    const stored = window.localStorage.getItem(customerFocusStorageKey);
+
+    if (!stored) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(stored) as FocusedCustomerState;
+      return parsed?.id && parsed.name && parsed.phone ? parsed : null;
+    } catch {
+      window.localStorage.removeItem(customerFocusStorageKey);
+      return null;
+    }
+  });
   const [batchTagPending, startBatchTagTransition] = useTransition();
   const [batchRecyclePending, startBatchRecycleTransition] = useTransition();
   const router = useRouter();
@@ -528,6 +555,26 @@ export function CustomersTable({
       window.clearTimeout(timer);
     };
   }, []);
+
+  function rememberFocusedCustomer(item: CustomerListItem) {
+    const nextFocusedCustomer = {
+      id: item.id,
+      name: item.name,
+      phone: item.phone,
+      touchedAt: new Date().toISOString(),
+    } satisfies FocusedCustomerState;
+
+    setFocusedCustomer(nextFocusedCustomer);
+    window.localStorage.setItem(
+      customerFocusStorageKey,
+      JSON.stringify(nextFocusedCustomer),
+    );
+  }
+
+  function clearFocusedCustomer() {
+    setFocusedCustomer(null);
+    window.localStorage.removeItem(customerFocusStorageKey);
+  }
 
   function handleChangeView(nextValue: CustomerViewMode) {
     setViewMode(nextValue);
@@ -611,6 +658,7 @@ export function CustomersTable({
     item: CustomerListItem,
     options: Partial<Omit<FollowUpDialogState, "item">> = {},
   ) {
+    rememberFocusedCustomer(item);
     setFollowUpDialogState({
       item,
       initialResult: options.initialResult ?? getSuggestedFollowUpResult(item),
@@ -668,6 +716,7 @@ export function CustomersTable({
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href={`/customers/${row.id}`}
+              onClick={() => rememberFocusedCustomer(row)}
               className="text-sm font-semibold text-[var(--foreground)] transition-colors hover:text-[var(--color-accent-strong)]"
             >
               {row.name}
@@ -706,6 +755,7 @@ export function CustomersTable({
             customerName={row.name}
             phone={row.phone}
             triggerSource="table"
+            onFocusCustomer={() => rememberFocusedCustomer(row)}
             className="shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow] duration-150 hover:border-[rgba(122,154,255,0.16)] hover:bg-[var(--color-shell-hover)]"
           />
           <div className="text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
@@ -1033,13 +1083,41 @@ export function CustomersTable({
                 </div>
               ) : null}
 
+              {focusedCustomer ? (
+                <div className="flex flex-col gap-2 rounded-[0.95rem] border border-[rgba(79,125,247,0.16)] bg-[linear-gradient(180deg,rgba(248,250,255,0.98),rgba(255,255,255,0.96))] px-4 py-3 text-sm shadow-[var(--color-shell-shadow-sm)] sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-accent-strong)]">
+                      刚才操作的客户
+                    </p>
+                    <p className="mt-1 truncate font-semibold text-[var(--foreground)]">
+                      {focusedCustomer.name} · {focusedCustomer.phone}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <a
+                      href={`#customer-row-${focusedCustomer.id}`}
+                      className="crm-button crm-button-primary min-h-0 px-3 py-2 text-xs"
+                    >
+                      定位到该客户
+                    </a>
+                    <button
+                      type="button"
+                      onClick={clearFocusedCustomer}
+                      className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-xs"
+                    >
+                      清除标记
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="grid grid-cols-1 gap-3 md:hidden">
                 {viewMode === "cards" ? (
                   <div className="grid grid-cols-1 gap-3">
                     {items.map((item) => (
-                      <CustomerListCard
-                        key={item.id}
-                        item={item}
+                    <CustomerListCard
+                      key={item.id}
+                      item={item}
                         callResultOptions={callResultOptions}
                         canCreateCallRecord={canCreateCallRecord}
                         canCreateSalesOrder={canCreateSalesOrder}
@@ -1048,8 +1126,10 @@ export function CustomersTable({
                         selected={
                           selectionMode === "filtered" || manualSelectedIds.includes(item.id)
                         }
-                        onToggleSelected={() => toggleSelected(item.id)}
-                      />
+                      onToggleSelected={() => toggleSelected(item.id)}
+                      focused={focusedCustomer?.id === item.id}
+                      onFocusCustomer={() => rememberFocusedCustomer(item)}
+                    />
                     ))}
                   </div>
                 ) : (
@@ -1057,6 +1137,12 @@ export function CustomersTable({
                     density="compact"
                     rows={items}
                     getRowKey={(row) => row.id}
+                    getRowId={(row) => `customer-row-${row.id}`}
+                    getRowClassName={(row) =>
+                      focusedCustomer?.id === row.id
+                        ? "scroll-mt-28 bg-[rgba(79,125,247,0.07)] shadow-[inset_3px_0_0_var(--color-accent)]"
+                        : undefined
+                    }
                     columns={columns}
                   />
                 )}
@@ -1067,6 +1153,12 @@ export function CustomersTable({
                   density="compact"
                   rows={items}
                   getRowKey={(row) => row.id}
+                  getRowId={(row) => `customer-row-${row.id}`}
+                  getRowClassName={(row) =>
+                    focusedCustomer?.id === row.id
+                      ? "scroll-mt-28 bg-[rgba(79,125,247,0.07)] shadow-[inset_3px_0_0_var(--color-accent)]"
+                      : undefined
+                  }
                   columns={columns}
                 />
               </div>

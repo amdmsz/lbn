@@ -109,7 +109,7 @@ export async function generateShippingExportCsvForBatch(exportBatchId: string) {
   }
 
   if (batch.lines.length === 0) {
-    throw new Error("当前历史批次尚未回填冻结快照，暂不支持重生成文件。");
+    throw new Error("当前历史批次尚未回填冻结快照，暂不支持重新生成文件。");
   }
 
   const exportedFile = await writeShippingExportCsvFile({

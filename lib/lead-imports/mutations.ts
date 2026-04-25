@@ -23,7 +23,6 @@ import {
   setLeadImportBatchFailed,
   updateLeadImportBatchProgress,
 } from "@/lib/lead-imports/batch-state";
-import { createCustomerContinuationImportBatch } from "@/lib/lead-imports/customer-continuation-import";
 import { parseLeadImportBuffer, parseLeadImportFile } from "@/lib/lead-imports/file-parser";
 import {
   LEAD_IMPORT_TEMPLATE_NONE_VALUE,
@@ -44,6 +43,25 @@ type Actor = {
 };
 
 type ImportedLeadData = ReturnType<typeof buildMappedLeadData>["mappedData"];
+
+type ExistingCustomerForLeadImport = {
+  id: string;
+  phone: string;
+  name: string;
+  ownerId: string | null;
+  owner: {
+    name: string;
+    username: string;
+  } | null;
+};
+
+function buildExistingCustomerDuplicateReason(customer: ExistingCustomerForLeadImport) {
+  const ownerText = customer.owner
+    ? `\uFF0C\u5F53\u524D\u8D1F\u8D23\u4EBA\uFF1A${customer.owner.name} (@${customer.owner.username})`
+    : "\uFF0C\u5F53\u524D\u6682\u65E0\u8D1F\u8D23\u4EBA";
+
+  return `\u7CFB\u7EDF\u5185\u5DF2\u5B58\u5728\u540C\u624B\u673A\u53F7\u5BA2\u6237\uFF1A${customer.name}${ownerText}`;
+}
 
 type LeadImportPersistedRowSummary = {
   rowNumber: number;
@@ -227,14 +245,7 @@ async function createOrMatchCustomerForLead(
       ownerId: string | null;
     };
     mappedData: ImportedLeadData;
-    existingCustomerMap: Map<
-      string,
-      {
-        id: string;
-        phone: string;
-        name: string;
-      }
-    >;
+    existingCustomerMap: Map<string, ExistingCustomerForLeadImport>;
     sourceTag: {
       id: string;
       code: string;
@@ -262,6 +273,13 @@ async function createOrMatchCustomerForLead(
         id: true,
         phone: true,
         name: true,
+        ownerId: true,
+        owner: {
+          select: {
+            name: true,
+            username: true,
+          },
+        },
       },
     }));
 
@@ -467,14 +485,7 @@ async function processLeadImportRowTx(
         name: string | null;
       }
     >;
-    existingCustomerMap: Map<
-      string,
-      {
-        id: string;
-        phone: string;
-        name: string;
-      }
-    >;
+    existingCustomerMap: Map<string, ExistingCustomerForLeadImport>;
     seenPhones: Map<string, number>;
     sourceTag: {
       id: string;
@@ -490,13 +501,7 @@ async function processLeadImportRowTx(
         name: string | null;
       }
     | null;
-  customer:
-    | {
-        id: string;
-        phone: string;
-        name: string;
-      }
-    | null;
+  customer: ExistingCustomerForLeadImport | null;
 }> {
   return prisma.$transaction(async (tx) => {
     const existingRow = await tx.leadImportRow.findUnique({
@@ -520,6 +525,13 @@ async function processLeadImportRowTx(
                 id: true,
                 phone: true,
                 name: true,
+                ownerId: true,
+                owner: {
+                  select: {
+                    name: true,
+                    username: true,
+                  },
+                },
               },
             },
           },
@@ -563,13 +575,7 @@ async function processLeadImportRowTx(
           ownerId: string | null;
         }
       | null = null;
-    let customer:
-      | {
-          id: string;
-          phone: string;
-          name: string;
-        }
-      | null = null;
+    let customer: ExistingCustomerForLeadImport | null = null;
 
     if (!phoneRaw.trim()) {
       status = LeadImportRowStatus.FAILED;
@@ -583,9 +589,15 @@ async function processLeadImportRowTx(
       dedupType = LeadDedupType.BATCH_DUPLICATE;
     } else if (input.existingLeadMap.has(normalizedPhone)) {
       status = LeadImportRowStatus.DUPLICATE;
-      errorReason = "系统内已存在相同手机号的线索";
+      errorReason = "\u7CFB\u7EDF\u5185\u5DF2\u5B58\u5728\u76F8\u540C\u624B\u673A\u53F7\u7684\u7EBF\u7D22";
       dedupType = LeadDedupType.EXISTING_LEAD;
       matchedLeadId = input.existingLeadMap.get(normalizedPhone)?.id ?? null;
+    } else if (input.existingCustomerMap.has(normalizedPhone)) {
+      status = LeadImportRowStatus.DUPLICATE;
+      dedupType = LeadDedupType.EXISTING_CUSTOMER;
+      errorReason = buildExistingCustomerDuplicateReason(
+        input.existingCustomerMap.get(normalizedPhone)!,
+      );
     } else {
       importedLead = await tx.lead.create({
         data: {
@@ -719,415 +731,6 @@ async function processLeadImportRowTx(
   });
 }
 
-export async function createLeadImportBatch(
-  actor: Actor,
-  input: {
-    file: File;
-    templateId?: string;
-    defaultLeadSource: LeadSource;
-    mappingConfig: string;
-    importMode?: LeadImportMode;
-  },
-) {
-  assertAccess(actor.role);
-
-  if (input.importMode === "customer_continuation") {
-    return createCustomerContinuationImportBatch(actor, {
-      file: input.file,
-      defaultLeadSource: input.defaultLeadSource,
-      mappingConfig: input.mappingConfig,
-    });
-  }
-
-  if (!input.file || input.file.size === 0) {
-    throw new Error("请先选择要上传的文件。");
-  }
-
-  const parsedInput = createBatchSchema.parse({
-    templateId: input.templateId,
-    defaultLeadSource: input.defaultLeadSource,
-    mappingConfig: input.mappingConfig,
-  });
-
-  const parsedFile = await parseLeadImportFile(input.file);
-  const mappingConfig = sanitizeLeadImportMapping(
-    parseMappingConfig(parsedInput.mappingConfig),
-    parsedFile.headers,
-  );
-
-  const missingHeaders = leadImportFieldDefinitions
-    .filter((field) => field.required && !mappingConfig[field.key])
-    .map((field) => field.label);
-
-  if (missingHeaders.length > 0) {
-    throw new Error(`导入文件缺少固定模板列：${missingHeaders.join(" / ")}`);
-  }
-
-  const template =
-    parsedInput.templateId &&
-    parsedInput.templateId !== LEAD_IMPORT_TEMPLATE_NONE_VALUE
-      ? await prisma.leadImportTemplate.findFirst({
-          where: {
-            id: parsedInput.templateId,
-            isActive: true,
-          },
-          select: {
-            id: true,
-            name: true,
-          },
-        })
-      : null;
-
-  const batch = await prisma.leadImportBatch.create({
-    data: {
-      createdById: actor.id,
-      templateId: template?.id ?? null,
-      fileName: input.file.name,
-      fileType: parsedFile.fileType,
-      status: LeadImportBatchStatus.IMPORTING,
-      defaultLeadSource: parsedInput.defaultLeadSource,
-      mappingConfig: mappingConfig as Prisma.InputJsonValue,
-      headers: parsedFile.headers as Prisma.InputJsonValue,
-      totalRows: parsedFile.rows.length,
-    },
-    select: { id: true },
-  });
-
-  try {
-    const actorTeam = await prisma.user.findUnique({
-      where: { id: actor.id },
-      select: { teamId: true },
-    });
-
-    const uniqueCandidatePhones = [
-      ...new Set(
-        parsedFile.rows
-          .map((row) =>
-            normalizeImportedPhone(getMappedValue(row.rawData, mappingConfig, "phone")),
-          )
-          .filter(Boolean),
-      ),
-    ];
-
-    const [existingLeads, existingCustomers] = await Promise.all([
-      prisma.lead.findMany({
-        where: withVisibleLeadWhere({
-          phone: {
-            in: uniqueCandidatePhones,
-          },
-        }),
-        select: {
-          id: true,
-          phone: true,
-          name: true,
-        },
-      }),
-      prisma.customer.findMany({
-        where: {
-          phone: {
-            in: uniqueCandidatePhones,
-          },
-        },
-        select: {
-          id: true,
-          phone: true,
-          name: true,
-        },
-      }),
-    ]);
-
-    const existingLeadMap = new Map(existingLeads.map((lead) => [lead.phone, lead]));
-    const existingCustomerMap = new Map(
-      existingCustomers.map((customer) => [customer.phone, customer]),
-    );
-    const seenPhones = new Map<string, number>();
-
-    const report = await prisma.$transaction(async (tx) => {
-      let successRows = 0;
-      let failedRows = 0;
-      let duplicateRows = 0;
-      let createdCustomerRows = 0;
-      let matchedCustomerRows = 0;
-      const sourceTag = await tx.tag.findFirst({
-        where: {
-          isActive: true,
-          code: {
-            in: getSourceTagCodeCandidates(parsedInput.defaultLeadSource),
-          },
-        },
-        orderBy: { createdAt: "asc" },
-        select: {
-          id: true,
-          code: true,
-        },
-      });
-
-      await createOperationLog(tx, {
-        actor: { connect: { id: actor.id } },
-        module: OperationModule.LEAD_IMPORT,
-        action: "lead_import.batch_created",
-        targetType: OperationTargetType.LEAD_IMPORT_BATCH,
-        targetId: batch.id,
-        description: `创建线索导入批次：${input.file.name}`,
-        afterData: {
-          fileName: input.file.name,
-          fileType: parsedFile.fileType,
-          totalRows: parsedFile.rows.length,
-          templateId: template?.id ?? null,
-          defaultLeadSource: parsedInput.defaultLeadSource,
-        },
-      });
-
-      for (const row of parsedFile.rows) {
-        const { phoneRaw, normalizedPhone, mappedData } = buildMappedLeadData(
-          row.rawData,
-          mappingConfig,
-          parsedInput.defaultLeadSource,
-        );
-
-        let status: LeadImportRowStatus = LeadImportRowStatus.IMPORTED;
-        let errorReason: string | null = null;
-        let dedupType: LeadDedupType | null = null;
-        let matchedLeadId: string | null = null;
-        let importedLeadId: string | null = null;
-        let linkedCustomerId: string | null = null;
-        let linkedCustomerName: string | null = null;
-        let mergeAction: LeadCustomerMergeAction | null = null;
-        let tagSynced = false;
-        let createdLeadSnapshot: {
-          name: string | null;
-          phone: string;
-        } | null = null;
-
-        if (!phoneRaw.trim()) {
-          status = LeadImportRowStatus.FAILED;
-          errorReason = "手机号为空";
-          failedRows += 1;
-        } else if (!normalizedPhone) {
-          status = LeadImportRowStatus.FAILED;
-          errorReason = "手机号格式无效";
-          failedRows += 1;
-        } else if (seenPhones.has(normalizedPhone)) {
-          status = LeadImportRowStatus.DUPLICATE;
-          errorReason = `与本批次第 ${seenPhones.get(normalizedPhone)} 行手机号重复`;
-          dedupType = LeadDedupType.BATCH_DUPLICATE;
-          duplicateRows += 1;
-        } else if (existingLeadMap.has(normalizedPhone)) {
-          status = LeadImportRowStatus.DUPLICATE;
-          errorReason = "系统内已存在相同手机号的线索";
-          dedupType = LeadDedupType.EXISTING_LEAD;
-          matchedLeadId = existingLeadMap.get(normalizedPhone)?.id ?? null;
-          duplicateRows += 1;
-        } else {
-          const createdLead = await tx.lead.create({
-            data: {
-              source: parsedInput.defaultLeadSource,
-              phone: normalizedPhone,
-              name: mappedData.name,
-              address: mappedData.address,
-              interestedProduct: mappedData.interestedProduct,
-              campaignName: mappedData.campaignName,
-              sourceDetail: mappedData.sourceDetail,
-              remark: mappedData.remark,
-              status: "NEW",
-            },
-            select: {
-              id: true,
-              phone: true,
-              name: true,
-              ownerId: true,
-            },
-          });
-
-          createdLeadSnapshot = {
-            name: createdLead.name,
-            phone: createdLead.phone,
-          };
-          importedLeadId = createdLead.id;
-          successRows += 1;
-          seenPhones.set(normalizedPhone, row.rowNumber);
-
-          await createOperationLog(tx, {
-            actor: { connect: { id: actor.id } },
-            module: OperationModule.LEAD_IMPORT,
-            action: "lead.imported_from_batch",
-            targetType: OperationTargetType.LEAD,
-            targetId: createdLead.id,
-            description: `通过导入批次 ${input.file.name} 创建线索 ${createdLead.name ?? createdLead.phone}`,
-            afterData: {
-              batchId: batch.id,
-              rowNumber: row.rowNumber,
-              phone: createdLead.phone,
-              source: parsedInput.defaultLeadSource,
-            },
-          });
-
-          const mergeResult = await createOrMatchCustomerForLead(tx, {
-            actorId: actor.id,
-            batchId: batch.id,
-            rowNumber: row.rowNumber,
-            fileName: input.file.name,
-            source: parsedInput.defaultLeadSource,
-            lead: createdLead,
-            mappedData,
-            existingCustomerMap,
-            sourceTag,
-            actorTeamId: actorTeam?.teamId ?? null,
-          });
-
-          linkedCustomerId = mergeResult.customer.id;
-          linkedCustomerName = mergeResult.customer.name;
-          mergeAction = mergeResult.action;
-          tagSynced = mergeResult.tagSynced;
-
-          if (mergeAction === LeadCustomerMergeAction.CREATED_CUSTOMER) {
-            createdCustomerRows += 1;
-          } else {
-            matchedCustomerRows += 1;
-          }
-        }
-
-        if (
-          normalizedPhone &&
-          !seenPhones.has(normalizedPhone) &&
-          status !== LeadImportRowStatus.DUPLICATE
-        ) {
-          seenPhones.set(normalizedPhone, row.rowNumber);
-        }
-
-        const createdRow = await tx.leadImportRow.create({
-          data: {
-            batchId: batch.id,
-            rowNumber: row.rowNumber,
-            status,
-            phoneRaw: normalizeOptional(phoneRaw),
-            normalizedPhone: normalizeOptional(normalizedPhone),
-            mappedName: mappedData.name,
-            errorReason,
-            rawData: row.rawData as Prisma.InputJsonValue,
-            mappedData: mappedData as Prisma.InputJsonValue,
-            dedupType,
-            matchedLeadId,
-            importedLeadId,
-          },
-          select: {
-            id: true,
-          },
-        });
-
-        if (dedupType) {
-          await tx.leadDedupLog.create({
-            data: {
-              batchId: batch.id,
-              rowId: createdRow.id,
-              phone: normalizedPhone || phoneRaw,
-              dedupType,
-              matchedLeadId,
-              reason: errorReason,
-            },
-          });
-        }
-
-        if (importedLeadId && linkedCustomerId && mergeAction) {
-          await tx.leadCustomerMergeLog.create({
-            data: {
-              batchId: batch.id,
-              rowId: createdRow.id,
-              leadId: importedLeadId,
-              leadIdSnapshot: importedLeadId,
-              leadNameSnapshot: createdLeadSnapshot?.name ?? null,
-              leadPhoneSnapshot:
-                createdLeadSnapshot?.phone ?? normalizedPhone ?? phoneRaw,
-              customerId: linkedCustomerId,
-              action: mergeAction,
-              source: parsedInput.defaultLeadSource,
-              phone: normalizedPhone || phoneRaw,
-              tagSynced,
-              actorId: actor.id,
-              note: linkedCustomerName,
-            },
-          });
-        }
-      }
-
-      await tx.leadImportBatch.update({
-        where: { id: batch.id },
-        data: {
-          status: LeadImportBatchStatus.COMPLETED,
-          successRows,
-          failedRows,
-          duplicateRows,
-          createdCustomerRows,
-          matchedCustomerRows,
-          importedAt: new Date(),
-          report: {
-            headers: parsedFile.headers,
-            mappingConfig,
-            templateName: template?.name ?? null,
-            generatedAt: new Date().toISOString(),
-          },
-        },
-      });
-
-      await createOperationLog(tx, {
-        actor: { connect: { id: actor.id } },
-        module: OperationModule.LEAD_IMPORT,
-        action: "lead_import.batch_completed",
-        targetType: OperationTargetType.LEAD_IMPORT_BATCH,
-        targetId: batch.id,
-        description: `完成线索导入批次：${input.file.name}`,
-        afterData: {
-          totalRows: parsedFile.rows.length,
-          successRows,
-          failedRows,
-          duplicateRows,
-          createdCustomerRows,
-          matchedCustomerRows,
-        },
-      });
-
-      return {
-        successRows,
-        failedRows,
-        duplicateRows,
-        createdCustomerRows,
-        matchedCustomerRows,
-      };
-    });
-
-    return {
-      batchId: batch.id,
-      ...report,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "导入失败，请稍后重试。";
-
-    await prisma.leadImportBatch.update({
-      where: { id: batch.id },
-      data: {
-        status: LeadImportBatchStatus.FAILED,
-        errorMessage: message,
-      },
-    });
-
-    await prisma.operationLog.create({
-      data: {
-        actorId: actor.id,
-        module: OperationModule.LEAD_IMPORT,
-        action: "lead_import.batch_failed",
-        targetType: OperationTargetType.LEAD_IMPORT_BATCH,
-        targetId: batch.id,
-        description: `线索导入批次失败：${input.file.name}`,
-        afterData: {
-          errorMessage: message,
-        },
-      },
-    });
-
-    throw error;
-  }
-}
-
 export async function processLeadImportBatchAsync(
   batchId: string,
   options?: {
@@ -1222,6 +825,13 @@ export async function processLeadImportBatchAsync(
         id: true,
         phone: true,
         name: true,
+        ownerId: true,
+        owner: {
+          select: {
+            name: true,
+            username: true,
+          },
+        },
       },
     }),
     prisma.tag.findFirst({

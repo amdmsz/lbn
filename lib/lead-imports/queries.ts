@@ -6,9 +6,13 @@ import {
 } from "@prisma/client";
 import { z } from "zod";
 import {
-  canAccessLeadImportModule,
   canExecuteLeadImportBatchHardDelete,
 } from "@/lib/auth/access";
+import {
+  assertLeadImportAccess,
+  buildLeadImportBatchVisibilityWhere,
+  type LeadImportAccessViewer,
+} from "@/lib/lead-imports/access";
 import {
   getLeadImportBatchRollbackPreview,
   parseLeadImportBatchRollbackExecutionSnapshot,
@@ -45,10 +49,7 @@ import {
 
 type SearchParamsValue = string | string[] | undefined;
 
-export type LeadImportViewer = {
-  id: string;
-  role: RoleCode;
-};
+export type LeadImportViewer = LeadImportAccessViewer;
 
 export type LeadImportListFilters = {
   mode: LeadImportMode;
@@ -73,9 +74,7 @@ function getParamValue(value: SearchParamsValue) {
 }
 
 function assertAccess(role: RoleCode) {
-  if (!canAccessLeadImportModule(role)) {
-    throw new Error("当前角色无权访问导入中心。");
-  }
+  assertLeadImportAccess(role);
 }
 
 function parseCustomerContinuationBatchReport(
@@ -640,6 +639,7 @@ export async function getLeadImportListData(
   const filters = parseLeadImportListFilters(rawSearchParams);
   const where = {
     AND: [
+      buildLeadImportBatchVisibilityWhere(viewer),
       filters.keyword
         ? {
             OR: [
@@ -980,8 +980,10 @@ export async function getLeadImportBatchProgressData(
 ) {
   assertAccess(viewer.role);
 
-  const batch = await prisma.leadImportBatch.findUnique({
-    where: { id: batchId },
+  const batch = await prisma.leadImportBatch.findFirst({
+    where: {
+      AND: [{ id: batchId }, buildLeadImportBatchVisibilityWhere(viewer)],
+    },
     select: leadImportBatchProgressSelect,
   });
 
@@ -1010,8 +1012,10 @@ export async function getLeadImportDetailData(
 ) {
   assertAccess(viewer.role);
 
-  const batch = await prisma.leadImportBatch.findUnique({
-    where: { id: batchId },
+  const batch = await prisma.leadImportBatch.findFirst({
+    where: {
+      AND: [{ id: batchId }, buildLeadImportBatchVisibilityWhere(viewer)],
+    },
     select: {
       id: true,
       fileName: true,

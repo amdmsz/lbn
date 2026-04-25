@@ -39,6 +39,7 @@ export async function GET(
     {
       id: session.user.id,
       role: session.user.role,
+      teamId: session.user.teamId,
     },
     batchId,
   );

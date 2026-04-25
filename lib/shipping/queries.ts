@@ -369,6 +369,11 @@ export type ShippingOperationsItem = {
     id: string;
     name: string;
     phone: string;
+    owner: {
+      id: string;
+      name: string;
+      username: string;
+    } | null;
   };
   salesOrder: {
     id: string;
@@ -1382,6 +1387,13 @@ export async function getShippingOperationsPageData(
               id: true,
               name: true,
               phone: true,
+              owner: {
+                select: {
+                  id: true,
+                  name: true,
+                  username: true,
+                },
+              },
             },
           },
           salesOrder: {
@@ -1482,6 +1494,13 @@ export async function getShippingOperationsPageData(
                 id: true,
                 name: true,
                 phone: true,
+                owner: {
+                  select: {
+                    id: true,
+                    name: true,
+                    username: true,
+                  },
+                },
               },
             },
             salesOrder: {

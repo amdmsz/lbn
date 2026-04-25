@@ -478,6 +478,7 @@ const dedupTypeMeta: Record<
   { label: string; variant: StatusBadgeVariant }
 > = {
   EXISTING_LEAD: { label: "系统内已存在线索", variant: "neutral" },
+  EXISTING_CUSTOMER: { label: "系统内已存在客户", variant: "info" },
   BATCH_DUPLICATE: { label: "本批次内重复", variant: "warning" },
 };
 

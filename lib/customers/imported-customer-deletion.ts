@@ -1327,6 +1327,7 @@ export async function deleteImportedCustomersDirect(
     role: RoleCode;
   },
   input: {
+    sourceBatchId?: string | null;
     customerIds: string[];
     reason: string;
   },
@@ -1384,6 +1385,17 @@ export async function deleteImportedCustomersDirect(
             pendingRequest,
             suggestedReviewer,
           });
+
+          if (input.sourceBatchId && guard.source?.batchId !== input.sourceBatchId) {
+            return {
+              customerId: customer.id,
+              customerName: customer.name,
+              sourceBatchId: guard.source?.batchId ?? null,
+              redirectTo: null,
+              status: "skipped" as const,
+              message: "该客户不是当前导入批次产生的客户，已跳过。",
+            };
+          }
 
           if (!guard.canDirectDelete) {
             return {

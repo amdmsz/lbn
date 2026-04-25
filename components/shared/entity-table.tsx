@@ -15,6 +15,8 @@ export function EntityTable<T>({
   columns,
   rows,
   getRowKey,
+  getRowId,
+  getRowClassName,
   emptyTitle = "暂无数据",
   emptyDescription = "当前筛选条件下没有匹配的数据。",
   className,
@@ -24,6 +26,8 @@ export function EntityTable<T>({
   columns: EntityTableColumn<T>[];
   rows: T[];
   getRowKey: (row: T, index: number) => string;
+  getRowId?: (row: T, index: number) => string | undefined;
+  getRowClassName?: (row: T, index: number) => string | undefined;
   emptyTitle?: string;
   emptyDescription?: string;
   className?: string;
@@ -73,7 +77,11 @@ export function EntityTable<T>({
         </thead>
         <tbody>
           {rows.map((row, index) => (
-            <tr key={getRowKey(row, index)}>
+            <tr
+              key={getRowKey(row, index)}
+              id={getRowId?.(row, index)}
+              className={getRowClassName?.(row, index)}
+            >
               {columns.map((column) => (
                 <td
                   key={column.key}

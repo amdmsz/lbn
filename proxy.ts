@@ -3,6 +3,12 @@ import { NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { canAccessPath, getDefaultRouteForRole } from "@/lib/auth/access";
 
+function assignInternalRoute(url: URL, route: string) {
+  const destination = new URL(route, url.origin);
+  url.pathname = destination.pathname;
+  url.search = destination.search;
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const token = await getToken({
@@ -13,10 +19,10 @@ export async function proxy(request: NextRequest) {
   if (pathname === "/login") {
     if (token?.role) {
       const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = token.mustChangePassword
-        ? "/change-password"
-        : getDefaultRouteForRole(token.role);
-      redirectUrl.search = "";
+      assignInternalRoute(
+        redirectUrl,
+        token.mustChangePassword ? "/change-password" : getDefaultRouteForRole(token.role),
+      );
       return NextResponse.redirect(redirectUrl);
     }
 
@@ -39,10 +45,10 @@ export async function proxy(request: NextRequest) {
 
   if (!canAccessPath(token.role, pathname, token.permissionCodes ?? [])) {
     const fallbackUrl = request.nextUrl.clone();
-    fallbackUrl.pathname = token.mustChangePassword
-      ? "/change-password"
-      : getDefaultRouteForRole(token.role);
-    fallbackUrl.search = "";
+    assignInternalRoute(
+      fallbackUrl,
+      token.mustChangePassword ? "/change-password" : getDefaultRouteForRole(token.role),
+    );
     return NextResponse.redirect(fallbackUrl);
   }
 
@@ -61,6 +67,7 @@ export const config = {
     "/customers/:path*",
     "/suppliers/:path*",
     "/products/:path*",
+    "/recycle-bin/:path*",
     "/fulfillment/:path*",
     "/live-sessions/:path*",
     "/orders/:path*",

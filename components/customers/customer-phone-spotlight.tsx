@@ -13,6 +13,7 @@ export function CustomerPhoneSpotlight({
   triggerSource,
   variant = "table",
   className,
+  onFocusCustomer,
 }: Readonly<{
   customerId: string;
   customerName: string;
@@ -20,6 +21,7 @@ export function CustomerPhoneSpotlight({
   triggerSource: MobileCallTriggerSource;
   variant?: CustomerPhoneSpotlightVariant;
   className?: string;
+  onFocusCustomer?: () => void;
 }>) {
   const normalizedPhone = phone.trim();
   const hasPhone = normalizedPhone.length > 0 && normalizedPhone !== "暂无电话";
@@ -55,6 +57,7 @@ export function CustomerPhoneSpotlight({
             customerName={customerName}
             phone={normalizedPhone}
             triggerSource={triggerSource}
+            onClick={onFocusCustomer}
             label="拨打"
             className={cn(
               "inline-flex items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-strong)] font-medium text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,transform,box-shadow] duration-150 motion-safe:hover:-translate-y-[1px] md:hidden",
