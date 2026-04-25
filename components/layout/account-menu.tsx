@@ -280,23 +280,21 @@ export function AccountMenu({
               </div>
             ) : null}
 
-            <div className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
-              <div className="flex items-start gap-3">
+            <div className="rounded-[1.15rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] p-3 shadow-[var(--color-shell-shadow-xs)]">
+              <div className="mb-3 flex items-center gap-3">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.95rem] bg-[var(--color-accent-soft)] text-[var(--color-accent-strong)]">
                   <Palette className="h-4 w-4" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-medium text-[var(--foreground)]">
-                    网页外观
+                  <p className="text-[13px] font-semibold text-[var(--foreground)]">
+                    {"\u5168\u7ad9\u914d\u8272"}
                   </p>
                   <p className="mt-0.5 text-[11px] text-[var(--color-sidebar-muted)]">
-                    浅色、深色或跟随系统
+                    {"\u57fa\u4e8e animated-login \u7684\u84dd\u767d\u4f53\u7cfb\u6269\u5c55"}
                   </p>
                 </div>
               </div>
-              <div className="mt-3">
-                <AppearanceSwitcher />
-              </div>
+              <AppearanceSwitcher />
             </div>
           </div>
 

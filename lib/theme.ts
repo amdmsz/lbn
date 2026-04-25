@@ -3,23 +3,24 @@ export type ResolvedTheme = "white" | "paper" | "dark" | "pink";
 
 export const APPEARANCE_STORAGE_KEY = "jiuzhuang-appearance";
 export const DEFAULT_APPEARANCE_MODE: AppearanceMode = "system";
-export const DEFAULT_LIGHT_THEME: ResolvedTheme = "paper";
+export const DEFAULT_LIGHT_THEME: ResolvedTheme = "white";
 
 export const appearanceOptions: Array<{
   value: AppearanceMode;
   label: string;
   description: string;
+  swatch: string;
 }> = [
-  { value: "system", label: "\u8ddf\u968f\u7cfb\u7edf", description: "\u7cfb\u7edf\u4eae\u8272\u7528\u7f8a\u6bdb\u7eb8\uff0c\u6df1\u8272\u7528\u6697\u8272" },
-  { value: "white", label: "\u7eaf\u767d", description: "\u6e05\u723d\u9ad8\u5bf9\u6bd4\uff0c\u9002\u5408\u767d\u5929\u529e\u516c" },
-  { value: "paper", label: "\u7f8a\u6bdb\u7eb8", description: "\u6e29\u548c\u7eb8\u611f\uff0c\u9ed8\u8ba4\u8212\u9002\u4e3b\u9898" },
-  { value: "dark", label: "\u6697\u8272", description: "\u4f4e\u4eae\u5ea6\uff0c\u9002\u5408\u591c\u95f4\u548c\u5927\u5c4f" },
-  { value: "pink", label: "\u7c89\u8272", description: "\u67d4\u548c\u7c89\u8c03\uff0c\u8f7b\u677e\u4f46\u4e0d\u751c\u817b" },
+  { value: "system", label: "\u8ddf\u968f", description: "\u4eae\u8272\u7528\u53c2\u8003\u9879\u76ee\u7eaf\u767d\uff0c\u6df1\u8272\u7528\u6d77\u519b\u84dd\u6697\u8272", swatch: "linear-gradient(135deg,#ffffff 0%,#eff6ff 50%,#0f172a 100%)" },
+  { value: "white", label: "\u7eaf\u767d", description: "\u53c2\u8003 animated-login \u7684\u539f\u751f\u84dd\u767d\u914d\u8272", swatch: "linear-gradient(135deg,#ffffff 0%,#eff6ff 50%,#1e40af 100%)" },
+  { value: "paper", label: "\u7f8a\u6bdb\u7eb8", description: "\u4fdd\u7559\u84dd\u8272\u4e3b\u8f74\uff0c\u589e\u52a0\u7eb8\u611f\u67d4\u548c\u5ea6", swatch: "linear-gradient(135deg,#fffaf2 0%,#f6efe3 58%,#1e40af 100%)" },
+  { value: "dark", label: "\u6697\u8272", description: "\u4ee5\u53c2\u8003\u9879\u76ee\u5de6\u4fa7\u6d77\u519b\u84dd\u4e3a\u57fa\u5e95", swatch: "linear-gradient(135deg,#020617 0%,#0f172a 48%,#3b82f6 100%)" },
+  { value: "pink", label: "\u7c89\u8272", description: "\u7528\u70ed\u95e8\u7c89\u8272\u7cfb\u66ff\u6362\u84dd\u8272 accent\uff0c\u4fdd\u6301\u9875\u9762\u514b\u5236", swatch: "linear-gradient(135deg,#fff8fb 0%,#fdf2f8 52%,#db2777 100%)" },
 ];
 
 export function normalizeAppearanceMode(value: string | null | undefined): AppearanceMode {
   if (value === "light") {
-    return "paper";
+    return "white";
   }
 
   return isAppearanceMode(value) ? value : DEFAULT_APPEARANCE_MODE;
@@ -50,7 +51,7 @@ export const themeInitScript = `
     const key = "${APPEARANCE_STORAGE_KEY}";
     const stored = localStorage.getItem(key);
     const appearance = stored === "light"
-      ? "paper"
+      ? "white"
       : (stored === "system" || stored === "white" || stored === "paper" || stored === "dark" || stored === "pink"
         ? stored
         : "${DEFAULT_APPEARANCE_MODE}");
@@ -61,7 +62,7 @@ export const themeInitScript = `
     document.documentElement.dataset.appearance = appearance;
     document.documentElement.dataset.theme = resolved;
     if (stored === "light") {
-      localStorage.setItem(key, "paper");
+      localStorage.setItem(key, "white");
     }
   } catch (error) {
     document.documentElement.dataset.appearance = "${DEFAULT_APPEARANCE_MODE}";
