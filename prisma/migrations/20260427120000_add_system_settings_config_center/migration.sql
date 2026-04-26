@@ -1,6 +1,6 @@
 -- Add auditable system settings config center foundation.
 
-ALTER TABLE `OperationLog`
+ALTER TABLE `operationlog`
   MODIFY `targetType` ENUM(
     'USER',
     'TEAM',
@@ -92,6 +92,6 @@ CREATE TABLE `system_setting_revisions` (
   PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-ALTER TABLE `system_settings` ADD CONSTRAINT `system_settings_updatedById_fkey` FOREIGN KEY (`updatedById`) REFERENCES `User`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `system_settings` ADD CONSTRAINT `system_settings_updatedById_fkey` FOREIGN KEY (`updatedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE `system_setting_revisions` ADD CONSTRAINT `system_setting_revisions_settingId_fkey` FOREIGN KEY (`settingId`) REFERENCES `system_settings`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE `system_setting_revisions` ADD CONSTRAINT `system_setting_revisions_changedById_fkey` FOREIGN KEY (`changedById`) REFERENCES `User`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `system_setting_revisions` ADD CONSTRAINT `system_setting_revisions_changedById_fkey` FOREIGN KEY (`changedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;

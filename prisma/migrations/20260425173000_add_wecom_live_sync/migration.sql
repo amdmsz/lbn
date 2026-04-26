@@ -1,6 +1,6 @@
 -- Add WeCom-backed live session sync metadata and audience records.
 
-ALTER TABLE `LiveSession`
+ALTER TABLE `livesession`
   ADD COLUMN `source` ENUM('MANUAL', 'WECOM') NOT NULL DEFAULT 'MANUAL',
   ADD COLUMN `wecomLivingId` VARCHAR(191) NULL,
   ADD COLUMN `wecomAnchorUserId` VARCHAR(191) NULL,
@@ -15,9 +15,9 @@ ALTER TABLE `LiveSession`
   ADD COLUMN `syncError` TEXT NULL,
   ADD COLUMN `wecomRaw` JSON NULL;
 
-CREATE UNIQUE INDEX `LiveSession_wecomLivingId_key` ON `LiveSession`(`wecomLivingId`);
-CREATE INDEX `LiveSession_source_startAt_idx` ON `LiveSession`(`source`, `startAt`);
-CREATE INDEX `LiveSession_syncStatus_lastSyncedAt_idx` ON `LiveSession`(`syncStatus`, `lastSyncedAt`);
+CREATE UNIQUE INDEX `LiveSession_wecomLivingId_key` ON `livesession`(`wecomLivingId`);
+CREATE INDEX `LiveSession_source_startAt_idx` ON `livesession`(`source`, `startAt`);
+CREATE INDEX `LiveSession_syncStatus_lastSyncedAt_idx` ON `livesession`(`syncStatus`, `lastSyncedAt`);
 
 CREATE TABLE `LiveAudienceRecord` (
   `id` VARCHAR(191) NOT NULL,
@@ -60,8 +60,8 @@ CREATE INDEX `LiveAudienceRecord_customerId_matchStatus_idx` ON `LiveAudienceRec
 CREATE INDEX `LiveAudienceRecord_liveInvitationId_idx` ON `LiveAudienceRecord`(`liveInvitationId`);
 CREATE INDEX `LiveAudienceRecord_confirmedById_confirmedAt_idx` ON `LiveAudienceRecord`(`confirmedById`, `confirmedAt`);
 
-ALTER TABLE `LiveAudienceRecord` ADD CONSTRAINT `LiveAudienceRecord_liveSessionId_fkey` FOREIGN KEY (`liveSessionId`) REFERENCES `LiveSession`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE `LiveAudienceRecord` ADD CONSTRAINT `LiveAudienceRecord_candidateCustomerId_fkey` FOREIGN KEY (`candidateCustomerId`) REFERENCES `Customer`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE `LiveAudienceRecord` ADD CONSTRAINT `LiveAudienceRecord_confirmedById_fkey` FOREIGN KEY (`confirmedById`) REFERENCES `User`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE `LiveAudienceRecord` ADD CONSTRAINT `LiveAudienceRecord_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `Customer`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE `LiveAudienceRecord` ADD CONSTRAINT `LiveAudienceRecord_liveInvitationId_fkey` FOREIGN KEY (`liveInvitationId`) REFERENCES `LiveInvitation`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `LiveAudienceRecord` ADD CONSTRAINT `LiveAudienceRecord_liveSessionId_fkey` FOREIGN KEY (`liveSessionId`) REFERENCES `livesession`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `LiveAudienceRecord` ADD CONSTRAINT `LiveAudienceRecord_candidateCustomerId_fkey` FOREIGN KEY (`candidateCustomerId`) REFERENCES `customer`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `LiveAudienceRecord` ADD CONSTRAINT `LiveAudienceRecord_confirmedById_fkey` FOREIGN KEY (`confirmedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `LiveAudienceRecord` ADD CONSTRAINT `LiveAudienceRecord_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `LiveAudienceRecord` ADD CONSTRAINT `LiveAudienceRecord_liveInvitationId_fkey` FOREIGN KEY (`liveInvitationId`) REFERENCES `liveinvitation`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;

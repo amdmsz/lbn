@@ -1,6 +1,6 @@
 -- Add mobile SIM call recording, resumable upload, AI analysis, and review foundation.
 
-ALTER TABLE `OperationLog`
+ALTER TABLE `operationlog`
   MODIFY `targetType` ENUM(
     'USER',
     'TEAM',
@@ -176,15 +176,15 @@ CREATE TABLE `CallQualityReview` (
   PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-ALTER TABLE `MobileDevice` ADD CONSTRAINT `MobileDevice_userId_fkey` FOREIGN KEY (`userId`) REFERENCES `User`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE `CallRecording` ADD CONSTRAINT `CallRecording_callRecordId_fkey` FOREIGN KEY (`callRecordId`) REFERENCES `CallRecord`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE `CallRecording` ADD CONSTRAINT `CallRecording_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `Customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE `CallRecording` ADD CONSTRAINT `CallRecording_salesId_fkey` FOREIGN KEY (`salesId`) REFERENCES `User`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `MobileDevice` ADD CONSTRAINT `MobileDevice_userId_fkey` FOREIGN KEY (`userId`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `CallRecording` ADD CONSTRAINT `CallRecording_callRecordId_fkey` FOREIGN KEY (`callRecordId`) REFERENCES `callrecord`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `CallRecording` ADD CONSTRAINT `CallRecording_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `CallRecording` ADD CONSTRAINT `CallRecording_salesId_fkey` FOREIGN KEY (`salesId`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE `CallRecording` ADD CONSTRAINT `CallRecording_teamId_fkey` FOREIGN KEY (`teamId`) REFERENCES `teams`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE `CallRecording` ADD CONSTRAINT `CallRecording_deviceId_fkey` FOREIGN KEY (`deviceId`) REFERENCES `MobileDevice`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE `CallRecordingUpload` ADD CONSTRAINT `CallRecordingUpload_recordingId_fkey` FOREIGN KEY (`recordingId`) REFERENCES `CallRecording`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE `CallAiAnalysis` ADD CONSTRAINT `CallAiAnalysis_callRecordId_fkey` FOREIGN KEY (`callRecordId`) REFERENCES `CallRecord`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `CallAiAnalysis` ADD CONSTRAINT `CallAiAnalysis_callRecordId_fkey` FOREIGN KEY (`callRecordId`) REFERENCES `callrecord`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE `CallAiAnalysis` ADD CONSTRAINT `CallAiAnalysis_recordingId_fkey` FOREIGN KEY (`recordingId`) REFERENCES `CallRecording`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE `CallQualityReview` ADD CONSTRAINT `CallQualityReview_callRecordId_fkey` FOREIGN KEY (`callRecordId`) REFERENCES `CallRecord`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `CallQualityReview` ADD CONSTRAINT `CallQualityReview_callRecordId_fkey` FOREIGN KEY (`callRecordId`) REFERENCES `callrecord`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE `CallQualityReview` ADD CONSTRAINT `CallQualityReview_recordingId_fkey` FOREIGN KEY (`recordingId`) REFERENCES `CallRecording`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE `CallQualityReview` ADD CONSTRAINT `CallQualityReview_reviewerId_fkey` FOREIGN KEY (`reviewerId`) REFERENCES `User`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `CallQualityReview` ADD CONSTRAINT `CallQualityReview_reviewerId_fkey` FOREIGN KEY (`reviewerId`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;

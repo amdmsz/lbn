@@ -1,5 +1,5 @@
 -- AlterTable
-ALTER TABLE `Product` ADD COLUMN `brandName` VARCHAR(191) NULL,
+ALTER TABLE `product` ADD COLUMN `brandName` VARCHAR(191) NULL,
     ADD COLUMN `categoryCode` VARCHAR(191) NULL,
     ADD COLUMN `financeCategoryCode` VARCHAR(191) NULL,
     ADD COLUMN `internalSupplyRemark` TEXT NULL,
@@ -8,7 +8,7 @@ ALTER TABLE `Product` ADD COLUMN `brandName` VARCHAR(191) NULL,
     ADD COLUMN `supplyGroupCode` VARCHAR(191) NULL;
 
 -- AlterTable
-ALTER TABLE `ProductSku` ADD COLUMN `alcoholPercent` DECIMAL(5, 2) NULL,
+ALTER TABLE `productsku` ADD COLUMN `alcoholPercent` DECIMAL(5, 2) NULL,
     ADD COLUMN `capacityMl` INTEGER NULL,
     ADD COLUMN `isLiveCommon` BOOLEAN NOT NULL DEFAULT false,
     ADD COLUMN `minUnitPrice` DECIMAL(10, 2) NULL,
@@ -30,4 +30,4 @@ CREATE TABLE `ProductSavedView` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- AddForeignKey
-ALTER TABLE `ProductSavedView` ADD CONSTRAINT `ProductSavedView_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `User`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `ProductSavedView` ADD CONSTRAINT `ProductSavedView_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
