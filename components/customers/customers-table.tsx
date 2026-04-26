@@ -498,25 +498,7 @@ export function CustomersTable({
     item: null,
     initialResult: "",
   });
-  const [focusedCustomer, setFocusedCustomer] = useState<FocusedCustomerState | null>(() => {
-    if (typeof window === "undefined") {
-      return null;
-    }
-
-    const stored = window.localStorage.getItem(customerFocusStorageKey);
-
-    if (!stored) {
-      return null;
-    }
-
-    try {
-      const parsed = JSON.parse(stored) as FocusedCustomerState;
-      return parsed?.id && parsed.name && parsed.phone ? parsed : null;
-    } catch {
-      window.localStorage.removeItem(customerFocusStorageKey);
-      return null;
-    }
-  });
+  const [focusedCustomer, setFocusedCustomer] = useState<FocusedCustomerState | null>(null);
   const [batchTagPending, startBatchTagTransition] = useTransition();
   const [batchRecyclePending, startBatchRecycleTransition] = useTransition();
   const router = useRouter();
@@ -554,6 +536,30 @@ export function CustomersTable({
     return () => {
       window.clearTimeout(timer);
     };
+  }, []);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem(customerFocusStorageKey);
+
+    if (!stored) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(stored) as Partial<FocusedCustomerState> | null;
+
+      if (parsed?.id && parsed.name && parsed.phone) {
+        const timer = window.setTimeout(() => {
+          setFocusedCustomer(parsed as FocusedCustomerState);
+        }, 0);
+
+        return () => {
+          window.clearTimeout(timer);
+        };
+      }
+    } catch {
+      window.localStorage.removeItem(customerFocusStorageKey);
+    }
   }, []);
 
   function rememberFocusedCustomer(item: CustomerListItem) {
