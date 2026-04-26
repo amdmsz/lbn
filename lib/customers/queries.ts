@@ -3953,6 +3953,28 @@ export async function getCustomerDetailCallsData(
         resultCode: true,
         remark: true,
         nextFollowUpAt: true,
+        recording: {
+          select: {
+            id: true,
+            status: true,
+            mimeType: true,
+            fileSizeBytes: true,
+            durationSeconds: true,
+            uploadedAt: true,
+            aiAnalysis: {
+              select: {
+                status: true,
+                summary: true,
+                qualityScore: true,
+                riskFlagsJson: true,
+                opportunityTagsJson: true,
+                nextActionSuggestion: true,
+                transcriptText: true,
+                transcriptJson: true,
+              },
+            },
+          },
+        },
         sales: {
           select: {
             name: true,

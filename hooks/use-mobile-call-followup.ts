@@ -8,8 +8,10 @@ import {
   readPendingMobileCallFollowUp,
   shouldEnableMobileCallFollowUp,
   snoozePendingMobileCallFollowUp,
+  writePendingMobileCallFollowUp,
   type PendingMobileCallFollowUp,
 } from "@/lib/calls/mobile-call-followup";
+import { readNativeCallSessionSnapshot } from "@/lib/calls/native-mobile-call";
 
 export type MobileCallFollowUpScope =
   | {
@@ -74,6 +76,7 @@ export function useMobileCallFollowUp(scope: MobileCallFollowUpScope) {
       }
 
       setPendingCall(storedPendingCall);
+      syncNativeSnapshot(storedPendingCall);
 
       if (
         storedPendingCall.promptedAt ||
@@ -86,6 +89,43 @@ export function useMobileCallFollowUp(scope: MobileCallFollowUpScope) {
       const promptedPendingCall = markPendingMobileCallPrompted();
       setPendingCall(promptedPendingCall ?? storedPendingCall);
       setSheetOpen(true);
+    }
+
+    function syncNativeSnapshot(storedPendingCall: PendingMobileCallFollowUp) {
+      if (!storedPendingCall.callRecordId) {
+        return;
+      }
+
+      void readNativeCallSessionSnapshot(storedPendingCall.callRecordId).then(
+        (snapshot) => {
+          if (!snapshot || snapshot.callRecordId !== storedPendingCall.callRecordId) {
+            return;
+          }
+
+          const latestPendingCall = readPendingMobileCallFollowUp();
+
+          if (!latestPendingCall || latestPendingCall.id !== storedPendingCall.id) {
+            return;
+          }
+
+          const nextPendingCall = {
+            ...latestPendingCall,
+            durationSeconds:
+              typeof snapshot.durationSeconds === "number"
+                ? snapshot.durationSeconds
+                : latestPendingCall.durationSeconds,
+            recordingStatus:
+              snapshot.recordingStatus ?? latestPendingCall.recordingStatus,
+            uploadStatus: snapshot.uploadStatus ?? latestPendingCall.uploadStatus,
+            recordingId: snapshot.recordingId ?? latestPendingCall.recordingId,
+            nativeFailureMessage:
+              snapshot.failureMessage ?? latestPendingCall.nativeFailureMessage,
+          } satisfies PendingMobileCallFollowUp;
+
+          writePendingMobileCallFollowUp(nextPendingCall);
+          setPendingCall(nextPendingCall);
+        },
+      );
     }
 
     function handleVisibilityChange() {

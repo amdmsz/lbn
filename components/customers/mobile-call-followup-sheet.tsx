@@ -50,13 +50,50 @@ export function CustomerMobileDialButton({
   return (
     <button
       type="button"
+      aria-label={`${label}：${customerName}`}
       disabled={disabled}
       onClick={handleClick}
       className={className}
     >
-      {label}
+      <span className="inline-flex items-center gap-1.5">
+        <PhoneCall className="h-3.5 w-3.5" aria-hidden="true" />
+        <span>{label}</span>
+      </span>
     </button>
   );
+}
+
+function getRecordingStatusLabel(input: {
+  recordingStatus: string | null;
+  uploadStatus: string | null;
+  nativeFailureMessage: string | null;
+}) {
+  if (
+    input.recordingStatus === "READY" ||
+    input.recordingStatus === "PROCESSING" ||
+    input.recordingStatus === "UPLOADED" ||
+    input.uploadStatus === "READY"
+  ) {
+    return "录音已上传";
+  }
+
+  if (input.recordingStatus === "UPLOADING" || input.uploadStatus === "UPLOADING") {
+    return "录音上传中";
+  }
+
+  if (input.recordingStatus === "RECORDING") {
+    return "录音中";
+  }
+
+  if (input.recordingStatus === "FAILED") {
+    return input.nativeFailureMessage ? `录音失败：${input.nativeFailureMessage}` : "录音失败";
+  }
+
+  if (input.recordingStatus === "STARTED") {
+    return "录音待上传";
+  }
+
+  return null;
 }
 
 export function MobileCallFollowUpSheet({
@@ -79,6 +116,12 @@ export function MobileCallFollowUpSheet({
   if (!pendingCall) {
     return null;
   }
+
+  const recordingStatusLabel = getRecordingStatusLabel({
+    recordingStatus: pendingCall.recordingStatus,
+    uploadStatus: pendingCall.uploadStatus,
+    nativeFailureMessage: pendingCall.nativeFailureMessage,
+  });
 
   return (
     <>
@@ -130,6 +173,11 @@ export function MobileCallFollowUpSheet({
                 <Clock3 className="h-3.5 w-3.5" />
                 <span>{formatDateTime(new Date(pendingCall.createdAt))}</span>
               </div>
+              {recordingStatusLabel ? (
+                <p className="mt-2 text-[12px] text-[var(--color-sidebar-muted)]">
+                  {recordingStatusLabel}
+                </p>
+              ) : null}
             </div>
 
             <CustomerCallRecordForm
@@ -139,8 +187,9 @@ export function MobileCallFollowUpSheet({
               className="mt-4"
               submitLabel="保存本次通话"
               pendingLabel="保存中..."
-              defaultDurationSeconds={0}
+              defaultDurationSeconds={pendingCall.durationSeconds ?? 0}
               defaultCallTime={pendingCall.createdAt}
+              mobileCallRecordId={pendingCall.callRecordId}
               remarkAutoFocus
               onSuccess={completePendingCall}
               onCancel={dismissPendingCall}

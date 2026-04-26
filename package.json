@@ -7,6 +7,9 @@
     "build": "next build --webpack",
     "start": "next start",
     "worker:lead-imports": "tsx scripts/lead-import-worker.ts",
+    "worker:call-ai": "tsx scripts/call-ai-worker.ts",
+    "dev:local-asr-smoke": "tsx scripts/local-asr-smoke-server.ts",
+    "check:call-ai-provider": "tsx scripts/check-call-ai-provider.ts",
     "check:lead-import-runtime": "node scripts/check-lead-import-runtime.mjs",
     "worker:recycle-auto-finalize": "tsx scripts/recycle-auto-finalize.ts",
     "lint": "eslint",
@@ -18,6 +21,7 @@
     "prisma:baseline:plan": "node scripts/prisma-baseline-draft.mjs --plan-only",
     "prisma:baseline:draft": "node scripts/prisma-baseline-draft.mjs",
     "test:lead-imports": "node --test --experimental-strip-types tests/lead-imports/customer-continuation-signals.test.mts",
+    "test:system-settings": "node --test --experimental-strip-types tests/system-settings/schema-and-secrets.test.mts",
     "postinstall": "prisma generate",
     "admin:bootstrap": "node scripts/bootstrap-admin.mjs",
     "db:seed": "node prisma/seed.mjs",
@@ -37,6 +41,7 @@
     "mobile:open:android": "npm run open:android --prefix apps/mobile"
   },
   "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/adapter-mariadb": "^7.6.0",
     "@prisma/client": "^7.6.0",

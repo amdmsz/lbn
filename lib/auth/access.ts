@@ -13,6 +13,7 @@ const masterDataSettingPaths = [
   "/settings/tags",
   "/settings/dictionaries",
   "/settings/call-results",
+  "/settings/mobile-devices",
 ] as const;
 
 export const roleLabels: Record<RoleCode, string> = {
@@ -57,6 +58,10 @@ export function canAccessSettingsModule(role: RoleCode) {
   return canManageMasterData(role);
 }
 
+export function canAccessSystemSettings(role: RoleCode) {
+  return role === "ADMIN";
+}
+
 export function canAccessLeadImportModule(role: RoleCode) {
   return role === "ADMIN" || role === "SUPERVISOR";
 }
@@ -86,6 +91,10 @@ export function canAccessPath(
     return true;
   }
 
+  if (pathname === "/mobile" || pathname.startsWith("/mobile/")) {
+    return canAccessMobileApp(role);
+  }
+
   if (pathname === "/leads" || pathname.startsWith("/leads/")) {
     return canAccessLeadModule(role);
   }
@@ -103,6 +112,10 @@ export function canAccessPath(
 
   if (pathname === "/customers" || pathname.startsWith("/customers/")) {
     return canAccessCustomerModule(role);
+  }
+
+  if (pathname === "/call-recordings" || pathname.startsWith("/call-recordings/")) {
+    return canAccessCallRecordingModule(role);
   }
 
   if (pathname === "/suppliers" || pathname.startsWith("/suppliers/")) {
@@ -184,6 +197,10 @@ export function canAccessLeadModule(role: RoleCode) {
 
 export function canAccessCustomerModule(role: RoleCode) {
   return role === "ADMIN" || role === "SUPERVISOR" || role === "SALES";
+}
+
+export function canAccessMobileApp(role: RoleCode) {
+  return canAccessCustomerModule(role);
 }
 
 export function canCreateCustomer(role: RoleCode) {
@@ -425,6 +442,30 @@ export function canCreateCallRecord(role: RoleCode) {
   return role === "ADMIN" || role === "SALES";
 }
 
+export function canAccessCallRecordingModule(role: RoleCode) {
+  return role === "ADMIN" || role === "SUPERVISOR";
+}
+
+export function canPlaybackCallRecording(role: RoleCode) {
+  return role === "ADMIN" || role === "SUPERVISOR" || role === "SALES";
+}
+
+export function canUploadCallRecording(role: RoleCode) {
+  return role === "ADMIN" || role === "SALES";
+}
+
+export function canReviewCallRecording(role: RoleCode) {
+  return role === "ADMIN" || role === "SUPERVISOR";
+}
+
+export function canRegisterMobileDevice(role: RoleCode) {
+  return role === "ADMIN" || role === "SALES";
+}
+
+export function canManageMobileDevice(role: RoleCode) {
+  return role === "ADMIN" || role === "SUPERVISOR";
+}
+
 export function canCreateWechatRecord(role: RoleCode) {
   return role === "SALES";
 }
@@ -606,6 +647,22 @@ export function getShippingTaskScope(role: RoleCode, userId: string, teamId?: st
         ownerId: userId,
       },
     };
+  }
+
+  return null;
+}
+
+export function getCallRecordingScope(role: RoleCode, userId: string, teamId?: string | null) {
+  if (role === "ADMIN") {
+    return {};
+  }
+
+  if (role === "SUPERVISOR") {
+    return teamId ? { teamId } : { id: buildMissingScopeId("call_recording_team") };
+  }
+
+  if (role === "SALES") {
+    return { salesId: userId };
   }
 
   return null;

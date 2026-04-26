@@ -49,6 +49,7 @@ export default async function SettingsTeamsPage({
     <div className="crm-page">
       <SettingsPageHeader
         activeValue="teams"
+        viewerRole={session.user.role}
         title="团队管理"
         description="团队页继续维护团队基础信息和团队负责人。管理员可编辑；主管在这里主要做只读回看。"
         badges={

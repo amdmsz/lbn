@@ -1466,6 +1466,8 @@ function renderTabContent({
       return (
         <CustomerCallRecordsSection
           customerId={shell.id}
+          customerName={shell.name}
+          phone={shell.phone}
           records={(tabData as CustomerCallsData).records}
           resultOptions={(tabData as CustomerCallsData).callResultOptions}
           canCreate={canCreateCalls}

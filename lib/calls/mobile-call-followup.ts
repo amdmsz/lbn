@@ -1,6 +1,10 @@
 "use client";
 
 import type { CallResultOption } from "@/lib/calls/metadata";
+import {
+  canUseNativeCallRecorder,
+  startNativeRecordedSimCall,
+} from "@/lib/calls/native-mobile-call";
 
 export const MOBILE_CALL_FOLLOWUP_STORAGE_KEY =
   "lbncrm.mobile-call-followup.pending";
@@ -32,6 +36,13 @@ export type PendingMobileCallFollowUp = {
   customerName: string;
   phone: string;
   triggerSource: MobileCallTriggerSource;
+  callRecordId: string | null;
+  deviceId: string | null;
+  durationSeconds: number | null;
+  recordingStatus: string | null;
+  uploadStatus: string | null;
+  recordingId: string | null;
+  nativeFailureMessage: string | null;
   createdAt: string;
   returnPath: string;
   backgroundedAt: string | null;
@@ -65,6 +76,10 @@ function isOptionalString(value: unknown): value is string | null {
   return value === null || typeof value === "string";
 }
 
+function isOptionalNumber(value: unknown): value is number | null {
+  return value === null || typeof value === "number";
+}
+
 function parsePendingMobileCallFollowUp(rawValue: string | null) {
   if (!rawValue) {
     return null;
@@ -82,6 +97,13 @@ function parsePendingMobileCallFollowUp(rawValue: string | null) {
       !isNonEmptyString(parsed.triggerSource) ||
       !isNonEmptyString(parsed.createdAt) ||
       !isNonEmptyString(parsed.returnPath) ||
+      !isOptionalString(parsed.callRecordId ?? null) ||
+      !isOptionalString(parsed.deviceId ?? null) ||
+      !isOptionalNumber(parsed.durationSeconds ?? null) ||
+      !isOptionalString(parsed.recordingStatus ?? null) ||
+      !isOptionalString(parsed.uploadStatus ?? null) ||
+      !isOptionalString(parsed.recordingId ?? null) ||
+      !isOptionalString(parsed.nativeFailureMessage ?? null) ||
       !isOptionalString(parsed.backgroundedAt) ||
       !isOptionalString(parsed.promptedAt) ||
       !isOptionalString(parsed.snoozedAt)
@@ -103,6 +125,13 @@ function parsePendingMobileCallFollowUp(rawValue: string | null) {
       customerName: parsed.customerName,
       phone: parsed.phone,
       triggerSource: parsed.triggerSource,
+      callRecordId: parsed.callRecordId ?? null,
+      deviceId: parsed.deviceId ?? null,
+      durationSeconds: parsed.durationSeconds ?? null,
+      recordingStatus: parsed.recordingStatus ?? null,
+      uploadStatus: parsed.uploadStatus ?? null,
+      recordingId: parsed.recordingId ?? null,
+      nativeFailureMessage: parsed.nativeFailureMessage ?? null,
       createdAt: parsed.createdAt,
       returnPath: parsed.returnPath,
       backgroundedAt: parsed.backgroundedAt,
@@ -240,22 +269,58 @@ export function startMobileCallFollowUpDial(input: {
     return;
   }
 
-  if (shouldEnableMobileCallFollowUp()) {
-    writePendingMobileCallFollowUp({
-      id: generatePendingMobileCallId(),
-      customerId: input.customerId,
-      customerName: input.customerName.trim() || input.phone,
-      phone,
-      triggerSource: input.triggerSource,
-      createdAt: new Date().toISOString(),
-      returnPath: getCurrentPathname(),
-      backgroundedAt: null,
-      promptedAt: null,
-      snoozedAt: null,
-    });
+  const basePendingCall = {
+    id: generatePendingMobileCallId(),
+    customerId: input.customerId,
+    customerName: input.customerName.trim() || input.phone,
+    phone,
+    triggerSource: input.triggerSource,
+    callRecordId: null,
+    deviceId: null,
+    durationSeconds: null,
+    recordingStatus: null,
+    uploadStatus: null,
+    recordingId: null,
+    nativeFailureMessage: null,
+    createdAt: new Date().toISOString(),
+    returnPath: getCurrentPathname(),
+    backgroundedAt: null,
+    promptedAt: null,
+    snoozedAt: null,
+  } satisfies PendingMobileCallFollowUp;
+
+  if (!canUseNativeCallRecorder()) {
+    if (shouldEnableMobileCallFollowUp()) {
+      writePendingMobileCallFollowUp(basePendingCall);
+    }
+
+    window.location.href = `tel:${phone}`;
+    return;
   }
 
-  window.location.href = `tel:${phone}`;
+  void (async () => {
+    const nativeCall = await startNativeRecordedSimCall({
+      customerId: input.customerId,
+      customerName: input.customerName,
+      phone,
+    });
+
+    if (shouldEnableMobileCallFollowUp()) {
+      writePendingMobileCallFollowUp({
+        ...basePendingCall,
+        phone: nativeCall.phone ?? phone,
+        callRecordId: nativeCall.callRecordId ?? null,
+        deviceId: nativeCall.deviceId ?? null,
+        recordingStatus: nativeCall.nativeStarted ? "STARTED" : "FAILED",
+        uploadStatus: nativeCall.nativeStarted ? "PENDING" : null,
+        nativeFailureMessage: nativeCall.errorMessage ?? null,
+      });
+    }
+
+    if (!nativeCall.nativeStarted) {
+      window.location.href = `tel:${phone}`;
+    }
+  })();
 }
 
 export function inferConnectedStateFromResultCode(

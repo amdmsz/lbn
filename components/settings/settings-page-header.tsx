@@ -2,10 +2,14 @@ import type { ReactNode } from "react";
 import { SettingsWorkspaceNav } from "@/components/settings/settings-workspace-nav";
 import { PageContextLink } from "@/components/shared/page-context-link";
 import { SummaryHeader } from "@/components/shared/summary-header";
-import type { SettingsWorkspaceValue } from "@/lib/settings/metadata";
+import type {
+  SettingsViewerRole,
+  SettingsWorkspaceValue,
+} from "@/lib/settings/metadata";
 
 export function SettingsPageHeader({
   activeValue,
+  viewerRole,
   title,
   description,
   badges,
@@ -16,6 +20,7 @@ export function SettingsPageHeader({
   trail,
 }: Readonly<{
   activeValue: SettingsWorkspaceValue;
+  viewerRole?: SettingsViewerRole;
   title: string;
   description?: string;
   badges?: ReactNode;
@@ -48,7 +53,7 @@ export function SettingsPageHeader({
       />
 
       <div className="crm-subtle-panel px-3 py-2.5">
-        <SettingsWorkspaceNav activeValue={activeValue} />
+        <SettingsWorkspaceNav activeValue={activeValue} viewerRole={viewerRole} />
       </div>
     </div>
   );

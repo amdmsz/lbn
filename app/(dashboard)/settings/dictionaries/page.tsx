@@ -40,6 +40,7 @@ export default async function DictionariesPage({
     <div className="crm-page">
       <SettingsPageHeader
         activeValue="dictionaries"
+        viewerRole={session.user.role}
         title="字典与类目"
         description="这里统一维护通用类目、字典类型和字典项，供后续模块复用同一套主数据。"
         metrics={[

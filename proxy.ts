@@ -60,6 +60,7 @@ export const config = {
     "/",
     "/login",
     "/change-password",
+    "/mobile/:path*",
     "/dashboard/:path*",
     "/leads/:path*",
     "/lead-imports/:path*",

@@ -218,6 +218,7 @@ export function CustomerListCard({
   const hasLifetimeTrade = Number(item.lifetimeTradeAmount) > 0.009;
   const recentInterest = getRecentInterest(item);
   const phoneText = item.phone?.trim() || "暂无电话";
+  const canDialFromCard = canCreateCallRecord && phoneText !== "暂无电话";
   const recycleEntryProps = {
     customerId: item.id,
     customerName: item.name,
@@ -396,9 +397,24 @@ export function CustomerListCard({
                 </button>
               </div>
 
-              <p className="mt-1.5 text-[18px] font-semibold leading-none tracking-[0.02em] text-[var(--foreground)] tabular-nums">
-                {phoneText}
-              </p>
+              <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <p className="text-[18px] font-semibold leading-none tracking-[0.02em] text-[var(--foreground)] tabular-nums">
+                  {phoneText}
+                </p>
+                {canDialFromCard ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      startPhoneDial();
+                    }}
+                    className="inline-flex h-8 w-fit items-center gap-1.5 rounded-full border border-[rgba(79,125,247,0.18)] bg-[var(--foreground)] px-3 text-[12px] font-semibold text-[var(--color-panel)] shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,transform,box-shadow] duration-150 motion-safe:hover:-translate-y-[1px] hover:border-[rgba(79,125,247,0.3)] hover:bg-[var(--foreground)]/92"
+                  >
+                    <Phone className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>拨打并录音</span>
+                  </button>
+                ) : null}
+              </div>
 
               <div className="mt-2.5 flex items-start gap-2 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
                 <span className="shrink-0 font-medium text-[var(--color-sidebar-muted)]">
@@ -452,9 +468,9 @@ export function CustomerListCard({
               <div className="space-y-1">
                 <CustomerActionButton
                   icon={Phone}
-                  label="拨打"
+                  label="拨打并录音"
                   onClick={startPhoneDial}
-                  disabled={!canCreateCallRecord}
+                  disabled={!canDialFromCard}
                   fullWidth
                 />
                 <CustomerActionButton

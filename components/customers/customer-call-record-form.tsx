@@ -33,6 +33,55 @@ function getDefaultDateTimeLocalValue(input?: Date | string | null) {
   return local.toISOString().slice(0, 16);
 }
 
+function getFormString(formData: FormData, key: string) {
+  return String(formData.get(key) ?? "").trim();
+}
+
+async function updateMobileCallRecordFromForm(
+  callRecordId: string,
+  formData: FormData,
+): Promise<CreateCallRecordActionState> {
+  const durationSeconds = Number(getFormString(formData, "durationSeconds") || 0);
+  const response = await fetch(
+    `/api/mobile/calls/${encodeURIComponent(callRecordId)}/end`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        durationSeconds: Number.isFinite(durationSeconds) ? durationSeconds : 0,
+        result: getFormString(formData, "result"),
+        remark: getFormString(formData, "remark"),
+        nextFollowUpAt: getFormString(formData, "nextFollowUpAt"),
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    try {
+      const body = (await response.json()) as { message?: unknown };
+      return {
+        status: "error",
+        message:
+          typeof body.message === "string" && body.message.trim()
+            ? body.message
+            : "通话记录保存失败。",
+      };
+    } catch {
+      return {
+        status: "error",
+        message: "通话记录保存失败。",
+      };
+    }
+  }
+
+  return {
+    status: "success",
+    message: "通话记录已保存。",
+  };
+}
+
 function HelperChoiceButton({
   label,
   active,
@@ -70,6 +119,7 @@ export function CustomerCallRecordForm({
   defaultDurationSeconds = 0,
   defaultCallTime = null,
   defaultResult = "",
+  mobileCallRecordId = null,
   remarkAutoFocus = false,
   onCancel,
   onLater,
@@ -84,6 +134,7 @@ export function CustomerCallRecordForm({
   defaultDurationSeconds?: number;
   defaultCallTime?: Date | string | null;
   defaultResult?: string;
+  mobileCallRecordId?: string | null;
   remarkAutoFocus?: boolean;
   onCancel?: () => void;
   onLater?: () => void;
@@ -140,10 +191,12 @@ export function CustomerCallRecordForm({
     const formData = new FormData(event.currentTarget);
 
     startTransition(async () => {
-      const nextState = await createCustomerCallRecordAction(
-        initialCreateCallRecordActionState,
-        formData,
-      );
+      const nextState = mobileCallRecordId
+        ? await updateMobileCallRecordFromForm(mobileCallRecordId, formData)
+        : await createCustomerCallRecordAction(
+            initialCreateCallRecordActionState,
+            formData,
+          );
 
       setState(nextState);
 

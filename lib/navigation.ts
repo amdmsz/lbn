@@ -1,5 +1,6 @@
 import type { RoleCode } from "@prisma/client";
 import {
+  canAccessCallRecordingModule,
   canAccessLiveSessionModule,
   canAccessProductModule,
   canAccessRecycleBinModule,
@@ -12,6 +13,7 @@ export type NavigationIconName =
   | "leads"
   | "leadImports"
   | "customers"
+  | "callRecordings"
   | "suppliers"
   | "products"
   | "liveSessions"
@@ -66,6 +68,13 @@ const navigationItems = {
     description: "客户执行主工作台和客户经营视图。",
     iconName: "customers",
     activePrefixes: ["/customers"],
+  }),
+  callRecordings: createItem({
+    title: "通话录音",
+    href: "/call-recordings",
+    description: "按员工、客户、日期和 AI 信号筛选录音与质检结果。",
+    iconName: "callRecordings",
+    activePrefixes: ["/call-recordings"],
   }),
   leads: createItem({
     title: "线索中心",
@@ -221,6 +230,7 @@ const navigationTree: NavigationTree = {
         {
           items: [
             navigationItems.customers,
+            navigationItems.callRecordings,
             navigationItems.leads,
             navigationItems.leadImports,
             navigationItems.liveSessions,
@@ -276,6 +286,7 @@ const navigationTree: NavigationTree = {
         {
           items: [
             navigationItems.customers,
+            navigationItems.callRecordings,
             navigationItems.leads,
             navigationItems.leadImports,
             navigationItems.liveSessions,
@@ -393,6 +404,10 @@ function canAccessNavigationItem(
 ) {
   if (item.href === "/live-sessions") {
     return canAccessLiveSessionModule(role, permissionCodes);
+  }
+
+  if (item.href === "/call-recordings") {
+    return canAccessCallRecordingModule(role);
   }
 
   if (item.href === "/products") {

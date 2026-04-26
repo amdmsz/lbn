@@ -36,6 +36,7 @@ export default async function TagCategoriesPage({
     <div className="crm-page">
       <SettingsPageHeader
         activeValue="tag-categories"
+        viewerRole={session.user.role}
         title="标签分类"
         description="标签分类是标签组下的二级归类，用于让同类标签的维护和展示更清楚。"
         metrics={[

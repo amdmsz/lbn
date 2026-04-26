@@ -31,5 +31,10 @@ export default async function SettingsCallResultsPage({
     resolvedSearchParams,
   );
 
-  return <CallResultSettingsWorkbench data={data} />;
+  return (
+    <CallResultSettingsWorkbench
+      data={data}
+      viewerRole={session.user.role}
+    />
+  );
 }

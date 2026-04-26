@@ -34,6 +34,7 @@ export default async function TagsPage({
     <div className="crm-page">
       <SettingsPageHeader
         activeValue="tags"
+        viewerRole={session.user.role}
         title="标签"
         description="标签会被客户与线索直接使用，可用于展示、筛选和后续业务规则扩展。"
         metrics={[{ label: "标签", value: String(data.items.length), hint: "当前可维护标签数" }]}

@@ -59,6 +59,7 @@ export default async function SettingsUsersPage({
     <div className="crm-page">
       <SettingsPageHeader
         activeValue="users"
+        viewerRole={session.user.role}
         title="账号管理"
         description="账号管理继续负责内部账号、角色、状态和密码流程。当前页面只统一设置域认知，不重做原有账号管理逻辑。"
         badges={

@@ -154,6 +154,69 @@ enum CallResultWechatSyncAction {
   REFUSED
 }
 
+enum CallRecordingStatus {
+  LOCAL_PENDING
+  UPLOADING
+  UPLOADED
+  PROCESSING
+  READY
+  FAILED
+  EXPIRED
+  DELETED
+}
+
+enum CallRecordingStorageProvider {
+  LOCAL_MOUNT
+  MINIO
+  S3
+}
+
+enum CallRecordingUploadStatus {
+  INITIATED
+  UPLOADING
+  COMPLETED
+  FAILED
+  CANCELED
+}
+
+enum MobileRecordingCapability {
+  UNKNOWN
+  SUPPORTED
+  UNSUPPORTED
+  BLOCKED
+}
+
+enum CallAiAnalysisStatus {
+  PENDING
+  TRANSCRIBING
+  ANALYZING
+  READY
+  FAILED
+}
+
+enum CallCustomerIntent {
+  HIGH
+  MEDIUM
+  LOW
+  REFUSED
+  UNKNOWN
+}
+
+enum CallSentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+  MIXED
+}
+
+enum CallQualityReviewStatus {
+  PENDING
+  REVIEWED
+  NEEDS_COACHING
+  EXCELLENT
+  DISMISSED
+}
+
 enum WechatAddStatus {
   PENDING
   ADDED
@@ -558,6 +621,10 @@ enum OperationTargetType {
   LEAD_ASSIGNMENT
   FOLLOW_UP_TASK
   CALL_RECORD
+  CALL_RECORDING
+  CALL_AI_ANALYSIS
+  CALL_QUALITY_REVIEW
+  MOBILE_DEVICE
   WECHAT_RECORD
   LIVE_SESSION
   LIVE_INVITATION
@@ -589,6 +656,7 @@ enum OperationTargetType {
   DICTIONARY_TYPE
   DICTIONARY_ITEM
   CALL_RESULT_SETTING
+  SYSTEM_SETTING
 }
 
 model Role {
@@ -613,6 +681,7 @@ model Team {
   publicPoolSetting TeamPublicPoolSetting?
   publicPoolCustomers Customer[] @relation("CustomerPublicPoolTeam")
   customerOwnershipEvents CustomerOwnershipEvent[] @relation("CustomerOwnershipEventTeam")
+  callRecordings CallRecording[] @relation("CallRecordingTeam")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -683,6 +752,9 @@ model User {
   ownedFollowUpTasks      FollowUpTask[]   @relation("FollowUpTaskOwner")
   createdFollowUpTasks    FollowUpTask[]   @relation("FollowUpTaskCreator")
   callRecords             CallRecord[]     @relation("CallRecordSales")
+  callRecordings          CallRecording[]  @relation("CallRecordingSales")
+  mobileDevices           MobileDevice[]   @relation("MobileDeviceUser")
+  callQualityReviews      CallQualityReview[] @relation("CallQualityReviewReviewer")
   wechatRecords           WechatRecord[]   @relation("WechatRecordSales")
   createdLiveSessions     LiveSession[]    @relation("LiveSessionCreator")
   liveInvitations         LiveInvitation[] @relation("LiveInvitationSales")
@@ -716,6 +788,8 @@ model User {
   assignedCustomerTags    CustomerTag[]    @relation("CustomerTagAssignedBy")
   assignedLeadTags        LeadTag[]        @relation("LeadTagAssignedBy")
   operationLogs           OperationLog[]   @relation("OperationLogActor")
+  updatedSystemSettings   SystemSetting[]  @relation("SystemSettingUpdatedBy")
+  systemSettingRevisions  SystemSettingRevision[] @relation("SystemSettingRevisionChangedBy")
   recycleBinEntriesDeleted RecycleBinEntry[] @relation("RecycleBinEntryDeletedBy")
   recycleBinEntriesResolved RecycleBinEntry[] @relation("RecycleBinEntryResolvedBy")
   customerOwnershipEventsAsActor CustomerOwnershipEvent[] @relation("CustomerOwnershipEventActor")
@@ -858,6 +932,7 @@ model Customer {
   leads           Lead[]
   followUpTasks   FollowUpTask[]
   callRecords     CallRecord[]
+  callRecordings  CallRecording[]
   wechatRecords   WechatRecord[]
   liveInvitations LiveInvitation[]
   liveAudienceRecords LiveAudienceRecord[]
@@ -973,6 +1048,9 @@ model CallRecord {
   resultCode      String?
   remark          String?    @db.Text
   nextFollowUpAt  DateTime?
+  recording       CallRecording?
+  aiAnalysis      CallAiAnalysis?
+  qualityReviews  CallQualityReview[]
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
@@ -980,6 +1058,137 @@ model CallRecord {
   @@index([customerId, callTime])
   @@index([salesId, callTime])
   @@index([resultCode, callTime])
+}
+
+model CallRecording {
+  id              String                       @id @default(cuid())
+  callRecordId    String                       @unique
+  callRecord      CallRecord                   @relation(fields: [callRecordId], references: [id])
+  customerId      String
+  customer        Customer                     @relation(fields: [customerId], references: [id])
+  salesId         String
+  sales           User                         @relation("CallRecordingSales", fields: [salesId], references: [id])
+  teamId          String?
+  team            Team?                        @relation("CallRecordingTeam", fields: [teamId], references: [id])
+  deviceId        String?
+  device          MobileDevice?                @relation(fields: [deviceId], references: [id])
+  status          CallRecordingStatus          @default(LOCAL_PENDING)
+  storageProvider CallRecordingStorageProvider @default(LOCAL_MOUNT)
+  storageBucket   String?
+  storageKey      String?                      @db.Text
+  mimeType        String
+  codec           String?
+  fileSizeBytes   Int?
+  durationSeconds Int?
+  sha256          String?
+  uploadedAt      DateTime?
+  retentionUntil  DateTime?
+  failureCode     String?
+  failureMessage  String?                      @db.Text
+  uploads         CallRecordingUpload[]
+  aiAnalysis      CallAiAnalysis?
+  qualityReviews  CallQualityReview[]
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+
+  @@index([customerId, createdAt])
+  @@index([salesId, createdAt])
+  @@index([teamId, createdAt])
+  @@index([status, createdAt])
+  @@index([retentionUntil])
+}
+
+model CallRecordingUpload {
+  id              String                    @id @default(cuid())
+  recordingId     String
+  recording       CallRecording             @relation(fields: [recordingId], references: [id])
+  status          CallRecordingUploadStatus @default(INITIATED)
+  chunkSizeBytes  Int
+  totalChunks     Int
+  uploadedChunks  Int                       @default(0)
+  totalSizeBytes  Int
+  sha256          String?
+  chunkStateJson  Json?
+  expiresAt       DateTime
+  completedAt     DateTime?
+  failureMessage  String?                   @db.Text
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  @@index([recordingId, createdAt])
+  @@index([status, expiresAt])
+}
+
+model MobileDevice {
+  id                  String                    @id @default(cuid())
+  userId              String
+  user                User                      @relation("MobileDeviceUser", fields: [userId], references: [id])
+  deviceFingerprint   String
+  deviceModel         String?
+  androidVersion      String?
+  appVersion          String?
+  recordingEnabled    Boolean                   @default(true)
+  recordingCapability MobileRecordingCapability @default(UNKNOWN)
+  lastSeenAt          DateTime?
+  disabledAt          DateTime?
+  callRecordings      CallRecording[]
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+
+  @@unique([userId, deviceFingerprint])
+  @@index([userId, lastSeenAt])
+  @@index([recordingCapability, lastSeenAt])
+  @@index([disabledAt])
+}
+
+model CallAiAnalysis {
+  id                   String               @id @default(cuid())
+  callRecordId         String               @unique
+  callRecord           CallRecord           @relation(fields: [callRecordId], references: [id])
+  recordingId          String               @unique
+  recording            CallRecording        @relation(fields: [recordingId], references: [id])
+  status               CallAiAnalysisStatus @default(PENDING)
+  transcriptText       String?              @db.LongText
+  transcriptJson       Json?
+  summary              String?              @db.Text
+  customerIntent       CallCustomerIntent   @default(UNKNOWN)
+  sentiment            CallSentiment?
+  qualityScore         Int?
+  riskFlagsJson        Json?
+  opportunityTagsJson  Json?
+  keywordsJson         Json?
+  nextActionSuggestion String?              @db.Text
+  modelProvider        String?
+  modelName            String?
+  modelVersion         String?
+  processedAt          DateTime?
+  failureMessage       String?              @db.Text
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  @@index([status, createdAt])
+  @@index([qualityScore])
+}
+
+model CallQualityReview {
+  id              String                  @id @default(cuid())
+  callRecordId    String
+  callRecord      CallRecord              @relation(fields: [callRecordId], references: [id])
+  recordingId     String
+  recording       CallRecording           @relation(fields: [recordingId], references: [id])
+  reviewerId      String
+  reviewer        User                    @relation("CallQualityReviewReviewer", fields: [reviewerId], references: [id])
+  aiScoreSnapshot Int?
+  manualScore     Int?
+  reviewStatus    CallQualityReviewStatus @default(PENDING)
+  comment         String?                 @db.Text
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@unique([recordingId, reviewerId])
+  @@index([callRecordId, createdAt])
+  @@index([reviewerId, createdAt])
+  @@index([reviewStatus, createdAt])
 }
 
 model CallResultSetting {
@@ -1001,6 +1210,49 @@ model CallResultSetting {
   @@index([isEnabled, sortOrder])
   @@index([isSystem, sortOrder])
   @@map("call_result_settings")
+}
+
+model SystemSetting {
+  id                   String                  @id @default(cuid())
+  namespace            String
+  key                  String
+  valueJson            Json?
+  secretValueEncrypted String?                 @db.Text
+  secretFingerprint    String?
+  valueVersion         Int                     @default(1)
+  isSecret             Boolean                 @default(false)
+  description          String?                 @db.Text
+  updatedById          String?
+  updatedBy            User?                   @relation("SystemSettingUpdatedBy", fields: [updatedById], references: [id])
+  revisions            SystemSettingRevision[]
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  @@unique([namespace, key])
+  @@index([namespace, updatedAt])
+  @@index([updatedById])
+  @@map("system_settings")
+}
+
+model SystemSettingRevision {
+  id                      String        @id @default(cuid())
+  settingId               String
+  setting                 SystemSetting @relation(fields: [settingId], references: [id])
+  namespace               String
+  key                     String
+  beforeJson              Json?
+  afterJson               Json?
+  beforeSecretFingerprint String?
+  afterSecretFingerprint  String?
+  changedById             String?
+  changedBy               User?         @relation("SystemSettingRevisionChangedBy", fields: [changedById], references: [id])
+  changeReason            String?       @db.Text
+  createdAt               DateTime      @default(now())
+
+  @@index([settingId, createdAt])
+  @@index([namespace, key, createdAt])
+  @@index([changedById, createdAt])
+  @@map("system_setting_revisions")
 }
 
 model WechatRecord {

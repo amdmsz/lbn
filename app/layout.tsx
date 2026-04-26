@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SITE_TITLE } from "@/lib/branding";
 import { themeInitScript } from "@/lib/theme";
@@ -17,6 +17,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: SITE_TITLE,
   description: "酒水私域销售执行与履约协同平台",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#f7f8fb",
 };
 
 export default function RootLayout({

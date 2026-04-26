@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { RoleCode } from "@prisma/client";
 import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { SettingsWorkspaceNav } from "@/components/settings/settings-workspace-nav";
 import { ActionBanner } from "@/components/shared/action-banner";
@@ -6,7 +7,14 @@ import { DetailSidebar } from "@/components/shared/detail-sidebar";
 import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { SummaryHeader } from "@/components/shared/summary-header";
+import { roleLabels } from "@/lib/auth/access";
 import { getMasterDataOverviewData } from "@/lib/master-data/queries";
+import {
+  getVisibleSettingsWorkspaceSections,
+  settingsWorkspaceSections,
+  type SettingsWorkspaceItem,
+  type SettingsWorkspaceValue,
+} from "@/lib/settings/metadata";
 
 type SettingsData = Awaited<ReturnType<typeof getMasterDataOverviewData>> & {
   callResultsSummary: {
@@ -16,39 +24,125 @@ type SettingsData = Awaited<ReturnType<typeof getMasterDataOverviewData>> & {
   };
 };
 
+type EntryMeta = {
+  stat: string;
+  note: string;
+  state: "已接入" | "配置预览" | "下一阶段";
+};
+
+type EntryItem = SettingsWorkspaceItem & EntryMeta;
+
+function buildEntryMeta(data: SettingsData): Partial<Record<SettingsWorkspaceValue, EntryMeta>> {
+  return {
+    site: {
+      stat: "基础",
+      note: "站点展示",
+      state: "配置预览",
+    },
+    security: {
+      stat: "策略",
+      note: "登录与会话",
+      state: "下一阶段",
+    },
+    users: {
+      stat: String(data.overview.userCount),
+      note: `启用 ${data.overview.activeUserCount}`,
+      state: "已接入",
+    },
+    teams: {
+      stat: String(data.overview.teamCount),
+      note: "组织关系",
+      state: "已接入",
+    },
+    "tag-groups": {
+      stat: String(data.overview.tagGroupCount),
+      note: `${data.overview.tagCategoryCount} 个分类`,
+      state: "已接入",
+    },
+    "tag-categories": {
+      stat: String(data.overview.tagCategoryCount),
+      note: "二级归类",
+      state: "已接入",
+    },
+    tags: {
+      stat: String(data.overview.tagCount),
+      note: "标签资产",
+      state: "已接入",
+    },
+    dictionaries: {
+      stat: String(
+        data.overview.categoryCount +
+          data.overview.dictionaryTypeCount +
+          data.overview.dictionaryItemCount,
+      ),
+      note: `${data.overview.dictionaryTypeCount} 个类型`,
+      state: "已接入",
+    },
+    "call-results": {
+      stat: String(data.callResultsSummary.totalCount),
+      note: `自定义 ${data.callResultsSummary.customCount}`,
+      state: "已接入",
+    },
+    "recording-storage": {
+      stat: "LOCAL",
+      note: "内网存储",
+      state: "配置预览",
+    },
+    "call-ai": {
+      stat: "ASR/LLM",
+      note: "转写与分析",
+      state: "配置预览",
+    },
+    audit: {
+      stat: "日志",
+      note: "SYSTEM",
+      state: "配置预览",
+    },
+  };
+}
+
+function getStateVariant(state: EntryMeta["state"]) {
+  switch (state) {
+    case "已接入":
+      return "success";
+    case "配置预览":
+      return "info";
+    default:
+      return "warning";
+  }
+}
+
 function EntryList({
   items,
 }: Readonly<{
-  items: Array<{
-    href: string;
-    title: string;
-    description?: string;
-    stat: string;
-    note?: string;
-  }>;
+  items: EntryItem[];
 }>) {
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-2.5">
       {items.map((item) => (
         <Link
           key={item.href}
           href={item.href}
-          className="group rounded-[1rem] border border-black/7 bg-white/78 px-4 py-3.5 transition-colors hover:border-black/12 hover:bg-white"
+          className="group rounded-[0.95rem] border border-black/7 bg-white/78 px-3.5 py-3 transition-colors hover:border-black/12 hover:bg-white"
         >
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
-              <div className="text-sm font-medium text-black/82">{item.title}</div>
-              {item.description ? (
-                <div className="text-[13px] leading-5 text-black/54">{item.description}</div>
-              ) : null}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <div className="text-sm font-medium text-black/82">{item.label}</div>
+                <StatusBadge label={item.state} variant={getStateVariant(item.state)} />
+                {item.access === "admin" ? (
+                  <StatusBadge label="ADMIN" variant="neutral" />
+                ) : null}
+              </div>
+              <div className="text-[12px] leading-5 text-black/54">
+                {item.description}
+              </div>
             </div>
             <div className="shrink-0 text-right">
-              <div className="text-base font-semibold tracking-tight text-black/84">
+              <div className="text-sm font-semibold tracking-tight text-black/84">
                 {item.stat}
               </div>
-              {item.note ? (
-                <div className="mt-1 text-[12px] text-black/46">{item.note}</div>
-              ) : null}
+              <div className="mt-1 text-[11px] text-black/46">{item.note}</div>
             </div>
           </div>
         </Link>
@@ -57,87 +151,65 @@ function EntryList({
   );
 }
 
+function getEntryGroups(data: SettingsData, actorRole: RoleCode) {
+  const entryMeta = buildEntryMeta(data);
+  const visibleSections = getVisibleSettingsWorkspaceSections(actorRole);
+
+  return visibleSections
+    .map((section) => ({
+      ...section,
+      items: section.items
+        .map((item) => {
+          const meta = entryMeta[item.value];
+
+          if (!meta) {
+            return null;
+          }
+
+          return {
+            ...item,
+            ...meta,
+          };
+        })
+        .filter((item): item is EntryItem => Boolean(item)),
+    }))
+    .filter((section) => section.items.length > 0);
+}
+
 export function SettingsControlCenter({
   data,
+  actorRole,
 }: Readonly<{
   data: SettingsData;
+  actorRole: RoleCode;
 }>) {
-  const organizationItems = [
-    {
-      href: "/settings/users",
-      title: "账号管理",
-      description: "账号与角色。",
-      stat: String(data.overview.userCount),
-      note: `启用 ${data.overview.activeUserCount}`,
-    },
-    {
-      href: "/settings/teams",
-      title: "团队管理",
-      description: "团队与负责人。",
-      stat: String(data.overview.teamCount),
-      note: "组织关系",
-    },
-  ];
-
-  const tagItems = [
-    {
-      href: "/settings/tag-groups",
-      title: "标签组",
-      description: "一级分组。",
-      stat: String(data.overview.tagGroupCount),
-      note: `${data.overview.tagCategoryCount} 个分类`,
-    },
-    {
-      href: "/settings/tag-categories",
-      title: "标签分类",
-      description: "二级分类。",
-      stat: String(data.overview.tagCategoryCount),
-      note: "结构层",
-    },
-    {
-      href: "/settings/tags",
-      title: "标签",
-      description: "业务标签。",
-      stat: String(data.overview.tagCount),
-      note: "实际资产",
-    },
-  ];
-
-  const dictionaryItems = [
-    {
-      href: "/settings/dictionaries",
-      title: "字典与类目",
-      description: "字典与类目。",
-      stat: String(
-        data.overview.categoryCount +
-          data.overview.dictionaryTypeCount +
-          data.overview.dictionaryItemCount,
-      ),
-      note: `${data.overview.dictionaryTypeCount} 个类型`,
-    },
-  ];
-
-  const followUpItems = [
-    {
-      href: "/settings/call-results",
-      title: "通话结果",
-      description: "结果与联动。",
-      stat: String(data.callResultsSummary.totalCount),
-      note: `自定义 ${data.callResultsSummary.customCount}`,
-    },
-  ];
+  const isAdmin = actorRole === "ADMIN";
+  const entryGroups = getEntryGroups(data, actorRole);
+  const totalItemCount = entryGroups.reduce(
+    (sum, group) => sum + group.items.length,
+    0,
+  );
+  const adminItemCount = settingsWorkspaceSections.reduce(
+    (sum, section) =>
+      sum + section.items.filter((item) => item.access === "admin").length,
+    0,
+  );
 
   return (
     <WorkbenchLayout
       header={
         <SummaryHeader
-          eyebrow="设置域"
+          eyebrow="管理员设置"
           title="设置中心"
-          description="统一维护账号、标签、字典与通话结果。"
+          description={
+            isAdmin
+              ? "统一维护账号权限、业务主数据、录音存储、AI 转写分析和系统运行配置。"
+              : "主管当前可维护账号协作、标签、字典和通话结果；全局系统配置由管理员维护。"
+          }
           badges={
             <>
-              <StatusBadge label="统一设置域" variant="info" />
-              <StatusBadge label="ADMIN / SUPERVISOR" variant="success" />
+              <StatusBadge label={roleLabels[actorRole]} variant={isAdmin ? "info" : "warning"} />
+              <StatusBadge label={isAdmin ? "全局配置视图" : "主数据视图"} variant="success" />
             </>
           }
           actions={
@@ -148,19 +220,33 @@ export function SettingsControlCenter({
               >
                 账号管理
               </Link>
-              <Link
-                href="/settings/call-results"
-                className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-              >
-                通话结果
-              </Link>
+              {isAdmin ? (
+                <Link
+                  href="/settings/call-ai"
+                  className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
+                >
+                  AI 配置
+                </Link>
+              ) : (
+                <Link
+                  href="/settings/call-results"
+                  className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                >
+                  通话结果
+                </Link>
+              )}
             </div>
           }
           metrics={[
             {
+              label: "可见配置",
+              value: String(totalItemCount),
+              hint: isAdmin ? "管理员可见全量设置入口" : "主管只看主数据设置入口",
+            },
+            {
               label: "账号",
               value: String(data.overview.userCount),
-              hint: "内部账号与角色状态",
+              hint: `启用 ${data.overview.activeUserCount}`,
             },
             {
               label: "团队",
@@ -168,19 +254,16 @@ export function SettingsControlCenter({
               hint: "组织结构与负责人",
             },
             {
-              label: "标签",
-              value: String(data.overview.tagCount),
-              hint: "标签资产规模",
+              label: "主数据",
+              value: String(
+                data.overview.tagCount + data.overview.dictionaryItemCount,
+              ),
+              hint: "标签与字典项合计",
             },
             {
-              label: "字典项",
-              value: String(data.overview.dictionaryItemCount),
-              hint: "通用值域配置",
-            },
-            {
-              label: "通话结果",
-              value: String(data.callResultsSummary.totalCount),
-              hint: `启用 ${data.callResultsSummary.enabledCount} / 自定义 ${data.callResultsSummary.customCount}`,
+              label: "系统配置",
+              value: isAdmin ? String(adminItemCount) : "受限",
+              hint: isAdmin ? "录音、AI、安全和审计" : "仅管理员可维护",
             },
           ]}
         />
@@ -189,23 +272,24 @@ export function SettingsControlCenter({
         <DetailSidebar
           sections={[
             {
-              eyebrow: "设置边界",
-              title: "当前收口范围",
+              eyebrow: "Phase 1",
+              title: "当前改造边界",
+              description:
+                "本期先完成设置中心入口和只读配置预览，不改数据库配置模型。",
               items: [
-                { label: "组织与账号", value: "账号、团队与角色边界" },
-                { label: "标签体系", value: "标签组、标签分类和标签" },
-                { label: "字典配置", value: "类目、类型和值域" },
-                { label: "通话与跟进", value: "通话结果与微信联动" },
+                { label: "配置保存", value: "下一阶段接入 SystemSetting" },
+                { label: "权限边界", value: "ADMIN 全局配置，SUPERVISOR 主数据配置" },
+                { label: "运行时", value: "录音和 AI 当前仍走环境变量 fallback" },
               ],
             },
             {
-              eyebrow: "设置摘要",
-              title: "当前概况",
+              eyebrow: "重点链路",
+              title: "后续接入顺序",
               items: [
-                { label: "启用账号", value: String(data.overview.activeUserCount) },
-                { label: "标签组", value: String(data.overview.tagGroupCount) },
-                { label: "字典类型", value: String(data.overview.dictionaryTypeCount) },
-                { label: "启用通话结果", value: String(data.callResultsSummary.enabledCount) },
+                { label: "录音存储", value: "本地挂载路径、分片和保留周期" },
+                { label: "ASR", value: "内网 LOCAL_HTTP_ASR / FunASR / SenseVoice" },
+                { label: "LLM", value: "DeepSeek、通义、Kimi、智谱、火山、混元" },
+                { label: "Diarization", value: "销售 / 客户说话人分离" },
               ],
             },
           ]}
@@ -216,43 +300,20 @@ export function SettingsControlCenter({
         <ActionBanner tone={data.notice.tone}>{data.notice.message}</ActionBanner>
       ) : null}
 
-      <SectionCard
-        eyebrow="工作区导航"
-        title="设置工作台"
-      >
-        <SettingsWorkspaceNav activeValue="overview" />
+      <SectionCard eyebrow="导航" title="设置工作区" contentClassName="p-2.5">
+        <SettingsWorkspaceNav activeValue="overview" viewerRole={actorRole} />
       </SectionCard>
 
-      <div className="grid gap-5 2xl:grid-cols-2">
-        <SectionCard
-          eyebrow="组织与账号"
-          title="组织与账号"
-        >
-          <EntryList items={organizationItems} />
-        </SectionCard>
-
-        <SectionCard
-          eyebrow="通话与跟进"
-          title="通话与跟进"
-        >
-          <EntryList items={followUpItems} />
-        </SectionCard>
-      </div>
-
-      <div className="grid gap-5 2xl:grid-cols-2">
-        <SectionCard
-          eyebrow="标签体系"
-          title="标签体系"
-        >
-          <EntryList items={tagItems} />
-        </SectionCard>
-
-        <SectionCard
-          eyebrow="字典配置"
-          title="字典配置"
-        >
-          <EntryList items={dictionaryItems} />
-        </SectionCard>
+      <div className="grid gap-4 2xl:grid-cols-2">
+        {entryGroups.map((group) => (
+          <SectionCard
+            key={group.key}
+            eyebrow="配置分区"
+            title={group.title}
+          >
+            <EntryList items={group.items} />
+          </SectionCard>
+        ))}
       </div>
     </WorkbenchLayout>
   );

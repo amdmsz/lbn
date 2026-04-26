@@ -14,6 +14,7 @@ import {
   callResultWechatSyncActionLabels,
 } from "@/lib/calls/metadata";
 import type { CallResultSettingsPageData } from "@/lib/calls/settings";
+import type { SettingsViewerRole } from "@/lib/settings/metadata";
 
 function Field({
   label,
@@ -238,8 +239,10 @@ function ResultEditor({
 
 export function CallResultSettingsWorkbench({
   data,
+  viewerRole,
 }: Readonly<{
   data: CallResultSettingsPageData;
+  viewerRole: SettingsViewerRole;
 }>) {
   const systemItems = data.items.filter((item) => item.isSystem);
   const customItems = data.items.filter((item) => !item.isSystem);
@@ -248,6 +251,7 @@ export function CallResultSettingsWorkbench({
     <div className="crm-page">
       <SettingsPageHeader
         activeValue="call-results"
+        viewerRole={viewerRole}
         title="通话结果"
         description="维护系统结果与自定义结果。"
         badges={

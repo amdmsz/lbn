@@ -1907,3 +1907,41 @@ html[data-theme="dark"] [class*="border-[rgba(32,24,19"] {
     transition: none !important;
   }
 }
+
+.lbn-mobile-app {
+  -webkit-tap-highlight-color: transparent;
+  display: flex;
+  height: 100svh;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.lbn-mobile-screen {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-top: max(14px, env(safe-area-inset-top));
+  padding-bottom: 18px;
+}
+
+.lbn-mobile-bottom-nav {
+  flex: 0 0 auto;
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+
+.lbn-mobile-scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.lbn-mobile-scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+@supports (min-height: 100dvh) {
+  .lbn-mobile-app {
+    height: 100dvh;
+  }
+}

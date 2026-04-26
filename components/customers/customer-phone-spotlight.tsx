@@ -58,10 +58,12 @@ export function CustomerPhoneSpotlight({
             phone={normalizedPhone}
             triggerSource={triggerSource}
             onClick={onFocusCustomer}
-            label="拨打"
+            label={variant === "dialog" ? "拨打并录音" : "拨打"}
             className={cn(
-              "inline-flex items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-strong)] font-medium text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,transform,box-shadow] duration-150 motion-safe:hover:-translate-y-[1px] md:hidden",
-              variant === "dialog" ? "h-8.5 px-3 text-[12px]" : "h-7 px-2.5 text-[11px]",
+              "inline-flex items-center justify-center rounded-full border font-medium shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,transform,box-shadow] duration-150 motion-safe:hover:-translate-y-[1px] md:hidden",
+              variant === "dialog"
+                ? "h-10 border-[rgba(79,125,247,0.22)] bg-[var(--foreground)] px-4 text-[12px] text-[var(--color-panel)] hover:border-[rgba(79,125,247,0.34)] hover:bg-[var(--foreground)]/92"
+                : "h-7 border-[var(--color-border-soft)] bg-[var(--color-shell-surface-strong)] px-2.5 text-[11px] text-[var(--foreground)]",
             )}
           />
         </div>

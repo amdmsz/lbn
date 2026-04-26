@@ -35,6 +35,7 @@ export default async function SettingsPage({
 
   return (
     <SettingsControlCenter
+      actorRole={session.user.role}
       data={{
         ...masterData,
         callResultsSummary: {

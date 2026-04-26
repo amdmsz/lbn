@@ -46,6 +46,7 @@ export default async function SettingsUserDetailPage({
     <div className="crm-page">
       <SettingsPageHeader
         activeValue="users"
+        viewerRole={session.user.role}
         title={data.user.name}
         description="查看账号的团队归属、直属主管、启停状态和审计记录，并在允许范围内完成信息维护、临时密码重置与启停。"
         backHref="/settings/users"

@@ -21,6 +21,7 @@ This file should be updated whenever a capability is cut over, redirected, or re
 - Supervisor / management daily operating mainline: `/dashboard`
 - Sales daily workbench mainline: `/customers`
 - Supervisor drill-down employee customer pool mainline: `/customers?salesId=<salesId>`
+- Android / phone native-style app shell: `/mobile`
 - Order and fulfillment domain mainline: `/fulfillment`
 - Trade-order list mainline: `/fulfillment?tab=trade-orders`
 - Shipping execution mainline: `/fulfillment?tab=shipping`
@@ -31,6 +32,9 @@ This file should be updated whenever a capability is cut over, redirected, or re
 - Public-pool reports mainline: `/customers/public-pool/reports`
 - Product domain mainline: `/products`
 - Supplier management mainline: `/products?tab=suppliers`
+- Admin settings center mainline: `/settings`
+- Admin-only system configuration pages: `/settings/site`, `/settings/recording-storage`, `/settings/call-ai`, `/settings/security`, `/settings/audit`
+- Master-data settings sub-surfaces: `/settings/users`, `/settings/teams`, `/settings/tag-groups`, `/settings/tag-categories`, `/settings/tags`, `/settings/dictionaries`, `/settings/call-results`
 
 Compatibility routes currently still in use:
 
@@ -80,6 +84,10 @@ Compatibility routes currently still in use:
 **唯一主链（当前 cutover 目标主入口）**
 
 - `/customers`
+
+**手机端入口**
+
+- `/mobile` 是 Android App 默认入口，复用客户主线数据、通话补记和原生拨号录音桥接，不替代电脑端 `/customers` 主工作台。
 
 **主入口列表**
 

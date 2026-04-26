@@ -40,6 +40,7 @@ export default async function TagGroupsPage({
     <div className="crm-page">
       <SettingsPageHeader
         activeValue="tag-groups"
+        viewerRole={session.user.role}
         title="标签组"
         description="标签组继续作为标签体系的一级分组，用来承载客户分层、跟进信号和直播表现等标签资产。"
         metrics={[
