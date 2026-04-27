@@ -3,6 +3,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { RoleCode } from "@prisma/client";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
+import { WebRtcSoftphone } from "@/components/outbound-calls/webrtc-softphone";
 import type { NavigationGroup } from "@/lib/navigation";
 
 export function DashboardShell({
@@ -38,6 +39,8 @@ export function DashboardShell({
           {children}
         </div>
       </main>
+
+      <WebRtcSoftphone role={currentUser.role} />
     </div>
   );
 }

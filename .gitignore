@@ -35,6 +35,8 @@
 /backups/
 /reports/*.json
 /reports/**/*.json
+/reports/*.sql
+/reports/**/*.sql
 /prisma/_prisma_migrations_backup_*.json
 
 # debug

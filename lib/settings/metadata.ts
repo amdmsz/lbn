@@ -90,8 +90,15 @@ export const settingsWorkspaceSections = [
   },
   {
     key: "recording",
-    title: "录音存储",
+    title: "外呼录音",
     items: [
+      {
+        value: "outbound-call",
+        label: "外呼 CTI",
+        href: "/settings/outbound-call",
+        description: "CTI 网关、坐席绑定与回调策略",
+        access: "admin",
+      },
       {
         value: "recording-storage",
         label: "录音存储",

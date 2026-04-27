@@ -4,6 +4,7 @@ import type { CallResult } from "@prisma/client";
 import { CustomerCallRecordForm } from "@/components/customers/customer-call-record-form";
 import { CustomerCallRecordHistory } from "@/components/customers/customer-call-record-history";
 import { CustomerMobileDialButton } from "@/components/customers/mobile-call-followup-sheet";
+import { CustomerOutboundCallButton } from "@/components/customers/customer-outbound-call-button";
 import type { CallTranscriptSegment } from "@/lib/calls/call-ai-diarization";
 import {
   CustomerDossierMeta,
@@ -58,6 +59,7 @@ export function CustomerCallRecordsSection({
   records,
   resultOptions,
   canCreate,
+  outboundCallEnabled = false,
 }: Readonly<{
   customerId: string;
   customerName: string;
@@ -65,6 +67,7 @@ export function CustomerCallRecordsSection({
   records: CallRecordItem[];
   resultOptions: CallResultOption[];
   canCreate: boolean;
+  outboundCallEnabled?: boolean;
 }>) {
   const normalizedPhone = phone.trim();
   const canDialOnMobile =
@@ -123,7 +126,24 @@ export function CustomerCallRecordsSection({
           <CustomerDossierSignalRail items={signals} />
           {canCreate ? (
             <CustomerDossierPanel className="space-y-4">
-              {canDialOnMobile ? (
+              {outboundCallEnabled && canDialOnMobile ? (
+                <div className="flex flex-col gap-3 rounded-[0.95rem] border border-[rgba(79,125,247,0.16)] bg-[var(--color-shell-surface)] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-[var(--foreground)]">
+                      CRM 外呼
+                    </p>
+                    <p className="mt-1 truncate text-[12px] tabular-nums text-[var(--color-sidebar-muted)]">
+                      {normalizedPhone}
+                    </p>
+                  </div>
+                  <CustomerOutboundCallButton
+                    customerId={customerId}
+                    customerName={customerName}
+                    label="发起外呼"
+                    className="h-10 w-full border-[rgba(79,125,247,0.22)] bg-[var(--foreground)] px-4 text-[13px] font-semibold text-[var(--color-panel)] hover:border-[rgba(79,125,247,0.34)] hover:bg-[var(--foreground)]/92 sm:w-auto"
+                  />
+                </div>
+              ) : canDialOnMobile ? (
                 <div className="flex flex-col gap-3 rounded-[0.95rem] border border-[rgba(79,125,247,0.16)] bg-[var(--color-shell-surface)] px-3.5 py-3 md:hidden">
                   <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-[var(--foreground)]">

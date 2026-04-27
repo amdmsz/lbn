@@ -1,0 +1,18 @@
+<include>
+  <gateway name="{{CTI_SIP_GATEWAY_NAME}}">
+    <param name="username" value="{{CTI_SIP_USERNAME}}"/>
+    <param name="password" value="{{CTI_SIP_PASSWORD}}"/>
+    <param name="realm" value="{{CTI_SIP_HOST}}"/>
+    <param name="proxy" value="{{CTI_SIP_HOST}}:{{CTI_SIP_PORT}}"/>
+    <param name="register" value="{{CTI_SIP_REGISTER}}"/>
+    <param name="caller-id-in-from" value="true"/>
+    <param name="extension" value="{{CTI_SIP_USERNAME}}"/>
+    <param name="extension-in-contact" value="true"/>
+    <param name="ping" value="30"/>
+    <param name="retry-seconds" value="30"/>
+    <param name="expire-seconds" value="300"/>
+    <param name="codec-prefs" value="{{CTI_SIP_CODEC}}"/>
+    <param name="inbound-codec-prefs" value="{{CTI_SIP_CODEC}}"/>
+    <param name="outbound-codec-prefs" value="{{CTI_SIP_CODEC}}"/>
+  </gateway>
+</include>

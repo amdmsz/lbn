@@ -1414,6 +1414,7 @@ function renderTabContent({
   shell,
   tabData,
   canCreateCalls,
+  outboundCallEnabled,
   canCreateWechat,
   canManageLiveInvitations,
   canManageTags,
@@ -1433,6 +1434,7 @@ function renderTabContent({
   shell: CustomerDetailShellData;
   tabData: CustomerDetailTabDataMap[CustomerDetailTab];
   canCreateCalls: boolean;
+  outboundCallEnabled: boolean;
   canCreateWechat: boolean;
   canManageLiveInvitations: boolean;
   canManageTags: boolean;
@@ -1471,6 +1473,7 @@ function renderTabContent({
           records={(tabData as CustomerCallsData).records}
           resultOptions={(tabData as CustomerCallsData).callResultOptions}
           canCreate={canCreateCalls}
+          outboundCallEnabled={outboundCallEnabled}
         />
       );
     case "wechat":
@@ -1519,6 +1522,7 @@ export function CustomerDetailWorkbench({
   callResultOptions,
   notice,
   canCreateCalls,
+  outboundCallEnabled,
   canCreateWechat,
   canManageLiveInvitations,
   canManageTags,
@@ -1544,6 +1548,7 @@ export function CustomerDetailWorkbench({
   callResultOptions: CustomerCallResultOptions;
   notice: { tone: "success" | "danger"; message: string } | null;
   canCreateCalls: boolean;
+  outboundCallEnabled: boolean;
   canCreateWechat: boolean;
   canManageLiveInvitations: boolean;
   canManageTags: boolean;
@@ -1725,6 +1730,7 @@ export function CustomerDetailWorkbench({
                 triggerSource="detail"
                 variant="dialog"
                 className="max-w-[24rem]"
+                outboundCallEnabled={outboundCallEnabled && canCreateCalls}
               />
 
               <div className="flex flex-wrap gap-2">
@@ -1922,6 +1928,7 @@ export function CustomerDetailWorkbench({
         shell,
         tabData,
         canCreateCalls,
+        outboundCallEnabled,
         canCreateWechat,
         canManageLiveInvitations,
         canManageTags,

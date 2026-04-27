@@ -51,6 +51,7 @@ staging 验收请看：[docs/staging-checklist.md](./staging-checklist.md)
 - 环境变量模板：[.env.example](../.env.example)
 - systemd 模板：[deploy/systemd/jiuzhuang-crm.service](../deploy/systemd/jiuzhuang-crm.service)
 - lead import worker systemd 模板：[deploy/systemd/jiuzhuang-crm-import-worker.service](../deploy/systemd/jiuzhuang-crm-import-worker.service)
+- CTI Gateway systemd 模板：[deploy/systemd/jiuzhuang-crm-cti-gateway.service](../deploy/systemd/jiuzhuang-crm-cti-gateway.service)
 - Nginx 模板：[deploy/nginx/jiuzhuang-crm.conf](../deploy/nginx/jiuzhuang-crm.conf)
 - MySQL 初始化 SQL 模板：[deploy/mysql/init-database.sql](../deploy/mysql/init-database.sql)
 - MySQL 备份脚本：[scripts/backup-mysql.sh](../scripts/backup-mysql.sh)
@@ -65,6 +66,7 @@ staging 验收请看：[docs/staging-checklist.md](./staging-checklist.md)
 - 首个管理员初始化脚本：[scripts/bootstrap-admin.mjs](../scripts/bootstrap-admin.mjs)
 - 旧环境 migration metadata 对齐脚本：[scripts/reconcile-prisma-migration-baseline.mjs](../scripts/reconcile-prisma-migration-baseline.mjs)
 - Prisma migration rebaseline 说明：[docs/prisma-migration-rebaseline.md](./prisma-migration-rebaseline.md)
+- CTI 外呼接入说明：[docs/cti-outbound-call-runbook.md](./cti-outbound-call-runbook.md)
 
 注意：
 
@@ -218,6 +220,7 @@ npm run db:migration-baseline:reconcile -- --apply
 - 正式发布时不允许跳过 `prisma migrate status` 或 `prisma migrate deploy`
 - build 未通过时，不允许执行 `prisma migrate deploy`
 - `npm run start` 与 `npm run worker:lead-imports` 是两个独立进程
+- 如果启用 CRM 外呼，`npm run cti-gateway` 也应作为独立进程运行
 - 正式环境不能只起 Web，不起 worker
 - 如果通过 systemd 启动，则这两个进程应由两个独立 service 托管
 - 推荐在 Web 与 worker 重启完成后，再执行一次 `REQUIRE_LEAD_IMPORT_WORKER=1 npm run check:lead-import-runtime`，把 Redis 连通性、queue 状态和 worker presence 一次性确认掉

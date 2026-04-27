@@ -1,5 +1,4 @@
 import {
-  LeadConversionStatus,
   LeadSource,
   LeadStatus,
   UserStatus,
@@ -19,7 +18,11 @@ import {
   UNASSIGNED_OWNER_VALUE,
 } from "@/lib/leads/metadata";
 import type { LeadRecycleGuard } from "@/lib/leads/recycle-guards";
-import { buildLeadMoveGuardFromRecord } from "@/lib/recycle-bin/lead-adapter";
+import {
+  buildLeadMoveGuardFromRecord,
+  leadRecycleRecordSelect,
+  type LeadRecycleRecord,
+} from "@/lib/recycle-bin/lead-adapter";
 import { withVisibleLeadWhere } from "@/lib/leads/visibility";
 import { getActiveTagOptions } from "@/lib/master-data/queries";
 import {
@@ -121,35 +124,7 @@ export type LeadUnassignedExportItem = {
   }>;
 };
 
-type LeadListGuardRecord = {
-  id: string;
-  name: string | null;
-  phone: string;
-  status: LeadStatus;
-  conversionStatus: LeadConversionStatus;
-  ownerId: string | null;
-  customerId: string | null;
-  rolledBackAt: Date | null;
-  rolledBackBatchId: string | null;
-  lastFollowUpAt: Date | null;
-  nextFollowUpAt: Date | null;
-  owner: {
-    id: string;
-    name: string;
-    username: string;
-  } | null;
-  _count: {
-    assignments: number;
-    followUpTasks: number;
-    callRecords: number;
-    wechatRecords: number;
-    liveInvitations: number;
-    orders: number;
-    giftRecords: number;
-    leadTags: number;
-    mergeLogs: number;
-  };
-};
+type LeadListGuardRecord = LeadRecycleRecord;
 
 function attachLeadRecycleGuard<T extends LeadListGuardRecord & {
   source: LeadSource;
@@ -186,21 +161,7 @@ function attachLeadRecycleGuard<T extends LeadListGuardRecord & {
     owner: item.owner,
     leadTags: item.leadTags,
     assignments: item.assignments,
-    recycleGuard: buildLeadMoveGuardFromRecord({
-      id: item.id,
-      name: item.name,
-      phone: item.phone,
-      status: item.status,
-      conversionStatus: item.conversionStatus,
-      ownerId: item.ownerId,
-      customerId: item.customerId,
-      rolledBackAt: item.rolledBackAt,
-      rolledBackBatchId: item.rolledBackBatchId,
-      lastFollowUpAt: item.lastFollowUpAt,
-      nextFollowUpAt: item.nextFollowUpAt,
-      owner: item.owner,
-      _count: item._count,
-    }),
+    recycleGuard: buildLeadMoveGuardFromRecord(item),
   };
 }
 
@@ -540,6 +501,8 @@ export async function getLeadListData(
             username: true,
           },
         },
+        customer: leadRecycleRecordSelect.customer,
+        mergeLogs: leadRecycleRecordSelect.mergeLogs,
         leadTags: {
           orderBy: [{ tag: { sortOrder: "asc" } }, { createdAt: "asc" }],
           take: 5,
@@ -597,6 +560,8 @@ export async function getLeadListData(
             username: true,
           },
         },
+        customer: leadRecycleRecordSelect.customer,
+        mergeLogs: leadRecycleRecordSelect.mergeLogs,
         leadTags: {
           orderBy: [{ tag: { sortOrder: "asc" } }, { createdAt: "asc" }],
           take: 3,

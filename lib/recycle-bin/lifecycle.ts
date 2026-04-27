@@ -21,6 +21,7 @@ import {
   buildLeadPurgeGuard,
   buildLeadRestoreGuard,
   getLeadRecycleTarget,
+  listLeadCascadeRecycleTargets,
   purgeLeadTarget,
 } from "@/lib/recycle-bin/lead-adapter";
 import {
@@ -265,18 +266,27 @@ async function loadCascadeRecycleTargets(
   tx: RecycleTx,
   target: RecycleTargetSnapshot,
 ) {
-  if (target.targetType !== "PRODUCT") {
-    return [] as RecycleTargetSnapshot[];
+  const cascadeTargets: RecycleTargetSnapshot[] = [];
+
+  if (target.targetType === "PRODUCT") {
+    const cascadeSkuSnapshot = await listProductCascadeSkuSnapshot(tx, target.targetId);
+    const productCascadeTargets = await Promise.all(
+      cascadeSkuSnapshot.map((sku) => loadRecycleTarget(tx, "PRODUCT_SKU", sku.id)),
+    );
+
+    cascadeTargets.push(
+      ...productCascadeTargets.filter(
+        (cascadeTarget): cascadeTarget is RecycleTargetSnapshot =>
+          Boolean(cascadeTarget),
+      ),
+    );
   }
 
-  const cascadeSkuSnapshot = await listProductCascadeSkuSnapshot(tx, target.targetId);
-  const cascadeTargets = await Promise.all(
-    cascadeSkuSnapshot.map((sku) => loadRecycleTarget(tx, "PRODUCT_SKU", sku.id)),
-  );
+  if (target.targetType === "LEAD") {
+    cascadeTargets.push(...(await listLeadCascadeRecycleTargets(tx, target)));
+  }
 
-  return cascadeTargets.filter(
-    (cascadeTarget): cascadeTarget is RecycleTargetSnapshot => Boolean(cascadeTarget),
-  );
+  return cascadeTargets;
 }
 
 function buildRecycleEntryAfterData(input: {

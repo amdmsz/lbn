@@ -1,0 +1,17 @@
+[Unit]
+Description=Jiuzhuang CRM CTI Gateway
+After=network.target
+
+[Service]
+Type=simple
+User=crm
+Group=crm
+WorkingDirectory=__APP_ROOT__
+EnvironmentFile=__ENV_FILE__
+ExecStart=/usr/bin/npm run cti-gateway
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

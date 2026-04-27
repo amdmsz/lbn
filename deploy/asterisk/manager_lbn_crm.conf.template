@@ -1,0 +1,10 @@
+; Jiuzhuang CRM local CTI AMI user.
+; Include from /etc/asterisk/manager.conf:
+; #include "manager_lbn_crm.conf"
+
+[{{CTI_GATEWAY_ASTERISK_USERNAME}}]
+secret = {{CTI_GATEWAY_ASTERISK_PASSWORD}}
+deny = 0.0.0.0/0.0.0.0
+permit = 127.0.0.1/255.255.255.255
+read = system,call,log,verbose,command,agent,user,dtmf,reporting,cdr,dialplan
+write = system,call,log,verbose,command,agent,user,originate,reporting

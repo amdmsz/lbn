@@ -27,6 +27,7 @@ import {
 } from "@/lib/customers/queries";
 import { prisma } from "@/lib/db/prisma";
 import { parseMasterDataNotice } from "@/lib/master-data/metadata";
+import { isOutboundCallRuntimeEnabled } from "@/lib/outbound-calls/config";
 import {
   buildCustomerFinalizePreview,
   getCustomerRecycleTarget,
@@ -150,7 +151,12 @@ export default async function CustomerDetailPage({
     (session.user.role !== "SALES" || isOwnedByCurrentSales);
   const canEditProfile =
     session.user.role !== "SALES" || isOwnedByCurrentSales;
-  const callResultOptions = canCreateCalls ? await getEnabledCallResultOptions() : [];
+  const [callResultOptions, outboundCallEnabled] = canCreateCalls
+    ? await Promise.all([
+        getEnabledCallResultOptions(),
+        isOutboundCallRuntimeEnabled(),
+      ])
+    : [[], false];
   const [tradeOrderComposer, customerRecycleTarget, customerFinalizePreview] =
     await Promise.all([
       activeTab === "orders" && createTradeOrder && canCreateSalesOrders
@@ -180,6 +186,7 @@ export default async function CustomerDetailPage({
       callResultOptions={callResultOptions}
       notice={notice}
       canCreateCalls={canCreateCalls}
+      outboundCallEnabled={outboundCallEnabled}
       canCreateWechat={
         isExecutionReady &&
         canCreateWechatRecord(session.user.role) &&

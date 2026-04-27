@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
-import { saveSystemSettingAction } from "@/app/(dashboard)/settings/actions";
+import {
+  saveOutboundCallSeatBindingAction,
+  saveSystemSettingAction,
+} from "@/app/(dashboard)/settings/actions";
 import { SettingsPageHeader } from "@/components/settings/settings-page-header";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { SectionCard } from "@/components/shared/section-card";
@@ -11,11 +14,15 @@ import {
   CALL_AI_ASR_PROVIDERS,
   CALL_AI_LLM_PROVIDERS,
   DIARIZATION_PROVIDERS,
+  OUTBOUND_CALL_CODECS,
+  OUTBOUND_CALL_PROVIDERS,
+  OUTBOUND_CALL_RECORDING_IMPORT_MODES,
   RECORDING_STORAGE_PROVIDERS,
   TRANSCRIPT_SPEAKER_ROLES,
   type CallAiAsrSettingValue,
   type CallAiDiarizationSettingValue,
   type CallAiLlmSettingValue,
+  type OutboundCallProviderSettingValue,
   type RecordingStorageSettingValue,
   type RecordingUploadSettingValue,
   type RuntimeWorkerSettingValue,
@@ -23,6 +30,14 @@ import {
   type SiteProfileSettingValue,
 } from "@/lib/system-settings/schema";
 import type { SystemSettingPublic } from "@/lib/system-settings/queries";
+import {
+  OUTBOUND_CALL_SEAT_PROVIDERS,
+  outboundCallCodecLabels,
+  outboundCallProviderLabels,
+  outboundCallRecordingImportModeLabels,
+  type OutboundCallSeatProvider,
+} from "@/lib/outbound-calls/metadata";
+import type { OutboundCallSeatBindingRow } from "@/lib/outbound-calls/seat-bindings";
 
 type Metric = {
   label: string;
@@ -53,6 +68,15 @@ const providerLabelMap: Record<string, string> = {
   OPENAI_COMPATIBLE_AUDIO: "OPENAI_COMPATIBLE_AUDIO",
   OPENAI: "OPENAI",
   MOCK: "MOCK",
+  FREESWITCH: "FreeSWITCH / CTI Gateway",
+  CUSTOM_HTTP: "自定义 HTTP CTI",
+  PCMA: "PCMA · G.711A",
+  PCMU: "PCMU · G.711U",
+  OPUS: "OPUS",
+  AUTO: "自动协商",
+  WEBHOOK_URL: "Webhook 录音 URL",
+  CDR_PULL: "CDR 拉取",
+  FILE_DROP: "文件落盘扫描",
   DEEPSEEK: "DEEPSEEK",
   DASHSCOPE_QWEN: "通义千问",
   MOONSHOT: "Kimi / Moonshot",
@@ -593,6 +617,334 @@ export function RecordingStorageSettingsWorkbench({
           />
         </div>
       </SettingSection>
+    </SystemSettingsLayout>
+  );
+}
+
+function OutboundCallSeatBindingForm({
+  row,
+  defaultProvider,
+}: Readonly<{
+  row: OutboundCallSeatBindingRow;
+  defaultProvider: OutboundCallSeatProvider;
+}>) {
+  const binding = row.outboundCallSeatBinding;
+  const defaultSeatNo = row.username;
+
+  return (
+    <form
+      action={saveOutboundCallSeatBindingAction}
+      className="grid gap-3 rounded-[0.95rem] border border-black/7 bg-white px-3.5 py-3 shadow-[var(--color-shell-shadow-sm)] xl:grid-cols-[minmax(12rem,1.1fr)_8.5rem_8rem_8rem_8rem_8rem_6.5rem]"
+    >
+      <input type="hidden" name="redirectTo" value="/settings/outbound-call" />
+      <input type="hidden" name="userId" value={row.id} />
+
+      <div className="min-w-0">
+        <p className="truncate text-[13px] font-semibold text-black/82">
+          {row.name}
+        </p>
+        <p className="mt-1 truncate text-[12px] text-black/52">
+          @{row.username} / {row.team?.name ?? "未分组"} / {row.role.name}
+        </p>
+      </div>
+
+      <label className="space-y-1.5">
+        <span className="crm-label">Provider</span>
+        <SelectField
+          name="provider"
+          defaultValue={binding?.provider ?? defaultProvider}
+          values={OUTBOUND_CALL_SEAT_PROVIDERS}
+        />
+      </label>
+
+      <label className="space-y-1.5">
+        <span className="crm-label">坐席号</span>
+        <input
+          name="seatNo"
+          required
+          maxLength={80}
+          defaultValue={binding?.seatNo ?? defaultSeatNo}
+          placeholder={defaultSeatNo}
+          className="crm-input"
+        />
+      </label>
+
+      <label className="space-y-1.5">
+        <span className="crm-label">分机</span>
+        <input
+          name="extensionNo"
+          maxLength={80}
+          defaultValue={binding?.extensionNo ?? ""}
+          placeholder="可选"
+          className="crm-input"
+        />
+      </label>
+
+      <label className="space-y-1.5">
+        <span className="crm-label">主叫</span>
+        <input
+          name="displayNumber"
+          maxLength={80}
+          defaultValue={binding?.displayNumber ?? ""}
+          placeholder="线路侧决定"
+          className="crm-input"
+        />
+      </label>
+
+      <label className="space-y-1.5">
+        <span className="crm-label">路由组</span>
+        <input
+          name="routingGroup"
+          maxLength={120}
+          defaultValue={binding?.routingGroup ?? ""}
+          placeholder="default"
+          className="crm-input"
+        />
+      </label>
+
+      <div className="flex items-end gap-2">
+        <label className="mb-2 flex items-center gap-2 text-[12px] font-medium text-black/62">
+          <input
+            type="checkbox"
+            name="enabled"
+            defaultChecked={binding?.enabled ?? true}
+            className="h-4 w-4 rounded border-black/20 text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
+          />
+          启用
+        </label>
+        <button
+          type="submit"
+          className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-xs"
+        >
+          保存
+        </button>
+      </div>
+
+      {binding?.lastRegisteredAt || binding?.updatedAt ? (
+        <p className="text-[11px] leading-5 text-black/42 xl:col-span-7">
+          最近保存 {formatDateTimeLabel(binding.updatedAt)}
+          {binding.lastRegisteredAt
+            ? ` / 最近注册 ${formatDateTimeLabel(binding.lastRegisteredAt)}`
+            : ""}
+        </p>
+      ) : (
+        <p className="text-[11px] leading-5 text-black/42 xl:col-span-7">
+          未单独保存时，系统会直接使用 CRM 登录账号 @{defaultSeatNo} 作为坐席号。
+        </p>
+      )}
+    </form>
+  );
+}
+
+export function OutboundCallSettingsWorkbench({
+  providerSetting,
+  seatBindings,
+  viewerRole,
+  notice,
+}: Readonly<{
+  providerSetting: SystemSettingPublic;
+  seatBindings: OutboundCallSeatBindingRow[];
+  viewerRole: SettingsViewerRole;
+  notice: ActionNotice;
+}>) {
+  const value = getValue<OutboundCallProviderSettingValue>(providerSetting);
+  const explicitSeatBindings = seatBindings.filter(
+    (row) => row.outboundCallSeatBinding,
+  ).length;
+  const disabledSeatBindings = seatBindings.filter(
+    (row) => row.outboundCallSeatBinding && !row.outboundCallSeatBinding.enabled,
+  ).length;
+  const defaultSeatProvider = OUTBOUND_CALL_SEAT_PROVIDERS.includes(
+    value.provider as OutboundCallSeatProvider,
+  )
+    ? (value.provider as OutboundCallSeatProvider)
+    : "FREESWITCH";
+
+  return (
+    <SystemSettingsLayout
+      activeValue="outbound-call"
+      viewerRole={viewerRole}
+      title="外呼 CTI"
+      description="配置 CRM 到 CTI Gateway 的点击外呼、坐席绑定、回调签名和服务端录音策略。"
+      notice={notice}
+      metrics={[
+        {
+          label: "Provider",
+          value: outboundCallProviderLabels[value.provider] ?? value.provider,
+          hint: value.enabled ? "已启用" : "关闭",
+        },
+        {
+          label: "默认坐席",
+          value: String(seatBindings.length),
+          hint: `账号即坐席 / 覆盖 ${explicitSeatBindings}`,
+        },
+        {
+          label: "Codec",
+          value: outboundCallCodecLabels[value.codec] ?? value.codec,
+          hint:
+            outboundCallRecordingImportModeLabels[value.recordingImportMode] ??
+            value.recordingImportMode,
+        },
+      ]}
+    >
+      <SettingSection
+        setting={providerSetting}
+        redirectTo="/settings/outbound-call"
+        eyebrow="Provider"
+        title="CTI Gateway"
+        description="CRM 只调用服务端 CTI Gateway；SIP/VOS 密钥留在 PBX 或环境变量，不进前端。"
+        secretLabel="Gateway / Webhook Secret"
+      >
+        <div className="grid gap-4 xl:grid-cols-3">
+          <Field label="外呼 Provider">
+            <SelectField
+              name="provider"
+              defaultValue={value.provider}
+              values={OUTBOUND_CALL_PROVIDERS}
+            />
+          </Field>
+          <Field label="Codec">
+            <SelectField
+              name="codec"
+              defaultValue={value.codec}
+              values={OUTBOUND_CALL_CODECS}
+            />
+          </Field>
+          <Field label="录音导入模式">
+            <SelectField
+              name="recordingImportMode"
+              defaultValue={value.recordingImportMode}
+              values={OUTBOUND_CALL_RECORDING_IMPORT_MODES}
+            />
+          </Field>
+          <Field label="Gateway Base URL" wide>
+            <input
+              name="gatewayBaseUrl"
+              defaultValue={value.gatewayBaseUrl ?? ""}
+              maxLength={500}
+              placeholder="http://cti-gateway.internal:8080"
+              className="crm-input"
+            />
+          </Field>
+          <Field label="Start Path">
+            <input
+              name="startPath"
+              defaultValue={value.startPath}
+              required
+              maxLength={160}
+              className="crm-input"
+            />
+          </Field>
+          <Field label="Webhook Base URL" wide>
+            <input
+              name="webhookBaseUrl"
+              defaultValue={value.webhookBaseUrl ?? ""}
+              maxLength={500}
+              placeholder="https://crm.cclbn.com/api/outbound-calls/webhooks/freeswitch"
+              className="crm-input"
+            />
+          </Field>
+          <Field label="默认路由组">
+            <input
+              name="defaultRoutingGroup"
+              defaultValue={value.defaultRoutingGroup ?? ""}
+              maxLength={120}
+              className="crm-input"
+            />
+          </Field>
+          <Field label="拨号前缀">
+            <input
+              name="dialPrefix"
+              defaultValue={value.dialPrefix ?? ""}
+              maxLength={40}
+              placeholder="例如 0"
+              className="crm-input"
+            />
+          </Field>
+          <Field label="默认主叫号码">
+            <input
+              name="defaultDisplayNumber"
+              defaultValue={value.defaultDisplayNumber ?? ""}
+              maxLength={80}
+              className="crm-input"
+            />
+          </Field>
+          <Field label="发起超时秒">
+            <input
+              type="number"
+              name="timeoutSeconds"
+              min={3}
+              max={180}
+              defaultValue={value.timeoutSeconds}
+              className="crm-input"
+            />
+          </Field>
+          <Field label="Webhook 签名容忍秒">
+            <input
+              type="number"
+              name="webhookTimestampToleranceSeconds"
+              min={30}
+              max={3600}
+              defaultValue={value.webhookTimestampToleranceSeconds}
+              className="crm-input"
+            />
+          </Field>
+          <ToggleField
+            name="enabled"
+            label="启用 CRM 外呼"
+            description="启用后客户详情会显示 CTI 外呼入口。"
+            defaultChecked={value.enabled}
+          />
+          <ToggleField
+            name="recordOnServer"
+            label="服务端录音"
+            description="由 PBX / CTI 侧录音，CRM 后续导入。"
+            defaultChecked={value.recordOnServer}
+          />
+          <ToggleField
+            name="requireWebhookSecret"
+            label="要求回调签名"
+            description="生产环境必须开启。"
+            defaultChecked={value.requireWebhookSecret}
+          />
+        </div>
+      </SettingSection>
+
+      <SectionCard
+        eyebrow="Seats"
+        title="坐席绑定"
+        description="默认使用 CRM 登录账号作为 CTI 坐席号；这里只维护少数需要覆盖或禁用的账号。"
+      >
+        <div className="space-y-3">
+          <div className="grid gap-2 rounded-[0.95rem] border border-black/7 bg-[var(--color-panel-soft)] px-3.5 py-3 text-[12px] leading-5 text-black/56 md:grid-cols-3">
+            <span>
+              坐席规则：未单独保存时，系统用销售 CRM 登录账号作为坐席号。
+            </span>
+            <span>
+              覆盖规则：需要不同坐席号、分机、路由组或禁用时，在下方单独保存。
+            </span>
+            <span>
+              当前禁用：{disabledSeatBindings} 个；真实 SIP 密码仍只放在 CTI Gateway / PBX。
+            </span>
+          </div>
+
+          {seatBindings.length > 0 ? (
+            <div className="space-y-3">
+              {seatBindings.map((row) => (
+                <OutboundCallSeatBindingForm
+                  key={row.id}
+                  row={row}
+                  defaultProvider={defaultSeatProvider}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="crm-empty-state text-sm leading-7 text-[var(--color-sidebar-muted)]">
+              暂无可绑定账号。
+            </div>
+          )}
+        </div>
+      </SectionCard>
     </SystemSettingsLayout>
   );
 }

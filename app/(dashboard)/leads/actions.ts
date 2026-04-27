@@ -996,6 +996,9 @@ export async function moveLeadToRecycleBinAction(
     if (result.status !== "blocked") {
       revalidatePath("/leads");
       revalidatePath(`/leads/${leadId}`);
+      revalidatePath("/customers");
+      revalidatePath("/customers/public-pool");
+      revalidatePath("/dashboard");
       revalidatePath("/recycle-bin");
     }
 
@@ -1071,6 +1074,9 @@ export async function batchMoveLeadsToRecycleBinAction(
 
     if (summary.successCount > 0 || summary.skippedCount > 0) {
       revalidatePath("/leads");
+      revalidatePath("/customers");
+      revalidatePath("/customers/public-pool");
+      revalidatePath("/dashboard");
       revalidatePath("/recycle-bin");
     }
 

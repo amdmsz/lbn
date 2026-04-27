@@ -8,6 +8,7 @@ export const SYSTEM_SETTING_NAMESPACES = [
   "call_ai.asr",
   "call_ai.llm",
   "call_ai.diarization",
+  "outbound_call.provider",
   "runtime.worker",
 ] as const;
 
@@ -44,6 +45,22 @@ export const CALL_AI_LLM_PROVIDERS = [
 export const DIARIZATION_PROVIDERS = [
   "ASR_SEGMENTS",
   "LLM_INFERENCE",
+  "DISABLED",
+] as const;
+
+export const OUTBOUND_CALL_PROVIDERS = [
+  "DISABLED",
+  "MOCK",
+  "FREESWITCH",
+  "CUSTOM_HTTP",
+] as const;
+
+export const OUTBOUND_CALL_CODECS = ["PCMA", "PCMU", "OPUS", "AUTO"] as const;
+
+export const OUTBOUND_CALL_RECORDING_IMPORT_MODES = [
+  "WEBHOOK_URL",
+  "CDR_PULL",
+  "FILE_DROP",
   "DISABLED",
 ] as const;
 
@@ -186,6 +203,36 @@ export type CallAiDiarizationSettingValue = z.infer<
   typeof callAiDiarizationSettingSchema
 >;
 
+const outboundCallProviderSettingSchema = z
+  .object({
+    enabled: z.coerce.boolean().default(false),
+    provider: z.enum(OUTBOUND_CALL_PROVIDERS).default("DISABLED"),
+    gatewayBaseUrl: nullableTrimmedString(500).default(null),
+    startPath: optionalTrimmedString(160).default("/calls/start"),
+    webhookBaseUrl: nullableTrimmedString(500).default(null),
+    defaultRoutingGroup: nullableTrimmedString(120).default(null),
+    dialPrefix: nullableTrimmedString(40).default(null),
+    defaultDisplayNumber: nullableTrimmedString(80).default(null),
+    codec: z.enum(OUTBOUND_CALL_CODECS).default("PCMA"),
+    recordOnServer: z.coerce.boolean().default(true),
+    recordingImportMode: z
+      .enum(OUTBOUND_CALL_RECORDING_IMPORT_MODES)
+      .default("WEBHOOK_URL"),
+    timeoutSeconds: z.coerce.number().int().min(3).max(180).default(30),
+    requireWebhookSecret: z.coerce.boolean().default(true),
+    webhookTimestampToleranceSeconds: z.coerce
+      .number()
+      .int()
+      .min(30)
+      .max(3600)
+      .default(300),
+  })
+  .strict();
+
+export type OutboundCallProviderSettingValue = z.infer<
+  typeof outboundCallProviderSettingSchema
+>;
+
 const runtimeWorkerSettingSchema = z
   .object({
     leadImportWorkerRequired: z.coerce.boolean().default(false),
@@ -271,6 +318,15 @@ export const SYSTEM_SETTING_DEFINITIONS = [
     schema: callAiDiarizationSettingSchema,
     defaultValue: callAiDiarizationSettingSchema.parse({}),
     supportsSecret: false,
+  },
+  {
+    namespace: "outbound_call.provider",
+    key: SYSTEM_SETTING_ACTIVE_KEY,
+    title: "外呼 CTI",
+    description: "外呼 provider、CTI gateway、webhook、坐席路由和服务端录音策略。",
+    schema: outboundCallProviderSettingSchema,
+    defaultValue: outboundCallProviderSettingSchema.parse({}),
+    supportsSecret: true,
   },
   {
     namespace: "runtime.worker",

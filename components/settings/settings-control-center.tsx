@@ -88,6 +88,11 @@ function buildEntryMeta(data: SettingsData): Partial<Record<SettingsWorkspaceVal
       note: "内网存储",
       state: "配置预览",
     },
+    "outbound-call": {
+      stat: "CTI",
+      note: "坐席外呼",
+      state: "配置预览",
+    },
     "call-ai": {
       stat: "ASR/LLM",
       note: "转写与分析",

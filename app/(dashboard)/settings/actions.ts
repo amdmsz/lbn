@@ -10,6 +10,7 @@ import {
   sanitizeRedirectTarget,
 } from "@/lib/action-notice";
 import { auth } from "@/lib/auth/session";
+import { upsertOutboundCallSeatBinding } from "@/lib/outbound-calls/seat-bindings";
 import {
   requireSystemSettingDefinition,
   type SystemSettingNamespace,
@@ -120,6 +121,26 @@ function buildSettingValue(namespace: SystemSettingNamespace, formData: FormData
         unknownSpeakerLabel: getValue(formData, "unknownSpeakerLabel"),
         minSegmentTextLength: getValue(formData, "minSegmentTextLength"),
       };
+    case "outbound_call.provider":
+      return {
+        enabled: getCheckboxValue(formData, "enabled"),
+        provider: getValue(formData, "provider"),
+        gatewayBaseUrl: getNullableValue(formData, "gatewayBaseUrl"),
+        startPath: getValue(formData, "startPath"),
+        webhookBaseUrl: getNullableValue(formData, "webhookBaseUrl"),
+        defaultRoutingGroup: getNullableValue(formData, "defaultRoutingGroup"),
+        dialPrefix: getNullableValue(formData, "dialPrefix"),
+        defaultDisplayNumber: getNullableValue(formData, "defaultDisplayNumber"),
+        codec: getValue(formData, "codec"),
+        recordOnServer: getCheckboxValue(formData, "recordOnServer"),
+        recordingImportMode: getValue(formData, "recordingImportMode"),
+        timeoutSeconds: getValue(formData, "timeoutSeconds"),
+        requireWebhookSecret: getCheckboxValue(formData, "requireWebhookSecret"),
+        webhookTimestampToleranceSeconds: getValue(
+          formData,
+          "webhookTimestampToleranceSeconds",
+        ),
+      };
     case "runtime.worker":
       return {
         leadImportWorkerRequired: getCheckboxValue(
@@ -178,6 +199,38 @@ export async function saveSystemSettingAction(formData: FormData) {
     revalidatePath("/settings");
     revalidatePath(getRedirectPathname(redirectTo));
     redirect(buildRedirectTarget(redirectTo, "success", `${definition.title}已保存。`));
+  } catch (error) {
+    rethrowRedirectError(error);
+    redirect(buildRedirectTarget(redirectTo, "error", getErrorMessage(error)));
+  }
+}
+
+export async function saveOutboundCallSeatBindingAction(formData: FormData) {
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const redirectTo = sanitizeRedirectTarget(
+    getValue(formData, "redirectTo"),
+    "/settings/outbound-call",
+  );
+
+  try {
+    await upsertOutboundCallSeatBinding(session.user.id, {
+      userId: getValue(formData, "userId"),
+      provider: getValue(formData, "provider"),
+      seatNo: getValue(formData, "seatNo"),
+      extensionNo: getNullableValue(formData, "extensionNo"),
+      displayNumber: getNullableValue(formData, "displayNumber"),
+      routingGroup: getNullableValue(formData, "routingGroup"),
+      enabled: getCheckboxValue(formData, "enabled"),
+    });
+
+    revalidatePath("/settings");
+    revalidatePath("/settings/outbound-call");
+    redirect(buildRedirectTarget(redirectTo, "success", "坐席绑定已保存。"));
   } catch (error) {
     rethrowRedirectError(error);
     redirect(buildRedirectTarget(redirectTo, "error", getErrorMessage(error)));

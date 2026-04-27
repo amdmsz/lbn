@@ -171,6 +171,26 @@ enum CallRecordingStorageProvider {
   S3
 }
 
+enum OutboundCallProvider {
+  MOCK
+  FREESWITCH
+  CUSTOM_HTTP
+}
+
+enum OutboundCallDirection {
+  OUTBOUND
+}
+
+enum OutboundCallSessionStatus {
+  REQUESTED
+  PROVIDER_ACCEPTED
+  RINGING
+  ANSWERED
+  ENDED
+  FAILED
+  CANCELED
+}
+
 enum CallRecordingUploadStatus {
   INITIATED
   UPLOADING
@@ -625,6 +645,8 @@ enum OperationTargetType {
   CALL_AI_ANALYSIS
   CALL_QUALITY_REVIEW
   MOBILE_DEVICE
+  OUTBOUND_CALL_SESSION
+  OUTBOUND_CALL_SEAT_BINDING
   WECHAT_RECORD
   LIVE_SESSION
   LIVE_INVITATION
@@ -684,6 +706,7 @@ model Team {
   publicPoolCustomers Customer[] @relation("CustomerPublicPoolTeam")
   customerOwnershipEvents CustomerOwnershipEvent[] @relation("CustomerOwnershipEventTeam")
   callRecordings CallRecording[] @relation("CallRecordingTeam")
+  outboundCallSessions OutboundCallSession[] @relation("OutboundCallSessionTeam")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -755,6 +778,8 @@ model User {
   createdFollowUpTasks    FollowUpTask[]   @relation("FollowUpTaskCreator")
   callRecords             CallRecord[]     @relation("CallRecordSales")
   callRecordings          CallRecording[]  @relation("CallRecordingSales")
+  outboundCallSeatBinding OutboundCallSeatBinding? @relation("OutboundCallSeatBindingUser")
+  outboundCallSessions    OutboundCallSession[] @relation("OutboundCallSessionSales")
   mobileDevices           MobileDevice[]   @relation("MobileDeviceUser")
   callQualityReviews      CallQualityReview[] @relation("CallQualityReviewReviewer")
   wechatRecords           WechatRecord[]   @relation("WechatRecordSales")
@@ -937,6 +962,7 @@ model Customer {
   followUpTasks   FollowUpTask[]
   callRecords     CallRecord[]
   callRecordings  CallRecording[]
+  outboundCallSessions OutboundCallSession[]
   wechatRecords   WechatRecord[]
   liveInvitations LiveInvitation[]
   liveAudienceRecords LiveAudienceRecord[]
@@ -1057,6 +1083,7 @@ model CallRecord {
   remark          String?    @db.Text
   nextFollowUpAt  DateTime?
   recording       CallRecording?
+  outboundSession OutboundCallSession?
   aiAnalysis      CallAiAnalysis?
   qualityReviews  CallQualityReview[]
   createdAt       DateTime   @default(now())
@@ -1067,6 +1094,72 @@ model CallRecord {
   @@index([salesId, callTime])
   @@index([resultCode, callTime])
   @@map("callrecord")
+}
+
+model OutboundCallSeatBinding {
+  id               String               @id @default(cuid())
+  userId           String               @unique
+  user             User                 @relation("OutboundCallSeatBindingUser", fields: [userId], references: [id])
+  provider         OutboundCallProvider @default(MOCK)
+  seatNo           String
+  extensionNo      String?
+  displayNumber    String?
+  routingGroup     String?
+  enabled          Boolean              @default(true)
+  lastRegisteredAt DateTime?
+  metadataJson     Json?
+  sessions         OutboundCallSession[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@unique([provider, seatNo], map: "outbound_call_seat_bindings_provider_seatNo_key")
+  @@index([provider, enabled], map: "outbound_call_seat_bindings_provider_enabled_idx")
+  @@index([enabled, updatedAt], map: "outbound_call_seat_bindings_enabled_updatedAt_idx")
+  @@map("outbound_call_seat_bindings")
+}
+
+model OutboundCallSession {
+  id                  String                    @id @default(cuid())
+  callRecordId        String                    @unique
+  callRecord          CallRecord                @relation(fields: [callRecordId], references: [id])
+  customerId          String
+  customer            Customer                  @relation(fields: [customerId], references: [id])
+  salesId             String
+  sales               User                      @relation("OutboundCallSessionSales", fields: [salesId], references: [id])
+  teamId              String?
+  team                Team?                     @relation("OutboundCallSessionTeam", fields: [teamId], references: [id])
+  seatBindingId       String?
+  seatBinding         OutboundCallSeatBinding?  @relation(fields: [seatBindingId], references: [id])
+  provider            OutboundCallProvider
+  providerCallId      String?
+  providerTraceId     String?
+  dialedNumber        String
+  displayNumber       String?
+  seatNo              String?
+  direction           OutboundCallDirection     @default(OUTBOUND)
+  status              OutboundCallSessionStatus @default(REQUESTED)
+  failureCode         String?
+  failureMessage      String?                   @db.Text
+  requestedAt         DateTime                  @default(now())
+  ringingAt           DateTime?
+  answeredAt          DateTime?
+  endedAt             DateTime?
+  durationSeconds     Int?
+  recordingUrl        String?                   @db.Text
+  recordingExternalId String?
+  recordingImportedAt DateTime?
+  rawCdrJson          Json?
+  rawEventsJson       Json?
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+
+  @@unique([provider, providerCallId], map: "outbound_call_sessions_provider_callId_key")
+  @@index([salesId, requestedAt], map: "outbound_call_sessions_sales_requestedAt_idx")
+  @@index([customerId, requestedAt], map: "outbound_call_sessions_customer_requestedAt_idx")
+  @@index([teamId, requestedAt], map: "outbound_call_sessions_team_requestedAt_idx")
+  @@index([seatBindingId, requestedAt], map: "outbound_call_sessions_seat_requestedAt_idx")
+  @@index([status, requestedAt], map: "outbound_call_sessions_status_requestedAt_idx")
+  @@map("outbound_call_sessions")
 }
 
 model CallRecording {

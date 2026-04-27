@@ -33,7 +33,7 @@ This file should be updated whenever a capability is cut over, redirected, or re
 - Product domain mainline: `/products`
 - Supplier management mainline: `/products?tab=suppliers`
 - Admin settings center mainline: `/settings`
-- Admin-only system configuration pages: `/settings/site`, `/settings/recording-storage`, `/settings/call-ai`, `/settings/security`, `/settings/audit`
+- Admin-only system configuration pages: `/settings/site`, `/settings/outbound-call`, `/settings/recording-storage`, `/settings/call-ai`, `/settings/security`, `/settings/audit`
 - Master-data settings sub-surfaces: `/settings/users`, `/settings/teams`, `/settings/tag-groups`, `/settings/tag-categories`, `/settings/tags`, `/settings/dictionaries`, `/settings/call-results`
 
 Compatibility routes currently still in use:
@@ -208,6 +208,33 @@ Compatibility routes currently still in use:
 
 - `/orders/[id]` is intentionally dual-mode today
 - Parent detail is the business mainline, but child-detail compatibility links still exist across execution pages
+
+---
+
+### 2A. Outbound CTI Call
+
+**当前一期入口**
+
+- Customer detail phone spotlight and calls tab: `/customers/[id]`
+- Admin config: `/settings/outbound-call`
+- Start API: `POST /api/outbound-calls/start`
+- WebRTC seat config API: `GET /api/outbound-calls/webrtc-config`
+- Provider callback API: `POST /api/outbound-calls/webhooks/[provider]`
+
+**当前边界**
+
+- CRM frontends only call CRM APIs; browser may receive only its own WebRTC seat credential, never the SIP trunk credential.
+- Phase 1 keeps existing mobile native call recorder as fallback when CTI config is disabled.
+- Server-side CTI events write `OutboundCallSession` and link to `CallRecord`.
+- WebRTC softphone is mounted inside the dashboard shell and keeps `PJSIP/{seatNo}` compatible with the CTI Gateway originate flow.
+
+**每次改该能力时必须同步检查的入口**
+
+- Customer detail header phone action
+- Customer detail calls tab action
+- `/settings/outbound-call` provider and seat binding forms
+- Dashboard shell WebRTC softphone status and controls
+- Webhook signature and idempotent event update behavior
 
 ---
 

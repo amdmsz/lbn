@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+set -u
+
+DEFAULT_WEBHOOK_URL={{SHELL_CTI_POST_CALL_WEBHOOK_URL}}
+DEFAULT_WEBHOOK_SECRET={{SHELL_OUTBOUND_CALL_WEBHOOK_SECRET}}
+DEFAULT_LOG_FILE={{SHELL_CTI_POST_CALL_WEBHOOK_LOG_FILE}}
+
+WEBHOOK_URL="${CTI_POST_CALL_WEBHOOK_URL:-$DEFAULT_WEBHOOK_URL}"
+WEBHOOK_SECRET="${OUTBOUND_CALL_WEBHOOK_SECRET:-$DEFAULT_WEBHOOK_SECRET}"
+LOG_FILE="${CTI_POST_CALL_WEBHOOK_LOG_FILE:-$DEFAULT_LOG_FILE}"
+
+SESSION_ID="${1:-}"
+CALL_RECORD_ID="${2:-}"
+UNIQUE_ID="${3:-}"
+DIAL_STATUS="${4:-}"
+DISPOSITION="${5:-}"
+BILLSEC="${6:-}"
+DURATION="${7:-}"
+RECORDING_FILE="${8:-}"
+HANGUP_CAUSE="${9:-}"
+SEAT_NO="${10:-}"
+DIALED_NUMBER="${11:-}"
+
+log_line() {
+  local message="$1"
+
+  if [ -n "$LOG_FILE" ]; then
+    printf '%s %s\n' "$(date -Is)" "$message" >> "$LOG_FILE"
+  else
+    printf '%s\n' "$message" >&2
+  fi
+}
+
+if [ -z "$WEBHOOK_URL" ] || [ -z "$WEBHOOK_SECRET" ]; then
+  log_line "skip crm post-call webhook: missing url or secret"
+  exit 0
+fi
+
+if [ -z "$SESSION_ID" ] || [ -z "$CALL_RECORD_ID" ]; then
+  log_line "skip crm post-call webhook: missing session or call record"
+  exit 0
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+  log_line "skip crm post-call webhook: python3 is required"
+  exit 0
+fi
+
+if ! command -v openssl >/dev/null 2>&1; then
+  log_line "skip crm post-call webhook: openssl is required"
+  exit 0
+fi
+
+if ! command -v curl >/dev/null 2>&1; then
+  log_line "skip crm post-call webhook: curl is required"
+  exit 0
+fi
+
+PAYLOAD="$(
+  python3 - \
+    "$SESSION_ID" \
+    "$CALL_RECORD_ID" \
+    "$UNIQUE_ID" \
+    "$DIAL_STATUS" \
+    "$DISPOSITION" \
+    "$BILLSEC" \
+    "$DURATION" \
+    "$RECORDING_FILE" \
+    "$HANGUP_CAUSE" \
+    "$SEAT_NO" \
+    "$DIALED_NUMBER" <<'PY'
+import datetime
+import json
+import sys
+
+(
+    _,
+    session_id,
+    call_record_id,
+    unique_id,
+    dial_status,
+    disposition,
+    billsec,
+    duration,
+    recording_file,
+    hangup_cause,
+    seat_no,
+    dialed_number,
+) = sys.argv
+
+def int_or_none(value):
+    try:
+        parsed = int(str(value or "").strip())
+    except ValueError:
+        return None
+    return parsed if parsed >= 0 else None
+
+dial_status_upper = (dial_status or "").strip().upper()
+disposition_upper = (disposition or "").strip().upper()
+talk_seconds = int_or_none(billsec)
+total_seconds = int_or_none(duration)
+answered = (
+    (talk_seconds or 0) > 0
+    or dial_status_upper in {"ANSWER", "ANSWERED"}
+    or disposition_upper == "ANSWERED"
+)
+status = "ENDED" if answered else "FAILED"
+event_at = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+failure_code = None if answered else (dial_status_upper or hangup_cause or "CALL_FAILED")
+
+payload = {
+    "eventId": f"asterisk:{unique_id or call_record_id}:final",
+    "sessionId": session_id,
+    "callRecordId": call_record_id,
+    "providerCallId": unique_id or call_record_id,
+    "recordingExternalId": unique_id or None,
+    "status": status,
+    "eventAt": event_at,
+    "durationSeconds": talk_seconds if talk_seconds is not None else 0,
+    "failureCode": failure_code,
+    "failureMessage": None if answered else (disposition_upper or dial_status_upper or hangup_cause or None),
+    "recordingPath": recording_file or None,
+    "recordingMimeType": "audio/wav",
+    "recordingCodec": "alaw",
+    "cdr": {
+        "source": "asterisk",
+        "uniqueId": unique_id or None,
+        "dialStatus": dial_status_upper or None,
+        "disposition": disposition_upper or None,
+        "billsec": talk_seconds,
+        "duration": total_seconds,
+        "hangupCause": hangup_cause or None,
+        "seatNo": seat_no or None,
+        "dialedNumber": dialed_number or None,
+        "recordingPath": recording_file or None,
+    },
+}
+
+print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+PY
+)"
+
+TIMESTAMP="$(date +%s)"
+SIGNATURE_HEX="$(
+  printf '%s' "$TIMESTAMP.$PAYLOAD" \
+    | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" \
+    | awk '{print $NF}'
+)"
+
+if curl -fsS --max-time 10 \
+  -H "Content-Type: application/json" \
+  -H "X-LBN-CTI-Timestamp: $TIMESTAMP" \
+  -H "X-LBN-CTI-Signature: sha256=$SIGNATURE_HEX" \
+  --data "$PAYLOAD" \
+  "$WEBHOOK_URL" >/dev/null; then
+  log_line "crm post-call webhook ok session=$SESSION_ID callRecord=$CALL_RECORD_ID status=$DIAL_STATUS billsec=$BILLSEC"
+else
+  log_line "crm post-call webhook failed session=$SESSION_ID callRecord=$CALL_RECORD_ID status=$DIAL_STATUS billsec=$BILLSEC"
+fi
+
+exit 0

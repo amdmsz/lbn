@@ -1,0 +1,25 @@
+; Jiuzhuang CRM outbound dialplan.
+; Include from /etc/asterisk/extensions.conf:
+; #include "extensions_lbn_crm.conf"
+
+[crm-outbound]
+exten => _X.,1,NoOp(CRM outbound ${CRM_CALL_RECORD_ID} seat ${CRM_SEAT_NO} to ${EXTEN})
+ same => n,Set(CALLERID(num)=${CRM_SEAT_NO})
+ same => n,Set(CDR(accountcode)=crm)
+ same => n,Set(CRM_DIALED_NUMBER=${EXTEN})
+ same => n,Set(RECORDING_DIR={{CTI_ASTERISK_RECORDING_DIR}}/${STRFTIME(${EPOCH},,%Y%m%d)})
+ same => n,System(/bin/mkdir -p ${RECORDING_DIR})
+ same => n,Set(RECORDING_FILE=${RECORDING_DIR}/${STRFTIME(${EPOCH},,%Y%m%d-%H%M%S)}-${CRM_CALL_RECORD_ID}-${CRM_SEAT_NO}-${EXTEN}.wav)
+ same => n,MixMonitor(${RECORDING_FILE},b)
+ same => n,Dial(PJSIP/${EXTEN}@{{CTI_ASTERISK_TRUNK_NAME}},60,tT)
+ same => n,Hangup()
+
+exten => h,1,NoOp(CRM outbound finished ${CRM_CALL_RECORD_ID} ${DIALSTATUS} ${CDR(disposition)})
+ same => n,System(/bin/bash {{CTI_ASTERISK_POST_CALL_WEBHOOK_SCRIPT}} "${CRM_SESSION_ID}" "${CRM_CALL_RECORD_ID}" "${UNIQUEID}" "${DIALSTATUS}" "${CDR(disposition)}" "${CDR(billsec)}" "${CDR(duration)}" "${RECORDING_FILE}" "${HANGUPCAUSE}" "${CRM_SEAT_NO}" "${CRM_DIALED_NUMBER}")
+
+[from-lbn-provider]
+exten => _X.,1,NoOp(Inbound from LBN provider ${CALLERID(all)})
+ same => n,Hangup()
+
+[from-lbn-seat]
+exten => _X.,1,Goto(crm-outbound,${EXTEN},1)

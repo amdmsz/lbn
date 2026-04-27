@@ -1,0 +1,12 @@
+; Jiuzhuang CRM Asterisk HTTP/WebSocket config.
+; Include from /etc/asterisk/http.conf:
+; #include "http_lbn_crm.conf"
+
+[general]
+enabled={{CTI_ASTERISK_HTTP_ENABLED}}
+bindaddr={{CTI_ASTERISK_HTTP_BIND_ADDR}}
+bindport={{CTI_ASTERISK_HTTP_BIND_PORT}}
+tlsenable={{CTI_ASTERISK_HTTP_TLS_ENABLED}}
+tlsbindaddr={{CTI_ASTERISK_HTTP_TLS_BIND_ADDR}}
+tlscertfile={{CTI_ASTERISK_HTTP_TLS_CERT_FILE}}
+tlsprivatekey={{CTI_ASTERISK_HTTP_TLS_PRIVATE_KEY}}
