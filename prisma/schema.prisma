@@ -1216,8 +1216,8 @@ model CallResultSetting {
   createdAt                DateTime                   @default(now())
   updatedAt                DateTime                   @updatedAt
 
-  @@index([isEnabled, sortOrder])
-  @@index([isSystem, sortOrder])
+  @@index([isEnabled, sortOrder], map: "call_result_settings_isEnabled_sortorder_idx")
+  @@index([isSystem, sortOrder], map: "call_result_settings_isSystem_sortorder_idx")
   @@map("call_result_settings")
 }
 
@@ -1516,7 +1516,7 @@ model ProductBundleItem {
   updatedAt  DateTime      @updatedAt
 
   @@unique([bundleId, lineNo])
-  @@index([bundleId, sortOrder])
+  @@index([bundleId, sortOrder], map: "productbundleitem_bundleId_sortorder_idx")
   @@map("productbundleitem")
 }
 
@@ -1937,15 +1937,15 @@ model ShippingExportLine {
 model LogisticsFollowUpTask {
   id               String                      @id @default(cuid())
   tradeOrderId     String?
-  tradeOrder       TradeOrder?                 @relation(fields: [tradeOrderId], references: [id])
+  tradeOrder       TradeOrder?                 @relation(fields: [tradeOrderId], references: [id], map: "Logisticsfollowuptask_tradeOrderId_fkey")
   salesOrderId     String
-  salesOrder       SalesOrder                  @relation(fields: [salesOrderId], references: [id])
+  salesOrder       SalesOrder                  @relation(fields: [salesOrderId], references: [id], map: "Logisticsfollowuptask_salesOrderId_fkey")
   shippingTaskId   String
-  shippingTask     ShippingTask                @relation(fields: [shippingTaskId], references: [id])
+  shippingTask     ShippingTask                @relation(fields: [shippingTaskId], references: [id], map: "Logisticsfollowuptask_shippingTaskId_fkey")
   customerId       String
-  customer         Customer                    @relation(fields: [customerId], references: [id])
+  customer         Customer                    @relation(fields: [customerId], references: [id], map: "Logisticsfollowuptask_customerId_fkey")
   ownerId          String
-  owner            User                        @relation("LogisticsFollowUpTaskOwner", fields: [ownerId], references: [id])
+  owner            User                        @relation("LogisticsFollowUpTaskOwner", fields: [ownerId], references: [id], map: "Logisticsfollowuptask_ownerId_fkey")
   status           LogisticsFollowUpTaskStatus @default(PENDING)
   intervalDays     Int                         @default(2)
   nextTriggerAt    DateTime
@@ -1956,12 +1956,12 @@ model LogisticsFollowUpTask {
   createdAt        DateTime                    @default(now())
   updatedAt        DateTime                    @updatedAt
 
-  @@index([salesOrderId, status, nextTriggerAt])
-  @@index([shippingTaskId, status, nextTriggerAt])
+  @@index([salesOrderId, status, nextTriggerAt], map: "Logisticsfollowuptask_salesOrderId_status_nextTriggerAt_idx")
+  @@index([shippingTaskId, status, nextTriggerAt], map: "Logisticsfollowuptask_shippingTaskId_status_nextTriggerAt_idx")
   @@index([tradeOrderId, salesOrderId, status, nextTriggerAt], map: "lgfollow_trade_sales_next_idx")
   @@index([tradeOrderId, shippingTaskId, status, nextTriggerAt], map: "lgfollow_trade_ship_next_idx")
-  @@index([customerId, status, nextTriggerAt])
-  @@index([ownerId, status, nextTriggerAt])
+  @@index([customerId, status, nextTriggerAt], map: "Logisticsfollowuptask_customerId_status_nextTriggerAt_idx")
+  @@index([ownerId, status, nextTriggerAt], map: "Logisticsfollowuptask_ownerId_status_nextTriggerAt_idx")
   @@map("logisticsfollowuptask")
 }
 
@@ -2146,7 +2146,7 @@ model TagGroup {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  @@index([isActive, sortOrder])
+  @@index([isActive, sortOrder], map: "tag_groups_isActive_sortorder_idx")
   @@map("tag_groups")
 }
 
@@ -2163,7 +2163,7 @@ model TagCategory {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@index([groupId, isActive, sortOrder])
+  @@index([groupId, isActive, sortOrder], map: "tag_categories_groupId_isActive_sortorder_idx")
   @@map("tag_categories")
 }
 
@@ -2184,8 +2184,8 @@ model Tag {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  @@index([groupId, isActive, sortOrder])
-  @@index([categoryId, isActive, sortOrder])
+  @@index([groupId, isActive, sortOrder], map: "tags_groupId_isActive_sortorder_idx")
+  @@index([categoryId, isActive, sortOrder], map: "tags_categoryId_isActive_sortorder_idx")
   @@map("tags")
 }
 
@@ -2420,7 +2420,7 @@ model Category {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 
-  @@index([isActive, sortOrder])
+  @@index([isActive, sortOrder], map: "categories_isActive_sortorder_idx")
   @@map("categories")
 }
 
@@ -2437,7 +2437,7 @@ model DictionaryType {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
-  @@index([categoryId, isActive, sortOrder])
+  @@index([categoryId, isActive, sortOrder], map: "dictionary_types_categoryId_isActive_sortorder_idx")
   @@map("dictionary_types")
 }
 
@@ -2455,7 +2455,7 @@ model DictionaryItem {
   updatedAt   DateTime       @updatedAt
 
   @@unique([typeId, code])
-  @@index([typeId, isActive, sortOrder])
+  @@index([typeId, isActive, sortOrder], map: "dictionary_items_typeId_isActive_sortorder_idx")
   @@map("dictionary_items")
 }
 
