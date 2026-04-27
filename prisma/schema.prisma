@@ -668,6 +668,8 @@ model Role {
   users       User[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@map("role")
 }
 
 model Team {
@@ -808,6 +810,7 @@ model User {
   @@index([supervisorId])
   @@index([invitedById])
   @@index([disabledById])
+  @@map("user")
 }
 
 model RecycleBinEntry {
@@ -904,6 +907,7 @@ model Lead {
   @@index([rolledBackBatchId])
   @@index([nextFollowUpAt])
   @@index([createdAt])
+  @@map("lead")
 }
 
 model Customer {
@@ -962,6 +966,7 @@ model Customer {
   @@index([claimLockedUntil])
   @@index([lastEffectiveFollowUpAt])
   @@index([createdAt])
+  @@map("customer")
 }
 
 model CustomerOwnershipEvent {
@@ -988,6 +993,7 @@ model CustomerOwnershipEvent {
   @@index([reason, createdAt])
   @@index([teamId, createdAt])
   @@index([actorId, createdAt])
+  @@map("customerownershipevent")
 }
 
 model LeadAssignment {
@@ -1007,6 +1013,7 @@ model LeadAssignment {
 
   @@index([leadId, createdAt])
   @@index([toUserId, createdAt])
+  @@map("leadassignment")
 }
 
 model FollowUpTask {
@@ -1032,6 +1039,7 @@ model FollowUpTask {
   @@index([leadId, status, dueAt])
   @@index([customerId, status, dueAt])
   @@index([ownerId, status, dueAt])
+  @@map("followuptask")
 }
 
 model CallRecord {
@@ -1058,6 +1066,7 @@ model CallRecord {
   @@index([customerId, callTime])
   @@index([salesId, callTime])
   @@index([resultCode, callTime])
+  @@map("callrecord")
 }
 
 model CallRecording {
@@ -1277,6 +1286,7 @@ model WechatRecord {
   @@index([leadId, createdAt])
   @@index([customerId, createdAt])
   @@index([salesId, createdAt])
+  @@map("wechatrecord")
 }
 
 model LiveSession {
@@ -1314,6 +1324,7 @@ model LiveSession {
   @@index([source, startAt])
   @@index([syncStatus, lastSyncedAt])
   @@index([createdById])
+  @@map("livesession")
 }
 
 model LiveInvitation {
@@ -1340,6 +1351,7 @@ model LiveInvitation {
   @@index([liveSessionId, salesId])
   @@index([leadId])
   @@index([customerId])
+  @@map("liveinvitation")
 }
 
 model LiveAudienceRecord {
@@ -1405,6 +1417,7 @@ model Supplier {
   updatedAt   DateTime @updatedAt
 
   @@index([enabled, createdAt])
+  @@map("supplier")
 }
 
 model Product {
@@ -1433,6 +1446,7 @@ model Product {
   updatedAt   DateTime @updatedAt
 
   @@index([supplierId, enabled, createdAt])
+  @@map("product")
 }
 
 model ProductSku {
@@ -1450,6 +1464,7 @@ model ProductSku {
   updatedAt              DateTime @updatedAt
 
   @@index([productId, enabled, createdAt])
+  @@map("productsku")
 }
 
 model ProductSavedView {
@@ -1483,6 +1498,7 @@ model ProductBundle {
   updatedAt          DateTime            @updatedAt
 
   @@index([status, enabled, createdAt])
+  @@map("productbundle")
 }
 
 model ProductBundleItem {
@@ -1501,6 +1517,7 @@ model ProductBundleItem {
 
   @@unique([bundleId, lineNo])
   @@index([bundleId, sortOrder])
+  @@map("productbundleitem")
 }
 
 model TradeOrder {
@@ -1551,6 +1568,7 @@ model TradeOrder {
   @@index([customerId, createdAt])
   @@index([ownerId, reviewStatus, createdAt])
   @@index([reviewStatus, tradeStatus, createdAt])
+  @@map("tradeorder")
 }
 
 model TradeOrderItem {
@@ -1586,6 +1604,7 @@ model TradeOrderItem {
   @@unique([tradeOrderId, lineNo])
   @@index([tradeOrderId, itemType, createdAt])
   @@index([bundleId])
+  @@map("tradeorderitem")
 }
 
 model TradeOrderItemComponent {
@@ -1617,6 +1636,7 @@ model TradeOrderItemComponent {
 
   @@unique([tradeOrderItemId, componentSeq])
   @@index([tradeOrderId, supplierId, createdAt])
+  @@map("tradeorderitemcomponent")
 }
 
 /// Phase 1 keeps one supplier sub-order per trade order as a migration-safe rule.
@@ -1683,6 +1703,7 @@ model SalesOrder {
   @@index([paymentMode, createdAt])
   @@index([tradeOrderId, createdAt])
   @@unique([tradeOrderId, supplierId])
+  @@map("salesorder")
 }
 
 model SalesOrderItem {
@@ -1720,6 +1741,7 @@ model SalesOrderItem {
   @@index([tradeOrderId, salesOrderId])
   @@index([tradeOrderItemId])
   @@index([tradeOrderItemComponentId])
+  @@map("salesorderitem")
 }
 
 /// Read-only compatibility for historical bundled gifts.
@@ -1734,6 +1756,7 @@ model SalesOrderGiftItem {
   createdAt    DateTime   @default(now())
 
   @@index([salesOrderId, createdAt])
+  @@map("salesordergiftitem")
 }
 
 model Order {
@@ -1763,6 +1786,7 @@ model Order {
   @@index([leadId])
   @@index([ownerId])
   @@index([status, paymentStatus, shippingStatus])
+  @@map("order")
 }
 
 model GiftRecord {
@@ -1797,6 +1821,7 @@ model GiftRecord {
   @@index([liveSessionId])
   @@index([salesId])
   @@index([reviewStatus, shippingStatus])
+  @@map("giftrecord")
 }
 
 model ShippingTask {
@@ -1850,6 +1875,7 @@ model ShippingTask {
   @@index([tradeOrderId, supplierId, reportStatus, shippingStatus, createdAt], map: "shiptask_trade_scope_idx")
   @@index([exportBatchId])
   @@index([trackingNumber])
+  @@map("shippingtask")
 }
 
 model ShippingExportBatch {
@@ -1873,6 +1899,7 @@ model ShippingExportBatch {
 
   @@index([supplierId, exportedAt])
   @@index([exportedById, exportedAt])
+  @@map("shippingexportbatch")
 }
 
 model ShippingExportLine {
@@ -1904,6 +1931,7 @@ model ShippingExportLine {
   @@unique([exportBatchId, rowNo])
   @@index([shippingTaskId])
   @@index([tradeOrderId, salesOrderId])
+  @@map("shippingexportline")
 }
 
 model LogisticsFollowUpTask {
@@ -1934,6 +1962,7 @@ model LogisticsFollowUpTask {
   @@index([tradeOrderId, shippingTaskId, status, nextTriggerAt], map: "lgfollow_trade_ship_next_idx")
   @@index([customerId, status, nextTriggerAt])
   @@index([ownerId, status, nextTriggerAt])
+  @@map("logisticsfollowuptask")
 }
 
 model CodCollectionRecord {
@@ -1966,6 +1995,7 @@ model CodCollectionRecord {
   @@index([tradeOrderId, shippingTaskId, status, createdAt], map: "codrec_trade_ship_created_idx")
   @@index([customerId, status, createdAt])
   @@index([ownerId, status, createdAt])
+  @@map("codcollectionrecord")
 }
 
 model PaymentPlan {
@@ -2012,6 +2042,7 @@ model PaymentPlan {
   @@index([shippingTaskId, status, dueAt])
   @@index([customerId, status, dueAt])
   @@index([ownerId, status, dueAt])
+  @@map("paymentplan")
 }
 
 model PaymentRecord {
@@ -2057,6 +2088,7 @@ model PaymentRecord {
   @@index([ownerId, status, occurredAt])
   @@index([submittedById, status, occurredAt])
   @@index([confirmedById, status, occurredAt])
+  @@map("paymentrecord")
 }
 
 model CollectionTask {
@@ -2099,6 +2131,7 @@ model CollectionTask {
   @@index([shippingTaskId, status, dueAt])
   @@index([customerId, status, dueAt])
   @@index([ownerId, status, dueAt])
+  @@map("collectiontask")
 }
 
 model TagGroup {
@@ -2443,4 +2476,5 @@ model OperationLog {
   @@index([actorId, createdAt])
   @@index([module, createdAt])
   @@index([targetType, targetId])
+  @@map("operationlog")
 }
