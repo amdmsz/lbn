@@ -2,6 +2,8 @@
 
 import type { RoleCode } from "@prisma/client";
 import {
+  ChevronDown,
+  ChevronUp,
   Loader2,
   Mic,
   MicOff,
@@ -66,6 +68,26 @@ const statusCopy: Record<SoftphoneStatus, string> = {
   failed: "异常",
 };
 
+function StatusIcon({ status }: Readonly<{ status: SoftphoneStatus }>) {
+  if (status === "loading" || status === "connecting") {
+    return <Loader2 className="h-3.5 w-3.5 animate-spin" />;
+  }
+
+  if (status === "online" || status === "in_call") {
+    return <Wifi className="h-3.5 w-3.5" />;
+  }
+
+  if (status === "incoming") {
+    return <PhoneIncoming className="h-3.5 w-3.5" />;
+  }
+
+  if (status === "failed") {
+    return <WifiOff className="h-3.5 w-3.5" />;
+  }
+
+  return <Radio className="h-3.5 w-3.5" />;
+}
+
 function canUseSoftphone(role: RoleCode) {
   return role === "ADMIN" || role === "SALES";
 }
@@ -106,6 +128,7 @@ export function WebRtcSoftphone({
   const [status, setStatus] = useState<SoftphoneStatus>("loading");
   const [message, setMessage] = useState("正在读取网页坐席配置");
   const [muted, setMuted] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const userRef = useRef<SimpleUser | null>(null);
   const mountedRef = useRef(true);
@@ -140,6 +163,12 @@ export function WebRtcSoftphone({
     },
     [],
   );
+
+  useEffect(() => {
+    if (status === "incoming" || status === "in_call") {
+      setExpanded(true);
+    }
+  }, [status]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -473,110 +502,137 @@ export function WebRtcSoftphone({
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 w-[min(21rem,calc(100vw-2rem))] rounded-lg border border-neutral-200 bg-white/95 p-3 text-[13px] shadow-[0_12px_40px_rgba(15,23,42,0.12)] backdrop-blur">
+    <div className="fixed bottom-4 right-4 z-40 flex w-[min(21rem,calc(100vw-2rem))] justify-end text-[13px]">
       <audio ref={audioRef} autoPlay />
 
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span
-              className={`inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs font-medium ${statusTone}`}
-            >
-              {status === "loading" || status === "connecting" ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : status === "online" || status === "in_call" ? (
-                <Wifi className="h-3.5 w-3.5" />
-              ) : status === "incoming" ? (
-                <PhoneIncoming className="h-3.5 w-3.5" />
-              ) : status === "failed" ? (
-                <WifiOff className="h-3.5 w-3.5" />
-              ) : (
-                <Radio className="h-3.5 w-3.5" />
-              )}
-              {statusCopy[status]}
+      {!expanded ? (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          aria-expanded="false"
+          aria-label={`打开网页坐席，当前状态：${statusCopy[status]}`}
+          className="inline-flex h-11 max-w-full items-center gap-2 rounded-lg border border-neutral-200 bg-white/95 px-3 text-left shadow-[0_12px_40px_rgba(15,23,42,0.12)] backdrop-blur transition hover:border-neutral-300 hover:bg-white"
+        >
+          <span
+            className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2 text-xs font-medium ${statusTone}`}
+          >
+            <StatusIcon status={status} />
+            {statusCopy[status]}
+          </span>
+          <span className="min-w-0 truncate text-xs font-medium text-neutral-800">
+            网页坐席
+          </span>
+          {config?.seatNo ? (
+            <span className="hidden max-w-20 truncate text-xs text-neutral-500 sm:inline">
+              {config.seatNo}
             </span>
-            {config?.seatNo ? (
-              <span className="truncate text-xs text-neutral-500">
-                {config.seatNo}
-              </span>
+          ) : null}
+          <ChevronUp className="h-4 w-4 shrink-0 text-neutral-400" />
+        </button>
+      ) : (
+        <div className="w-full rounded-lg border border-neutral-200 bg-white/95 p-3 shadow-[0_12px_40px_rgba(15,23,42,0.12)] backdrop-blur">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs font-medium ${statusTone}`}
+                >
+                  <StatusIcon status={status} />
+                  {statusCopy[status]}
+                </span>
+                {config?.seatNo ? (
+                  <span className="truncate text-xs text-neutral-500">
+                    {config.seatNo}
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-2 line-clamp-2 text-xs leading-5 text-neutral-500">
+                {message}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              aria-label="收起网页坐席"
+              aria-expanded="true"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-500 transition hover:bg-neutral-50 hover:text-neutral-700"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {status === "idle" || status === "failed" ? (
+              <button
+                type="button"
+                disabled={!config?.enabled}
+                onClick={() => void connect()}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-neutral-950 px-3 text-xs font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300"
+              >
+                <PhoneCall className="h-3.5 w-3.5" />
+                启用网页坐席
+              </button>
+            ) : null}
+
+            {status === "incoming" ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void answer()}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-emerald-600 px-3 text-xs font-medium text-white transition hover:bg-emerald-700"
+                >
+                  <PhoneCall className="h-3.5 w-3.5" />
+                  接听
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void decline()}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50"
+                >
+                  <PhoneOff className="h-3.5 w-3.5" />
+                  拒接
+                </button>
+              </>
+            ) : null}
+
+            {status === "in_call" ? (
+              <>
+                <button
+                  type="button"
+                  onClick={toggleMute}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50"
+                >
+                  {muted ? (
+                    <MicOff className="h-3.5 w-3.5" />
+                  ) : (
+                    <Mic className="h-3.5 w-3.5" />
+                  )}
+                  {muted ? "取消静音" : "静音"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void hangup()}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-red-600 px-3 text-xs font-medium text-white transition hover:bg-red-700"
+                >
+                  <PhoneOff className="h-3.5 w-3.5" />
+                  挂断
+                </button>
+              </>
+            ) : null}
+
+            {status === "online" ? (
+              <button
+                type="button"
+                onClick={() => void disconnect()}
+                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50"
+              >
+                <WifiOff className="h-3.5 w-3.5" />
+                下线
+              </button>
             ) : null}
           </div>
-          <p className="mt-2 line-clamp-2 text-xs leading-5 text-neutral-500">
-            {message}
-          </p>
         </div>
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {status === "idle" || status === "failed" ? (
-          <button
-            type="button"
-            disabled={!config?.enabled}
-            onClick={() => void connect()}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-neutral-950 px-3 text-xs font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300"
-          >
-            <PhoneCall className="h-3.5 w-3.5" />
-            启用网页坐席
-          </button>
-        ) : null}
-
-        {status === "incoming" ? (
-          <>
-            <button
-              type="button"
-              onClick={() => void answer()}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-emerald-600 px-3 text-xs font-medium text-white transition hover:bg-emerald-700"
-            >
-              <PhoneCall className="h-3.5 w-3.5" />
-              接听
-            </button>
-            <button
-              type="button"
-              onClick={() => void decline()}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50"
-            >
-              <PhoneOff className="h-3.5 w-3.5" />
-              拒接
-            </button>
-          </>
-        ) : null}
-
-        {status === "in_call" ? (
-          <>
-            <button
-              type="button"
-              onClick={toggleMute}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50"
-            >
-              {muted ? (
-                <MicOff className="h-3.5 w-3.5" />
-              ) : (
-                <Mic className="h-3.5 w-3.5" />
-              )}
-              {muted ? "取消静音" : "静音"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void hangup()}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-red-600 px-3 text-xs font-medium text-white transition hover:bg-red-700"
-            >
-              <PhoneOff className="h-3.5 w-3.5" />
-              挂断
-            </button>
-          </>
-        ) : null}
-
-        {status === "online" ? (
-          <button
-            type="button"
-            onClick={() => void disconnect()}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50"
-          >
-            <WifiOff className="h-3.5 w-3.5" />
-            下线
-          </button>
-        ) : null}
-      </div>
+      )}
     </div>
   );
 }
