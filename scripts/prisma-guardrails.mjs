@@ -4,7 +4,15 @@ import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import { PrismaClient } from "@prisma/client";
 import dotenv from "dotenv";
+import {
+  formatNameDriftReport,
+  hasNameDrift,
+  loadPrismaNameExpectations,
+  readDatabaseNameDrift,
+} from "./lib/prisma-name-drift.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -163,6 +171,49 @@ function readBooleanFlag(argv, flagName) {
   return argv.includes(flagName);
 }
 
+async function runPhysicalNameDriftCheck({ allowDrift = false } = {}) {
+  const expectations = loadPrismaNameExpectations(SCHEMA_PATH);
+  const prisma = new PrismaClient({
+    adapter: new PrismaMariaDb(process.env.DATABASE_URL),
+    log: ["warn", "error"],
+  });
+
+  try {
+    const drift = await readDatabaseNameDrift(prisma, expectations);
+
+    if (drift.skipped) {
+      log(
+        `Physical-name drift check skipped because lower_case_table_names=${drift.lowerCaseTableNames || "unknown"}.`,
+      );
+      return;
+    }
+
+    if (!hasNameDrift(drift)) {
+      log("Physical table/index/foreign-key names match prisma/schema.prisma.");
+      return;
+    }
+
+    const detail = [
+      "检测到大小写敏感 MySQL 环境中的物理对象命名漂移。",
+      "这通常来自 legacy 表/索引/外键名与当前 Prisma schema 不一致，会导致生产 migrate deploy 中途失败。",
+      "",
+      formatNameDriftReport(drift),
+      "",
+      "请先备份数据库，然后执行：",
+      "  ENV_FILE=<env-file> npm run db:reconcile-prisma-names -- --apply",
+    ].join("\n");
+
+    if (allowDrift) {
+      log(`Physical-name drift detected but explicitly allowed.\n${detail}`);
+      return;
+    }
+
+    fail("Detected physical table/index/foreign-key name drift.", detail);
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 function collectStatusState() {
   const statusResult = runPrisma(["migrate", "status"], {
     allowedExitCodes: [0, 1],
@@ -227,13 +278,17 @@ function noteShadowAuditAvailability() {
   );
 }
 
-function runPredeployCheck(argv) {
+async function runPredeployCheck(argv) {
   ensureMigrationInputs();
 
   const allowPendingMigrations = readBooleanFlag(argv, "--allow-pending-migrations");
   const allowSchemaDiff = readBooleanFlag(argv, "--allow-schema-diff");
+  const allowPhysicalNameDrift =
+    readBooleanFlag(argv, "--allow-physical-name-drift") ||
+    process.env.ALLOW_PRISMA_PHYSICAL_NAME_DRIFT === "1";
 
   runPrisma(["validate"]);
+  await runPhysicalNameDriftCheck({ allowDrift: allowPhysicalNameDrift });
 
   const statusState = collectStatusState();
 
@@ -316,20 +371,25 @@ function runDiffMigrations() {
   );
 }
 
-function runDeploySafe(argv) {
+async function runDeploySafe(argv) {
   ensureMigrationInputs();
 
   const skipGenerate = readBooleanFlag(argv, "--skip-generate");
 
-  runPredeployCheck(["--allow-pending-migrations", "--allow-schema-diff"]);
+  await runPredeployCheck(["--allow-pending-migrations", "--allow-schema-diff"]);
   runPrisma(["migrate", "deploy"]);
-  runPredeployCheck([]);
+  await runPredeployCheck([]);
 
   if (!skipGenerate) {
     runPrisma(["generate"]);
   }
 
   log("Safe Prisma deploy sequence passed.");
+}
+
+async function runNameDrift() {
+  ensureMigrationInputs();
+  await runPhysicalNameDriftCheck();
 }
 
 function printUsage() {
@@ -342,7 +402,8 @@ function printUsage() {
       "  status",
       "  diff-schema",
       "  diff-migrations",
-      "  predeploy-check [--allow-pending-migrations] [--allow-schema-diff]",
+      "  name-drift",
+      "  predeploy-check [--allow-pending-migrations] [--allow-schema-diff] [--allow-physical-name-drift]",
       "  deploy-safe [--skip-generate]",
       "",
       "Notes:",
@@ -353,7 +414,7 @@ function printUsage() {
   );
 }
 
-function main() {
+async function main() {
   const [command, ...argv] = process.argv.slice(2);
 
   switch (command) {
@@ -368,10 +429,13 @@ function main() {
       runDiffMigrations();
       return;
     case "predeploy-check":
-      runPredeployCheck(argv);
+      await runPredeployCheck(argv);
       return;
     case "deploy-safe":
-      runDeploySafe(argv);
+      await runDeploySafe(argv);
+      return;
+    case "name-drift":
+      await runNameDrift();
       return;
     case "--help":
     case "-h":
@@ -383,4 +447,9 @@ function main() {
   }
 }
 
-main();
+main().catch((error) => {
+  fail(
+    "Unhandled prisma guardrails error.",
+    error instanceof Error ? error.stack ?? error.message : String(error),
+  );
+});

@@ -136,6 +136,7 @@ LEAD_IMPORT_JOB_ATTEMPTS=3
 ```bash
 npx prisma validate
 npx prisma generate
+npm run prisma:name-drift
 npm run lint
 npm run build
 ```
