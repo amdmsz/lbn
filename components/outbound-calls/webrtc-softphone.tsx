@@ -4,6 +4,7 @@ import type { RoleCode } from "@prisma/client";
 import {
   ChevronDown,
   ChevronUp,
+  Clock3,
   Loader2,
   Mic,
   MicOff,
@@ -68,6 +69,17 @@ const statusCopy: Record<SoftphoneStatus, string> = {
   failed: "异常",
 };
 
+function formatElapsed(seconds: number) {
+  const safeSeconds = Math.max(0, seconds);
+  const minutes = Math.floor(safeSeconds / 60);
+  const restSeconds = safeSeconds % 60;
+
+  return `${String(minutes).padStart(2, "0")}:${String(restSeconds).padStart(
+    2,
+    "0",
+  )}`;
+}
+
 function StatusIcon({ status }: Readonly<{ status: SoftphoneStatus }>) {
   if (status === "loading" || status === "connecting") {
     return <Loader2 className="h-3.5 w-3.5 animate-spin" />;
@@ -129,9 +141,14 @@ export function WebRtcSoftphone({
   const [message, setMessage] = useState("正在读取网页坐席配置");
   const [muted, setMuted] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [incomingStartedAt, setIncomingStartedAt] = useState<number | null>(null);
+  const [callStartedAt, setCallStartedAt] = useState<number | null>(null);
+  const [lastCallSeconds, setLastCallSeconds] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const userRef = useRef<SimpleUser | null>(null);
   const mountedRef = useRef(true);
+  const callStartedAtRef = useRef<number | null>(null);
 
   const statusTone = useMemo(() => {
     if (status === "online" || status === "in_call") {
@@ -163,6 +180,26 @@ export function WebRtcSoftphone({
     },
     [],
   );
+
+  const activeStartedAt =
+    status === "incoming"
+      ? incomingStartedAt
+      : status === "in_call"
+        ? callStartedAt
+        : null;
+  const activeSeconds = activeStartedAt
+    ? Math.floor((now - activeStartedAt) / 1000)
+    : null;
+
+  useEffect(() => {
+    if (status !== "incoming" && status !== "in_call") {
+      return;
+    }
+
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+
+    return () => window.clearInterval(timer);
+  }, [status]);
 
   useEffect(() => {
     if (status === "incoming" || status === "in_call") {
@@ -304,14 +341,32 @@ export function WebRtcSoftphone({
           safeSetStatus("idle", "坐席已下线");
         },
         onCallReceived: () => {
+          const startedAt = Date.now();
+          setIncomingStartedAt(startedAt);
+          setCallStartedAt(null);
+          callStartedAtRef.current = null;
+          setLastCallSeconds(null);
           safeSetStatus("incoming", "CRM 外呼来电，请接听");
         },
         onCallAnswered: () => {
+          const startedAt = Date.now();
+          setIncomingStartedAt(null);
+          setCallStartedAt(startedAt);
+          callStartedAtRef.current = startedAt;
+          setLastCallSeconds(null);
           setMuted(false);
           attachRemoteAudio();
           safeSetStatus("in_call", "通话已接通，录音由 Asterisk 服务端保存");
         },
         onCallHangup: () => {
+          setLastCallSeconds(
+            callStartedAtRef.current
+              ? Math.floor((Date.now() - callStartedAtRef.current) / 1000)
+              : null,
+          );
+          setIncomingStartedAt(null);
+          setCallStartedAt(null);
+          callStartedAtRef.current = null;
           setMuted(false);
           safeSetStatus("online", "通话结束，坐席在线");
         },
@@ -362,6 +417,9 @@ export function WebRtcSoftphone({
       const currentUser = userRef.current;
       userRef.current = null;
       setMuted(false);
+      setIncomingStartedAt(null);
+      setCallStartedAt(null);
+      callStartedAtRef.current = null;
 
       if (currentUser?.isConnected()) {
         void currentUser.disconnect().catch(() => undefined);
@@ -416,6 +474,9 @@ export function WebRtcSoftphone({
       await currentUser.disconnect().catch(() => undefined);
       userRef.current = null;
       setMuted(false);
+      setIncomingStartedAt(null);
+      setCallStartedAt(null);
+      callStartedAtRef.current = null;
       safeSetStatus("idle", "坐席已下线");
     } catch (error) {
       safeSetStatus(
@@ -452,6 +513,8 @@ export function WebRtcSoftphone({
 
     try {
       await currentUser.decline();
+      setIncomingStartedAt(null);
+      callStartedAtRef.current = null;
       safeSetStatus("online", "已拒接，坐席在线");
     } catch (error) {
       safeSetStatus(
@@ -470,6 +533,14 @@ export function WebRtcSoftphone({
 
     try {
       await currentUser.hangup();
+      setLastCallSeconds(
+        callStartedAtRef.current
+          ? Math.floor((Date.now() - callStartedAtRef.current) / 1000)
+          : null,
+      );
+      setIncomingStartedAt(null);
+      setCallStartedAt(null);
+      callStartedAtRef.current = null;
       setMuted(false);
       safeSetStatus("online", "通话已挂断，坐席在线");
     } catch (error) {
@@ -545,10 +616,21 @@ export function WebRtcSoftphone({
                     {config.seatNo}
                   </span>
                 ) : null}
+                {activeSeconds !== null ? (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs tabular-nums text-neutral-600">
+                    <Clock3 className="h-3.5 w-3.5" />
+                    {formatElapsed(activeSeconds)}
+                  </span>
+                ) : null}
               </div>
               <p className="mt-2 line-clamp-2 text-xs leading-5 text-neutral-500">
                 {message}
               </p>
+              {lastCallSeconds !== null ? (
+                <p className="mt-1 text-xs tabular-nums text-neutral-500">
+                  上次坐席通话 {formatElapsed(lastCallSeconds)}
+                </p>
+              ) : null}
             </div>
             <button
               type="button"
