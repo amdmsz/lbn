@@ -96,6 +96,31 @@ export type LeadListItem = {
   recycleGuard: LeadRecycleGuard;
 };
 
+export type LeadUnassignedExportItem = {
+  id: string;
+  name: string | null;
+  phone: string;
+  source: LeadSource;
+  sourceDetail: string | null;
+  campaignName: string | null;
+  interestedProduct: string | null;
+  isFirstPurchase: boolean;
+  status: LeadStatus;
+  province: string | null;
+  city: string | null;
+  district: string | null;
+  address: string | null;
+  remark: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  leadTags: Array<{
+    id: string;
+    tag: {
+      name: string;
+    };
+  }>;
+};
+
 type LeadListGuardRecord = {
   id: string;
   name: string | null;
@@ -723,6 +748,72 @@ export async function getLeadListData(
     summary: {
       totalVisibleCount: unassignedTotalCount + assignedTotalCount,
     },
+  };
+}
+
+export async function getLeadUnassignedExportData(
+  viewer: LeadViewer,
+  rawSearchParams: Record<string, SearchParamsValue> | undefined,
+) {
+  if (!canAccessLeadModule(viewer.role)) {
+    throw new Error("You do not have access to leads.");
+  }
+
+  const filters = {
+    ...parseLeadListFilters(rawSearchParams),
+    view: "unassigned",
+    assignedOwnerId: "",
+    page: 1,
+  } satisfies LeadListFilters;
+  const [importedLeadIds, activeLeadIds] = await Promise.all([
+    filters.importBatchId
+      ? getLeadImportBatchLeadIds(filters.importBatchId)
+      : Promise.resolve([] as string[]),
+    findActiveTargetIds(prisma, "LEAD"),
+  ]);
+  const where = buildLeadWhereInput(
+    viewer,
+    filters,
+    importedLeadIds,
+    activeLeadIds,
+  );
+  const items = await prisma.lead.findMany({
+    where,
+    orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      source: true,
+      sourceDetail: true,
+      campaignName: true,
+      interestedProduct: true,
+      isFirstPurchase: true,
+      status: true,
+      province: true,
+      city: true,
+      district: true,
+      address: true,
+      remark: true,
+      createdAt: true,
+      updatedAt: true,
+      leadTags: {
+        orderBy: [{ tag: { sortOrder: "asc" } }, { createdAt: "asc" }],
+        select: {
+          id: true,
+          tag: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return {
+    filters,
+    items,
   };
 }
 

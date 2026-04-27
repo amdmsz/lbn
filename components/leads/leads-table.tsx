@@ -1,6 +1,7 @@
 "use client";
 
 import type { LeadSource, LeadStatus } from "@prisma/client";
+import { Download } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -34,6 +35,7 @@ import {
   createInitialLeadBatchActionNoticeState,
   type LeadBatchActionNoticeState,
 } from "@/lib/leads/batch-action-contract";
+import { buildLeadUnassignedExportHref } from "@/lib/leads/export";
 import {
   LEAD_RECYCLE_REASON_OPTIONS,
   type LeadRecycleGuard,
@@ -874,6 +876,7 @@ export function LeadsTable({
     view: "unassigned",
     page: 1,
   });
+  const unassignedExportHref = buildLeadUnassignedExportHref(filters);
 
   return (
     <div className="space-y-4">
@@ -957,6 +960,15 @@ export function LeadsTable({
           actions={
             <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--color-sidebar-muted)]">
               <span>共 {unassigned.totalCount} 条</span>
+              <Link
+                href={unassignedExportHref}
+                prefetch={false}
+                download
+                className="crm-button crm-button-secondary min-h-0 gap-1.5 px-3 py-2 text-sm"
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                导出未分配
+              </Link>
               {canAssign ? (
                 <>
                   <button
