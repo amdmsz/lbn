@@ -274,7 +274,10 @@ function resolveEnv(key: string): string {
 function renderTemplate(template: string) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => {
     const value = resolveEnv(key);
-    return key === "CTI_ASTERISK_SEAT_ENDPOINTS" ? value : textEscape(value);
+    return key === "CTI_ASTERISK_SEAT_ENDPOINTS" ||
+      key === "CTI_ASTERISK_WEBRTC_TRANSPORT"
+      ? value
+      : textEscape(value);
   });
 }
 
