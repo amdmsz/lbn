@@ -1,5 +1,5 @@
 import type { CallResult } from "@prisma/client";
-import { CallTranscriptDialogue } from "@/components/calls/call-transcript-dialogue";
+import { CallAiInsightPanel } from "@/components/calls/call-ai-insight-panel";
 import { RecordingAudioPlayer } from "@/components/calls/recording-audio-player";
 import {
   CustomerEmptyState,
@@ -42,8 +42,11 @@ type CallRecordHistoryItem = {
       status: string;
       summary: string | null;
       qualityScore: number | null;
+      customerIntent?: string | null;
+      sentiment?: string | null;
       riskFlagsJson: unknown;
       opportunityTagsJson: unknown;
+      keywordsJson?: unknown;
       nextActionSuggestion: string | null;
       transcriptText?: string | null;
       transcriptJson?: unknown;
@@ -85,6 +88,7 @@ function renderRecordingSummary(record: CallRecordHistoryItem) {
   const ai = recording.aiAnalysis;
   const riskFlags = parseJsonStringArray(ai?.riskFlagsJson);
   const opportunityTags = parseJsonStringArray(ai?.opportunityTagsJson);
+  const keywords = parseJsonStringArray(ai?.keywordsJson);
   const transcriptSegments =
     ai?.transcriptSegments ??
     extractStoredCallTranscriptSegments(ai?.transcriptJson);
@@ -108,6 +112,7 @@ function renderRecordingSummary(record: CallRecordHistoryItem) {
           recordingId={recording.id}
           status={recording.status}
           mimeType={recording.mimeType}
+          durationSeconds={recording.durationSeconds ?? record.durationSeconds}
           className="mt-2"
         />
       </div>
@@ -117,42 +122,21 @@ function renderRecordingSummary(record: CallRecordHistoryItem) {
             AI 分析 {getAiStatusLabel(ai.status)}
             {ai.qualityScore !== null ? ` / ${ai.qualityScore} 分` : ""}
           </summary>
-          <div className="mt-2 space-y-2 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
-            {ai.summary ? <p>{ai.summary}</p> : null}
-            {ai.nextActionSuggestion ? <p>建议：{ai.nextActionSuggestion}</p> : null}
-            {transcriptSegments.length > 0 ? (
-              <CallTranscriptDialogue segments={transcriptSegments} maxSegments={6} />
-            ) : ai.transcriptText ? (
-              <div className="rounded-[0.8rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2.5 py-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
-                  转写
-                </p>
-                <p className="mt-1 text-[12px] leading-5 text-[var(--foreground)]/82">
-                  {ai.transcriptText}
-                </p>
-              </div>
-            ) : null}
-            {riskFlags.length > 0 || opportunityTags.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {riskFlags.map((item) => (
-                  <span
-                    key={`risk-${item}`}
-                    className="rounded-full border border-[rgba(220,38,38,0.14)] bg-[rgba(220,38,38,0.06)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-danger)]"
-                  >
-                    {item}
-                  </span>
-                ))}
-                {opportunityTags.map((item) => (
-                  <span
-                    key={`opportunity-${item}`}
-                    className="rounded-full border border-[rgba(22,163,74,0.14)] bg-[rgba(22,163,74,0.06)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-success)]"
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-          </div>
+          <CallAiInsightPanel
+            status={ai.status}
+            summary={ai.summary}
+            qualityScore={ai.qualityScore}
+            customerIntent={ai.customerIntent}
+            sentiment={ai.sentiment}
+            riskFlags={riskFlags}
+            opportunityTags={opportunityTags}
+            keywords={keywords}
+            nextActionSuggestion={ai.nextActionSuggestion}
+            transcriptText={ai.transcriptText}
+            transcriptSegments={transcriptSegments}
+            maxTranscriptSegments={6}
+            className="mt-2"
+          />
         </details>
       ) : null}
     </div>

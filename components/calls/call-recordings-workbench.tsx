@@ -1,18 +1,20 @@
-import type { ReactNode } from "react";
 import Link from "next/link";
 import {
   Activity,
   Bot,
+  CheckCircle2,
+  Clock,
   Headphones,
   Search,
   ShieldCheck,
   SlidersHorizontal,
+  UserRound,
 } from "lucide-react";
+import { CallAiInsightPanel } from "@/components/calls/call-ai-insight-panel";
+import { RecordingAudioPlayer } from "@/components/calls/recording-audio-player";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageShell } from "@/components/shared/page-shell";
-import { CallTranscriptDialogue } from "@/components/calls/call-transcript-dialogue";
-import { RecordingAudioPlayer } from "@/components/calls/recording-audio-player";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/shared/status-badge";
 import { formatDurationSeconds } from "@/lib/calls/metadata";
 import {
@@ -85,41 +87,68 @@ function formatPercent(value: number, total: number) {
   return `${Math.round((value / total) * 100)}%`;
 }
 
-function getQualityBand(score: number | null | undefined) {
+function getIntentLabel(intent: string | null | undefined) {
+  switch (intent) {
+    case "HIGH":
+      return "强意向";
+    case "MEDIUM":
+      return "中意向";
+    case "LOW":
+      return "弱意向";
+    case "REFUSED":
+      return "拒绝";
+    default:
+      return "待判断";
+  }
+}
+
+function getScoreTone(score: number | null | undefined) {
   if (score === null || score === undefined) {
-    return "未评分";
+    return "border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] text-[var(--color-sidebar-muted)]";
   }
 
   if (score >= 85) {
-    return "高质量";
+    return "border-[rgba(22,163,74,0.16)] bg-[rgba(22,163,74,0.06)] text-[var(--color-success)]";
   }
 
-  if (score >= 60) {
-    return "可跟进";
+  if (score >= 70) {
+    return "border-[rgba(79,125,247,0.16)] bg-[rgba(79,125,247,0.06)] text-[var(--color-primary)]";
   }
 
-  return "需复核";
+  if (score >= 50) {
+    return "border-[rgba(217,119,6,0.16)] bg-[rgba(217,119,6,0.06)] text-[rgb(180,83,9)]";
+  }
+
+  return "border-[rgba(220,38,38,0.16)] bg-[rgba(220,38,38,0.06)] text-[var(--color-danger)]";
 }
 
-function CompactCell({
-  primary,
-  secondary,
-  className,
+function SummaryMetric({
+  label,
+  value,
+  detail,
+  icon: Icon,
+  tone,
 }: Readonly<{
-  primary: ReactNode;
-  secondary?: ReactNode;
-  className?: string;
+  label: string;
+  value: string | number;
+  detail: string;
+  icon: typeof Activity;
+  tone: string;
 }>) {
   return (
-    <div className={cn("min-w-0", className)}>
-      <div className="truncate text-[13px] font-medium text-[var(--foreground)]">
-        {primary}
+    <div className="min-w-0 border-r border-[var(--color-border-soft)] px-3 py-2.5 last:border-r-0 md:px-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="truncate text-[10.5px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
+          {label}
+        </p>
+        <Icon className={cn("h-3.5 w-3.5", tone)} aria-hidden="true" />
       </div>
-      {secondary ? (
-        <div className="mt-1 truncate text-[11px] text-[var(--color-sidebar-muted)]">
-          {secondary}
-        </div>
-      ) : null}
+      <p className="mt-1 text-[1.05rem] font-semibold tabular-nums tracking-[-0.035em] text-[var(--foreground)]">
+        {value}
+      </p>
+      <p className="mt-0.5 truncate text-[10.5px] text-[var(--color-sidebar-muted)]">
+        {detail}
+      </p>
     </div>
   );
 }
@@ -132,100 +161,60 @@ function WorkbenchHero({
   const aiRate = formatPercent(data.summary.aiReadyCount, data.summary.totalCount);
   const playableRate = formatPercent(data.summary.readyCount, data.summary.totalCount);
   const failedRate = formatPercent(data.summary.failedCount, data.summary.totalCount);
-  const signals = [
-    {
-      label: "AI 完成率",
-      value: aiRate,
-      detail: `${data.summary.aiReadyCount} 条完成 / ${data.summary.aiPendingCount} 条待处理`,
-      icon: Bot,
-      tone: "text-[var(--color-primary)]",
-    },
-    {
-      label: "可回听率",
-      value: playableRate,
-      detail: `${data.summary.readyCount} 条可播放`,
-      icon: Headphones,
-      tone: "text-[var(--color-success)]",
-    },
-    {
-      label: "异常占比",
-      value: failedRate,
-      detail: `${data.summary.failedCount} 条失败`,
-      icon: Activity,
-      tone: "text-[var(--color-danger)]",
-    },
-  ];
 
   return (
-    <section className="overflow-hidden rounded-[1.2rem] border border-[rgba(79,125,247,0.16)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-md)]">
-      <div className="border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 md:px-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-sidebar-muted)]">
-              <span>Voice Quality Matrix</span>
-              <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-              <span>Server Scoped</span>
-              <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-              <span>Audit Trace</span>
-            </div>
-            <h1 className="mt-2 text-[1.45rem] font-semibold tracking-[-0.045em] text-[var(--foreground)] md:text-[1.8rem]">
-              录音质检工作台
-            </h1>
-            <p className="mt-1 max-w-3xl text-[12.5px] leading-6 text-[var(--color-sidebar-muted)]">
-              回听录音、查看转写对话、筛查风险与机会信号，所有播放和复核动作保留审计记录。
-            </p>
+    <section className="overflow-hidden rounded-[1rem] border border-[rgba(79,125,247,0.14)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-sm)]">
+      <div className="flex flex-col gap-3 border-b border-[var(--color-border-soft)] px-4 py-3 md:px-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-sidebar-muted)]">
+            <span>Call Recording QA</span>
+            <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+            <span>{data.items.length} 条当前队列</span>
           </div>
-
-          <div className="grid min-w-0 grid-cols-3 gap-2 lg:min-w-[26rem]">
-            {signals.map((signal) => {
-              const Icon = signal.icon;
-
-              return (
-                <div
-                  key={signal.label}
-                  className="rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-2.5 shadow-[var(--color-shell-shadow-sm)]"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
-                      {signal.label}
-                    </p>
-                    <Icon className={cn("h-3.5 w-3.5", signal.tone)} aria-hidden="true" />
-                  </div>
-                  <p className="mt-2 text-[1.15rem] font-semibold tracking-[-0.04em] text-[var(--foreground)]">
-                    {signal.value}
-                  </p>
-                  <p className="mt-1 truncate text-[10.5px] text-[var(--color-sidebar-muted)]">
-                    {signal.detail}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
+          <h1 className="mt-1.5 text-[1.35rem] font-semibold tracking-[-0.04em] text-[var(--foreground)] md:text-[1.6rem]">
+            录音质检工作台
+          </h1>
+          <p className="mt-1 max-w-3xl text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">
+            回听录音、确认接通、查看 AI 质检信号，并把需要人工复核的通话集中处理。
+          </p>
+        </div>
+        <div className="inline-flex w-full items-center justify-between rounded-[0.8rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2 text-[11px] font-medium text-[var(--color-sidebar-muted)] lg:w-auto lg:min-w-[14rem]">
+          <span>当前筛选</span>
+          <span className="font-semibold tabular-nums text-[var(--foreground)]">
+            {data.summary.totalCount} 条
+          </span>
         </div>
       </div>
 
-      <div className="grid border-t border-[rgba(79,125,247,0.08)] md:grid-cols-4">
-        {[
-          ["录音总数", data.summary.totalCount, "当前筛选范围"],
-          ["可播放", data.summary.readyCount, "已上传并可回听"],
-          ["处理中", data.summary.processingCount, "上传或 AI 处理中"],
-          ["AI 完成", data.summary.aiReadyCount, `${data.summary.aiPendingCount} 条待处理`],
-        ].map(([label, value, note]) => (
-          <div
-            key={label}
-            className="border-b border-r border-[var(--color-border-soft)] px-4 py-3 last:border-r-0 md:border-b-0"
-          >
-            <p className="text-[11px] font-medium text-[var(--color-sidebar-muted)]">
-              {label}
-            </p>
-            <p className="mt-1 text-[1.15rem] font-semibold tabular-nums tracking-[-0.035em] text-[var(--foreground)]">
-              {value}
-            </p>
-            <p className="mt-0.5 text-[10.5px] text-[var(--color-sidebar-muted)]">
-              {note}
-            </p>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 divide-y divide-[var(--color-border-soft)] md:grid-cols-4 md:divide-y-0">
+        <SummaryMetric
+          label="AI 完成率"
+          value={aiRate}
+          detail={`${data.summary.aiReadyCount} 完成 / ${data.summary.aiPendingCount} 待处理`}
+          icon={Bot}
+          tone="text-[var(--color-primary)]"
+        />
+        <SummaryMetric
+          label="可回听率"
+          value={playableRate}
+          detail={`${data.summary.readyCount} 条可播放`}
+          icon={Headphones}
+          tone="text-[var(--color-success)]"
+        />
+        <SummaryMetric
+          label="处理中"
+          value={data.summary.processingCount}
+          detail="上传或 AI 处理中"
+          icon={Clock}
+          tone="text-[var(--color-primary)]"
+        />
+        <SummaryMetric
+          label="异常占比"
+          value={failedRate}
+          detail={`${data.summary.failedCount} 条失败`}
+          icon={Activity}
+          tone="text-[var(--color-danger)]"
+        />
       </div>
     </section>
   );
@@ -243,13 +232,13 @@ function FilterDeck({
   return (
     <DataTableWrapper
       title="筛选"
-      description="员工、客户关键词、日期和处理状态。"
+      description="按员工、客户、日期、录音状态和 AI 分数收窄队列。"
       contentClassName="p-0"
       className="border-[rgba(79,125,247,0.12)]"
       toolbar={
         <div className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
           <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
-          <span>Quality Controls</span>
+          <span>Queue Controls</span>
         </div>
       }
     >
@@ -343,258 +332,187 @@ function RecordingAiBlock({ item }: Readonly<{ item: CallRecordingWorkbenchItem 
 
   if (!ai) {
     return (
-      <div className="text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+      <div className="rounded-[0.7rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
         暂无 AI 分析
       </div>
     );
   }
 
   return (
-    <details className="group rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-2.5 py-2 transition-colors open:border-[rgba(79,125,247,0.22)]">
+    <details className="group rounded-[0.75rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2 transition-colors open:border-[rgba(79,125,247,0.22)]">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-[12px] font-medium text-[var(--foreground)]">
         <span className="flex min-w-0 items-center gap-2">
           <StatusBadge
             label={getAiStatusLabel(ai.status)}
             variant={getAiStatusVariant(ai.status)}
           />
-          <span className="truncate">{getQualityBand(ai.qualityScore)}</span>
+          <span className="truncate">{getIntentLabel(ai.customerIntent)}</span>
         </span>
-        {ai.qualityScore !== null ? (
-          <span className="rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2 py-0.5 text-[11px] tabular-nums text-[var(--foreground)]">
-            {ai.qualityScore}
-          </span>
-        ) : null}
+        <span
+          className={cn(
+            "inline-flex h-6 shrink-0 items-center rounded-full border px-2 text-[11px] font-semibold tabular-nums",
+            getScoreTone(ai.qualityScore),
+          )}
+        >
+          {ai.qualityScore !== null ? `${ai.qualityScore} 分` : "未评分"}
+        </span>
       </summary>
-      <div className="mt-2 max-w-[31rem] space-y-2 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
-        {ai.summary ? <p className="line-clamp-3">{ai.summary}</p> : null}
-        {ai.nextActionSuggestion ? (
-          <p className="line-clamp-2">建议：{ai.nextActionSuggestion}</p>
-        ) : null}
-        {ai.transcriptSegments.length > 0 ? (
-          <CallTranscriptDialogue segments={ai.transcriptSegments} maxSegments={5} />
-        ) : ai.transcriptText ? (
-          <div className="rounded-[0.8rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2.5 py-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
-              转写
-            </p>
-            <p className="mt-1 line-clamp-5 text-[12px] leading-5 text-[var(--foreground)]/82">
-              {ai.transcriptText}
-            </p>
-          </div>
-        ) : null}
-        {ai.riskFlags.length > 0 || ai.opportunityTags.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
-            {ai.riskFlags.map((flag) => (
-              <span
-                key={`risk-${item.id}-${flag}`}
-                className="rounded-full border border-[rgba(220,38,38,0.14)] bg-[rgba(220,38,38,0.06)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-danger)]"
-              >
-                {flag}
-              </span>
-            ))}
-            {ai.opportunityTags.map((tag) => (
-              <span
-                key={`opportunity-${item.id}-${tag}`}
-                className="rounded-full border border-[rgba(22,163,74,0.14)] bg-[rgba(22,163,74,0.06)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-success)]"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        ) : null}
-      </div>
+      <CallAiInsightPanel
+        status={ai.status}
+        summary={ai.summary}
+        qualityScore={ai.qualityScore}
+        customerIntent={ai.customerIntent}
+        sentiment={ai.sentiment}
+        riskFlags={ai.riskFlags}
+        opportunityTags={ai.opportunityTags}
+        keywords={ai.keywords}
+        nextActionSuggestion={ai.nextActionSuggestion}
+        transcriptText={ai.transcriptText}
+        transcriptSegments={ai.transcriptSegments}
+        maxTranscriptSegments={6}
+        className="mt-2"
+      />
     </details>
   );
 }
 
-function RecordingMobileCards({
+function ReviewSummary({ item }: Readonly<{ item: CallRecordingWorkbenchItem }>) {
+  if (!item.latestReview) {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-[0.7rem] border border-dashed border-[var(--color-border-soft)] px-3 py-2 text-[12px] text-[var(--color-sidebar-muted)]">
+        <span>人工复核</span>
+        <span>待复核</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-[0.7rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <StatusBadge
+          label={getReviewStatusLabel(item.latestReview.reviewStatus)}
+          variant="info"
+        />
+        <span className="text-[11px] font-medium tabular-nums text-[var(--color-sidebar-muted)]">
+          {formatDateTime(item.latestReview.updatedAt)}
+        </span>
+      </div>
+      <p className="mt-1 text-[11.5px] text-[var(--color-sidebar-muted)]">
+        {item.latestReview.manualScore !== null
+          ? `${item.latestReview.manualScore} 分 / ${item.latestReview.reviewerName}`
+          : item.latestReview.reviewerName}
+      </p>
+      {item.latestReview.comment ? (
+        <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-[var(--foreground)]/82">
+          {item.latestReview.comment}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function RecordingQueueItem({ item }: Readonly<{ item: CallRecordingWorkbenchItem }>) {
+  const callDuration = item.durationSeconds ?? item.callRecord.durationSeconds;
+  const uploadMeta = item.uploadedAt
+    ? `上传 ${formatDateTime(item.uploadedAt)}`
+    : `创建 ${formatDateTime(item.createdAt)}`;
+
+  return (
+    <article className="grid gap-3 border-b border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-3.5 transition-colors last:border-b-0 hover:bg-[var(--color-shell-surface-soft)] md:px-4 lg:grid-cols-[minmax(15rem,0.9fr)_minmax(20rem,1.05fr)_minmax(19rem,1fr)]">
+      <div className="min-w-0 space-y-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <Link
+              href={`/customers/${item.customer.id}?tab=calls`}
+              className="crm-text-link truncate text-[14px] font-semibold"
+            >
+              {item.customer.name}
+            </Link>
+            <p className="mt-1 truncate text-[11.5px] tabular-nums text-[var(--color-sidebar-muted)]">
+              {item.customer.phone}
+            </p>
+          </div>
+          <StatusBadge
+            label={getRecordingStatusLabel(item.status)}
+            variant={getRecordingStatusVariant(item.status)}
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-1.5 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
+          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2 py-0.5">
+            <Clock className="h-3 w-3" aria-hidden="true" />
+            {formatDateTime(item.callRecord.callTime)}
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2 py-0.5">
+            <Headphones className="h-3 w-3" aria-hidden="true" />
+            {formatDurationSeconds(item.callRecord.durationSeconds)}
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2 py-0.5">
+            <UserRound className="h-3 w-3" aria-hidden="true" />
+            {item.sales.name}
+          </span>
+        </div>
+
+        <div className="rounded-[0.7rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[12px] font-semibold text-[var(--foreground)]">
+              {item.callRecord.resultLabel}
+            </span>
+            <span className="text-[11px] tabular-nums text-[var(--color-sidebar-muted)]">
+              {formatDurationSeconds(callDuration)}
+            </span>
+          </div>
+          <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+            {item.callRecord.remark?.trim() || "无备注"}
+          </p>
+        </div>
+      </div>
+
+      <div className="min-w-0 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--color-sidebar-muted)]">
+          <span>{formatRecordingFileSize(item.fileSizeBytes)}</span>
+          <span>{uploadMeta}</span>
+        </div>
+        <RecordingAudioPlayer
+          recordingId={item.id}
+          status={item.status}
+          mimeType={item.mimeType}
+          durationSeconds={callDuration}
+        />
+      </div>
+
+      <div className="min-w-0 space-y-2">
+        <RecordingAiBlock item={item} />
+        <ReviewSummary item={item} />
+      </div>
+    </article>
+  );
+}
+
+function RecordingQueueList({
   items,
 }: Readonly<{
   items: CallRecordingWorkbenchItem[];
 }>) {
   if (items.length === 0) {
     return (
-      <div className="lg:hidden">
-        <EmptyState
-          title="暂无录音"
-          description="当前筛选条件下没有可查看的通话录音。"
-        />
-      </div>
+      <EmptyState
+        title="暂无录音"
+        description="当前筛选条件下没有可查看的通话录音。"
+      />
     );
   }
 
   return (
-    <div className="space-y-2 lg:hidden">
+    <div className="overflow-hidden rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)]">
+      <div className="hidden border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)] lg:grid lg:grid-cols-[minmax(15rem,0.9fr)_minmax(20rem,1.05fr)_minmax(19rem,1fr)]">
+        <span>Customer / Result</span>
+        <span>Audio Playback</span>
+        <span>AI / Review</span>
+      </div>
       {items.map((item) => (
-        <article
-          key={item.id}
-          className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-3 shadow-[var(--color-shell-shadow-sm)]"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <Link
-                href={`/customers/${item.customer.id}?tab=calls`}
-                className="crm-text-link text-[14px] font-semibold"
-              >
-                {item.customer.name}
-              </Link>
-              <p className="mt-1 text-[11px] tabular-nums text-[var(--color-sidebar-muted)]">
-                {item.customer.phone} / {item.sales.name}
-              </p>
-            </div>
-            <div className="shrink-0 text-right">
-              <p className="text-[11px] font-medium text-[var(--foreground)]">
-                {formatDurationSeconds(item.callRecord.durationSeconds)}
-              </p>
-              <p className="mt-1 text-[10.5px] text-[var(--color-sidebar-muted)]">
-                {formatDateTime(item.callRecord.callTime)}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <StatusBadge
-              label={getRecordingStatusLabel(item.status)}
-              variant={getRecordingStatusVariant(item.status)}
-            />
-            {item.aiAnalysis ? (
-              <StatusBadge
-                label={`AI ${getAiStatusLabel(item.aiAnalysis.status)}`}
-                variant={getAiStatusVariant(item.aiAnalysis.status)}
-              />
-            ) : null}
-            <span className="text-[11px] text-[var(--color-sidebar-muted)]">
-              {formatRecordingFileSize(item.fileSizeBytes)}
-            </span>
-          </div>
-
-          <div className="mt-3">
-            <RecordingAudioPlayer
-              recordingId={item.id}
-              status={item.status}
-              mimeType={item.mimeType}
-            />
-          </div>
-
-          <div className="mt-3 border-t border-[var(--color-border-soft)] pt-3">
-            <RecordingAiBlock item={item} />
-          </div>
-        </article>
+        <RecordingQueueItem key={item.id} item={item} />
       ))}
-    </div>
-  );
-}
-
-function RecordingTable({ items }: Readonly<{ items: CallRecordingWorkbenchItem[] }>) {
-  if (items.length === 0) {
-    return (
-      <div className="hidden lg:block">
-        <EmptyState
-          title="暂无录音"
-          description="当前筛选条件下没有可查看的通话录音。"
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="hidden overflow-x-auto lg:block">
-      <table className="w-full min-w-[1180px] border-separate border-spacing-0 text-left">
-        <thead className="sticky top-0 z-10">
-          <tr className="bg-[var(--color-panel)] text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
-            <th className="border-b border-[var(--color-border-soft)] px-3 py-2.5">Call</th>
-            <th className="border-b border-[var(--color-border-soft)] px-3 py-2.5">Owner</th>
-            <th className="border-b border-[var(--color-border-soft)] px-3 py-2.5">Customer</th>
-            <th className="border-b border-[var(--color-border-soft)] px-3 py-2.5">Outcome</th>
-            <th className="border-b border-[var(--color-border-soft)] px-3 py-2.5">Audio</th>
-            <th className="border-b border-[var(--color-border-soft)] px-3 py-2.5">AI Signal</th>
-            <th className="border-b border-[var(--color-border-soft)] px-3 py-2.5">Review</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr
-              key={item.id}
-              className="align-top transition-colors hover:bg-[var(--color-shell-surface-soft)]"
-            >
-              <td className="border-b border-[var(--color-border-soft)] px-3 py-3.5">
-                <CompactCell
-                  primary={formatDateTime(item.callRecord.callTime)}
-                  secondary={formatDurationSeconds(item.callRecord.durationSeconds)}
-                />
-              </td>
-              <td className="border-b border-[var(--color-border-soft)] px-3 py-3.5">
-                <CompactCell
-                  primary={item.sales.name}
-                  secondary={`@${item.sales.username}`}
-                />
-              </td>
-              <td className="border-b border-[var(--color-border-soft)] px-3 py-3.5">
-                <CompactCell
-                  primary={
-                    <Link
-                      href={`/customers/${item.customer.id}?tab=calls`}
-                      className="crm-text-link"
-                    >
-                      {item.customer.name}
-                    </Link>
-                  }
-                  secondary={item.customer.phone}
-                />
-              </td>
-              <td className="border-b border-[var(--color-border-soft)] px-3 py-3.5">
-                <CompactCell
-                  primary={item.callRecord.resultLabel}
-                  secondary={item.callRecord.remark || "无备注"}
-                  className="max-w-[15rem]"
-                />
-              </td>
-              <td className="border-b border-[var(--color-border-soft)] px-3 py-3.5">
-                <div className="min-w-[15rem] space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge
-                      label={getRecordingStatusLabel(item.status)}
-                      variant={getRecordingStatusVariant(item.status)}
-                    />
-                    <span className="text-[11px] text-[var(--color-sidebar-muted)]">
-                      {formatRecordingFileSize(item.fileSizeBytes)}
-                    </span>
-                  </div>
-                  <RecordingAudioPlayer
-                    recordingId={item.id}
-                    status={item.status}
-                    mimeType={item.mimeType}
-                  />
-                </div>
-              </td>
-              <td className="border-b border-[var(--color-border-soft)] px-3 py-3.5">
-                <RecordingAiBlock item={item} />
-              </td>
-              <td className="border-b border-[var(--color-border-soft)] px-3 py-3.5">
-                {item.latestReview ? (
-                  <CompactCell
-                    primary={
-                      <StatusBadge
-                        label={getReviewStatusLabel(item.latestReview.reviewStatus)}
-                        variant="info"
-                      />
-                    }
-                    secondary={
-                      item.latestReview.manualScore !== null
-                        ? `${item.latestReview.manualScore} 分 / ${item.latestReview.reviewerName}`
-                        : item.latestReview.reviewerName
-                    }
-                  />
-                ) : (
-                  <span className="text-[12px] text-[var(--color-sidebar-muted)]">
-                    待复核
-                  </span>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }
@@ -621,20 +539,24 @@ export function CallRecordingsWorkbench({
     >
       <DataTableWrapper
         title="质检队列"
-        description="桌面端使用高密度队列表格，手机端自动切换为录音卡片。"
+        description="客户、播放、AI 信号和人工复核合并到同一条记录，减少横向滚动和来回跳转。"
         eyebrow="Review Queue"
         className="border-[rgba(79,125,247,0.12)]"
+        contentClassName="p-3"
         toolbar={
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
               <ShieldCheck className="h-3.5 w-3.5 text-[var(--color-success)]" aria-hidden="true" />
               {data.items.length} / {data.summary.totalCount} 条
             </span>
+            <span className="hidden items-center gap-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-sidebar-muted)] sm:inline-flex">
+              <CheckCircle2 className="h-3.5 w-3.5 text-[var(--color-primary)]" aria-hidden="true" />
+              {data.summary.aiReadyCount} 条 AI 完成
+            </span>
           </div>
         }
       >
-        <RecordingMobileCards items={data.items} />
-        <RecordingTable items={data.items} />
+        <RecordingQueueList items={data.items} />
       </DataTableWrapper>
     </PageShell>
   );

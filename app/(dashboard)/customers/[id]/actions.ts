@@ -16,7 +16,10 @@ import {
   type CustomerRecycleReasonCode,
 } from "@/lib/customers/recycle";
 import { prisma } from "@/lib/db/prisma";
-import { updateCustomerProfile } from "@/lib/customers/mutations";
+import {
+  transferCustomerOwner,
+  updateCustomerProfile,
+} from "@/lib/customers/mutations";
 import {
   buildCustomerFinalizePreview,
 } from "@/lib/recycle-bin/customer-adapter";
@@ -58,6 +61,11 @@ export type CustomerRecycleActionResult = {
   recycleStatus?: MoveToRecycleBinResult["status"];
   guard?: MoveToRecycleBinResult["guard"];
   finalizePreview?: RecycleFinalizePreview | null;
+};
+
+export type TransferCustomerOwnerActionResult = {
+  status: "success" | "error";
+  message: string;
 };
 
 function getErrorMessage(error: unknown) {
@@ -343,6 +351,48 @@ export async function updateCustomerProfileAction(formData: FormData) {
   } catch (error) {
     rethrowRedirectError(error);
     redirect(buildRedirectTarget(errorRedirect, "error", getErrorMessage(error)));
+  }
+}
+
+export async function transferCustomerOwnerAction(
+  formData: FormData,
+): Promise<TransferCustomerOwnerActionResult> {
+  try {
+    const session = await auth();
+
+    if (!session?.user) {
+      redirect("/login");
+    }
+
+    const result = await transferCustomerOwner(
+      {
+        id: session.user.id,
+        role: session.user.role,
+        teamId: session.user.teamId,
+      },
+      {
+        customerId: getFormValue(formData, "customerId"),
+        targetOwnerId: getFormValue(formData, "targetOwnerId"),
+        note: getFormValue(formData, "note"),
+      },
+    );
+
+    revalidatePath("/customers");
+    revalidatePath("/customers/public-pool");
+    revalidatePath("/dashboard");
+    revalidatePath(`/customers/${result.customerId}`);
+
+    return {
+      status: "success",
+      message: result.description,
+    };
+  } catch (error) {
+    rethrowRedirectError(error);
+
+    return {
+      status: "error",
+      message: getErrorMessage(error),
+    };
   }
 }
 

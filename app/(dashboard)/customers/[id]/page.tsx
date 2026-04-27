@@ -8,6 +8,7 @@ import {
   canCreateLiveInvitation,
   canCreateSalesOrder,
   canCreateWechatRecord,
+  canTransferCustomerOwner,
   canUseCustomerTags,
   getDefaultRouteForRole,
 } from "@/lib/auth/access";
@@ -20,6 +21,7 @@ import {
   getCustomerDetailLiveData,
   getCustomerDetailLogsData,
   getCustomerDetailOrdersData,
+  getCustomerOwnerTransferOptions,
   getCustomerDetailProfileData,
   getCustomerDetailShell,
   getCustomerDetailWechatData,
@@ -40,6 +42,7 @@ import {
   saveTradeOrderDraftAction,
   reviewImportedCustomerDeletionAction,
   submitTradeOrderForReviewAction,
+  transferCustomerOwnerAction,
   updateCustomerProfileAction,
 } from "./actions";
 
@@ -151,13 +154,19 @@ export default async function CustomerDetailPage({
     (session.user.role !== "SALES" || isOwnedByCurrentSales);
   const canEditProfile =
     session.user.role !== "SALES" || isOwnedByCurrentSales;
+  const canTransferOwner = canTransferCustomerOwner(session.user.role);
   const [callResultOptions, outboundCallEnabled] = canCreateCalls
     ? await Promise.all([
         getEnabledCallResultOptions(),
         isOutboundCallRuntimeEnabled(),
       ])
     : [[], false];
-  const [tradeOrderComposer, customerRecycleTarget, customerFinalizePreview] =
+  const [
+    tradeOrderComposer,
+    customerRecycleTarget,
+    customerFinalizePreview,
+    ownerTransferOptions,
+  ] =
     await Promise.all([
       activeTab === "orders" && createTradeOrder && canCreateSalesOrders
         ? getCustomerTradeOrderComposerData(
@@ -175,6 +184,15 @@ export default async function CustomerDetailPage({
         targetId: id,
         domain: "CUSTOMER",
       }),
+      canTransferOwner
+        ? getCustomerOwnerTransferOptions(
+            {
+              id: session.user.id,
+              role: session.user.role,
+            },
+            id,
+          )
+        : Promise.resolve([]),
     ]);
 
   return (
@@ -208,6 +226,10 @@ export default async function CustomerDetailPage({
       tradeOrderComposer={tradeOrderComposer}
       customerRecycleGuard={customerRecycleTarget?.guard ?? null}
       customerFinalizePreview={customerFinalizePreview}
+      ownerTransferOptions={ownerTransferOptions}
+      transferCustomerOwnerAction={
+        canTransferOwner ? transferCustomerOwnerAction : undefined
+      }
       moveCustomerToRecycleBinAction={moveCustomerToRecycleBinAction}
       updateCustomerProfileAction={updateCustomerProfileAction}
       saveTradeOrderDraftAction={saveTradeOrderDraftAction}

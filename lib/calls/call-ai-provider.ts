@@ -182,6 +182,16 @@ type DashScopeTaskResponse = {
   code?: string;
 };
 
+type OpenAiTranscriptionBody = {
+  text?: unknown;
+  segments?: Array<{
+    text?: unknown;
+    speaker?: unknown;
+    start?: unknown;
+    end?: unknown;
+  }>;
+};
+
 type LocalHttpAsrResponse = {
   text?: unknown;
   transcriptText?: unknown;
@@ -399,6 +409,24 @@ function buildAudioPublicUrl(storageKey: string, publicBaseUrl?: string | null) 
     .join("/")}`;
 }
 
+function isOpenAiDiarizationModel(model: string) {
+  return model.toLowerCase().includes("transcribe-diarize");
+}
+
+function extractTranscriptionText(body: OpenAiTranscriptionBody) {
+  if (typeof body.text === "string" && body.text.trim()) {
+    return body.text.trim();
+  }
+
+  const segmentText = body.segments
+    ?.map((segment) => (typeof segment.text === "string" ? segment.text.trim() : ""))
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+
+  return segmentText || "";
+}
+
 function normalizeLlmProviderName(provider: string) {
   return provider === "MOCK" ? "MOCK_LLM" : provider;
 }
@@ -584,11 +612,20 @@ function buildAnalysisPrompt(input: {
     `CRM已记录结果：${input.context.callResultCode ?? "未记录"}`,
     `CRM备注：${input.context.callRemark ?? "无"}`,
     "",
-    "请基于以下中文销售通话转写，输出严格 JSON，不要输出 Markdown，不要输出解释文字。",
+    "你是酒水私域销售团队的通话质检主管。请只基于转写文本和 CRM 上下文做判断，输出严格 JSON，不要输出 Markdown，不要输出解释文字。",
+    "目标不是泛泛总结，而是给销售和主管可执行的复盘信号：客户真实意向、销售动作缺口、风险、机会、关键词和下一步动作。",
+    "",
     "字段必须包含：summary, customerIntent, sentiment, qualityScore, riskFlags, opportunityTags, keywords, nextActionSuggestion, dialogueSegments。",
+    "summary 用 2 到 4 句中文，按顺序覆盖：客户需求/问题、客户态度、销售回应、当前成交或跟进结论。短电话也要指出信息不足。",
+    "customerIntent 只能是 HIGH/MEDIUM/LOW/REFUSED/UNKNOWN。HIGH=明确购买/要报价/要加微信/约定下次推进；MEDIUM=表达兴趣但未承诺；LOW=只是了解或回应很弱；REFUSED=明确拒绝/拉黑/不需要；UNKNOWN=内容不足。",
+    "sentiment 只能是 POSITIVE/NEUTRAL/NEGATIVE/MIXED/null。根据客户语气和内容判断，不要按销售语气判断。",
+    "qualityScore 是 0-100 或 null。评分口径：开场建立信任 15，需求/场景/预算挖掘 20，产品与价格匹配 20，异议处理 15，明确下一步 20，合规与服务态度 10。没有有效销售对话时必须低分。",
+    "riskFlags 输出最多 12 个中文短标签，例如：未确认预算、未确认酒品偏好、未约定下次动作、客户价格敏感、客户拒绝、话术过短、信息不足、需主管复核。没有风险则输出 []。",
+    "opportunityTags 输出最多 12 个中文短标签，例如：询问价格、询问品质、有送礼需求、有宴请场景、可加微信、可推荐套餐、可二次回访。没有机会则输出 []。",
+    "keywords 输出最多 20 个中文关键词，优先提取酒品、价格、规格、场景、竞品、异议和客户关注点。",
+    "nextActionSuggestion 用一句中文给出明确动作，尽量包含：跟进渠道、时间、话术方向或要补问的问题。没有足够信息时建议补打确认。",
     "dialogueSegments 最多 40 段，用于区分销售和客户的对话；每段包含 speakerRole(SALES/CUSTOMER/UNKNOWN), speakerLabel, text, startMs, endMs, confidence。无法判断角色时用 UNKNOWN，无法判断时间时用 null。",
-    "customerIntent 只能是 HIGH/MEDIUM/LOW/REFUSED/UNKNOWN；sentiment 只能是 POSITIVE/NEUTRAL/NEGATIVE/MIXED/null；qualityScore 是 0-100 或 null。",
-    "不要捏造客户已承诺购买，无法判断时使用 UNKNOWN 或 null。",
+    "不要捏造客户已承诺购买、已加微信、已付款或已下单；无法判断时使用 UNKNOWN、null 或空数组。",
     "",
     input.transcriptText,
   ].join("\n");
@@ -698,14 +735,21 @@ class OpenAiAudioTranscriber implements CallAiTranscriber {
       input.filename,
     );
     formData.append("model", this.model);
-    formData.append("response_format", "json");
+    if (isOpenAiDiarizationModel(this.model)) {
+      formData.append("response_format", "diarized_json");
+      formData.append("chunking_strategy", "auto");
+    } else {
+      formData.append("response_format", "json");
+    }
     if (this.language) {
       formData.append("language", this.language);
     }
-    formData.append(
-      "prompt",
-      `酒水私域销售通话。客户：${input.context.customerName}。销售：${input.context.salesName}。`,
-    );
+    if (!isOpenAiDiarizationModel(this.model)) {
+      formData.append(
+        "prompt",
+        `酒水私域销售通话。客户：${input.context.customerName}。销售：${input.context.salesName}。`,
+      );
+    }
 
     const response = await fetch(joinUrl(this.baseUrl, "/audio/transcriptions"), {
       method: "POST",
@@ -715,14 +759,15 @@ class OpenAiAudioTranscriber implements CallAiTranscriber {
       },
       body: formData,
     });
-    const body = (await parseJsonResponse(response)) as { text?: unknown };
+    const body = (await parseJsonResponse(response)) as OpenAiTranscriptionBody;
+    const text = extractTranscriptionText(body);
 
-    if (typeof body.text !== "string" || !body.text.trim()) {
+    if (!text) {
       throw new Error("AI 转写结果为空。");
     }
 
     return {
-      text: body.text.trim(),
+      text,
       raw: body,
       modelProvider: this.providerName,
       modelName: this.model,

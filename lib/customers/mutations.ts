@@ -1,4 +1,5 @@
 import {
+  CustomerOwnershipEventReason,
   CustomerOwnershipMode,
   OperationModule,
   OperationTargetType,
@@ -11,9 +12,14 @@ import { z } from "zod";
 import {
   canAccessCustomerModule,
   canCreateCustomer,
+  canTransferCustomerOwner,
   getCustomerScope,
 } from "@/lib/auth/access";
 import { customerManualCreateOperationAction } from "@/lib/customers/metadata";
+import {
+  assignCustomerToSalesTx,
+  getCustomerOwnershipActorContextTx,
+} from "@/lib/customers/ownership";
 import {
   assertCustomerNotInActiveRecycleBin,
   findActiveCustomerRecycleEntry,
@@ -52,6 +58,12 @@ export type CreateOwnedCustomerInput = {
   district?: string;
   address?: string;
   remark?: string;
+};
+
+export type TransferCustomerOwnerInput = {
+  customerId: string;
+  targetOwnerId: string;
+  note?: string;
 };
 
 const customerStatusValues = [
@@ -106,6 +118,12 @@ const createOwnedCustomerSchema = z.object({
 const updateCustomerRemarkSchema = z.object({
   customerId: z.string().trim().min(1, "缺少客户 ID"),
   remark: z.string().trim().max(1000, "备注不能超过 1000 个字符").default(""),
+});
+
+const transferCustomerOwnerSchema = z.object({
+  customerId: z.string().trim().min(1, "缺少客户 ID"),
+  targetOwnerId: z.string().trim().min(1, "请选择新的负责人"),
+  note: z.string().trim().max(500, "移交备注不能超过 500 个字符").default(""),
 });
 
 const editableCustomerProfileSelect = {
@@ -486,6 +504,83 @@ export async function updateCustomerRemark(
     return {
       customerId: updated.id,
       description: "客户备注已更新。",
+    };
+  });
+}
+
+export async function transferCustomerOwner(
+  actor: CustomerMutationActor,
+  rawInput: TransferCustomerOwnerInput,
+) {
+  if (!canTransferCustomerOwner(actor.role)) {
+    throw new Error("当前角色不能移交客户负责人。");
+  }
+
+  const parsed = transferCustomerOwnerSchema.parse(rawInput);
+
+  return prisma.$transaction(async (tx) => {
+    const ownershipActor = await getCustomerOwnershipActorContextTx(tx, actor.id);
+
+    if (!canTransferCustomerOwner(ownershipActor.role)) {
+      throw new Error("当前角色不能移交客户负责人。");
+    }
+
+    if (ownershipActor.role === "SUPERVISOR" && !ownershipActor.teamId) {
+      throw new Error("当前主管账号缺少团队范围，不能移交客户负责人。");
+    }
+
+    const targetSales = await tx.user.findFirst({
+      where: {
+        id: parsed.targetOwnerId,
+        userStatus: UserStatus.ACTIVE,
+        disabledAt: null,
+        role: {
+          code: "SALES",
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        teamId: true,
+      },
+    });
+
+    if (!targetSales) {
+      throw new Error("目标负责人不存在、已停用，或不是销售账号。");
+    }
+
+    if (
+      ownershipActor.role === "SUPERVISOR" &&
+      targetSales.teamId !== ownershipActor.teamId
+    ) {
+      throw new Error("主管只能移交给本团队的销售。");
+    }
+
+    const transition = await assignCustomerToSalesTx(tx, {
+      actor: ownershipActor,
+      targetSales,
+      customerId: parsed.customerId,
+      reason: CustomerOwnershipEventReason.SUPERVISOR_ASSIGN,
+      note: parsed.note || null,
+      operationAction: "customer.owner.transferred_from_detail",
+      operationDescription: `移交客户负责人给 ${targetSales.name} (@${targetSales.username})。`,
+      operationMetadata: {
+        source: "CUSTOMER_DETAIL_OWNER_TRANSFER",
+        targetOwnerId: targetSales.id,
+      },
+    });
+
+    if (!transition) {
+      throw new Error("客户当前已由该负责人承接，无需重复移交。");
+    }
+
+    return {
+      customerId: transition.customer.id,
+      ownerId: targetSales.id,
+      ownerName: targetSales.name,
+      ownerUsername: targetSales.username,
+      description: `已将客户负责人移交给 ${targetSales.name} (@${targetSales.username})。`,
     };
   });
 }

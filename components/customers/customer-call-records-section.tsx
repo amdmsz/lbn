@@ -38,8 +38,11 @@ type CallRecordItem = {
       status: string;
       summary: string | null;
       qualityScore: number | null;
+      customerIntent?: string | null;
+      sentiment?: string | null;
       riskFlagsJson: unknown;
       opportunityTagsJson: unknown;
+      keywordsJson?: unknown;
       nextActionSuggestion: string | null;
       transcriptText?: string | null;
       transcriptJson?: unknown;

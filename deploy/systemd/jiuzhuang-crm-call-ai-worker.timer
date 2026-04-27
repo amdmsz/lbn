@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Jiuzhuang CRM call recording AI worker every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=10s
+Persistent=true
+Unit=jiuzhuang-crm-call-ai-worker.service
+
+[Install]
+WantedBy=timers.target

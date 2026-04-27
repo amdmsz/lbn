@@ -5,6 +5,11 @@ import { CustomerCallRecordsSection } from "@/components/customers/customer-call
 import { CustomerDetailTabs } from "@/components/customers/customer-detail-tabs";
 import { ImportedCustomerDeletionPanel } from "@/components/customers/imported-customer-deletion-panel";
 import { CustomerLiveRecordsSection } from "@/components/customers/customer-live-records-section";
+import {
+  CustomerOwnerTransferPanel,
+  type CustomerOwnerTransferOption,
+  type TransferCustomerOwnerAction,
+} from "@/components/customers/customer-owner-transfer-panel";
 import { CustomerPhoneSpotlight } from "@/components/customers/customer-phone-spotlight";
 import { CustomerRecycleEntry } from "@/components/customers/customer-recycle-entry";
 import { MobileCallFollowUpSheet } from "@/components/customers/mobile-call-followup-sheet";
@@ -1534,6 +1539,8 @@ export function CustomerDetailWorkbench({
   customerRecycleGuard,
   customerFinalizePreview,
   moveCustomerToRecycleBinAction,
+  ownerTransferOptions,
+  transferCustomerOwnerAction,
   updateCustomerProfileAction,
   saveTradeOrderDraftAction,
   submitTradeOrderForReviewAction,
@@ -1562,6 +1569,8 @@ export function CustomerDetailWorkbench({
   customerRecycleGuard: RecycleMoveGuard | null;
   customerFinalizePreview: RecycleFinalizePreview | null;
   moveCustomerToRecycleBinAction?: MoveCustomerToRecycleBinAction;
+  ownerTransferOptions: CustomerOwnerTransferOption[];
+  transferCustomerOwnerAction?: TransferCustomerOwnerAction;
   requestImportedCustomerDeletionAction: ImportedCustomerDeletionAction;
   reviewImportedCustomerDeletionAction: ImportedCustomerDeletionReviewAction;
   deleteImportedCustomerDirectAction: ImportedCustomerDeletionAction;
@@ -1574,6 +1583,7 @@ export function CustomerDetailWorkbench({
     ? publicPoolReasonLabels[shell.publicPoolReason]
     : "暂无入池原因";
   const ownershipLabel = getCustomerOwnershipModeLabel(shell.ownershipMode);
+  const currentOwnerLabel = formatOwnerLabel(shell.owner);
   const riskState = getOverviewRiskState(shell, publicPoolReasonLabel);
   const followUpEntryTab = getFollowUpEntryTab(
     canCreateCalls,
@@ -1823,7 +1833,7 @@ export function CustomerDetailWorkbench({
                     <div>
                       <p className="crm-detail-label">经营归属</p>
                       <p className="mt-1 text-[13px] font-medium leading-5 text-[var(--foreground)]">
-                        {formatOwnerLabel(shell.owner)}
+                        {currentOwnerLabel}
                       </p>
                       <p className="mt-1 text-[11px] leading-5 text-[var(--color-sidebar-muted)]">
                         {shell.publicPoolTeam?.name ?? shell.owner?.team?.name ?? "暂无团队"} / 保护期 {formatDateTimeSummary(shell.claimLockedUntil, "未锁定")}
@@ -1837,6 +1847,16 @@ export function CustomerDetailWorkbench({
                       </p>
                     </div>
                   </div>
+
+                  {transferCustomerOwnerAction ? (
+                    <CustomerOwnerTransferPanel
+                      customerId={shell.id}
+                      currentOwnerLabel={currentOwnerLabel}
+                      options={ownerTransferOptions}
+                      action={transferCustomerOwnerAction}
+                      className="mt-3 border-t border-[var(--color-border-soft)] pt-3"
+                    />
+                  ) : null}
                 </div>
 
                 <div className="mt-4 border-t border-[var(--color-border-soft)] pt-4">

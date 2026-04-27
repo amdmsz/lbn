@@ -27,6 +27,27 @@ export type RecordingStorageConfig = {
 
 export type RecordingRuntimeConfigSource = "database" | "fallback" | "default";
 
+export type RecordingByteRangeRequest = {
+  start?: number;
+  end?: number;
+};
+
+export type RecordingByteRange = {
+  start: number;
+  end: number;
+  total: number;
+};
+
+export class RecordingRangeNotSatisfiableError extends Error {
+  totalLength: number;
+
+  constructor(totalLength: number) {
+    super("Requested audio byte range is not satisfiable.");
+    this.name = "RecordingRangeNotSatisfiableError";
+    this.totalLength = totalLength;
+  }
+}
+
 export type ResolvedRecordingStorageConfig = RecordingStorageConfig & {
   source: {
     storage: RecordingRuntimeConfigSource;
@@ -276,6 +297,53 @@ export function resolveRecordingStoragePath(input: {
   return resolveInside(config.storageDir, input.storageKey);
 }
 
+export function resolveRecordingByteRange(
+  request: RecordingByteRangeRequest | null | undefined,
+  totalLength: number,
+): RecordingByteRange | null {
+  if (!request) {
+    return null;
+  }
+
+  if (totalLength <= 0) {
+    throw new RecordingRangeNotSatisfiableError(totalLength);
+  }
+
+  const hasStart = Number.isInteger(request.start);
+  const hasEnd = Number.isInteger(request.end);
+
+  if (!hasStart && !hasEnd) {
+    throw new RecordingRangeNotSatisfiableError(totalLength);
+  }
+
+  let start: number;
+  let end: number;
+
+  if (!hasStart) {
+    const suffixLength = request.end ?? 0;
+
+    if (suffixLength <= 0) {
+      throw new RecordingRangeNotSatisfiableError(totalLength);
+    }
+
+    start = Math.max(totalLength - suffixLength, 0);
+    end = totalLength - 1;
+  } else {
+    start = request.start ?? 0;
+    end = hasEnd ? request.end ?? 0 : totalLength - 1;
+  }
+
+  if (start < 0 || end < 0 || start > end || start >= totalLength) {
+    throw new RecordingRangeNotSatisfiableError(totalLength);
+  }
+
+  return {
+    start,
+    end: Math.min(end, totalLength - 1),
+    total: totalLength,
+  };
+}
+
 export async function ensureRecordingStorageReady(config = getRecordingStorageConfig()) {
   assertLocalProvider(config.provider);
   await Promise.all([
@@ -373,6 +441,7 @@ export async function removeUploadChunks(
 export async function openRecordingReadStream(input: {
   storageKey: string;
   config?: RecordingStorageConfig;
+  byteRange?: RecordingByteRangeRequest | null;
 }) {
   const config = input.config ?? getRecordingStorageConfig();
   assertLocalProvider(config.provider);
@@ -382,11 +451,27 @@ export async function openRecordingReadStream(input: {
     config,
   });
   const stat = await fs.stat(absolutePath);
-  const stream = Readable.toWeb(createReadStream(absolutePath));
+  const byteRange = resolveRecordingByteRange(input.byteRange, stat.size);
+  const stream = Readable.toWeb(
+    createReadStream(
+      absolutePath,
+      byteRange
+        ? {
+            start: byteRange.start,
+            end: byteRange.end,
+          }
+        : undefined,
+    ),
+  );
+  const contentLength = byteRange
+    ? byteRange.end - byteRange.start + 1
+    : stat.size;
 
   return {
     stream: stream as ReadableStream<Uint8Array>,
-    contentLength: stat.size,
+    contentLength,
+    totalContentLength: stat.size,
+    byteRange,
   };
 }
 

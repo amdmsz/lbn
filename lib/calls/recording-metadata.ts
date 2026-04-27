@@ -43,6 +43,21 @@ export const MOBILE_RECORDING_CAPABILITIES = [
 export type MobileRecordingCapabilityValue =
   (typeof MOBILE_RECORDING_CAPABILITIES)[number];
 
+export const callCustomerIntentLabels: Record<string, string> = {
+  HIGH: "强意向",
+  MEDIUM: "中意向",
+  LOW: "弱意向",
+  REFUSED: "拒绝",
+  UNKNOWN: "未知",
+};
+
+export const callSentimentLabels: Record<string, string> = {
+  POSITIVE: "正向",
+  NEUTRAL: "中性",
+  NEGATIVE: "负向",
+  MIXED: "摇摆",
+};
+
 export const callRecordingStatusLabels: Record<CallRecordingStatusValue, string> = {
   LOCAL_PENDING: "本地待传",
   UPLOADING: "上传中",

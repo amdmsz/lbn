@@ -8,12 +8,16 @@ import {
   LiveSessionStatus,
   SalesOrderReviewStatus,
   TradeOrderStatus,
+  UserStatus,
   WechatAddStatus,
   type Prisma,
   type RoleCode,
 } from "@prisma/client";
 import { z } from "zod";
-import { canAccessCustomerModule } from "@/lib/auth/access";
+import {
+  canAccessCustomerModule,
+  canTransferCustomerOwner,
+} from "@/lib/auth/access";
 import type { CallResultOption } from "@/lib/calls/metadata";
 import {
   getEnabledCallResultOptions,
@@ -352,6 +356,17 @@ export type CustomerOperatingDashboardData = {
   };
   summary: CustomerOperatingDashboardMetric[];
   employees: CustomerOperatingDashboardEmployeeRow[];
+};
+
+export type CustomerOwnerTransferOption = {
+  id: string;
+  name: string;
+  username: string;
+  team: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
 };
 
 const customerQueueValues = [
@@ -3821,6 +3836,54 @@ export async function getCustomerDetailShell(
   };
 }
 
+export async function getCustomerOwnerTransferOptions(
+  viewer: CustomerViewer,
+  customerId: string,
+): Promise<CustomerOwnerTransferOption[]> {
+  if (!canTransferCustomerOwner(viewer.role)) {
+    return [];
+  }
+
+  const detail = await getVisibleCustomerDetailBase(viewer, customerId);
+
+  if (!detail) {
+    return [];
+  }
+
+  const actor = detail.actor;
+
+  if (actor.role === "SUPERVISOR" && !actor.teamId) {
+    return [];
+  }
+
+  const currentOwnerId = detail.customer.owner?.id ?? null;
+
+  return prisma.user.findMany({
+    where: {
+      id: currentOwnerId ? { not: currentOwnerId } : undefined,
+      userStatus: UserStatus.ACTIVE,
+      disabledAt: null,
+      role: {
+        code: "SALES",
+      },
+      ...(actor.role === "SUPERVISOR" ? { teamId: actor.teamId } : {}),
+    },
+    orderBy: [{ team: { name: "asc" } }, { name: "asc" }, { username: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      username: true,
+      team: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+        },
+      },
+    },
+  });
+}
+
 export async function getCustomerDetailProfileData(
   viewer: CustomerViewer,
   customerId: string,
@@ -3966,8 +4029,11 @@ export async function getCustomerDetailCallsData(
                 status: true,
                 summary: true,
                 qualityScore: true,
+                customerIntent: true,
+                sentiment: true,
                 riskFlagsJson: true,
                 opportunityTagsJson: true,
+                keywordsJson: true,
                 nextActionSuggestion: true,
                 transcriptText: true,
                 transcriptJson: true,

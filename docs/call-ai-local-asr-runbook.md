@@ -100,3 +100,4 @@ does not need to support OPPO / Android native AMR containers directly.
 - Do not use `DASHSCOPE_FILE` for LAN-only recordings; cloud ASR cannot pull private IP URLs.
 - Keep the ASR endpoint reachable only from trusted internal servers.
 - If the CRM server cannot access the internet, use `LOCAL_HTTP_ASR` and add a local LLM provider before production.
+- Production systemd/timer deployment is documented in [call-ai-production-runbook.md](./call-ai-production-runbook.md).

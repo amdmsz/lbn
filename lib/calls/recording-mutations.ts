@@ -35,6 +35,7 @@ import {
   removeUploadChunks,
   resolveRecordingStorageConfig,
   writeUploadChunk,
+  type RecordingByteRangeRequest,
 } from "@/lib/calls/recording-storage";
 import { resolveCallAiWorkerRuntimeConfig } from "@/lib/calls/call-runtime-config";
 import { getEnabledCallResultDefinitionByCode } from "@/lib/calls/settings";
@@ -972,6 +973,7 @@ export async function getRecordingAudioForPlayback(
   recordingId: string,
   options: {
     downloadOriginal?: boolean;
+    byteRange?: RecordingByteRangeRequest | null;
   } = {},
 ) {
   if (!canPlaybackCallRecording(actor.role)) {
@@ -1032,11 +1034,13 @@ export async function getRecordingAudioForPlayback(
           recordingId: recording.id,
           storageKey,
           config,
+          byteRange: options.byteRange,
         })
       : await (async () => {
           const stream = await openRecordingReadStream({
             storageKey,
             config,
+            byteRange: options.byteRange,
           });
 
           return {

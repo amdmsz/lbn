@@ -231,6 +231,10 @@ export function canManageCustomerPublicPool(role: RoleCode) {
   return role === "ADMIN" || role === "SUPERVISOR";
 }
 
+export function canTransferCustomerOwner(role: RoleCode) {
+  return role === "ADMIN" || role === "SUPERVISOR";
+}
+
 export function canAccessCustomerPublicPoolSettings(role: RoleCode) {
   return canManageCustomerPublicPool(role);
 }

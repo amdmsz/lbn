@@ -1,0 +1,21 @@
+[Unit]
+Description=Jiuzhuang CRM call recording AI worker batch
+After=network-online.target mysql.service redis.service jiuzhuang-crm.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__APP_USER__
+Group=__APP_GROUP__
+WorkingDirectory=__APP_ROOT__
+Environment=NODE_ENV=production
+EnvironmentFile=__ENV_FILE__
+ExecStart=/usr/bin/env bash -lc 'npm run worker:call-ai -- --enqueue-missing --limit="${CALL_AI_WORKER_BATCH_LIMIT:-5}"'
+TimeoutStartSec=1800
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=__APP_ROOT__/runtime/imports
+StandardOutput=journal
+StandardError=journal

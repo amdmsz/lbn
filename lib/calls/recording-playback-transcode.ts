@@ -6,7 +6,9 @@ import { Readable } from "node:stream";
 import {
   buildRecordingPlaybackObjectKey,
   getRecordingStorageConfig,
+  resolveRecordingByteRange,
   resolveRecordingStoragePath,
+  type RecordingByteRangeRequest,
   type RecordingStorageConfig,
 } from "@/lib/calls/recording-storage";
 
@@ -144,13 +146,30 @@ export async function transcodeRecordingForBrowser(input: {
   recordingId: string;
   storageKey: string;
   config?: RecordingStorageConfig;
+  byteRange?: RecordingByteRangeRequest | null;
 }) {
   const file = await ensureTranscodedRecordingFile(input);
-  const stream = Readable.toWeb(createReadStream(file.absolutePath));
+  const byteRange = resolveRecordingByteRange(input.byteRange, file.contentLength);
+  const stream = Readable.toWeb(
+    createReadStream(
+      file.absolutePath,
+      byteRange
+        ? {
+            start: byteRange.start,
+            end: byteRange.end,
+          }
+        : undefined,
+    ),
+  );
+  const contentLength = byteRange
+    ? byteRange.end - byteRange.start + 1
+    : file.contentLength;
 
   return {
     stream: stream as ReadableStream<Uint8Array>,
-    contentLength: file.contentLength,
+    contentLength,
+    totalContentLength: file.contentLength,
+    byteRange,
     mimeType: file.mimeType,
     filename: file.filename,
     transcoded: file.transcoded,

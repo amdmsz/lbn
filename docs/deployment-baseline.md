@@ -327,6 +327,19 @@ sudo journalctl -u jiuzhuang-crm-import-worker -f
 cd /srv/jiuzhuang-crm/current
 REQUIRE_LEAD_IMPORT_WORKER=1 npm run check:lead-import-runtime
 ```
+
+Call AI Worker 定时任务
+
+模板文件：
+
+deploy/systemd/jiuzhuang-crm-call-ai-worker.service
+deploy/systemd/jiuzhuang-crm-call-ai-worker.timer
+
+使用方式见：
+
+docs/call-ai-production-runbook.md
+
+该 worker 是 one-shot 批处理，由 systemd timer 每分钟触发；不要把它当成长驻 daemon 直接 `enable` service。
 9. Nginx 反向代理
 
 模板文件：
