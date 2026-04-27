@@ -33,9 +33,9 @@ SET @lbn_sql = (
       FROM information_schema.STATISTICS
       WHERE TABLE_SCHEMA = DATABASE()
         AND TABLE_NAME = 'lead'
-        AND BINARY INDEX_NAME = 'Lead_rolledBackAt_idx'
+        AND BINARY INDEX_NAME = 'lead_rolledBackAt_idx'
     ),
-    'ALTER TABLE `lead` RENAME INDEX `lead_rolledBackAt_idx` TO `Lead_rolledBackAt_idx`',
+    'ALTER TABLE `lead` RENAME INDEX `lead_rolledBackAt_idx` TO `lead_rolledBackAt_idx`',
     'SELECT 1'
   )
 );
@@ -50,9 +50,9 @@ SET @lbn_sql = (
       FROM information_schema.STATISTICS
       WHERE TABLE_SCHEMA = DATABASE()
         AND TABLE_NAME = 'lead'
-        AND BINARY INDEX_NAME = 'Lead_rolledBackAt_idx'
+        AND BINARY INDEX_NAME = 'lead_rolledBackAt_idx'
     ),
-    'CREATE INDEX `Lead_rolledBackAt_idx` ON `lead`(`rolledBackAt`)',
+    'CREATE INDEX `lead_rolledBackAt_idx` ON `lead`(`rolledBackAt`)',
     'SELECT 1'
   )
 );
@@ -74,9 +74,9 @@ SET @lbn_sql = (
       FROM information_schema.STATISTICS
       WHERE TABLE_SCHEMA = DATABASE()
         AND TABLE_NAME = 'lead'
-        AND BINARY INDEX_NAME = 'Lead_rolledBackBatchId_idx'
+        AND BINARY INDEX_NAME = 'lead_rolledBackBatchId_idx'
     ),
-    'ALTER TABLE `lead` RENAME INDEX `lead_rolledBackBatchId_idx` TO `Lead_rolledBackBatchId_idx`',
+    'ALTER TABLE `lead` RENAME INDEX `lead_rolledBackBatchId_idx` TO `lead_rolledBackBatchId_idx`',
     'SELECT 1'
   )
 );
@@ -91,9 +91,9 @@ SET @lbn_sql = (
       FROM information_schema.STATISTICS
       WHERE TABLE_SCHEMA = DATABASE()
         AND TABLE_NAME = 'lead'
-        AND BINARY INDEX_NAME = 'Lead_rolledBackBatchId_idx'
+        AND BINARY INDEX_NAME = 'lead_rolledBackBatchId_idx'
     ),
-    'CREATE INDEX `Lead_rolledBackBatchId_idx` ON `lead`(`rolledBackBatchId`)',
+    'CREATE INDEX `lead_rolledBackBatchId_idx` ON `lead`(`rolledBackBatchId`)',
     'SELECT 1'
   )
 );
@@ -109,9 +109,9 @@ SET @lbn_sql = (
       WHERE CONSTRAINT_SCHEMA = DATABASE()
         AND TABLE_NAME = 'lead'
         AND CONSTRAINT_TYPE = 'FOREIGN KEY'
-        AND BINARY CONSTRAINT_NAME = 'Lead_rolledBackBatchId_fkey'
+        AND BINARY CONSTRAINT_NAME = 'lead_rolledBackBatchId_fkey'
     ),
-    'ALTER TABLE `lead` ADD CONSTRAINT `Lead_rolledBackBatchId_fkey` FOREIGN KEY (`rolledBackBatchId`) REFERENCES `lead_import_batches`(`id`) ON DELETE SET NULL ON UPDATE CASCADE',
+    'ALTER TABLE `lead` ADD CONSTRAINT `lead_rolledBackBatchId_fkey` FOREIGN KEY (`rolledBackBatchId`) REFERENCES `lead_import_batches`(`id`) ON DELETE SET NULL ON UPDATE CASCADE',
     'SELECT 1'
   )
 );

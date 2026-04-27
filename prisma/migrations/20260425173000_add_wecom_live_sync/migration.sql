@@ -15,9 +15,9 @@ ALTER TABLE `livesession`
   ADD COLUMN `syncError` TEXT NULL,
   ADD COLUMN `wecomRaw` JSON NULL;
 
-CREATE UNIQUE INDEX `LiveSession_wecomLivingId_key` ON `livesession`(`wecomLivingId`);
-CREATE INDEX `LiveSession_source_startAt_idx` ON `livesession`(`source`, `startAt`);
-CREATE INDEX `LiveSession_syncStatus_lastSyncedAt_idx` ON `livesession`(`syncStatus`, `lastSyncedAt`);
+CREATE UNIQUE INDEX `livesession_wecomLivingId_key` ON `livesession`(`wecomLivingId`);
+CREATE INDEX `livesession_source_startAt_idx` ON `livesession`(`source`, `startAt`);
+CREATE INDEX `livesession_syncStatus_lastSyncedAt_idx` ON `livesession`(`syncStatus`, `lastSyncedAt`);
 
 CREATE TABLE `LiveAudienceRecord` (
   `id` VARCHAR(191) NOT NULL,

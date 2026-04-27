@@ -16,8 +16,8 @@ CREATE TABLE `call_result_settings` (
     `updatedAt` DATETIME(3) NOT NULL,
 
     UNIQUE INDEX `call_result_settings_code_key`(`code` ASC),
-    INDEX `call_result_settings_isEnabled_sortOrder_idx`(`isEnabled` ASC, `sortOrder` ASC),
-    INDEX `call_result_settings_isSystem_sortOrder_idx`(`isSystem` ASC, `sortOrder` ASC),
+    INDEX `call_result_settings_isEnabled_sortorder_idx`(`isEnabled` ASC, `sortOrder` ASC),
+    INDEX `call_result_settings_isSystem_sortorder_idx`(`isSystem` ASC, `sortOrder` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -36,10 +36,10 @@ CREATE TABLE `callrecord` (
     `updatedAt` DATETIME(3) NOT NULL,
     `resultCode` VARCHAR(191) NULL,
 
-    INDEX `CallRecord_customerId_callTime_idx`(`customerId` ASC, `callTime` ASC),
-    INDEX `CallRecord_leadId_callTime_idx`(`leadId` ASC, `callTime` ASC),
-    INDEX `CallRecord_resultCode_callTime_idx`(`resultCode` ASC, `callTime` ASC),
-    INDEX `CallRecord_salesId_callTime_idx`(`salesId` ASC, `callTime` ASC),
+    INDEX `callrecord_customerId_callTime_idx`(`customerId` ASC, `callTime` ASC),
+    INDEX `callrecord_leadId_callTime_idx`(`leadId` ASC, `callTime` ASC),
+    INDEX `callrecord_resultCode_callTime_idx`(`resultCode` ASC, `callTime` ASC),
+    INDEX `callrecord_salesId_callTime_idx`(`salesId` ASC, `callTime` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -55,7 +55,7 @@ CREATE TABLE `categories` (
     `updatedAt` DATETIME(3) NOT NULL,
 
     UNIQUE INDEX `categories_code_key`(`code` ASC),
-    INDEX `categories_isActive_sortOrder_idx`(`isActive` ASC, `sortOrder` ASC),
+    INDEX `categories_isActive_sortorder_idx`(`isActive` ASC, `sortOrder` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -77,12 +77,12 @@ CREATE TABLE `codcollectionrecord` (
     `updatedAt` DATETIME(3) NOT NULL,
     `tradeOrderId` VARCHAR(191) NULL,
 
-    INDEX `CodCollectionRecord_customerId_status_createdAt_idx`(`customerId` ASC, `status` ASC, `createdAt` ASC),
-    INDEX `CodCollectionRecord_ownerId_status_createdAt_idx`(`ownerId` ASC, `status` ASC, `createdAt` ASC),
-    UNIQUE INDEX `CodCollectionRecord_paymentPlanId_key`(`paymentPlanId` ASC),
-    UNIQUE INDEX `CodCollectionRecord_paymentRecordId_key`(`paymentRecordId` ASC),
-    INDEX `CodCollectionRecord_salesOrderId_status_createdAt_idx`(`salesOrderId` ASC, `status` ASC, `createdAt` ASC),
-    INDEX `CodCollectionRecord_shippingTaskId_status_createdAt_idx`(`shippingTaskId` ASC, `status` ASC, `createdAt` ASC),
+    INDEX `codcollectionrecord_customerId_status_createdAt_idx`(`customerId` ASC, `status` ASC, `createdAt` ASC),
+    INDEX `codcollectionrecord_ownerId_status_createdAt_idx`(`ownerId` ASC, `status` ASC, `createdAt` ASC),
+    UNIQUE INDEX `codcollectionrecord_paymentPlanId_key`(`paymentPlanId` ASC),
+    UNIQUE INDEX `codcollectionrecord_paymentRecordId_key`(`paymentRecordId` ASC),
+    INDEX `codcollectionrecord_salesOrderId_status_createdAt_idx`(`salesOrderId` ASC, `status` ASC, `createdAt` ASC),
+    INDEX `codcollectionrecord_shippingTaskId_status_createdAt_idx`(`shippingTaskId` ASC, `status` ASC, `createdAt` ASC),
     INDEX `codrec_trade_sales_created_idx`(`tradeOrderId` ASC, `salesOrderId` ASC, `status` ASC, `createdAt` ASC),
     INDEX `codrec_trade_ship_created_idx`(`tradeOrderId` ASC, `shippingTaskId` ASC, `status` ASC, `createdAt` ASC),
     PRIMARY KEY (`id` ASC)
@@ -111,15 +111,15 @@ CREATE TABLE `collectiontask` (
     `updatedAt` DATETIME(3) NOT NULL,
     `tradeOrderId` VARCHAR(191) NULL,
 
-    INDEX `CollectionTask_createdById_fkey`(`createdById` ASC),
-    INDEX `CollectionTask_customerId_status_dueAt_idx`(`customerId` ASC, `status` ASC, `dueAt` ASC),
-    INDEX `CollectionTask_giftRecordId_status_dueAt_idx`(`giftRecordId` ASC, `status` ASC, `dueAt` ASC),
-    INDEX `CollectionTask_ownerId_status_dueAt_idx`(`ownerId` ASC, `status` ASC, `dueAt` ASC),
-    INDEX `CollectionTask_paymentPlanId_status_dueAt_idx`(`paymentPlanId` ASC, `status` ASC, `dueAt` ASC),
-    INDEX `CollectionTask_salesOrderId_status_dueAt_idx`(`salesOrderId` ASC, `status` ASC, `dueAt` ASC),
-    INDEX `CollectionTask_shippingTaskId_status_dueAt_idx`(`shippingTaskId` ASC, `status` ASC, `dueAt` ASC),
-    INDEX `CollectionTask_sourceType_status_dueAt_idx`(`sourceType` ASC, `status` ASC, `dueAt` ASC),
-    INDEX `CollectionTask_updatedById_fkey`(`updatedById` ASC),
+    INDEX `collectiontask_createdById_fkey`(`createdById` ASC),
+    INDEX `collectiontask_customerId_status_dueAt_idx`(`customerId` ASC, `status` ASC, `dueAt` ASC),
+    INDEX `collectiontask_giftRecordId_status_dueAt_idx`(`giftRecordId` ASC, `status` ASC, `dueAt` ASC),
+    INDEX `collectiontask_ownerId_status_dueAt_idx`(`ownerId` ASC, `status` ASC, `dueAt` ASC),
+    INDEX `collectiontask_paymentPlanId_status_dueAt_idx`(`paymentPlanId` ASC, `status` ASC, `dueAt` ASC),
+    INDEX `collectiontask_salesOrderId_status_dueAt_idx`(`salesOrderId` ASC, `status` ASC, `dueAt` ASC),
+    INDEX `collectiontask_shippingTaskId_status_dueAt_idx`(`shippingTaskId` ASC, `status` ASC, `dueAt` ASC),
+    INDEX `collectiontask_sourceType_status_dueAt_idx`(`sourceType` ASC, `status` ASC, `dueAt` ASC),
+    INDEX `collectiontask_updatedById_fkey`(`updatedById` ASC),
     INDEX `coltask_trade_sales_due_idx`(`tradeOrderId` ASC, `salesOrderId` ASC, `status` ASC, `dueAt` ASC),
     INDEX `coltask_trade_source_due_idx`(`tradeOrderId` ASC, `sourceType` ASC, `status` ASC, `dueAt` ASC),
     PRIMARY KEY (`id` ASC)
@@ -149,14 +149,14 @@ CREATE TABLE `customer` (
     `publicPoolReason` ENUM('UNASSIGNED_IMPORT', 'MANUAL_RELEASE', 'INACTIVE_RECYCLE', 'OWNER_LEFT_TEAM', 'BATCH_REALLOCATION', 'MERGE_RELEASE', 'INVALID_FOLLOWUP_RECYCLE') NULL,
     `publicPoolTeamId` VARCHAR(191) NULL,
 
-    INDEX `Customer_claimLockedUntil_idx`(`claimLockedUntil` ASC),
-    INDEX `Customer_createdAt_idx`(`createdAt` ASC),
-    INDEX `Customer_lastEffectiveFollowUpAt_idx`(`lastEffectiveFollowUpAt` ASC),
-    INDEX `Customer_lastOwnerId_idx`(`lastOwnerId` ASC),
-    INDEX `Customer_ownerId_idx`(`ownerId` ASC),
-    INDEX `Customer_ownershipMode_ownerId_idx`(`ownershipMode` ASC, `ownerId` ASC),
-    UNIQUE INDEX `Customer_phone_key`(`phone` ASC),
-    INDEX `Customer_status_idx`(`status` ASC),
+    INDEX `customer_claimLockedUntil_idx`(`claimLockedUntil` ASC),
+    INDEX `customer_createdAt_idx`(`createdAt` ASC),
+    INDEX `customer_lastEffectiveFollowUpAt_idx`(`lastEffectiveFollowUpAt` ASC),
+    INDEX `customer_lastOwnerId_idx`(`lastOwnerId` ASC),
+    INDEX `customer_ownerId_idx`(`ownerId` ASC),
+    INDEX `customer_ownershipMode_ownerId_idx`(`ownershipMode` ASC, `ownerId` ASC),
+    UNIQUE INDEX `customer_phone_key`(`phone` ASC),
+    INDEX `customer_status_idx`(`status` ASC),
     INDEX `cust_pool_reason_entered_idx`(`publicPoolReason` ASC, `publicPoolEnteredAt` ASC),
     INDEX `cust_pool_team_mode_entered_idx`(`publicPoolTeamId` ASC, `ownershipMode` ASC, `publicPoolEnteredAt` ASC),
     PRIMARY KEY (`id` ASC)
@@ -193,12 +193,12 @@ CREATE TABLE `customerownershipevent` (
     `claimLockedUntil` DATETIME(3) NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
-    INDEX `CustomerOwnershipEvent_actorId_createdAt_idx`(`actorId` ASC, `createdAt` ASC),
-    INDEX `CustomerOwnershipEvent_customerId_createdAt_idx`(`customerId` ASC, `createdAt` ASC),
-    INDEX `CustomerOwnershipEvent_fromOwnerId_fkey`(`fromOwnerId` ASC),
-    INDEX `CustomerOwnershipEvent_reason_createdAt_idx`(`reason` ASC, `createdAt` ASC),
-    INDEX `CustomerOwnershipEvent_teamId_createdAt_idx`(`teamId` ASC, `createdAt` ASC),
-    INDEX `CustomerOwnershipEvent_toOwnerId_fkey`(`toOwnerId` ASC),
+    INDEX `customerownershipevent_actorId_createdAt_idx`(`actorId` ASC, `createdAt` ASC),
+    INDEX `customerownershipevent_customerId_createdAt_idx`(`customerId` ASC, `createdAt` ASC),
+    INDEX `customerownershipevent_fromOwnerId_fkey`(`fromOwnerId` ASC),
+    INDEX `customerownershipevent_reason_createdAt_idx`(`reason` ASC, `createdAt` ASC),
+    INDEX `customerownershipevent_teamId_createdAt_idx`(`teamId` ASC, `createdAt` ASC),
+    INDEX `customerownershipevent_toOwnerId_fkey`(`toOwnerId` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -216,7 +216,7 @@ CREATE TABLE `dictionary_items` (
     `updatedAt` DATETIME(3) NOT NULL,
 
     UNIQUE INDEX `dictionary_items_typeId_code_key`(`typeId` ASC, `code` ASC),
-    INDEX `dictionary_items_typeId_isActive_sortOrder_idx`(`typeId` ASC, `isActive` ASC, `sortOrder` ASC),
+    INDEX `dictionary_items_typeId_isActive_sortorder_idx`(`typeId` ASC, `isActive` ASC, `sortOrder` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -232,7 +232,7 @@ CREATE TABLE `dictionary_types` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    INDEX `dictionary_types_categoryId_isActive_sortOrder_idx`(`categoryId` ASC, `isActive` ASC, `sortOrder` ASC),
+    INDEX `dictionary_types_categoryId_isActive_sortorder_idx`(`categoryId` ASC, `isActive` ASC, `sortOrder` ASC),
     UNIQUE INDEX `dictionary_types_code_key`(`code` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -254,10 +254,10 @@ CREATE TABLE `followuptask` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    INDEX `FollowUpTask_createdById_fkey`(`createdById` ASC),
-    INDEX `FollowUpTask_customerId_status_dueAt_idx`(`customerId` ASC, `status` ASC, `dueAt` ASC),
-    INDEX `FollowUpTask_leadId_status_dueAt_idx`(`leadId` ASC, `status` ASC, `dueAt` ASC),
-    INDEX `FollowUpTask_ownerId_status_dueAt_idx`(`ownerId` ASC, `status` ASC, `dueAt` ASC),
+    INDEX `followuptask_createdById_fkey`(`createdById` ASC),
+    INDEX `followuptask_customerId_status_dueAt_idx`(`customerId` ASC, `status` ASC, `dueAt` ASC),
+    INDEX `followuptask_leadId_status_dueAt_idx`(`leadId` ASC, `status` ASC, `dueAt` ASC),
+    INDEX `followuptask_ownerId_status_dueAt_idx`(`ownerId` ASC, `status` ASC, `dueAt` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -281,11 +281,11 @@ CREATE TABLE `giftrecord` (
     `updatedAt` DATETIME(3) NOT NULL,
     `receiverInfo` TEXT NULL,
 
-    INDEX `GiftRecord_customerId_createdAt_idx`(`customerId` ASC, `createdAt` ASC),
-    INDEX `GiftRecord_leadId_idx`(`leadId` ASC),
-    INDEX `GiftRecord_liveSessionId_idx`(`liveSessionId` ASC),
-    INDEX `GiftRecord_reviewStatus_shippingStatus_idx`(`reviewStatus` ASC, `shippingStatus` ASC),
-    INDEX `GiftRecord_salesId_idx`(`salesId` ASC),
+    INDEX `giftrecord_customerId_createdAt_idx`(`customerId` ASC, `createdAt` ASC),
+    INDEX `giftrecord_leadId_idx`(`leadId` ASC),
+    INDEX `giftrecord_liveSessionId_idx`(`liveSessionId` ASC),
+    INDEX `giftrecord_reviewStatus_shippingStatus_idx`(`reviewStatus` ASC, `shippingStatus` ASC),
+    INDEX `giftrecord_salesId_idx`(`salesId` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -313,12 +313,12 @@ CREATE TABLE `lead` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    INDEX `Lead_createdAt_idx`(`createdAt` ASC),
-    INDEX `Lead_customerId_idx`(`customerId` ASC),
-    INDEX `Lead_nextFollowUpAt_idx`(`nextFollowUpAt` ASC),
-    INDEX `Lead_ownerId_idx`(`ownerId` ASC),
-    INDEX `Lead_phone_idx`(`phone` ASC),
-    INDEX `Lead_status_idx`(`status` ASC),
+    INDEX `lead_createdAt_idx`(`createdAt` ASC),
+    INDEX `lead_customerId_idx`(`customerId` ASC),
+    INDEX `lead_nextFollowUpAt_idx`(`nextFollowUpAt` ASC),
+    INDEX `lead_ownerId_idx`(`ownerId` ASC),
+    INDEX `lead_phone_idx`(`phone` ASC),
+    INDEX `lead_status_idx`(`status` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -462,10 +462,10 @@ CREATE TABLE `leadassignment` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    INDEX `LeadAssignment_assignedById_fkey`(`assignedById` ASC),
-    INDEX `LeadAssignment_fromUserId_fkey`(`fromUserId` ASC),
-    INDEX `LeadAssignment_leadId_createdAt_idx`(`leadId` ASC, `createdAt` ASC),
-    INDEX `LeadAssignment_toUserId_createdAt_idx`(`toUserId` ASC, `createdAt` ASC),
+    INDEX `leadassignment_assignedById_fkey`(`assignedById` ASC),
+    INDEX `leadassignment_fromUserId_fkey`(`fromUserId` ASC),
+    INDEX `leadassignment_leadId_createdAt_idx`(`leadId` ASC, `createdAt` ASC),
+    INDEX `leadassignment_toUserId_createdAt_idx`(`toUserId` ASC, `createdAt` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -486,10 +486,10 @@ CREATE TABLE `liveinvitation` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    INDEX `LiveInvitation_customerId_idx`(`customerId` ASC),
-    INDEX `LiveInvitation_leadId_idx`(`leadId` ASC),
-    INDEX `LiveInvitation_liveSessionId_salesId_idx`(`liveSessionId` ASC, `salesId` ASC),
-    INDEX `LiveInvitation_salesId_fkey`(`salesId` ASC),
+    INDEX `liveinvitation_customerId_idx`(`customerId` ASC),
+    INDEX `liveinvitation_leadId_idx`(`leadId` ASC),
+    INDEX `liveinvitation_liveSessionId_salesId_idx`(`liveSessionId` ASC, `salesId` ASC),
+    INDEX `liveinvitation_salesId_fkey`(`salesId` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -508,8 +508,8 @@ CREATE TABLE `livesession` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    INDEX `LiveSession_createdById_idx`(`createdById` ASC),
-    INDEX `LiveSession_status_startAt_idx`(`status` ASC, `startAt` ASC),
+    INDEX `livesession_createdById_idx`(`createdById` ASC),
+    INDEX `livesession_status_startAt_idx`(`status` ASC, `startAt` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -531,10 +531,10 @@ CREATE TABLE `logisticsfollowuptask` (
     `updatedAt` DATETIME(3) NOT NULL,
     `tradeOrderId` VARCHAR(191) NULL,
 
-    INDEX `LogisticsFollowUpTask_customerId_status_nextTriggerAt_idx`(`customerId` ASC, `status` ASC, `nextTriggerAt` ASC),
-    INDEX `LogisticsFollowUpTask_ownerId_status_nextTriggerAt_idx`(`ownerId` ASC, `status` ASC, `nextTriggerAt` ASC),
-    INDEX `LogisticsFollowUpTask_salesOrderId_status_nextTriggerAt_idx`(`salesOrderId` ASC, `status` ASC, `nextTriggerAt` ASC),
-    INDEX `LogisticsFollowUpTask_shippingTaskId_status_nextTriggerAt_idx`(`shippingTaskId` ASC, `status` ASC, `nextTriggerAt` ASC),
+    INDEX `Logisticsfollowuptask_customerId_status_nextTriggerAt_idx`(`customerId` ASC, `status` ASC, `nextTriggerAt` ASC),
+    INDEX `Logisticsfollowuptask_ownerId_status_nextTriggerAt_idx`(`ownerId` ASC, `status` ASC, `nextTriggerAt` ASC),
+    INDEX `Logisticsfollowuptask_salesOrderId_status_nextTriggerAt_idx`(`salesOrderId` ASC, `status` ASC, `nextTriggerAt` ASC),
+    INDEX `Logisticsfollowuptask_shippingTaskId_status_nextTriggerAt_idx`(`shippingTaskId` ASC, `status` ASC, `nextTriggerAt` ASC),
     INDEX `lgfollow_trade_sales_next_idx`(`tradeOrderId` ASC, `salesOrderId` ASC, `status` ASC, `nextTriggerAt` ASC),
     INDEX `lgfollow_trade_ship_next_idx`(`tradeOrderId` ASC, `shippingTaskId` ASC, `status` ASC, `nextTriggerAt` ASC),
     PRIMARY KEY (`id` ASC)
@@ -554,9 +554,9 @@ CREATE TABLE `operationlog` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    INDEX `OperationLog_actorId_createdAt_idx`(`actorId` ASC, `createdAt` ASC),
-    INDEX `OperationLog_module_createdAt_idx`(`module` ASC, `createdAt` ASC),
-    INDEX `OperationLog_targetType_targetId_idx`(`targetType` ASC, `targetId` ASC),
+    INDEX `operationlog_actorId_createdAt_idx`(`actorId` ASC, `createdAt` ASC),
+    INDEX `operationlog_module_createdAt_idx`(`module` ASC, `createdAt` ASC),
+    INDEX `operationlog_targetType_targetId_idx`(`targetType` ASC, `targetId` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -580,10 +580,10 @@ CREATE TABLE `order` (
     `updatedAt` DATETIME(3) NOT NULL,
     `trackingNumber` VARCHAR(191) NULL,
 
-    INDEX `Order_customerId_createdAt_idx`(`customerId` ASC, `createdAt` ASC),
-    INDEX `Order_leadId_idx`(`leadId` ASC),
-    INDEX `Order_ownerId_idx`(`ownerId` ASC),
-    INDEX `Order_status_paymentStatus_shippingStatus_idx`(`status` ASC, `paymentStatus` ASC, `shippingStatus` ASC),
+    INDEX `order_customerId_createdAt_idx`(`customerId` ASC, `createdAt` ASC),
+    INDEX `order_leadId_idx`(`leadId` ASC),
+    INDEX `order_ownerId_idx`(`ownerId` ASC),
+    INDEX `order_status_paymentStatus_shippingStatus_idx`(`status` ASC, `paymentStatus` ASC, `shippingStatus` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -613,14 +613,14 @@ CREATE TABLE `paymentplan` (
     `updatedAt` DATETIME(3) NOT NULL,
     `tradeOrderId` VARCHAR(191) NULL,
 
-    INDEX `PaymentPlan_createdById_fkey`(`createdById` ASC),
-    INDEX `PaymentPlan_customerId_status_dueAt_idx`(`customerId` ASC, `status` ASC, `dueAt` ASC),
-    INDEX `PaymentPlan_giftRecordId_status_dueAt_idx`(`giftRecordId` ASC, `status` ASC, `dueAt` ASC),
-    INDEX `PaymentPlan_ownerId_status_dueAt_idx`(`ownerId` ASC, `status` ASC, `dueAt` ASC),
-    INDEX `PaymentPlan_salesOrderId_status_dueAt_idx`(`salesOrderId` ASC, `status` ASC, `dueAt` ASC),
-    INDEX `PaymentPlan_shippingTaskId_status_dueAt_idx`(`shippingTaskId` ASC, `status` ASC, `dueAt` ASC),
-    INDEX `PaymentPlan_sourceType_createdAt_idx`(`sourceType` ASC, `createdAt` ASC),
-    INDEX `PaymentPlan_updatedById_fkey`(`updatedById` ASC),
+    INDEX `paymentplan_createdById_fkey`(`createdById` ASC),
+    INDEX `paymentplan_customerId_status_dueAt_idx`(`customerId` ASC, `status` ASC, `dueAt` ASC),
+    INDEX `paymentplan_giftRecordId_status_dueAt_idx`(`giftRecordId` ASC, `status` ASC, `dueAt` ASC),
+    INDEX `paymentplan_ownerId_status_dueAt_idx`(`ownerId` ASC, `status` ASC, `dueAt` ASC),
+    INDEX `paymentplan_salesOrderId_status_dueAt_idx`(`salesOrderId` ASC, `status` ASC, `dueAt` ASC),
+    INDEX `paymentplan_shippingTaskId_status_dueAt_idx`(`shippingTaskId` ASC, `status` ASC, `dueAt` ASC),
+    INDEX `paymentplan_sourceType_createdAt_idx`(`sourceType` ASC, `createdAt` ASC),
+    INDEX `paymentplan_updatedById_fkey`(`updatedById` ASC),
     INDEX `payplan_trade_sales_due_idx`(`tradeOrderId` ASC, `salesOrderId` ASC, `status` ASC, `dueAt` ASC),
     INDEX `payplan_trade_source_due_idx`(`tradeOrderId` ASC, `sourceType` ASC, `status` ASC, `dueAt` ASC),
     PRIMARY KEY (`id` ASC)
@@ -649,15 +649,15 @@ CREATE TABLE `paymentrecord` (
     `updatedAt` DATETIME(3) NOT NULL,
     `tradeOrderId` VARCHAR(191) NULL,
 
-    INDEX `PaymentRecord_confirmedById_status_occurredAt_idx`(`confirmedById` ASC, `status` ASC, `occurredAt` ASC),
-    INDEX `PaymentRecord_customerId_status_occurredAt_idx`(`customerId` ASC, `status` ASC, `occurredAt` ASC),
-    INDEX `PaymentRecord_giftRecordId_status_occurredAt_idx`(`giftRecordId` ASC, `status` ASC, `occurredAt` ASC),
-    INDEX `PaymentRecord_ownerId_status_occurredAt_idx`(`ownerId` ASC, `status` ASC, `occurredAt` ASC),
-    INDEX `PaymentRecord_paymentPlanId_status_occurredAt_idx`(`paymentPlanId` ASC, `status` ASC, `occurredAt` ASC),
-    INDEX `PaymentRecord_salesOrderId_status_occurredAt_idx`(`salesOrderId` ASC, `status` ASC, `occurredAt` ASC),
-    INDEX `PaymentRecord_shippingTaskId_status_occurredAt_idx`(`shippingTaskId` ASC, `status` ASC, `occurredAt` ASC),
-    INDEX `PaymentRecord_sourceType_occurredAt_idx`(`sourceType` ASC, `occurredAt` ASC),
-    INDEX `PaymentRecord_submittedById_status_occurredAt_idx`(`submittedById` ASC, `status` ASC, `occurredAt` ASC),
+    INDEX `paymentrecord_confirmedById_status_occurredAt_idx`(`confirmedById` ASC, `status` ASC, `occurredAt` ASC),
+    INDEX `paymentrecord_customerId_status_occurredAt_idx`(`customerId` ASC, `status` ASC, `occurredAt` ASC),
+    INDEX `paymentrecord_giftRecordId_status_occurredAt_idx`(`giftRecordId` ASC, `status` ASC, `occurredAt` ASC),
+    INDEX `paymentrecord_ownerId_status_occurredAt_idx`(`ownerId` ASC, `status` ASC, `occurredAt` ASC),
+    INDEX `paymentrecord_paymentPlanId_status_occurredAt_idx`(`paymentPlanId` ASC, `status` ASC, `occurredAt` ASC),
+    INDEX `paymentrecord_salesOrderId_status_occurredAt_idx`(`salesOrderId` ASC, `status` ASC, `occurredAt` ASC),
+    INDEX `paymentrecord_shippingTaskId_status_occurredAt_idx`(`shippingTaskId` ASC, `status` ASC, `occurredAt` ASC),
+    INDEX `paymentrecord_sourceType_occurredAt_idx`(`sourceType` ASC, `occurredAt` ASC),
+    INDEX `paymentrecord_submittedById_status_occurredAt_idx`(`submittedById` ASC, `status` ASC, `occurredAt` ASC),
     INDEX `payrec_trade_sales_occ_idx`(`tradeOrderId` ASC, `salesOrderId` ASC, `status` ASC, `occurredAt` ASC),
     INDEX `payrec_trade_source_occ_idx`(`tradeOrderId` ASC, `sourceType` ASC, `status` ASC, `occurredAt` ASC),
     PRIMARY KEY (`id` ASC)
@@ -676,10 +676,10 @@ CREATE TABLE `product` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    UNIQUE INDEX `Product_code_key`(`code` ASC),
-    INDEX `Product_createdById_fkey`(`createdById` ASC),
-    INDEX `Product_supplierId_enabled_createdAt_idx`(`supplierId` ASC, `enabled` ASC, `createdAt` ASC),
-    INDEX `Product_updatedById_fkey`(`updatedById` ASC),
+    UNIQUE INDEX `product_code_key`(`code` ASC),
+    INDEX `product_createdById_fkey`(`createdById` ASC),
+    INDEX `product_supplierId_enabled_createdAt_idx`(`supplierId` ASC, `enabled` ASC, `createdAt` ASC),
+    INDEX `product_updatedById_fkey`(`updatedById` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -699,8 +699,8 @@ CREATE TABLE `productbundle` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    UNIQUE INDEX `ProductBundle_code_key`(`code` ASC),
-    INDEX `ProductBundle_status_enabled_createdAt_idx`(`status` ASC, `enabled` ASC, `createdAt` ASC),
+    UNIQUE INDEX `productbundle_code_key`(`code` ASC),
+    INDEX `productbundle_status_enabled_createdAt_idx`(`status` ASC, `enabled` ASC, `createdAt` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -718,8 +718,8 @@ CREATE TABLE `productbundleitem` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    UNIQUE INDEX `ProductBundleItem_bundleId_lineNo_key`(`bundleId` ASC, `lineNo` ASC),
-    INDEX `ProductBundleItem_bundleId_sortOrder_idx`(`bundleId` ASC, `sortOrder` ASC),
+    UNIQUE INDEX `productbundleitem_bundleId_lineNo_key`(`bundleId` ASC, `lineNo` ASC),
+    INDEX `productbundleitem_bundleId_sortorder_idx`(`bundleId` ASC, `sortOrder` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -739,8 +739,8 @@ CREATE TABLE `productsku` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    INDEX `ProductSku_productId_enabled_createdAt_idx`(`productId` ASC, `enabled` ASC, `createdAt` ASC),
-    UNIQUE INDEX `ProductSku_skuCode_key`(`skuCode` ASC),
+    INDEX `productsku_productId_enabled_createdAt_idx`(`productId` ASC, `enabled` ASC, `createdAt` ASC),
+    UNIQUE INDEX `productsku_skuCode_key`(`skuCode` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -754,8 +754,8 @@ CREATE TABLE `role` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    UNIQUE INDEX `Role_code_key`(`code` ASC),
-    UNIQUE INDEX `Role_name_key`(`name` ASC),
+    UNIQUE INDEX `role_code_key`(`code` ASC),
+    UNIQUE INDEX `role_name_key`(`name` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -798,18 +798,18 @@ CREATE TABLE `salesorder` (
     `supplierSequence` INTEGER NULL,
     `subOrderStatus` ENUM('PENDING_PARENT_REVIEW', 'READY_FOR_FULFILLMENT', 'IN_FULFILLMENT', 'COMPLETED', 'CANCELED') NULL,
 
-    INDEX `SalesOrder_createdById_fkey`(`createdById` ASC),
-    INDEX `SalesOrder_customerId_createdAt_idx`(`customerId` ASC, `createdAt` ASC),
-    UNIQUE INDEX `SalesOrder_orderNo_key`(`orderNo` ASC),
-    INDEX `SalesOrder_ownerId_reviewStatus_createdAt_idx`(`ownerId` ASC, `reviewStatus` ASC, `createdAt` ASC),
-    INDEX `SalesOrder_paymentMode_createdAt_idx`(`paymentMode` ASC, `createdAt` ASC),
-    INDEX `SalesOrder_paymentScheme_createdAt_idx`(`paymentScheme` ASC, `createdAt` ASC),
-    INDEX `SalesOrder_reviewStatus_createdAt_idx`(`reviewStatus` ASC, `createdAt` ASC),
-    INDEX `SalesOrder_reviewerId_fkey`(`reviewerId` ASC),
-    INDEX `SalesOrder_supplierId_reviewStatus_createdAt_idx`(`supplierId` ASC, `reviewStatus` ASC, `createdAt` ASC),
-    INDEX `SalesOrder_tradeOrderId_createdAt_idx`(`tradeOrderId` ASC, `createdAt` ASC),
-    UNIQUE INDEX `SalesOrder_tradeOrderId_supplierId_key`(`tradeOrderId` ASC, `supplierId` ASC),
-    INDEX `SalesOrder_updatedById_fkey`(`updatedById` ASC),
+    INDEX `salesorder_createdById_fkey`(`createdById` ASC),
+    INDEX `salesorder_customerId_createdAt_idx`(`customerId` ASC, `createdAt` ASC),
+    UNIQUE INDEX `salesorder_orderNo_key`(`orderNo` ASC),
+    INDEX `salesorder_ownerId_reviewStatus_createdAt_idx`(`ownerId` ASC, `reviewStatus` ASC, `createdAt` ASC),
+    INDEX `salesorder_paymentMode_createdAt_idx`(`paymentMode` ASC, `createdAt` ASC),
+    INDEX `salesorder_paymentScheme_createdAt_idx`(`paymentScheme` ASC, `createdAt` ASC),
+    INDEX `salesorder_reviewStatus_createdAt_idx`(`reviewStatus` ASC, `createdAt` ASC),
+    INDEX `salesorder_reviewerId_fkey`(`reviewerId` ASC),
+    INDEX `salesorder_supplierId_reviewStatus_createdAt_idx`(`supplierId` ASC, `reviewStatus` ASC, `createdAt` ASC),
+    INDEX `salesorder_tradeOrderId_createdAt_idx`(`tradeOrderId` ASC, `createdAt` ASC),
+    UNIQUE INDEX `salesorder_tradeOrderId_supplierId_key`(`tradeOrderId` ASC, `supplierId` ASC),
+    INDEX `salesorder_updatedById_fkey`(`updatedById` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -822,7 +822,7 @@ CREATE TABLE `salesordergiftitem` (
     `remark` TEXT NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
-    INDEX `SalesOrderGiftItem_salesOrderId_createdAt_idx`(`salesOrderId` ASC, `createdAt` ASC),
+    INDEX `salesordergiftitem_salesOrderId_createdAt_idx`(`salesOrderId` ASC, `createdAt` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -850,12 +850,12 @@ CREATE TABLE `salesorderitem` (
     `exportDisplayNameSnapshot` VARCHAR(191) NULL,
     `discountAmount` DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
 
-    INDEX `SalesOrderItem_productId_idx`(`productId` ASC),
-    INDEX `SalesOrderItem_salesOrderId_createdAt_idx`(`salesOrderId` ASC, `createdAt` ASC),
-    INDEX `SalesOrderItem_skuId_idx`(`skuId` ASC),
-    INDEX `SalesOrderItem_tradeOrderId_salesOrderId_idx`(`tradeOrderId` ASC, `salesOrderId` ASC),
-    INDEX `SalesOrderItem_tradeOrderItemComponentId_idx`(`tradeOrderItemComponentId` ASC),
-    INDEX `SalesOrderItem_tradeOrderItemId_idx`(`tradeOrderItemId` ASC),
+    INDEX `salesorderitem_productId_idx`(`productId` ASC),
+    INDEX `salesorderitem_salesOrderId_createdAt_idx`(`salesOrderId` ASC, `createdAt` ASC),
+    INDEX `salesorderitem_skuId_idx`(`skuId` ASC),
+    INDEX `salesorderitem_tradeOrderId_salesOrderId_idx`(`tradeOrderId` ASC, `salesOrderId` ASC),
+    INDEX `salesorderitem_tradeOrderItemComponentId_idx`(`tradeOrderItemComponentId` ASC),
+    INDEX `salesorderitem_tradeOrderItemId_idx`(`tradeOrderItemId` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -875,9 +875,9 @@ CREATE TABLE `shippingexportbatch` (
     `subOrderCount` INTEGER NOT NULL DEFAULT 0,
     `tradeOrderCount` INTEGER NOT NULL DEFAULT 0,
 
-    UNIQUE INDEX `ShippingExportBatch_exportNo_key`(`exportNo` ASC),
-    INDEX `ShippingExportBatch_exportedById_exportedAt_idx`(`exportedById` ASC, `exportedAt` ASC),
-    INDEX `ShippingExportBatch_supplierId_exportedAt_idx`(`supplierId` ASC, `exportedAt` ASC),
+    UNIQUE INDEX `shippingexportbatch_exportNo_key`(`exportNo` ASC),
+    INDEX `shippingexportbatch_exportedById_exportedAt_idx`(`exportedById` ASC, `exportedAt` ASC),
+    INDEX `shippingexportbatch_supplierId_exportedAt_idx`(`supplierId` ASC, `exportedAt` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -904,10 +904,10 @@ CREATE TABLE `shippingexportline` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    UNIQUE INDEX `ShippingExportLine_exportBatchId_rowNo_key`(`exportBatchId` ASC, `rowNo` ASC),
-    INDEX `ShippingExportLine_salesOrderId_fkey`(`salesOrderId` ASC),
-    INDEX `ShippingExportLine_shippingTaskId_idx`(`shippingTaskId` ASC),
-    INDEX `ShippingExportLine_tradeOrderId_salesOrderId_idx`(`tradeOrderId` ASC, `salesOrderId` ASC),
+    UNIQUE INDEX `shippingexportline_exportBatchId_rowNo_key`(`exportBatchId` ASC, `rowNo` ASC),
+    INDEX `shippingexportline_salesOrderId_fkey`(`salesOrderId` ASC),
+    INDEX `shippingexportline_shippingTaskId_idx`(`shippingTaskId` ASC),
+    INDEX `shippingexportline_tradeOrderId_salesOrderId_idx`(`tradeOrderId` ASC, `salesOrderId` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -943,14 +943,14 @@ CREATE TABLE `shippingtask` (
     `receiverPhoneSnapshot` VARCHAR(191) NULL,
     `receiverAddressSnapshot` TEXT NULL,
 
-    INDEX `ShippingTask_assigneeId_status_createdAt_idx`(`assigneeId` ASC, `status` ASC, `createdAt` ASC),
-    INDEX `ShippingTask_customerId_status_createdAt_idx`(`customerId` ASC, `status` ASC, `createdAt` ASC),
-    INDEX `ShippingTask_exportBatchId_idx`(`exportBatchId` ASC),
-    UNIQUE INDEX `ShippingTask_giftRecordId_key`(`giftRecordId` ASC),
-    UNIQUE INDEX `ShippingTask_orderId_key`(`orderId` ASC),
-    UNIQUE INDEX `ShippingTask_salesOrderId_key`(`salesOrderId` ASC),
-    INDEX `ShippingTask_supplierId_reportStatus_shippingStatus_createdA_idx`(`supplierId` ASC, `reportStatus` ASC, `shippingStatus` ASC, `createdAt` ASC),
-    INDEX `ShippingTask_trackingNumber_idx`(`trackingNumber` ASC),
+    INDEX `shippingtask_assigneeId_status_createdAt_idx`(`assigneeId` ASC, `status` ASC, `createdAt` ASC),
+    INDEX `shippingtask_customerId_status_createdAt_idx`(`customerId` ASC, `status` ASC, `createdAt` ASC),
+    INDEX `shippingtask_exportBatchId_idx`(`exportBatchId` ASC),
+    UNIQUE INDEX `shippingtask_giftRecordId_key`(`giftRecordId` ASC),
+    UNIQUE INDEX `shippingtask_orderId_key`(`orderId` ASC),
+    UNIQUE INDEX `shippingtask_salesOrderId_key`(`salesOrderId` ASC),
+    INDEX `shippingtask_supplierId_reportStatus_shippingStatus_createdA_idx`(`supplierId` ASC, `reportStatus` ASC, `shippingStatus` ASC, `createdAt` ASC),
+    INDEX `shippingtask_trackingNumber_idx`(`trackingNumber` ASC),
     INDEX `shiptask_trade_scope_idx`(`tradeOrderId` ASC, `supplierId` ASC, `reportStatus` ASC, `shippingStatus` ASC, `createdAt` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -969,10 +969,10 @@ CREATE TABLE `supplier` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    UNIQUE INDEX `Supplier_code_key`(`code` ASC),
-    INDEX `Supplier_createdById_fkey`(`createdById` ASC),
-    INDEX `Supplier_enabled_createdAt_idx`(`enabled` ASC, `createdAt` ASC),
-    INDEX `Supplier_updatedById_fkey`(`updatedById` ASC),
+    UNIQUE INDEX `supplier_code_key`(`code` ASC),
+    INDEX `supplier_createdById_fkey`(`createdById` ASC),
+    INDEX `supplier_enabled_createdAt_idx`(`enabled` ASC, `createdAt` ASC),
+    INDEX `supplier_updatedById_fkey`(`updatedById` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -989,7 +989,7 @@ CREATE TABLE `tag_categories` (
     `updatedAt` DATETIME(3) NOT NULL,
 
     UNIQUE INDEX `tag_categories_code_key`(`code` ASC),
-    INDEX `tag_categories_groupId_isActive_sortOrder_idx`(`groupId` ASC, `isActive` ASC, `sortOrder` ASC),
+    INDEX `tag_categories_groupId_isActive_sortorder_idx`(`groupId` ASC, `isActive` ASC, `sortOrder` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -1005,7 +1005,7 @@ CREATE TABLE `tag_groups` (
     `updatedAt` DATETIME(3) NOT NULL,
 
     UNIQUE INDEX `tag_groups_code_key`(`code` ASC),
-    INDEX `tag_groups_isActive_sortOrder_idx`(`isActive` ASC, `sortOrder` ASC),
+    INDEX `tag_groups_isActive_sortorder_idx`(`isActive` ASC, `sortOrder` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -1023,9 +1023,9 @@ CREATE TABLE `tags` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    INDEX `tags_categoryId_isActive_sortOrder_idx`(`categoryId` ASC, `isActive` ASC, `sortOrder` ASC),
+    INDEX `tags_categoryId_isActive_sortorder_idx`(`categoryId` ASC, `isActive` ASC, `sortOrder` ASC),
     UNIQUE INDEX `tags_code_key`(`code` ASC),
-    INDEX `tags_groupId_isActive_sortOrder_idx`(`groupId` ASC, `isActive` ASC, `sortOrder` ASC),
+    INDEX `tags_groupId_isActive_sortorder_idx`(`groupId` ASC, `isActive` ASC, `sortOrder` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -1107,10 +1107,10 @@ CREATE TABLE `tradeorder` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    INDEX `TradeOrder_customerId_createdAt_idx`(`customerId` ASC, `createdAt` ASC),
-    INDEX `TradeOrder_ownerId_reviewStatus_createdAt_idx`(`ownerId` ASC, `reviewStatus` ASC, `createdAt` ASC),
-    INDEX `TradeOrder_reviewStatus_tradeStatus_createdAt_idx`(`reviewStatus` ASC, `tradeStatus` ASC, `createdAt` ASC),
-    UNIQUE INDEX `TradeOrder_tradeNo_key`(`tradeNo` ASC),
+    INDEX `tradeorder_customerId_createdAt_idx`(`customerId` ASC, `createdAt` ASC),
+    INDEX `tradeorder_ownerId_reviewStatus_createdAt_idx`(`ownerId` ASC, `reviewStatus` ASC, `createdAt` ASC),
+    INDEX `tradeorder_reviewStatus_tradeStatus_createdAt_idx`(`reviewStatus` ASC, `tradeStatus` ASC, `createdAt` ASC),
+    UNIQUE INDEX `tradeorder_tradeNo_key`(`tradeNo` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -1141,9 +1141,9 @@ CREATE TABLE `tradeorderitem` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    INDEX `TradeOrderItem_bundleId_idx`(`bundleId` ASC),
-    INDEX `TradeOrderItem_tradeOrderId_itemType_createdAt_idx`(`tradeOrderId` ASC, `itemType` ASC, `createdAt` ASC),
-    UNIQUE INDEX `TradeOrderItem_tradeOrderId_lineNo_key`(`tradeOrderId` ASC, `lineNo` ASC),
+    INDEX `tradeorderitem_bundleId_idx`(`bundleId` ASC),
+    INDEX `tradeorderitem_tradeOrderId_itemType_createdAt_idx`(`tradeOrderId` ASC, `itemType` ASC, `createdAt` ASC),
+    UNIQUE INDEX `tradeorderitem_tradeOrderId_lineNo_key`(`tradeOrderId` ASC, `lineNo` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -1172,8 +1172,8 @@ CREATE TABLE `tradeorderitemcomponent` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    INDEX `TradeOrderItemComponent_tradeOrderId_supplierId_createdAt_idx`(`tradeOrderId` ASC, `supplierId` ASC, `createdAt` ASC),
-    UNIQUE INDEX `TradeOrderItemComponent_tradeOrderItemId_componentSeq_key`(`tradeOrderItemId` ASC, `componentSeq` ASC),
+    INDEX `tradeorderitemcomponent_tradeOrderId_supplierId_createdAt_idx`(`tradeOrderId` ASC, `supplierId` ASC, `createdAt` ASC),
+    UNIQUE INDEX `tradeorderitemcomponent_tradeOrderItemId_componentSeq_key`(`tradeOrderItemId` ASC, `componentSeq` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -1198,14 +1198,14 @@ CREATE TABLE `user` (
     `userStatus` ENUM('ACTIVE', 'INACTIVE') NOT NULL DEFAULT 'ACTIVE',
     `avatarPath` VARCHAR(191) NULL,
 
-    INDEX `User_disabledById_idx`(`disabledById` ASC),
-    INDEX `User_invitedById_idx`(`invitedById` ASC),
-    UNIQUE INDEX `User_phone_key`(`phone` ASC),
-    INDEX `User_roleId_idx`(`roleId` ASC),
-    INDEX `User_supervisorId_idx`(`supervisorId` ASC),
-    INDEX `User_teamId_idx`(`teamId` ASC),
-    INDEX `User_userStatus_idx`(`userStatus` ASC),
-    UNIQUE INDEX `User_username_key`(`username` ASC),
+    INDEX `user_disabledById_idx`(`disabledById` ASC),
+    INDEX `user_invitedById_idx`(`invitedById` ASC),
+    UNIQUE INDEX `user_phone_key`(`phone` ASC),
+    INDEX `user_roleId_idx`(`roleId` ASC),
+    INDEX `user_supervisorId_idx`(`supervisorId` ASC),
+    INDEX `user_teamId_idx`(`teamId` ASC),
+    INDEX `user_userStatus_idx`(`userStatus` ASC),
+    UNIQUE INDEX `user_username_key`(`username` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -1226,77 +1226,77 @@ CREATE TABLE `wechatrecord` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    INDEX `WechatRecord_customerId_createdAt_idx`(`customerId` ASC, `createdAt` ASC),
-    INDEX `WechatRecord_leadId_createdAt_idx`(`leadId` ASC, `createdAt` ASC),
-    INDEX `WechatRecord_salesId_createdAt_idx`(`salesId` ASC, `createdAt` ASC),
+    INDEX `wechatrecord_customerId_createdAt_idx`(`customerId` ASC, `createdAt` ASC),
+    INDEX `wechatrecord_leadId_createdAt_idx`(`leadId` ASC, `createdAt` ASC),
+    INDEX `wechatrecord_salesId_createdAt_idx`(`salesId` ASC, `createdAt` ASC),
     PRIMARY KEY (`id` ASC)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- AddForeignKey
-ALTER TABLE `callrecord` ADD CONSTRAINT `CallRecord_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `callrecord` ADD CONSTRAINT `callrecord_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `callrecord` ADD CONSTRAINT `CallRecord_leadId_fkey` FOREIGN KEY (`leadId`) REFERENCES `lead`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `callrecord` ADD CONSTRAINT `callrecord_leadId_fkey` FOREIGN KEY (`leadId`) REFERENCES `lead`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `callrecord` ADD CONSTRAINT `CallRecord_salesId_fkey` FOREIGN KEY (`salesId`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `callrecord` ADD CONSTRAINT `callrecord_salesId_fkey` FOREIGN KEY (`salesId`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `codcollectionrecord` ADD CONSTRAINT `CodCollectionRecord_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `codcollectionrecord` ADD CONSTRAINT `codcollectionrecord_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `codcollectionrecord` ADD CONSTRAINT `CodCollectionRecord_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `codcollectionrecord` ADD CONSTRAINT `codcollectionrecord_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `codcollectionrecord` ADD CONSTRAINT `CodCollectionRecord_paymentPlanId_fkey` FOREIGN KEY (`paymentPlanId`) REFERENCES `paymentplan`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `codcollectionrecord` ADD CONSTRAINT `codcollectionrecord_paymentPlanId_fkey` FOREIGN KEY (`paymentPlanId`) REFERENCES `paymentplan`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `codcollectionrecord` ADD CONSTRAINT `CodCollectionRecord_paymentRecordId_fkey` FOREIGN KEY (`paymentRecordId`) REFERENCES `paymentrecord`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `codcollectionrecord` ADD CONSTRAINT `codcollectionrecord_paymentRecordId_fkey` FOREIGN KEY (`paymentRecordId`) REFERENCES `paymentrecord`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `codcollectionrecord` ADD CONSTRAINT `CodCollectionRecord_salesOrderId_fkey` FOREIGN KEY (`salesOrderId`) REFERENCES `salesorder`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `codcollectionrecord` ADD CONSTRAINT `codcollectionrecord_salesOrderId_fkey` FOREIGN KEY (`salesOrderId`) REFERENCES `salesorder`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `codcollectionrecord` ADD CONSTRAINT `CodCollectionRecord_shippingTaskId_fkey` FOREIGN KEY (`shippingTaskId`) REFERENCES `shippingtask`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `codcollectionrecord` ADD CONSTRAINT `codcollectionrecord_shippingTaskId_fkey` FOREIGN KEY (`shippingTaskId`) REFERENCES `shippingtask`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `codcollectionrecord` ADD CONSTRAINT `CodCollectionRecord_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `codcollectionrecord` ADD CONSTRAINT `codcollectionrecord_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `collectiontask` ADD CONSTRAINT `CollectionTask_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `collectiontask` ADD CONSTRAINT `collectiontask_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `collectiontask` ADD CONSTRAINT `CollectionTask_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `collectiontask` ADD CONSTRAINT `collectiontask_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `collectiontask` ADD CONSTRAINT `CollectionTask_giftRecordId_fkey` FOREIGN KEY (`giftRecordId`) REFERENCES `giftrecord`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `collectiontask` ADD CONSTRAINT `collectiontask_giftRecordId_fkey` FOREIGN KEY (`giftRecordId`) REFERENCES `giftrecord`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `collectiontask` ADD CONSTRAINT `CollectionTask_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `collectiontask` ADD CONSTRAINT `collectiontask_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `collectiontask` ADD CONSTRAINT `CollectionTask_paymentPlanId_fkey` FOREIGN KEY (`paymentPlanId`) REFERENCES `paymentplan`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `collectiontask` ADD CONSTRAINT `collectiontask_paymentPlanId_fkey` FOREIGN KEY (`paymentPlanId`) REFERENCES `paymentplan`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `collectiontask` ADD CONSTRAINT `CollectionTask_salesOrderId_fkey` FOREIGN KEY (`salesOrderId`) REFERENCES `salesorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `collectiontask` ADD CONSTRAINT `collectiontask_salesOrderId_fkey` FOREIGN KEY (`salesOrderId`) REFERENCES `salesorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `collectiontask` ADD CONSTRAINT `CollectionTask_shippingTaskId_fkey` FOREIGN KEY (`shippingTaskId`) REFERENCES `shippingtask`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `collectiontask` ADD CONSTRAINT `collectiontask_shippingTaskId_fkey` FOREIGN KEY (`shippingTaskId`) REFERENCES `shippingtask`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `collectiontask` ADD CONSTRAINT `CollectionTask_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `collectiontask` ADD CONSTRAINT `collectiontask_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `collectiontask` ADD CONSTRAINT `CollectionTask_updatedById_fkey` FOREIGN KEY (`updatedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `collectiontask` ADD CONSTRAINT `collectiontask_updatedById_fkey` FOREIGN KEY (`updatedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `customer` ADD CONSTRAINT `Customer_lastOwnerId_fkey` FOREIGN KEY (`lastOwnerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `customer` ADD CONSTRAINT `customer_lastOwnerId_fkey` FOREIGN KEY (`lastOwnerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `customer` ADD CONSTRAINT `Customer_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `customer` ADD CONSTRAINT `customer_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `customer` ADD CONSTRAINT `Customer_publicPoolTeamId_fkey` FOREIGN KEY (`publicPoolTeamId`) REFERENCES `teams`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `customer` ADD CONSTRAINT `customer_publicPoolTeamId_fkey` FOREIGN KEY (`publicPoolTeamId`) REFERENCES `teams`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `customer_tags` ADD CONSTRAINT `customer_tags_assignedById_fkey` FOREIGN KEY (`assignedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
@@ -1308,19 +1308,19 @@ ALTER TABLE `customer_tags` ADD CONSTRAINT `customer_tags_customerId_fkey` FOREI
 ALTER TABLE `customer_tags` ADD CONSTRAINT `customer_tags_tagId_fkey` FOREIGN KEY (`tagId`) REFERENCES `tags`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `customerownershipevent` ADD CONSTRAINT `CustomerOwnershipEvent_actorId_fkey` FOREIGN KEY (`actorId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `customerownershipevent` ADD CONSTRAINT `customerownershipevent_actorId_fkey` FOREIGN KEY (`actorId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `customerownershipevent` ADD CONSTRAINT `CustomerOwnershipEvent_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `customerownershipevent` ADD CONSTRAINT `customerownershipevent_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `customerownershipevent` ADD CONSTRAINT `CustomerOwnershipEvent_fromOwnerId_fkey` FOREIGN KEY (`fromOwnerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `customerownershipevent` ADD CONSTRAINT `customerownershipevent_fromOwnerId_fkey` FOREIGN KEY (`fromOwnerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `customerownershipevent` ADD CONSTRAINT `CustomerOwnershipEvent_teamId_fkey` FOREIGN KEY (`teamId`) REFERENCES `teams`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `customerownershipevent` ADD CONSTRAINT `customerownershipevent_teamId_fkey` FOREIGN KEY (`teamId`) REFERENCES `teams`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `customerownershipevent` ADD CONSTRAINT `CustomerOwnershipEvent_toOwnerId_fkey` FOREIGN KEY (`toOwnerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `customerownershipevent` ADD CONSTRAINT `customerownershipevent_toOwnerId_fkey` FOREIGN KEY (`toOwnerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `dictionary_items` ADD CONSTRAINT `dictionary_items_typeId_fkey` FOREIGN KEY (`typeId`) REFERENCES `dictionary_types`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -1329,34 +1329,34 @@ ALTER TABLE `dictionary_items` ADD CONSTRAINT `dictionary_items_typeId_fkey` FOR
 ALTER TABLE `dictionary_types` ADD CONSTRAINT `dictionary_types_categoryId_fkey` FOREIGN KEY (`categoryId`) REFERENCES `categories`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `followuptask` ADD CONSTRAINT `FollowUpTask_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `followuptask` ADD CONSTRAINT `followuptask_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `followuptask` ADD CONSTRAINT `FollowUpTask_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `followuptask` ADD CONSTRAINT `followuptask_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `followuptask` ADD CONSTRAINT `FollowUpTask_leadId_fkey` FOREIGN KEY (`leadId`) REFERENCES `lead`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `followuptask` ADD CONSTRAINT `followuptask_leadId_fkey` FOREIGN KEY (`leadId`) REFERENCES `lead`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `followuptask` ADD CONSTRAINT `FollowUpTask_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `followuptask` ADD CONSTRAINT `followuptask_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `giftrecord` ADD CONSTRAINT `GiftRecord_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `giftrecord` ADD CONSTRAINT `giftrecord_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `giftrecord` ADD CONSTRAINT `GiftRecord_leadId_fkey` FOREIGN KEY (`leadId`) REFERENCES `lead`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `giftrecord` ADD CONSTRAINT `giftrecord_leadId_fkey` FOREIGN KEY (`leadId`) REFERENCES `lead`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `giftrecord` ADD CONSTRAINT `GiftRecord_liveSessionId_fkey` FOREIGN KEY (`liveSessionId`) REFERENCES `livesession`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `giftrecord` ADD CONSTRAINT `giftrecord_liveSessionId_fkey` FOREIGN KEY (`liveSessionId`) REFERENCES `livesession`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `giftrecord` ADD CONSTRAINT `GiftRecord_salesId_fkey` FOREIGN KEY (`salesId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `giftrecord` ADD CONSTRAINT `giftrecord_salesId_fkey` FOREIGN KEY (`salesId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `lead` ADD CONSTRAINT `Lead_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `lead` ADD CONSTRAINT `lead_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `lead` ADD CONSTRAINT `Lead_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `lead` ADD CONSTRAINT `lead_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `lead_customer_merge_logs` ADD CONSTRAINT `lead_customer_merge_logs_batchId_fkey` FOREIGN KEY (`batchId`) REFERENCES `lead_import_batches`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -1398,214 +1398,214 @@ ALTER TABLE `lead_tags` ADD CONSTRAINT `lead_tags_leadId_fkey` FOREIGN KEY (`lea
 ALTER TABLE `lead_tags` ADD CONSTRAINT `lead_tags_tagId_fkey` FOREIGN KEY (`tagId`) REFERENCES `tags`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `leadassignment` ADD CONSTRAINT `LeadAssignment_assignedById_fkey` FOREIGN KEY (`assignedById`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `leadassignment` ADD CONSTRAINT `leadassignment_assignedById_fkey` FOREIGN KEY (`assignedById`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `leadassignment` ADD CONSTRAINT `LeadAssignment_fromUserId_fkey` FOREIGN KEY (`fromUserId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `leadassignment` ADD CONSTRAINT `leadassignment_fromUserId_fkey` FOREIGN KEY (`fromUserId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `leadassignment` ADD CONSTRAINT `LeadAssignment_leadId_fkey` FOREIGN KEY (`leadId`) REFERENCES `lead`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `leadassignment` ADD CONSTRAINT `leadassignment_leadId_fkey` FOREIGN KEY (`leadId`) REFERENCES `lead`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `leadassignment` ADD CONSTRAINT `LeadAssignment_toUserId_fkey` FOREIGN KEY (`toUserId`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `leadassignment` ADD CONSTRAINT `leadassignment_toUserId_fkey` FOREIGN KEY (`toUserId`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `liveinvitation` ADD CONSTRAINT `LiveInvitation_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `liveinvitation` ADD CONSTRAINT `liveinvitation_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `liveinvitation` ADD CONSTRAINT `LiveInvitation_leadId_fkey` FOREIGN KEY (`leadId`) REFERENCES `lead`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `liveinvitation` ADD CONSTRAINT `liveinvitation_leadId_fkey` FOREIGN KEY (`leadId`) REFERENCES `lead`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `liveinvitation` ADD CONSTRAINT `LiveInvitation_liveSessionId_fkey` FOREIGN KEY (`liveSessionId`) REFERENCES `livesession`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `liveinvitation` ADD CONSTRAINT `liveinvitation_liveSessionId_fkey` FOREIGN KEY (`liveSessionId`) REFERENCES `livesession`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `liveinvitation` ADD CONSTRAINT `LiveInvitation_salesId_fkey` FOREIGN KEY (`salesId`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `liveinvitation` ADD CONSTRAINT `liveinvitation_salesId_fkey` FOREIGN KEY (`salesId`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `livesession` ADD CONSTRAINT `LiveSession_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `livesession` ADD CONSTRAINT `livesession_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `logisticsfollowuptask` ADD CONSTRAINT `LogisticsFollowUpTask_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `logisticsfollowuptask` ADD CONSTRAINT `Logisticsfollowuptask_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `logisticsfollowuptask` ADD CONSTRAINT `LogisticsFollowUpTask_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `logisticsfollowuptask` ADD CONSTRAINT `Logisticsfollowuptask_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `logisticsfollowuptask` ADD CONSTRAINT `LogisticsFollowUpTask_salesOrderId_fkey` FOREIGN KEY (`salesOrderId`) REFERENCES `salesorder`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `logisticsfollowuptask` ADD CONSTRAINT `Logisticsfollowuptask_salesOrderId_fkey` FOREIGN KEY (`salesOrderId`) REFERENCES `salesorder`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `logisticsfollowuptask` ADD CONSTRAINT `LogisticsFollowUpTask_shippingTaskId_fkey` FOREIGN KEY (`shippingTaskId`) REFERENCES `shippingtask`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `logisticsfollowuptask` ADD CONSTRAINT `Logisticsfollowuptask_shippingTaskId_fkey` FOREIGN KEY (`shippingTaskId`) REFERENCES `shippingtask`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `logisticsfollowuptask` ADD CONSTRAINT `LogisticsFollowUpTask_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `logisticsfollowuptask` ADD CONSTRAINT `Logisticsfollowuptask_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `operationlog` ADD CONSTRAINT `OperationLog_actorId_fkey` FOREIGN KEY (`actorId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `operationlog` ADD CONSTRAINT `operationlog_actorId_fkey` FOREIGN KEY (`actorId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `order` ADD CONSTRAINT `Order_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `order` ADD CONSTRAINT `order_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `order` ADD CONSTRAINT `Order_leadId_fkey` FOREIGN KEY (`leadId`) REFERENCES `lead`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `order` ADD CONSTRAINT `order_leadId_fkey` FOREIGN KEY (`leadId`) REFERENCES `lead`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `order` ADD CONSTRAINT `Order_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `order` ADD CONSTRAINT `order_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `paymentplan` ADD CONSTRAINT `PaymentPlan_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `paymentplan` ADD CONSTRAINT `paymentplan_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `paymentplan` ADD CONSTRAINT `PaymentPlan_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `paymentplan` ADD CONSTRAINT `paymentplan_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `paymentplan` ADD CONSTRAINT `PaymentPlan_giftRecordId_fkey` FOREIGN KEY (`giftRecordId`) REFERENCES `giftrecord`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `paymentplan` ADD CONSTRAINT `paymentplan_giftRecordId_fkey` FOREIGN KEY (`giftRecordId`) REFERENCES `giftrecord`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `paymentplan` ADD CONSTRAINT `PaymentPlan_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `paymentplan` ADD CONSTRAINT `paymentplan_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `paymentplan` ADD CONSTRAINT `PaymentPlan_salesOrderId_fkey` FOREIGN KEY (`salesOrderId`) REFERENCES `salesorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `paymentplan` ADD CONSTRAINT `paymentplan_salesOrderId_fkey` FOREIGN KEY (`salesOrderId`) REFERENCES `salesorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `paymentplan` ADD CONSTRAINT `PaymentPlan_shippingTaskId_fkey` FOREIGN KEY (`shippingTaskId`) REFERENCES `shippingtask`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `paymentplan` ADD CONSTRAINT `paymentplan_shippingTaskId_fkey` FOREIGN KEY (`shippingTaskId`) REFERENCES `shippingtask`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `paymentplan` ADD CONSTRAINT `PaymentPlan_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `paymentplan` ADD CONSTRAINT `paymentplan_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `paymentplan` ADD CONSTRAINT `PaymentPlan_updatedById_fkey` FOREIGN KEY (`updatedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `paymentplan` ADD CONSTRAINT `paymentplan_updatedById_fkey` FOREIGN KEY (`updatedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `paymentrecord` ADD CONSTRAINT `PaymentRecord_confirmedById_fkey` FOREIGN KEY (`confirmedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `paymentrecord` ADD CONSTRAINT `paymentrecord_confirmedById_fkey` FOREIGN KEY (`confirmedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `paymentrecord` ADD CONSTRAINT `PaymentRecord_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `paymentrecord` ADD CONSTRAINT `paymentrecord_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `paymentrecord` ADD CONSTRAINT `PaymentRecord_giftRecordId_fkey` FOREIGN KEY (`giftRecordId`) REFERENCES `giftrecord`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `paymentrecord` ADD CONSTRAINT `paymentrecord_giftRecordId_fkey` FOREIGN KEY (`giftRecordId`) REFERENCES `giftrecord`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `paymentrecord` ADD CONSTRAINT `PaymentRecord_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `paymentrecord` ADD CONSTRAINT `paymentrecord_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `paymentrecord` ADD CONSTRAINT `PaymentRecord_paymentPlanId_fkey` FOREIGN KEY (`paymentPlanId`) REFERENCES `paymentplan`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `paymentrecord` ADD CONSTRAINT `paymentrecord_paymentPlanId_fkey` FOREIGN KEY (`paymentPlanId`) REFERENCES `paymentplan`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `paymentrecord` ADD CONSTRAINT `PaymentRecord_salesOrderId_fkey` FOREIGN KEY (`salesOrderId`) REFERENCES `salesorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `paymentrecord` ADD CONSTRAINT `paymentrecord_salesOrderId_fkey` FOREIGN KEY (`salesOrderId`) REFERENCES `salesorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `paymentrecord` ADD CONSTRAINT `PaymentRecord_shippingTaskId_fkey` FOREIGN KEY (`shippingTaskId`) REFERENCES `shippingtask`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `paymentrecord` ADD CONSTRAINT `paymentrecord_shippingTaskId_fkey` FOREIGN KEY (`shippingTaskId`) REFERENCES `shippingtask`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `paymentrecord` ADD CONSTRAINT `PaymentRecord_submittedById_fkey` FOREIGN KEY (`submittedById`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `paymentrecord` ADD CONSTRAINT `paymentrecord_submittedById_fkey` FOREIGN KEY (`submittedById`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `paymentrecord` ADD CONSTRAINT `PaymentRecord_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `paymentrecord` ADD CONSTRAINT `paymentrecord_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `product` ADD CONSTRAINT `Product_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `product` ADD CONSTRAINT `product_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `product` ADD CONSTRAINT `Product_supplierId_fkey` FOREIGN KEY (`supplierId`) REFERENCES `supplier`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `product` ADD CONSTRAINT `product_supplierId_fkey` FOREIGN KEY (`supplierId`) REFERENCES `supplier`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `product` ADD CONSTRAINT `Product_updatedById_fkey` FOREIGN KEY (`updatedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `product` ADD CONSTRAINT `product_updatedById_fkey` FOREIGN KEY (`updatedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `productbundleitem` ADD CONSTRAINT `ProductBundleItem_bundleId_fkey` FOREIGN KEY (`bundleId`) REFERENCES `productbundle`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `productbundleitem` ADD CONSTRAINT `productbundleitem_bundleId_fkey` FOREIGN KEY (`bundleId`) REFERENCES `productbundle`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `productsku` ADD CONSTRAINT `ProductSku_productId_fkey` FOREIGN KEY (`productId`) REFERENCES `product`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `productsku` ADD CONSTRAINT `productsku_productId_fkey` FOREIGN KEY (`productId`) REFERENCES `product`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `salesorder` ADD CONSTRAINT `SalesOrder_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `salesorder` ADD CONSTRAINT `salesorder_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `salesorder` ADD CONSTRAINT `SalesOrder_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `salesorder` ADD CONSTRAINT `salesorder_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `salesorder` ADD CONSTRAINT `SalesOrder_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `salesorder` ADD CONSTRAINT `salesorder_ownerId_fkey` FOREIGN KEY (`ownerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `salesorder` ADD CONSTRAINT `SalesOrder_reviewerId_fkey` FOREIGN KEY (`reviewerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `salesorder` ADD CONSTRAINT `salesorder_reviewerId_fkey` FOREIGN KEY (`reviewerId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `salesorder` ADD CONSTRAINT `SalesOrder_supplierId_fkey` FOREIGN KEY (`supplierId`) REFERENCES `supplier`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `salesorder` ADD CONSTRAINT `salesorder_supplierId_fkey` FOREIGN KEY (`supplierId`) REFERENCES `supplier`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `salesorder` ADD CONSTRAINT `SalesOrder_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `salesorder` ADD CONSTRAINT `salesorder_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `salesorder` ADD CONSTRAINT `SalesOrder_updatedById_fkey` FOREIGN KEY (`updatedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `salesorder` ADD CONSTRAINT `salesorder_updatedById_fkey` FOREIGN KEY (`updatedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `salesordergiftitem` ADD CONSTRAINT `SalesOrderGiftItem_salesOrderId_fkey` FOREIGN KEY (`salesOrderId`) REFERENCES `salesorder`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `salesordergiftitem` ADD CONSTRAINT `salesordergiftitem_salesOrderId_fkey` FOREIGN KEY (`salesOrderId`) REFERENCES `salesorder`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `salesorderitem` ADD CONSTRAINT `SalesOrderItem_productId_fkey` FOREIGN KEY (`productId`) REFERENCES `product`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `salesorderitem` ADD CONSTRAINT `salesorderitem_productId_fkey` FOREIGN KEY (`productId`) REFERENCES `product`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `salesorderitem` ADD CONSTRAINT `SalesOrderItem_salesOrderId_fkey` FOREIGN KEY (`salesOrderId`) REFERENCES `salesorder`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `salesorderitem` ADD CONSTRAINT `salesorderitem_salesOrderId_fkey` FOREIGN KEY (`salesOrderId`) REFERENCES `salesorder`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `salesorderitem` ADD CONSTRAINT `SalesOrderItem_skuId_fkey` FOREIGN KEY (`skuId`) REFERENCES `productsku`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `salesorderitem` ADD CONSTRAINT `salesorderitem_skuId_fkey` FOREIGN KEY (`skuId`) REFERENCES `productsku`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `salesorderitem` ADD CONSTRAINT `SalesOrderItem_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `salesorderitem` ADD CONSTRAINT `salesorderitem_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `salesorderitem` ADD CONSTRAINT `SalesOrderItem_tradeOrderItemComponentId_fkey` FOREIGN KEY (`tradeOrderItemComponentId`) REFERENCES `tradeorderitemcomponent`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `salesorderitem` ADD CONSTRAINT `salesorderitem_tradeOrderItemComponentId_fkey` FOREIGN KEY (`tradeOrderItemComponentId`) REFERENCES `tradeorderitemcomponent`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `salesorderitem` ADD CONSTRAINT `SalesOrderItem_tradeOrderItemId_fkey` FOREIGN KEY (`tradeOrderItemId`) REFERENCES `tradeorderitem`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `salesorderitem` ADD CONSTRAINT `salesorderitem_tradeOrderItemId_fkey` FOREIGN KEY (`tradeOrderItemId`) REFERENCES `tradeorderitem`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `shippingexportbatch` ADD CONSTRAINT `ShippingExportBatch_exportedById_fkey` FOREIGN KEY (`exportedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `shippingexportbatch` ADD CONSTRAINT `shippingexportbatch_exportedById_fkey` FOREIGN KEY (`exportedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `shippingexportbatch` ADD CONSTRAINT `ShippingExportBatch_supplierId_fkey` FOREIGN KEY (`supplierId`) REFERENCES `supplier`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `shippingexportbatch` ADD CONSTRAINT `shippingexportbatch_supplierId_fkey` FOREIGN KEY (`supplierId`) REFERENCES `supplier`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `shippingexportline` ADD CONSTRAINT `ShippingExportLine_exportBatchId_fkey` FOREIGN KEY (`exportBatchId`) REFERENCES `shippingexportbatch`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `shippingexportline` ADD CONSTRAINT `shippingexportline_exportBatchId_fkey` FOREIGN KEY (`exportBatchId`) REFERENCES `shippingexportbatch`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `shippingexportline` ADD CONSTRAINT `ShippingExportLine_salesOrderId_fkey` FOREIGN KEY (`salesOrderId`) REFERENCES `salesorder`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `shippingexportline` ADD CONSTRAINT `shippingexportline_salesOrderId_fkey` FOREIGN KEY (`salesOrderId`) REFERENCES `salesorder`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `shippingexportline` ADD CONSTRAINT `ShippingExportLine_shippingTaskId_fkey` FOREIGN KEY (`shippingTaskId`) REFERENCES `shippingtask`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `shippingexportline` ADD CONSTRAINT `shippingexportline_shippingTaskId_fkey` FOREIGN KEY (`shippingTaskId`) REFERENCES `shippingtask`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `shippingexportline` ADD CONSTRAINT `ShippingExportLine_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `shippingexportline` ADD CONSTRAINT `shippingexportline_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `shippingtask` ADD CONSTRAINT `ShippingTask_assigneeId_fkey` FOREIGN KEY (`assigneeId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `shippingtask` ADD CONSTRAINT `shippingtask_assigneeId_fkey` FOREIGN KEY (`assigneeId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `shippingtask` ADD CONSTRAINT `ShippingTask_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `shippingtask` ADD CONSTRAINT `shippingtask_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `shippingtask` ADD CONSTRAINT `ShippingTask_exportBatchId_fkey` FOREIGN KEY (`exportBatchId`) REFERENCES `shippingexportbatch`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `shippingtask` ADD CONSTRAINT `shippingtask_exportBatchId_fkey` FOREIGN KEY (`exportBatchId`) REFERENCES `shippingexportbatch`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `shippingtask` ADD CONSTRAINT `ShippingTask_giftRecordId_fkey` FOREIGN KEY (`giftRecordId`) REFERENCES `giftrecord`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `shippingtask` ADD CONSTRAINT `shippingtask_giftRecordId_fkey` FOREIGN KEY (`giftRecordId`) REFERENCES `giftrecord`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `shippingtask` ADD CONSTRAINT `ShippingTask_orderId_fkey` FOREIGN KEY (`orderId`) REFERENCES `order`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `shippingtask` ADD CONSTRAINT `shippingtask_orderId_fkey` FOREIGN KEY (`orderId`) REFERENCES `order`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `shippingtask` ADD CONSTRAINT `ShippingTask_salesOrderId_fkey` FOREIGN KEY (`salesOrderId`) REFERENCES `salesorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `shippingtask` ADD CONSTRAINT `shippingtask_salesOrderId_fkey` FOREIGN KEY (`salesOrderId`) REFERENCES `salesorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `shippingtask` ADD CONSTRAINT `ShippingTask_supplierId_fkey` FOREIGN KEY (`supplierId`) REFERENCES `supplier`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `shippingtask` ADD CONSTRAINT `shippingtask_supplierId_fkey` FOREIGN KEY (`supplierId`) REFERENCES `supplier`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `shippingtask` ADD CONSTRAINT `ShippingTask_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `shippingtask` ADD CONSTRAINT `shippingtask_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `supplier` ADD CONSTRAINT `Supplier_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `supplier` ADD CONSTRAINT `supplier_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `supplier` ADD CONSTRAINT `Supplier_updatedById_fkey` FOREIGN KEY (`updatedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `supplier` ADD CONSTRAINT `supplier_updatedById_fkey` FOREIGN KEY (`updatedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `tag_categories` ADD CONSTRAINT `tag_categories_groupId_fkey` FOREIGN KEY (`groupId`) REFERENCES `tag_groups`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -1623,41 +1623,41 @@ ALTER TABLE `team_public_pool_settings` ADD CONSTRAINT `team_public_pool_setting
 ALTER TABLE `teams` ADD CONSTRAINT `teams_supervisorId_fkey` FOREIGN KEY (`supervisorId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `tradeorder` ADD CONSTRAINT `TradeOrder_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `tradeorder` ADD CONSTRAINT `tradeorder_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `tradeorderitem` ADD CONSTRAINT `TradeOrderItem_bundleId_fkey` FOREIGN KEY (`bundleId`) REFERENCES `productbundle`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `tradeorderitem` ADD CONSTRAINT `tradeorderitem_bundleId_fkey` FOREIGN KEY (`bundleId`) REFERENCES `productbundle`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `tradeorderitem` ADD CONSTRAINT `TradeOrderItem_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `tradeorderitem` ADD CONSTRAINT `tradeorderitem_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `tradeorderitemcomponent` ADD CONSTRAINT `TradeOrderItemComponent_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `tradeorderitemcomponent` ADD CONSTRAINT `tradeorderitemcomponent_tradeOrderId_fkey` FOREIGN KEY (`tradeOrderId`) REFERENCES `tradeorder`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `tradeorderitemcomponent` ADD CONSTRAINT `TradeOrderItemComponent_tradeOrderItemId_fkey` FOREIGN KEY (`tradeOrderItemId`) REFERENCES `tradeorderitem`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `tradeorderitemcomponent` ADD CONSTRAINT `tradeorderitemcomponent_tradeOrderItemId_fkey` FOREIGN KEY (`tradeOrderItemId`) REFERENCES `tradeorderitem`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `user` ADD CONSTRAINT `User_disabledById_fkey` FOREIGN KEY (`disabledById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `user` ADD CONSTRAINT `user_disabledById_fkey` FOREIGN KEY (`disabledById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `user` ADD CONSTRAINT `User_invitedById_fkey` FOREIGN KEY (`invitedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `user` ADD CONSTRAINT `user_invitedById_fkey` FOREIGN KEY (`invitedById`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `user` ADD CONSTRAINT `User_roleId_fkey` FOREIGN KEY (`roleId`) REFERENCES `role`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `user` ADD CONSTRAINT `user_roleId_fkey` FOREIGN KEY (`roleId`) REFERENCES `role`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `user` ADD CONSTRAINT `User_supervisorId_fkey` FOREIGN KEY (`supervisorId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `user` ADD CONSTRAINT `user_supervisorId_fkey` FOREIGN KEY (`supervisorId`) REFERENCES `user`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `user` ADD CONSTRAINT `User_teamId_fkey` FOREIGN KEY (`teamId`) REFERENCES `teams`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `user` ADD CONSTRAINT `user_teamId_fkey` FOREIGN KEY (`teamId`) REFERENCES `teams`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `wechatrecord` ADD CONSTRAINT `WechatRecord_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `wechatrecord` ADD CONSTRAINT `wechatrecord_customerId_fkey` FOREIGN KEY (`customerId`) REFERENCES `customer`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `wechatrecord` ADD CONSTRAINT `WechatRecord_leadId_fkey` FOREIGN KEY (`leadId`) REFERENCES `lead`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `wechatrecord` ADD CONSTRAINT `wechatrecord_leadId_fkey` FOREIGN KEY (`leadId`) REFERENCES `lead`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `wechatrecord` ADD CONSTRAINT `WechatRecord_salesId_fkey` FOREIGN KEY (`salesId`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `wechatrecord` ADD CONSTRAINT `wechatrecord_salesId_fkey` FOREIGN KEY (`salesId`) REFERENCES `user`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
