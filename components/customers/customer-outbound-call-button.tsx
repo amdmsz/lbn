@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Clock3, Loader2, PhoneCall, XCircle } from "lucide-react";
 import type { OutboundCallSessionStatus } from "@prisma/client";
+import { getOutboundCallFailureLabel } from "@/lib/outbound-calls/metadata";
 import { cn } from "@/lib/utils";
 
 type CallState = "idle" | "calling" | "tracking" | "completed" | "failed";
@@ -158,7 +159,10 @@ export function CustomerOutboundCallButton({
 
     if (verdict === "failed") {
       return {
-        label: "未接通",
+        label: getOutboundCallFailureLabel(
+          session.failureCode,
+          session.failureMessage,
+        ),
         description:
           session.failureMessage ??
           session.failureCode ??

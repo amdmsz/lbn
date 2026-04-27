@@ -71,6 +71,7 @@ PAYLOAD="$(
     "$DIALED_NUMBER" <<'PY'
 import datetime
 import json
+import os
 import sys
 
 (
@@ -102,11 +103,68 @@ total_seconds = int_or_none(duration)
 answered = (
     (talk_seconds or 0) > 0
     or dial_status_upper in {"ANSWER", "ANSWERED"}
-    or disposition_upper == "ANSWERED"
 )
 status = "ENDED" if answered else "FAILED"
 event_at = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
-failure_code = None if answered else (dial_status_upper or hangup_cause or "CALL_FAILED")
+
+def classify_failure():
+    cause = (hangup_cause or "").strip()
+
+    if dial_status_upper in {"NOANSWER", "NO_ANSWER"} or cause in {"18", "19"}:
+        return "CUSTOMER_NO_ANSWER", "客户未接"
+
+    if dial_status_upper == "BUSY" or cause == "17":
+        return "CUSTOMER_BUSY", "客户忙线或拒接"
+
+    if dial_status_upper in {"CANCEL", "CANCELED"}:
+        return "CALL_CANCELED", "外呼已取消"
+
+    if cause == "21":
+        return "CUSTOMER_REJECTED", "客户拒接"
+
+    if dial_status_upper in {"CONGESTION"} or cause in {"34", "38", "41", "42"}:
+        return "PROVIDER_CONGESTION", "线路拥塞"
+
+    if dial_status_upper in {"CHANUNAVAIL"} or cause in {"1", "3", "20", "27", "28"}:
+        return "DIAL_FAILED", "拨号失败"
+
+    return dial_status_upper or cause or "CALL_FAILED", "外呼失败"
+
+def file_size_or_none(value):
+    if not value:
+        return None
+
+    try:
+        return os.path.getsize(value)
+    except OSError:
+        return None
+
+recording_candidate = (recording_file or "").strip()
+recording_file_size = file_size_or_none(recording_candidate)
+has_effective_talk_time = (talk_seconds or 0) > 0
+has_effective_recording_file = (
+    bool(recording_candidate)
+    and has_effective_talk_time
+    and recording_file_size is not None
+    and recording_file_size > 44
+)
+recording_suppressed_reason = None
+
+if recording_candidate and not has_effective_recording_file:
+    if not has_effective_talk_time:
+        recording_suppressed_reason = "NO_EFFECTIVE_TALK_TIME"
+    elif recording_file_size is not None and recording_file_size <= 44:
+        recording_suppressed_reason = "EMPTY_RECORDING_FILE"
+    else:
+        recording_suppressed_reason = "RECORDING_FILE_UNAVAILABLE"
+
+    if recording_file_size is not None:
+        try:
+            os.remove(recording_candidate)
+        except OSError:
+            pass
+
+failure_code, failure_message = (None, None) if answered else classify_failure()
 
 payload = {
     "eventId": f"asterisk:{unique_id or call_record_id}:final",
@@ -118,8 +176,8 @@ payload = {
     "eventAt": event_at,
     "durationSeconds": talk_seconds if talk_seconds is not None else 0,
     "failureCode": failure_code,
-    "failureMessage": None if answered else (disposition_upper or dial_status_upper or hangup_cause or None),
-    "recordingPath": recording_file or None,
+    "failureMessage": failure_message,
+    "recordingPath": recording_candidate if has_effective_recording_file else None,
     "recordingMimeType": "audio/wav",
     "recordingCodec": "alaw",
     "cdr": {
@@ -132,7 +190,10 @@ payload = {
         "hangupCause": hangup_cause or None,
         "seatNo": seat_no or None,
         "dialedNumber": dialed_number or None,
-        "recordingPath": recording_file or None,
+        "recordingPath": recording_candidate or None,
+        "recordingFileSizeBytes": recording_file_size,
+        "recordingImported": has_effective_recording_file,
+        "recordingSuppressedReason": recording_suppressed_reason,
     },
 }
 

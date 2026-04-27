@@ -4041,6 +4041,15 @@ export async function getCustomerDetailCallsData(
             },
           },
         },
+        outboundSession: {
+          select: {
+            status: true,
+            failureCode: true,
+            failureMessage: true,
+            durationSeconds: true,
+            recordingImportedAt: true,
+          },
+        },
         sales: {
           select: {
             name: true,

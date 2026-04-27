@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, Pause, Play, RotateCcw } from "lucide-react";
 import {
   getRecordingMimeLabel,
@@ -32,6 +32,8 @@ function clampSeekValue(value: number, duration: number) {
   return Math.min(value, duration);
 }
 
+const playbackRates = [0.75, 1, 1.25, 1.5, 2] as const;
+
 export function RecordingAudioPlayer({
   recordingId,
   status,
@@ -56,6 +58,7 @@ export function RecordingAudioPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(fallbackDuration);
+  const [playbackRate, setPlaybackRate] = useState(1);
   const [loadError, setLoadError] = useState(false);
   const visibleDuration = duration > 0 ? duration : fallbackDuration;
   const canSeek = canPlay && visibleDuration > 0 && !loadError;
@@ -66,6 +69,14 @@ export function RecordingAudioPlayer({
 
     return Math.min(100, Math.max(0, (currentTime / visibleDuration) * 100));
   }, [currentTime, visibleDuration]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+
+    if (audio) {
+      audio.playbackRate = playbackRate;
+    }
+  }, [playbackRate]);
 
   const syncDuration = useCallback(() => {
     const audio = audioRef.current;
@@ -130,6 +141,19 @@ export function RecordingAudioPlayer({
     setCurrentTime(0);
   }, []);
 
+  const changePlaybackRate = useCallback((value: number) => {
+    const nextRate = playbackRates.includes(value as (typeof playbackRates)[number])
+      ? value
+      : 1;
+    const audio = audioRef.current;
+
+    if (audio) {
+      audio.playbackRate = nextRate;
+    }
+
+    setPlaybackRate(nextRate);
+  }, []);
+
   if (!canPlay) {
     return (
       <div
@@ -157,7 +181,10 @@ export function RecordingAudioPlayer({
         ref={audioRef}
         preload="metadata"
         src={audioUrl}
-        onLoadedMetadata={syncDuration}
+        onLoadedMetadata={() => {
+          syncDuration();
+          setLoadError(false);
+        }}
         onDurationChange={syncDuration}
         onTimeUpdate={(event) => {
           setCurrentTime(event.currentTarget.currentTime);
@@ -178,7 +205,7 @@ export function RecordingAudioPlayer({
         }}
       />
 
-      <div className="grid gap-2 sm:grid-cols-[2rem_minmax(0,1fr)_1.75rem] sm:items-center">
+      <div className="grid gap-2 sm:grid-cols-[2rem_minmax(0,1fr)_auto] sm:items-center">
         <button
           type="button"
           onClick={togglePlayback}
@@ -198,30 +225,61 @@ export function RecordingAudioPlayer({
             <span>{formatPlaybackTime(currentTime)}</span>
             <span>{visibleDuration > 0 ? formatPlaybackTime(visibleDuration) : "--:--"}</span>
           </div>
-          <input
-            type="range"
-            min={0}
-            max={visibleDuration > 0 ? visibleDuration : 1}
-            step="0.1"
-            value={Math.min(currentTime, visibleDuration > 0 ? visibleDuration : 1)}
-            disabled={!canSeek}
-            aria-label="拖动录音进度"
-            onChange={(event) => seekTo(Number(event.currentTarget.value))}
-            className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[var(--color-border-soft)] accent-[var(--color-primary)] disabled:cursor-not-allowed disabled:opacity-45 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-[var(--color-primary)] [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--color-primary)]"
-            style={{
-              background: `linear-gradient(to right, var(--color-primary) ${progressPercent}%, var(--color-border-soft) ${progressPercent}%)`,
-            }}
-          />
+          <div
+            className={cn(
+              "relative h-7",
+              canSeek ? "cursor-pointer" : "cursor-not-allowed opacity-55",
+            )}
+          >
+            <div className="pointer-events-none absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-[var(--color-border-soft)]">
+              <div
+                className="h-full rounded-full bg-[var(--color-accent)]"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <div
+              className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-[var(--color-panel)] bg-[var(--color-accent)] shadow-[0_4px_10px_rgba(15,23,42,0.18)]"
+              style={{
+                left: `calc(${progressPercent}% - 0.5rem)`,
+              }}
+            />
+            <input
+              type="range"
+              min={0}
+              max={visibleDuration > 0 ? visibleDuration : 1}
+              step="0.1"
+              value={Math.min(currentTime, visibleDuration > 0 ? visibleDuration : 1)}
+              disabled={!canSeek}
+              aria-label="拖动录音进度"
+              onChange={(event) => seekTo(Number(event.currentTarget.value))}
+              className="absolute inset-0 h-7 w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+            />
+          </div>
         </div>
 
-        <button
-          type="button"
-          onClick={resetPlayback}
-          aria-label="回到开头"
-          className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] text-[var(--color-sidebar-muted)] transition hover:border-[rgba(79,125,247,0.22)] hover:text-[var(--foreground)]"
-        >
-          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
+        <div className="flex items-center gap-1.5">
+          <select
+            value={playbackRate}
+            aria-label="播放倍速"
+            disabled={loadError}
+            onChange={(event) => changePlaybackRate(Number(event.currentTarget.value))}
+            className="h-7 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2 text-[11px] font-medium tabular-nums text-[var(--foreground)] outline-none transition hover:border-[rgba(79,125,247,0.22)] disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {playbackRates.map((rate) => (
+              <option key={rate} value={rate}>
+                {rate}x
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={resetPlayback}
+            aria-label="回到开头"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] text-[var(--color-sidebar-muted)] transition hover:border-[rgba(79,125,247,0.22)] hover:text-[var(--foreground)]"
+          >
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </div>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
@@ -235,7 +293,7 @@ export function RecordingAudioPlayer({
         <a
           href={downloadUrl}
           download
-          className="inline-flex items-center gap-1 text-[var(--color-primary)] hover:text-[var(--color-primary-hover)]"
+          className="inline-flex items-center gap-1 text-[var(--color-accent)] hover:text-[var(--color-accent-strong)]"
         >
           <Download className="h-3.5 w-3.5" aria-hidden="true" />
           原文件

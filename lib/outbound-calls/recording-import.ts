@@ -45,6 +45,8 @@ type RecordingImportRuntime = {
   aiEnabled: boolean;
 };
 
+const MIN_PLAYABLE_WAV_BYTES = 44;
+
 function toPrismaJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
 }
@@ -126,6 +128,42 @@ async function getRecordingFileStat(input: {
   }
 }
 
+function getRecordingImportSkipReason(input: {
+  storageKey: string | null;
+  durationSeconds: number | null;
+  fileSizeBytes: number | null;
+}) {
+  if (!input.storageKey) {
+    return {
+      code: "RECORDING_PATH_UNMAPPED",
+      message: "外呼回调已收到录音位置，但无法映射到 CRM 录音存储路径。",
+    };
+  }
+
+  if (input.durationSeconds !== null && input.durationSeconds <= 0) {
+    return {
+      code: "RECORDING_NO_EFFECTIVE_TALK_TIME",
+      message: "外呼未产生有效通话时长，不导入录音。",
+    };
+  }
+
+  if (input.fileSizeBytes === null) {
+    return {
+      code: "RECORDING_FILE_MISSING",
+      message: "外呼录音文件不存在或暂不可读。",
+    };
+  }
+
+  if (input.fileSizeBytes <= MIN_PLAYABLE_WAV_BYTES) {
+    return {
+      code: "RECORDING_FILE_EMPTY",
+      message: "外呼录音文件为空，不导入录音。",
+    };
+  }
+
+  return null;
+}
+
 export async function resolveOutboundRecordingImportRuntime(): Promise<RecordingImportRuntime> {
   const [storageConfig, workerConfig] = await Promise.all([
     resolveRecordingStorageConfig(),
@@ -155,15 +193,55 @@ export async function upsertOutboundCallRecordingFromWebhook(input: {
   const now = input.event.eventAt;
   const mimeType = input.event.recordingMimeType || "audio/wav";
   const durationSeconds = input.event.durationSeconds ?? null;
-  const readyForPlayback = Boolean(storageKey);
-  const recordingStatus = readyForPlayback
-    ? input.runtime.aiEnabled
-      ? CallRecordingStatus.PROCESSING
-      : CallRecordingStatus.READY
-    : CallRecordingStatus.FAILED;
-  const failureMessage = readyForPlayback
-    ? null
-    : "外呼回调已收到录音位置，但无法映射到 CRM 录音存储路径。";
+  const skipReason = getRecordingImportSkipReason({
+    storageKey,
+    durationSeconds,
+    fileSizeBytes: fileStat?.size ?? null,
+  });
+
+  if (skipReason) {
+    await input.tx.operationLog.create({
+      data: {
+        actorId: null,
+        module: OperationModule.CALL,
+        action: "call_recording.import_from_cti_skipped",
+        targetType: OperationTargetType.OUTBOUND_CALL_SESSION,
+        targetId: input.session.id,
+        description: `外呼录音未导入：${input.session.customer.name} (${maskPhoneForAudit(input.session.customer.phone)})`,
+        afterData: toPrismaJson({
+          sessionId: input.session.id,
+          callRecordId: input.session.callRecordId,
+          customerId: input.session.customerId,
+          salesId: input.session.salesId,
+          teamId: input.session.teamId,
+          storageProvider: input.runtime.storageConfig.provider,
+          storageDir: input.runtime.storageConfig.storageDir,
+          storageKey,
+          recordingUrl: input.event.recordingUrl ?? null,
+          recordingPath: input.event.recordingPath ?? null,
+          recordingExternalId: input.event.recordingExternalId ?? null,
+          mimeType,
+          fileSizeBytes: fileStat?.size ?? null,
+          durationSeconds,
+          skipCode: skipReason.code,
+          skipMessage: skipReason.message,
+        }),
+      },
+    });
+
+    return {
+      recordingId: null,
+      imported: false,
+      skipped: true,
+      skipCode: skipReason.code,
+      storageKey,
+      aiEnqueued: false,
+    };
+  }
+
+  const recordingStatus = input.runtime.aiEnabled
+    ? CallRecordingStatus.PROCESSING
+    : CallRecordingStatus.READY;
 
   const recording = await input.tx.callRecording.upsert({
     where: {
@@ -180,12 +258,12 @@ export async function upsertOutboundCallRecordingFromWebhook(input: {
       storageKey,
       mimeType,
       codec: input.event.recordingCodec || null,
-      fileSizeBytes: readyForPlayback ? fileStat?.size ?? null : null,
+      fileSizeBytes: fileStat?.size ?? null,
       durationSeconds,
       uploadedAt: now,
       retentionUntil: buildRetentionUntil(input.runtime.storageConfig, now),
-      failureCode: readyForPlayback ? null : "RECORDING_PATH_UNMAPPED",
-      failureMessage,
+      failureCode: null,
+      failureMessage: null,
     },
     update: {
       customerId: input.session.customerId,
@@ -197,19 +275,19 @@ export async function upsertOutboundCallRecordingFromWebhook(input: {
       storageKey,
       mimeType,
       codec: input.event.recordingCodec || null,
-      fileSizeBytes: readyForPlayback ? fileStat?.size ?? null : null,
+      fileSizeBytes: fileStat?.size ?? null,
       durationSeconds,
       uploadedAt: now,
       retentionUntil: buildRetentionUntil(input.runtime.storageConfig, now),
-      failureCode: readyForPlayback ? null : "RECORDING_PATH_UNMAPPED",
-      failureMessage,
+      failureCode: null,
+      failureMessage: null,
     },
     select: {
       id: true,
     },
   });
 
-  if (readyForPlayback && input.runtime.aiEnabled) {
+  if (input.runtime.aiEnabled) {
     await input.tx.callAiAnalysis.upsert({
       where: { recordingId: recording.id },
       create: {
@@ -228,14 +306,10 @@ export async function upsertOutboundCallRecordingFromWebhook(input: {
     data: {
       actorId: null,
       module: OperationModule.CALL,
-      action: readyForPlayback
-        ? "call_recording.imported_from_cti"
-        : "call_recording.import_from_cti_failed",
+      action: "call_recording.imported_from_cti",
       targetType: OperationTargetType.CALL_RECORDING,
       targetId: recording.id,
-      description: readyForPlayback
-        ? `外呼录音已进入 CRM：${input.session.customer.name} (${maskPhoneForAudit(input.session.customer.phone)})`
-        : `外呼录音导入失败：${input.session.customer.name} (${maskPhoneForAudit(input.session.customer.phone)})`,
+      description: `外呼录音已进入 CRM：${input.session.customer.name} (${maskPhoneForAudit(input.session.customer.phone)})`,
       afterData: toPrismaJson({
         recordingId: recording.id,
         sessionId: input.session.id,
@@ -253,15 +327,14 @@ export async function upsertOutboundCallRecordingFromWebhook(input: {
         fileSizeBytes: fileStat?.size ?? null,
         durationSeconds,
         aiEnabled: input.runtime.aiEnabled,
-        failureMessage,
       }),
     },
   });
 
   return {
     recordingId: recording.id,
-    imported: readyForPlayback,
+    imported: true,
     storageKey,
-    aiEnqueued: readyForPlayback && input.runtime.aiEnabled,
+    aiEnqueued: input.runtime.aiEnabled,
   };
 }

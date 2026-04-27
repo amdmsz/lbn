@@ -1,11 +1,12 @@
 "use client";
 
-import type { CallResult } from "@prisma/client";
+import type { CallResult, OutboundCallSessionStatus } from "@prisma/client";
 import { CustomerCallRecordForm } from "@/components/customers/customer-call-record-form";
 import { CustomerCallRecordHistory } from "@/components/customers/customer-call-record-history";
 import { CustomerMobileDialButton } from "@/components/customers/mobile-call-followup-sheet";
 import { CustomerOutboundCallButton } from "@/components/customers/customer-outbound-call-button";
 import type { CallTranscriptSegment } from "@/lib/calls/call-ai-diarization";
+import { getOutboundCallSessionDisplay } from "@/lib/outbound-calls/metadata";
 import {
   CustomerDossierMeta,
   CustomerDossierNotice,
@@ -49,11 +50,35 @@ type CallRecordItem = {
       transcriptSegments?: CallTranscriptSegment[];
     } | null;
   } | null;
+  outboundSession?: {
+    status: OutboundCallSessionStatus;
+    failureCode: string | null;
+    failureMessage: string | null;
+    durationSeconds: number | null;
+    recordingImportedAt: Date | null;
+  } | null;
   sales: {
     name: string;
     username: string;
   };
 };
+
+function getCallRecordDisplayLabel(record: CallRecordItem) {
+  if (
+    record.outboundSession &&
+    (!record.resultCode || record.resultLabel === "未记录")
+  ) {
+    return getOutboundCallSessionDisplay({
+      status: record.outboundSession.status,
+      failureCode: record.outboundSession.failureCode,
+      failureMessage: record.outboundSession.failureMessage,
+      durationSeconds:
+        record.outboundSession.durationSeconds ?? record.durationSeconds,
+    });
+  }
+
+  return record.resultLabel;
+}
 
 export function CustomerCallRecordsSection({
   customerId,
@@ -90,7 +115,9 @@ export function CustomerCallRecordsSection({
     {
       label: "最近通话",
       value: latestRecord ? formatDateTime(latestRecord.callTime) : "暂无记录",
-      description: latestRecord ? latestRecord.resultLabel : "还没有通话记录",
+      description: latestRecord
+        ? getCallRecordDisplayLabel(latestRecord)
+        : "还没有通话记录",
     },
     {
       label: "累计时长",

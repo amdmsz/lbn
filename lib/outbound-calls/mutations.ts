@@ -641,6 +641,47 @@ function hasRecordingLocation(event: ReturnType<typeof parseWebhookEvent>) {
   );
 }
 
+function shouldImportRecordingFromWebhook(
+  event: ReturnType<typeof parseWebhookEvent>,
+  nextStatus: OutboundCallSessionStatus,
+) {
+  if (!hasRecordingLocation(event)) {
+    return false;
+  }
+
+  if (nextStatus !== "ENDED" && nextStatus !== "ANSWERED") {
+    return false;
+  }
+
+  return event.durationSeconds === null || event.durationSeconds > 0;
+}
+
+function inferCallResultCodeFromOutboundFailure(input: {
+  failureCode?: string | null;
+}) {
+  const code = input.failureCode?.trim().toUpperCase();
+
+  if (!code) {
+    return null;
+  }
+
+  if (["CUSTOMER_NO_ANSWER", "NOANSWER", "NO_ANSWER"].includes(code)) {
+    return "NOT_CONNECTED";
+  }
+
+  if (
+    ["CUSTOMER_BUSY", "CUSTOMER_REJECTED", "BUSY", "REJECTED"].includes(code)
+  ) {
+    return "HUNG_UP";
+  }
+
+  if (["INVALID_NUMBER", "UNALLOCATED_NUMBER"].includes(code)) {
+    return "INVALID_NUMBER";
+  }
+
+  return null;
+}
+
 export async function handleOutboundCallWebhook(input: {
   provider: string;
   headers: HeaderBag;
@@ -669,9 +710,6 @@ export async function handleOutboundCallWebhook(input: {
 
   const payload = safeJsonParse(input.rawBody);
   const event = parseWebhookEvent(provider, payload);
-  const recordingImportRuntime = hasRecordingLocation(event)
-    ? await resolveOutboundRecordingImportRuntime()
-    : null;
   const filters: Prisma.OutboundCallSessionWhereInput[] = [];
 
   if (event.sessionId) {
@@ -707,6 +745,12 @@ export async function handleOutboundCallWebhook(input: {
       customerId: true,
       salesId: true,
       teamId: true,
+      callRecord: {
+        select: {
+          result: true,
+          resultCode: true,
+        },
+      },
       customer: {
         select: {
           id: true,
@@ -741,6 +785,21 @@ export async function handleOutboundCallWebhook(input: {
       : undefined;
   const durationSeconds =
     event.durationSeconds ?? session.durationSeconds ?? undefined;
+  const shouldImportRecording = shouldImportRecordingFromWebhook(
+    event,
+    nextStatus,
+  );
+  const recordingImportRuntime = shouldImportRecording
+    ? await resolveOutboundRecordingImportRuntime()
+    : null;
+  const inferredFailedResultCode =
+    nextStatus === "FAILED" &&
+    !session.callRecord.resultCode &&
+    !session.callRecord.result
+      ? inferCallResultCodeFromOutboundFailure({
+          failureCode: event.failureCode,
+        })
+      : null;
   let recordingImportResult: Awaited<
     ReturnType<typeof upsertOutboundCallRecordingFromWebhook>
   > | null = null;
@@ -780,7 +839,10 @@ export async function handleOutboundCallWebhook(input: {
     ) {
       await tx.callRecord.update({
         where: { id: session.callRecordId },
-        data: { durationSeconds },
+        data: {
+          durationSeconds,
+          resultCode: inferredFailedResultCode ?? undefined,
+        },
         select: { id: true },
       });
     }
@@ -806,7 +868,9 @@ export async function handleOutboundCallWebhook(input: {
             recordingPathConfigured: Boolean(
               event.recordingPath || event.recordingStorageKey,
             ),
+            recordingImportEligible: shouldImportRecording,
             failureCode: event.failureCode,
+            inferredFailedResultCode,
           }),
         },
       });

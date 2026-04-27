@@ -15,6 +15,7 @@ exten => _X.,1,NoOp(CRM outbound ${CRM_CALL_RECORD_ID} seat ${CRM_SEAT_NO} to ${
  same => n,Hangup()
 
 exten => h,1,NoOp(CRM outbound finished ${CRM_CALL_RECORD_ID} ${DIALSTATUS} ${CDR(disposition)})
+ same => n,StopMixMonitor()
  same => n,System(/bin/bash {{CTI_ASTERISK_POST_CALL_WEBHOOK_SCRIPT}} "${CRM_SESSION_ID}" "${CRM_CALL_RECORD_ID}" "${UNIQUEID}" "${DIALSTATUS}" "${CDR(disposition)}" "${CDR(billsec)}" "${CDR(duration)}" "${RECORDING_FILE}" "${HANGUPCAUSE}" "${CRM_SEAT_NO}" "${CRM_DIALED_NUMBER}")
 
 [from-lbn-provider]

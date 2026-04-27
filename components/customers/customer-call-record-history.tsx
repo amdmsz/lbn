@@ -1,4 +1,4 @@
-import type { CallResult } from "@prisma/client";
+import type { CallResult, OutboundCallSessionStatus } from "@prisma/client";
 import { CallAiInsightPanel } from "@/components/calls/call-ai-insight-panel";
 import { RecordingAudioPlayer } from "@/components/calls/recording-audio-player";
 import {
@@ -20,6 +20,7 @@ import {
   extractStoredCallTranscriptSegments,
   type CallTranscriptSegment,
 } from "@/lib/calls/call-ai-diarization";
+import { getOutboundCallSessionDisplay } from "@/lib/outbound-calls/metadata";
 import { cn } from "@/lib/utils";
 
 type CallRecordHistoryItem = {
@@ -53,6 +54,13 @@ type CallRecordHistoryItem = {
       transcriptSegments?: CallTranscriptSegment[];
     } | null;
   } | null;
+  outboundSession?: {
+    status: OutboundCallSessionStatus;
+    failureCode: string | null;
+    failureMessage: string | null;
+    durationSeconds: number | null;
+    recordingImportedAt: Date | string | null;
+  } | null;
   sales: {
     name: string;
     username: string;
@@ -78,11 +86,38 @@ function getAiStatusLabel(status: string) {
   return callAiAnalysisStatusLabels[status as CallAiAnalysisStatusValue] ?? status;
 }
 
+function getOutboundSessionLabel(record: CallRecordHistoryItem) {
+  const session = record.outboundSession;
+
+  if (!session) {
+    return null;
+  }
+
+  return getOutboundCallSessionDisplay({
+    status: session.status,
+    failureCode: session.failureCode,
+    failureMessage: session.failureMessage,
+    durationSeconds: session.durationSeconds ?? record.durationSeconds,
+  });
+}
+
+function getRecordTitle(record: CallRecordHistoryItem) {
+  const outboundLabel = getOutboundSessionLabel(record);
+
+  if (outboundLabel && (!record.resultCode || record.resultLabel === "未记录")) {
+    return outboundLabel;
+  }
+
+  return record.resultLabel;
+}
+
 function renderRecordingSummary(record: CallRecordHistoryItem) {
   const recording = record.recording;
 
   if (!recording) {
-    return record.remark?.trim() || "无备注";
+    const outboundLabel = getOutboundSessionLabel(record);
+
+    return record.remark?.trim() || outboundLabel || "无备注";
   }
 
   const ai = recording.aiAnalysis;
@@ -176,6 +211,11 @@ export function CustomerCallRecordHistory({
           `销售 ${record.sales.name} (@${record.sales.username})`,
           `通话时长 ${formatDurationSeconds(record.durationSeconds)}`,
         ];
+        const outboundLabel = getOutboundSessionLabel(record);
+
+        if (outboundLabel) {
+          meta.push(`外呼状态 ${outboundLabel}`);
+        }
 
         if (record.recording) {
           meta.push(`录音 ${getRecordingStatusLabel(record.recording.status)}`);
@@ -197,7 +237,7 @@ export function CustomerCallRecordHistory({
         return (
           <CustomerDossierRecordCard
             key={record.id}
-            title={record.resultLabel}
+            title={getRecordTitle(record)}
             meta={meta}
             summary={renderRecordingSummary(record)}
             aside={formatDateTime(normalizeDate(record.callTime))}

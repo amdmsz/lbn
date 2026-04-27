@@ -73,6 +73,8 @@ const defaultLogger: CallAiWorkerLogger = {
   },
 };
 
+const MIN_PLAYABLE_RECORDING_BYTES = 44;
+
 function normalizeLimit(limit: number) {
   return Math.max(1, Math.min(50, Number.isFinite(limit) ? Math.floor(limit) : 5));
 }
@@ -104,6 +106,17 @@ async function loadPendingCallAiAnalyses(input: {
           storageKey: {
             not: null,
           },
+          AND: [
+            {
+              OR: [{ durationSeconds: null }, { durationSeconds: { gt: 0 } }],
+            },
+            {
+              OR: [
+                { fileSizeBytes: null },
+                { fileSizeBytes: { gt: MIN_PLAYABLE_RECORDING_BYTES } },
+              ],
+            },
+          ],
         },
       },
     },
@@ -164,6 +177,17 @@ async function loadMissingCallAiAnalysisRecordings(limit: number) {
       storageKey: {
         not: null,
       },
+      AND: [
+        {
+          OR: [{ durationSeconds: null }, { durationSeconds: { gt: 0 } }],
+        },
+        {
+          OR: [
+            { fileSizeBytes: null },
+            { fileSizeBytes: { gt: MIN_PLAYABLE_RECORDING_BYTES } },
+          ],
+        },
+      ],
       aiAnalysis: {
         is: null,
       },
@@ -412,6 +436,11 @@ async function processCallAiAnalysis(input: {
     mimeType: row.recording.mimeType,
     storageConfig,
   });
+
+  if (file.bytes.length <= MIN_PLAYABLE_RECORDING_BYTES) {
+    throw new Error("录音文件为空或未产生有效音频，已跳过 AI 分析。");
+  }
+
   const transcription = await provider.transcribe({
     audio: file.bytes,
     filename: file.filename,
