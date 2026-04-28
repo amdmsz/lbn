@@ -32,6 +32,7 @@ type CallAiInsightPanelProps = {
   transcriptText?: string | null;
   transcriptSegments?: CallTranscriptSegment[];
   maxTranscriptSegments?: number;
+  showTranscript?: boolean;
   className?: string;
 };
 
@@ -198,6 +199,7 @@ export function CallAiInsightPanel({
   transcriptText,
   transcriptSegments = [],
   maxTranscriptSegments = 6,
+  showTranscript = true,
   className,
 }: Readonly<CallAiInsightPanelProps>) {
   const quality = getQualityBand(qualityScore);
@@ -282,17 +284,17 @@ export function CallAiInsightPanel({
         />
       </div>
 
-      {transcriptSegments.length > 0 ? (
+      {showTranscript && transcriptSegments.length > 0 ? (
         <CallTranscriptDialogue
           segments={transcriptSegments}
           maxSegments={maxTranscriptSegments}
         />
-      ) : transcriptText ? (
+      ) : showTranscript && transcriptText ? (
         <div className="rounded-[0.55rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2.5 py-2">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
             转写
           </p>
-          <p className="mt-1 line-clamp-6 text-[12px] leading-5 text-[var(--foreground)]/82">
+          <p className="mt-1 max-h-56 overflow-y-auto whitespace-pre-wrap pr-1 text-[12px] leading-5 text-[var(--foreground)]/82">
             {transcriptText}
           </p>
         </div>

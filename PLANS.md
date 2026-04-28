@@ -2,7 +2,7 @@
 
 ## 文档状态
 
-- 更新时间：2026-04-22
+- 更新时间：2026-04-28
 - 用途：记录真实里程碑状态，区分已完成、正在推进、待开始
 - 维护原则：只记录当前真实基线，不把已废弃的旧交易主模型继续当未来计划，不把 UI 愿景写成已落地事实
 
@@ -32,7 +32,7 @@
 
 ## 1. 当前真实基线
 
-截至 2026-04-10，仓库已经完成以下关键切换：
+截至 2026-04-28，仓库已经完成以下关键切换：
 
 - `TradeOrder` 父单模型已落地
 - Phase 1 additive schema 已完成并验证
@@ -52,6 +52,11 @@
 - recycle 主线已完成真实持久化回收站、业务页接线与 `/recycle-bin` 治理页收口
 - `Customer / TradeOrder` 已完成双终态 lifecycle：`move -> restore -> finalize(PURGE | ARCHIVE)`
 - auto-finalize worker、dry-run、runbook、deployment baseline 已补齐，剩余为 staging / production 运维落地
+- CTI 外呼已完成生产接线：CRM -> CTI Gateway -> Asterisk AMI / WebRTC 坐席 -> SIP provider -> CRM webhook
+- Asterisk 服务端录音已能通过 webhook 导入 CRM，录音页支持播放、拖动进度条与 Range 请求
+- 录音 AI 质检已接入 ASR + LLM 双阶段架构，生产推荐 `gpt-4o-transcribe-diarize` 做 ASR、`deepseek-v4-pro` 做分析
+- `jiuzhuang-crm-call-ai-worker.timer` 已作为 one-shot 定时 worker 基线提供
+- 客户详情已支持 `ADMIN / SUPERVISOR` 移交负责人，并沿用 ownership audit 链
 
 ---
 
@@ -166,6 +171,21 @@
 - `TradeOrder` 已完成业务页 recycle 入口、finalize 视角与 grouped blocker explanation 收口
 - `Lead` 与其他已接入域继续沿用现有 restore / purge 语义，并统一纳入 `/recycle-bin`
 - auto-finalize 已具备真实执行入口、dry-run、stdout summary、alert code、runbook 与 deployment/staging checklist
+
+### M6E. CTI / Recording / Call AI / Ownership Transfer 收口
+
+状态：已完成（生产已验证）
+
+- 外呼主链已固定为：`/customers/[id]` 发起外呼 -> `POST /api/outbound-calls/start` -> CTI Gateway -> Asterisk AMI / WebRTC 坐席 -> CRM webhook
+- 浏览器坐席只拿自己的 WebRTC endpoint 凭据；SIP trunk / VOS 密码不进入前端包
+- Asterisk `MixMonitor` 服务端录音与 webhook 回调已打通，`CallRecord / OutboundCallSession / CallRecording` 能收口到同一次通话
+- 录音文件读取 API 已支持 HTTP Range，录音质检页可拖动播放进度条
+- 录音质检页已切到 queue / workbench 布局，并展示 AI summary、风险、关键词、话术建议与质量分
+- Call AI worker 已支持 `gpt-4o-transcribe-diarize`；diarization 模型不再发送 unsupported prompt，而是使用 `diarized_json`
+- 生产推荐 LLM 为 DeepSeek OpenAI-compatible 接口，模型固定为 `deepseek-v4-pro`
+- `deploy/systemd/jiuzhuang-crm-call-ai-worker.service` 与 `.timer` 是当前定时处理基线
+- 客户详情页已支持 `ADMIN / SUPERVISOR` 选择新负责人移交客户；`SALES` 不开放该动作
+- 移交动作必须继续通过 server-side RBAC、ownership event 与 `OperationLog` 留痕，不允许只做前端隐藏
 
 ---
 

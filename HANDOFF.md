@@ -1,5 +1,5 @@
 # HANDOFF
-更新时间：2026-04-18
+更新时间：2026-04-28
 
 ## 当前交接结论
 
@@ -24,6 +24,8 @@
 - `PLANS.md`
 - `UI_ENTRYPOINTS.md`
 - `docs/deployment-baseline.md`
+- `docs/cti-outbound-call-runbook.md`
+- `docs/call-ai-production-runbook.md`
 - `docs/recycle-auto-finalize-runbook.md`
 
 为准。
@@ -123,6 +125,31 @@
 - staging / production 必须显式把 worker 进程纳入部署
 - 如果 Redis 没配或 worker 没起，导入链路会残缺
 
+### CTI 外呼、录音与 Call AI 基线
+
+当前 CRM 已经进入正式外呼和录音质检基线，但 PBX 仍是外部系统，不内置在 CRM 仓库内。
+
+当前生产链路：
+
+- CRM Web / Android 只调用 CRM API
+- `POST /api/outbound-calls/start` 创建外呼 session 并请求 CTI Gateway
+- CTI Gateway 以 `ASTERISK_AMI` 模式请求 Asterisk originate
+- 浏览器 WebRTC 坐席注册自己的 Asterisk endpoint，例如 `admin`
+- Asterisk 负责桥接坐席与客户、服务端 `MixMonitor` 录音和 CDR
+- 挂机后 Asterisk webhook 回传 `status / billsec / recordingPath`
+- CRM 写入 `OutboundCallSession / CallRecord / CallRecording`
+- Call AI worker 消费 `READY / UPLOADED` 录音并写入 `CallAiAnalysis`
+
+当前有效不变量：
+
+- `seatNo` 默认等于 CRM 登录账号；员工用 `admin` 登录时，坐席也应是 `admin`，不能误打成客户号或别人的坐席号。
+- WebRTC 坐席密码只用于浏览器注册 Asterisk endpoint，不是 SIP trunk 密码。
+- `chan_sip` 不应抢 WebSocket SIP 注册；生产应使用 `res_pjsip_transport_websocket.so`。
+- PBX 必须能解析 `crm.cclbn.com` 到 CRM 服务器，否则录音 webhook 会失败，CRM 录音质检看不到新录音。
+- `CTI_ASTERISK_RECORDING_DIR` 必须位于 `CALL_RECORDING_STORAGE_DIR` 下，CRM 才能把 PBX 本地路径映射为 `storageKey`。
+- Call AI 生产推荐 ASR 用 `gpt-4o-transcribe-diarize`，LLM 用 DeepSeek `deepseek-v4-pro`。
+- `jiuzhuang-crm-call-ai-worker.timer` 是 one-shot 定时触发，不是常驻 daemon。
+
 ---
 
 ## 4. 当前阶段已完成
@@ -141,6 +168,23 @@
 - 导入批次可异步消费
 - 失败批次与失败日志基线已接通
 - 该项不改变 `Lead / Customer` 业务边界
+
+### CTI / Recording / Call AI
+
+- `/settings/outbound-call`、`/settings/recording-storage`、`/settings/call-ai` 已作为 ADMIN 配置入口
+- `/customers/[id]` 已接入正式外呼入口和通话记录回看
+- `/call-recordings` 已作为主管以上录音质检工作台
+- 录音播放 API 已支持 Range / `206 Partial Content`，页面可拖动进度条
+- 录音 AI 分析结果已展示 summary、客户意图、风险、关键词、建议动作与质量分
+- `gpt-4o-transcribe-diarize` 兼容已完成，diarization 模型不再发送 prompt
+- `deepseek-v4-pro` 已作为生产推荐 LLM 模型写入 runbook
+- systemd timer 模板已纳入部署资产，生产以每分钟 one-shot 批处理为基线
+
+### Customer Owner Transfer
+
+- 客户详情已支持 `ADMIN / SUPERVISOR` 手动移交负责人
+- `SALES` 不显示移交动作，也不能绕过 server action 执行
+- 移交继续走 ownership event / `OperationLog` 留痕，不绕开公海池 ownership lifecycle
 
 ### GIFT / BUNDLE
 
@@ -327,18 +371,20 @@
 5. `PLANS.md`
 6. `UI_ENTRYPOINTS.md`
 7. `docs/deployment-baseline.md`
-8. `docs/staging-checklist.md`
-9. `docs/archive/README.md`（仅在追溯历史 freeze / handoff 时阅读）
-10. `scripts/lead-import-worker.ts`
-11. `lib/lead-imports/*`
-12. `app/(dashboard)/fulfillment/page.tsx`
-13. `components/fulfillment/order-fulfillment-center.tsx`
-14. `app/(dashboard)/customers/public-pool/*`
-15. `components/customers/public-pool-*`
-16. `components/trade-orders/*`
-17. `components/shipping/*`
-18. `lib/trade-orders/*`
-19. `lib/shipping/*`
+8. `docs/cti-outbound-call-runbook.md`
+9. `docs/call-ai-production-runbook.md`
+10. `docs/staging-checklist.md`
+11. `docs/archive/README.md`（仅在追溯历史 freeze / handoff 时阅读）
+12. `scripts/lead-import-worker.ts`
+13. `lib/lead-imports/*`
+14. `app/(dashboard)/fulfillment/page.tsx`
+15. `components/fulfillment/order-fulfillment-center.tsx`
+16. `app/(dashboard)/customers/public-pool/*`
+17. `components/customers/public-pool-*`
+18. `components/trade-orders/*`
+19. `components/shipping/*`
+20. `lib/trade-orders/*`
+21. `lib/shipping/*`
 
 ---
 
@@ -418,10 +464,11 @@
 - 公海池主线：ownership lifecycle、规则页、报表页、自动分配、自动回收
 - 线索导入异步链路：Web、Redis、worker、批次状态推进
 - 登录 / 部署基线：环境变量、Prisma 同步、首个管理员初始化、导出目录
+- 如启用外呼：CTI Gateway、Asterisk WebRTC 坐席、AMI ACL、webhook、服务端录音导入
+- 如启用录音 AI：ASR provider、DeepSeek LLM、call-ai worker timer、录音页播放与 AI 结果展示
 
 当前不应混入 staging 验收范围：
 
-- PBX / 外呼
 - 新功能扩展
 - 新 schema 改造
 - 与当前 release 无关的二次 schema 重构

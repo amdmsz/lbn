@@ -1,6 +1,6 @@
 {
     "name":  "lbn-crm-desktop",
-    "version":  "0.1.0",
+    "version":  "0.1.1",
     "private":  true,
     "description":  "Lbn CRM Windows desktop shell for intranet deployment.",
     "main":  "main.cjs",

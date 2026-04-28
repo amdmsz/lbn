@@ -23,6 +23,15 @@ import com.getcapacitor.annotation.Permission;
 
 import org.json.JSONException;
 
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 @CapacitorPlugin(
     name = "LbnCallRecorder",
     permissions = {
@@ -42,6 +51,7 @@ import org.json.JSONException;
 )
 public class LbnCallRecorderPlugin extends Plugin {
     private BroadcastReceiver sessionReceiver;
+    private final ExecutorService connectionExecutor = Executors.newSingleThreadExecutor();
 
     @Override
     public void load() {
@@ -70,16 +80,16 @@ public class LbnCallRecorderPlugin extends Plugin {
 
     @Override
     protected void handleOnDestroy() {
-        if (sessionReceiver == null) {
-            return;
+        if (sessionReceiver != null) {
+            try {
+                getContext().unregisterReceiver(sessionReceiver);
+            } catch (IllegalArgumentException ignored) {
+            } finally {
+                sessionReceiver = null;
+            }
         }
 
-        try {
-            getContext().unregisterReceiver(sessionReceiver);
-        } catch (IllegalArgumentException ignored) {
-        } finally {
-            sessionReceiver = null;
-        }
+        connectionExecutor.shutdownNow();
     }
 
     @PluginMethod
@@ -171,6 +181,106 @@ public class LbnCallRecorderPlugin extends Plugin {
             call.resolve(new JSObject(session));
         } catch (JSONException error) {
             call.reject("本地通话状态读取失败。", error);
+        }
+    }
+
+    @PluginMethod
+    public void getConnectionProfile(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("serverUrl", MainActivity.getServerUrl(getContext()));
+        result.put("defaultServerUrl", MainActivity.DEFAULT_SERVER_URL);
+        result.put("updateManifestUrl", MainActivity.getUpdateManifestUrl(getContext()));
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void saveConnectionProfile(PluginCall call) {
+        String serverUrl = requiredString(call, "serverUrl");
+
+        if (serverUrl == null) {
+            call.reject("服务器或代理地址不能为空。");
+            return;
+        }
+
+        String normalizedServerUrl = MainActivity.normalizeServerUrl(serverUrl);
+        MainActivity.saveServerUrl(getContext(), normalizedServerUrl);
+
+        JSObject result = new JSObject();
+        result.put("serverUrl", normalizedServerUrl);
+        result.put("updateManifestUrl", MainActivity.getUpdateManifestUrl(getContext()));
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void reloadApp(PluginCall call) {
+        String serverUrl = MainActivity.getServerUrl(getContext());
+
+        getActivity().runOnUiThread(() -> {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                getBridge().getWebView().loadUrl(serverUrl);
+            }
+        });
+
+        JSObject result = new JSObject();
+        result.put("serverUrl", serverUrl);
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void testConnection(PluginCall call) {
+        String rawServerUrl = call.getString("serverUrl", MainActivity.getServerUrl(getContext()));
+        String serverUrl = MainActivity.normalizeServerUrl(rawServerUrl);
+
+        connectionExecutor.execute(() -> {
+            HttpURLConnection connection = null;
+
+            try {
+                connection = (HttpURLConnection) new URL(serverUrl).openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(8000);
+                connection.setReadTimeout(8000);
+                connection.setRequestProperty("Accept", "text/html,application/json");
+
+                int status = connection.getResponseCode();
+                String response = readSmallResponse(connection);
+                JSObject result = new JSObject();
+                result.put("ok", status >= 200 && status < 400);
+                result.put("status", status);
+                result.put("serverUrl", serverUrl);
+                result.put("preview", response);
+                call.resolve(result);
+            } catch (Exception error) {
+                JSObject result = new JSObject();
+                result.put("ok", false);
+                result.put("status", 0);
+                result.put("serverUrl", serverUrl);
+                result.put("message", error.getMessage());
+                call.resolve(result);
+            } finally {
+                if (connection != null) {
+                    connection.disconnect();
+                }
+            }
+        });
+    }
+
+    private String readSmallResponse(HttpURLConnection connection) {
+        try {
+            InputStream stream = connection.getResponseCode() >= 400
+                ? connection.getErrorStream()
+                : connection.getInputStream();
+
+            if (stream == null) {
+                return "";
+            }
+
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+                char[] buffer = new char[160];
+                int read = reader.read(buffer);
+                return read <= 0 ? "" : new String(buffer, 0, read);
+            }
+        } catch (Exception ignored) {
+            return "";
         }
     }
 

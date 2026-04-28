@@ -334,7 +334,7 @@ async function main() {
         process.env.CTI_GATEWAY_DEFAULT_ROUTING_GROUP,
       defaultSeatNo: process.env.CTI_ASTERISK_DEFAULT_SEAT_NO,
       copyTo:
-        "Copy *.conf to /etc/asterisk, install lbn-crm-post-call-webhook.sh to CTI_ASTERISK_POST_CALL_WEBHOOK_SCRIPT, then reload asterisk.",
+        "Copy *.conf to /etc/asterisk, install lbn-crm-post-call-webhook.sh as root:asterisk mode 750 to CTI_ASTERISK_POST_CALL_WEBHOOK_SCRIPT, then reload asterisk.",
     }),
   );
 }

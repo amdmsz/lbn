@@ -22,6 +22,7 @@
     "check:outbound-webhook": "tsx scripts/check-outbound-webhook.ts",
     "check:lead-import-runtime": "node scripts/check-lead-import-runtime.mjs",
     "worker:recycle-auto-finalize": "tsx scripts/recycle-auto-finalize.ts",
+    "diagnose:lead-customer-recycle": "tsx scripts/diagnose-lead-customer-recycle.ts",
     "lint": "eslint",
     "prisma:status": "node scripts/prisma-guardrails.mjs status",
     "prisma:name-drift": "node scripts/prisma-guardrails.mjs name-drift",

@@ -26,6 +26,14 @@ type NativeCallRecorderPlugin = {
   getCallSessionSnapshot: (input?: {
     callRecordId?: string;
   }) => Promise<NativeCallSessionSnapshot>;
+  getConnectionProfile?: () => Promise<NativeConnectionProfile>;
+  saveConnectionProfile?: (input: {
+    serverUrl: string;
+  }) => Promise<NativeConnectionProfile>;
+  testConnection?: (input: {
+    serverUrl?: string;
+  }) => Promise<NativeConnectionTestResult>;
+  reloadApp?: () => Promise<NativeConnectionProfile>;
   addListener?: (
     eventName: "callRecordingSessionUpdated",
     listener: (snapshot: NativeCallSessionSnapshot) => void,
@@ -63,6 +71,20 @@ export type NativeRecordedCallStartResult = {
   deviceId?: string;
   phone?: string;
   errorMessage?: string;
+};
+
+export type NativeConnectionProfile = {
+  serverUrl?: string;
+  defaultServerUrl?: string;
+  updateManifestUrl?: string;
+};
+
+export type NativeConnectionTestResult = {
+  ok?: boolean;
+  status?: number;
+  serverUrl?: string;
+  preview?: string;
+  message?: string;
 };
 
 function getCapacitor() {
@@ -241,4 +263,49 @@ export async function readNativeCallSessionSnapshot(callRecordId?: string | null
   } catch {
     return null;
   }
+}
+
+export async function readNativeConnectionProfile() {
+  const plugin = getNativeCallRecorderPlugin();
+
+  if (!plugin?.getConnectionProfile || !canUseNativeCallRecorder()) {
+    return null;
+  }
+
+  try {
+    return await plugin.getConnectionProfile();
+  } catch {
+    return null;
+  }
+}
+
+export async function saveNativeConnectionProfile(serverUrl: string) {
+  const plugin = getNativeCallRecorderPlugin();
+
+  if (!plugin?.saveConnectionProfile || !canUseNativeCallRecorder()) {
+    throw new Error("当前客户端不支持代理地址设置。");
+  }
+
+  return plugin.saveConnectionProfile({ serverUrl });
+}
+
+export async function testNativeConnection(serverUrl?: string) {
+  const plugin = getNativeCallRecorderPlugin();
+
+  if (!plugin?.testConnection || !canUseNativeCallRecorder()) {
+    throw new Error("当前客户端不支持连接检测。");
+  }
+
+  return plugin.testConnection({ serverUrl });
+}
+
+export async function reloadNativeApp() {
+  const plugin = getNativeCallRecorderPlugin();
+
+  if (!plugin?.reloadApp || !canUseNativeCallRecorder()) {
+    window.location.reload();
+    return null;
+  }
+
+  return plugin.reloadApp();
 }

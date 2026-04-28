@@ -2,7 +2,7 @@
 
 酒水私域销售团队内部 CRM。
 
-当前仓库以 `Customer` 销售主线、`TradeOrder` 成交主单、`/products` 商品主入口、`/fulfillment` 履约主入口为准，不是泛 ERP，也不包含 PBX / 外呼能力。
+当前仓库以 `Customer` 销售主线、`TradeOrder` 成交主单、`/products` 商品主入口、`/fulfillment` 履约主入口为准，不是泛 ERP。CRM 不内置 PBX / SIP trunk，但已经提供正式 CTI 外呼、WebRTC 坐席、服务端录音导入与录音 AI 质检接入能力。
 
 ## 文档入口
 
@@ -24,6 +24,7 @@
 - UI / 页面结构 / workbench：先读 `DESIGN.md`、`UI_ENTRYPOINTS.md` 与 `plans/2026-04-22-sitewide-ui-and-truth-cutover.md`
 - 客户 / 交易 / 履约 / 支付 / 商品主线：先读 `PRD.md`
 - 兼容路径 / 切流背景 / worker 运行基线：先读 `HANDOFF.md`
+- 外呼 / WebRTC / 录音 / AI：先读 `docs/cti-outbound-call-runbook.md`、`docs/call-ai-production-runbook.md`
 
 ## 目录分层
 
@@ -156,6 +157,9 @@ npm run build
 ## 部署与历史文档
 
 - 正式部署说明见 [docs/deployment-baseline.md](./docs/deployment-baseline.md)
+- CTI 外呼接入说明见 [docs/cti-outbound-call-runbook.md](./docs/cti-outbound-call-runbook.md)
+- 录音 AI 生产 runbook 见 [docs/call-ai-production-runbook.md](./docs/call-ai-production-runbook.md)
+- 内网 ASR 服务 contract 见 [docs/call-ai-local-asr-runbook.md](./docs/call-ai-local-asr-runbook.md)
 - staging 验收清单见 [docs/staging-checklist.md](./docs/staging-checklist.md)
 - Prisma migration rebaseline 说明见 [docs/prisma-migration-rebaseline.md](./docs/prisma-migration-rebaseline.md)
 - 历史 freeze / 阶段交接文档统一收口到 [docs/archive/README.md](./docs/archive/README.md)

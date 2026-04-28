@@ -176,7 +176,7 @@ function CustomerFollowUpDialogBody({
         role="dialog"
         aria-modal="true"
         aria-label={`跟进 ${item.name}`}
-        className="relative flex max-h-[calc(100vh-3rem)] w-full max-w-[66rem] flex-col overflow-hidden rounded-[1.55rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-lg)]"
+        className="relative flex max-h-[calc(100vh-3rem)] w-full max-w-[72rem] flex-col overflow-hidden rounded-[1.55rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-lg)]"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="relative border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-5 py-4 md:px-6">
@@ -229,8 +229,8 @@ function CustomerFollowUpDialogBody({
           </div>
         </div>
 
-        <div className="relative grid gap-4 overflow-y-auto px-5 py-4 md:px-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(19rem,0.92fr)]">
-          <div className="space-y-3.5">
+        <div className="relative grid min-w-0 gap-4 overflow-y-auto px-5 py-4 md:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.82fr)] xl:grid-cols-[minmax(0,1.05fr)_minmax(23rem,0.85fr)]">
+          <div className="min-w-0 space-y-3.5">
             <div className={cn(dialogSurfaceClassName, "px-4 py-3.5")}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex min-w-0 flex-wrap items-center gap-2.5">
@@ -312,7 +312,7 @@ function CustomerFollowUpDialogBody({
             )}
           </div>
 
-          <div className={cn(dialogSurfaceClassName, "flex min-h-0 flex-col px-4 py-3.5 md:px-5")}>
+          <div className={cn(dialogSurfaceClassName, "flex min-h-0 min-w-0 flex-col px-4 py-3.5 md:px-5")}>
             <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-1">
                 <p className="crm-detail-label text-[11px]">最近记录</p>

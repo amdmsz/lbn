@@ -68,7 +68,7 @@ CALL_AI_LOCAL_ASR_ENDPOINT=http://10.0.0.20:8000/asr/transcribe
 CALL_AI_LOCAL_ASR_MODEL=funasr-sensevoice
 CALL_AI_LLM_PROVIDER=DEEPSEEK
 DEEPSEEK_API_KEY=...
-CALL_AI_DEEPSEEK_MODEL=deepseek-v4-flash
+CALL_AI_DEEPSEEK_MODEL=deepseek-v4-pro
 ```
 
 Check with a real uploaded audio file:
@@ -97,7 +97,8 @@ does not need to support OPPO / Android native AMR containers directly.
 
 ## Notes
 
-- Do not use `DASHSCOPE_FILE` for LAN-only recordings; cloud ASR cannot pull private IP URLs.
+- Do not use `DASHSCOPE_FILE_ASR` for LAN-only recordings; cloud ASR cannot pull private IP URLs.
+- If you use OpenAI ASR instead of local ASR, set `CALL_AI_ASR_PROVIDER=OPENAI` and `CALL_AI_ASR_MODEL=gpt-4o-transcribe-diarize`.
 - Keep the ASR endpoint reachable only from trusted internal servers.
 - If the CRM server cannot access the internet, use `LOCAL_HTTP_ASR` and add a local LLM provider before production.
 - Production systemd/timer deployment is documented in [call-ai-production-runbook.md](./call-ai-production-runbook.md).

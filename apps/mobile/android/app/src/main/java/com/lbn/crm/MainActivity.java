@@ -1,11 +1,14 @@
 package com.lbn.crm;
 
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
 
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.CapConfig;
 
 import com.lbn.crm.BuildConfig;
 
@@ -20,11 +23,17 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends BridgeActivity {
-    private static final String UPDATE_MANIFEST_URL = "http://crm.cclbn.com/client-update.json";
+    public static final String PREFERENCES_NAME = "lbn_crm_connection";
+    public static final String KEY_SERVER_URL = "serverUrl";
+    public static final String DEFAULT_SERVER_URL = "https://crm.cclbn.com/mobile";
     private final ExecutorService updateExecutor = Executors.newSingleThreadExecutor();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        config = new CapConfig.Builder(this)
+                .setServerUrl(getServerUrl(this))
+                .setAllowMixedContent(true)
+                .create();
         registerPlugin(LbnCallRecorderPlugin.class);
         super.onCreate(savedInstanceState);
         checkForUpdates();
@@ -39,7 +48,7 @@ public class MainActivity extends BridgeActivity {
     private void checkForUpdates() {
         updateExecutor.execute(() -> {
             try {
-                HttpURLConnection connection = (HttpURLConnection) new URL(UPDATE_MANIFEST_URL).openConnection();
+                HttpURLConnection connection = (HttpURLConnection) new URL(getUpdateManifestUrl(this)).openConnection();
                 connection.setRequestMethod("GET");
                 connection.setRequestProperty("Accept", "application/json");
                 connection.setConnectTimeout(5000);
@@ -74,6 +83,58 @@ public class MainActivity extends BridgeActivity {
             } catch (Exception ignored) {
             }
         });
+    }
+
+    public static String getServerUrl(Context context) {
+        SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+        return normalizeServerUrl(preferences.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL));
+    }
+
+    public static void saveServerUrl(Context context, String serverUrl) {
+        context
+                .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putString(KEY_SERVER_URL, normalizeServerUrl(serverUrl))
+                .apply();
+    }
+
+    public static String normalizeServerUrl(String rawValue) {
+        String value = rawValue == null ? "" : rawValue.trim();
+
+        if (value.isEmpty()) {
+            value = DEFAULT_SERVER_URL;
+        }
+
+        if (!value.startsWith("http://") && !value.startsWith("https://")) {
+            value = "https://" + value;
+        }
+
+        while (value.endsWith("/") && value.length() > "https://x".length()) {
+            value = value.substring(0, value.length() - 1);
+        }
+
+        try {
+            URL url = new URL(value);
+            String path = url.getPath() == null ? "" : url.getPath();
+
+            if (path.isEmpty() || "/".equals(path)) {
+                return value + "/mobile";
+            }
+
+            return value;
+        } catch (Exception error) {
+            return DEFAULT_SERVER_URL;
+        }
+    }
+
+    public static String getUpdateManifestUrl(Context context) {
+        try {
+            URL url = new URL(getServerUrl(context));
+            String port = url.getPort() > 0 ? ":" + url.getPort() : "";
+            return url.getProtocol() + "://" + url.getHost() + port + "/client-update.json";
+        } catch (Exception error) {
+            return "https://crm.cclbn.com/client-update.json";
+        }
     }
 
     private void showUpdateDialog(String latestVersion, String notes, String downloadUrl) {

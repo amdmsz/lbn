@@ -38,7 +38,14 @@ import {
 import type { RoleCode } from "@prisma/client";
 import { MobileCallFollowUpSheet } from "@/components/customers/mobile-call-followup-sheet";
 import { StatusBadge } from "@/components/shared/status-badge";
-import { canUseNativeCallRecorder } from "@/lib/calls/native-mobile-call";
+import {
+  canUseNativeCallRecorder,
+  readNativeConnectionProfile,
+  reloadNativeApp,
+  saveNativeConnectionProfile,
+  testNativeConnection,
+  type NativeConnectionProfile,
+} from "@/lib/calls/native-mobile-call";
 import {
   startMobileCallFollowUpDial,
   type MobileCallTriggerSource,
@@ -65,6 +72,7 @@ import type {
 import { cn } from "@/lib/utils";
 
 type MobileTab = "messages" | "customers" | "dialpad" | "apps" | "me";
+type MobileCallMode = "crm-outbound" | "local-phone";
 type DateLike = Date | string | null | undefined;
 type MobileIcon = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
 type CustomerExecutionClassValue = "A" | "B" | "C" | "D" | "E";
@@ -103,6 +111,12 @@ type RecentDialCustomer = {
   resultLabel: string | null;
 };
 
+type MobileOutboundNotice = {
+  tone: "pending" | "success" | "failed";
+  title: string;
+  description: string;
+};
+
 const tabs: Array<{
   key: MobileTab;
   label: string;
@@ -127,6 +141,23 @@ const customerExecutionClassOptions: Array<{
 ];
 
 const RECENT_DIAL_CUSTOMER_STORAGE_KEY = "lbncrm.mobile.recent-dial-customer";
+
+const mobileCallModeOptions: Array<{
+  value: MobileCallMode;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "crm-outbound",
+    label: "CRM 外呼",
+    description: "走 CTI 线路，录音由服务器归档。",
+  },
+  {
+    value: "local-phone",
+    label: "本机通话",
+    description: "调用手机拨号，App 负责录音上传。",
+  },
+];
 
 const keypadRows = [
   [
@@ -201,6 +232,17 @@ function formatCurrencyAmount(value: number) {
   return `¥${new Intl.NumberFormat("zh-CN", {
     maximumFractionDigits: 0,
   }).format(value)}`;
+}
+
+function formatCallDuration(seconds: number) {
+  const safeSeconds = Math.max(0, seconds);
+  const minutes = Math.floor(safeSeconds / 60);
+  const restSeconds = safeSeconds % 60;
+
+  return `${String(minutes).padStart(2, "0")}:${String(restSeconds).padStart(
+    2,
+    "0",
+  )}`;
 }
 
 function getCustomerPrimaryProduct(item: CustomerListItem) {
@@ -711,6 +753,44 @@ function SearchShell({
   );
 }
 
+function CallModeSwitch({
+  value,
+  onChange,
+}: Readonly<{
+  value: MobileCallMode;
+  onChange: (value: MobileCallMode) => void;
+}>) {
+  return (
+    <div className="grid grid-cols-2 gap-2 rounded-[18px] bg-white p-1.5 shadow-[0_8px_22px_rgba(16,24,40,0.04)]">
+      {mobileCallModeOptions.map((option) => {
+        const active = option.value === value;
+
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            className={cn(
+              "min-h-14 rounded-[14px] px-3 py-2 text-left transition",
+              active ? "bg-[#1677ff] text-white" : "bg-[#f7f8fb] text-[#667085]",
+            )}
+          >
+            <span className="block text-[14px] font-semibold">{option.label}</span>
+            <span
+              className={cn(
+                "mt-0.5 block text-[11px] leading-4",
+                active ? "text-white/82" : "text-[#98a1af]",
+              )}
+            >
+              {option.description}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function isCustomerExecutionClassValue(value: string): value is CustomerExecutionClassValue {
   return customerExecutionClassOptions.some((item) => item.value === value);
 }
@@ -971,7 +1051,11 @@ function CustomerRow({
   item: CustomerListItem;
   canCreateCallRecord: boolean;
   onSelect: () => void;
-  onStartCall: (customer: CustomerListItem, triggerSource: MobileCallTriggerSource) => void;
+  onStartCall: (
+    customer: CustomerListItem,
+    triggerSource: MobileCallTriggerSource,
+    mode: MobileCallMode,
+  ) => void;
 }>) {
   const latestCall = item.callRecords[0] ?? null;
   const executionVariant = getCustomerExecutionDisplayVariant({
@@ -984,12 +1068,12 @@ function CustomerRow({
   const primaryProduct = getCustomerPrimaryProduct(item);
   const importSignal = getCustomerImportSignal(item);
 
-  function startCall() {
+  function startCall(mode: MobileCallMode) {
     if (!canCreateCallRecord) {
       return;
     }
 
-    onStartCall(item, "card");
+    onStartCall(item, "card", mode);
   }
 
   return (
@@ -1043,18 +1127,34 @@ function CustomerRow({
           </div>
         </button>
 
-        <button
-          type="button"
-          onClick={startCall}
-          aria-label={`拨打 ${item.name}`}
-          disabled={!canCreateCallRecord}
-          className={cn(
-            "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-[0_10px_22px_rgba(22,119,255,0.24)]",
-            canCreateCallRecord ? "bg-[#1677ff]" : "bg-[#d0d5dd]",
-          )}
-        >
-          <PhoneCall className="h-5 w-5" aria-hidden />
-        </button>
+        <div className="grid shrink-0 gap-2">
+          <button
+            type="button"
+            onClick={() => startCall("crm-outbound")}
+            aria-label={`CRM 外呼 ${item.name}`}
+            disabled={!canCreateCallRecord}
+            className={cn(
+              "inline-flex h-9 min-w-14 items-center justify-center rounded-full px-3 text-[12px] font-semibold text-white shadow-[0_10px_22px_rgba(22,119,255,0.2)]",
+              canCreateCallRecord ? "bg-[#1677ff]" : "bg-[#d0d5dd]",
+            )}
+          >
+            外呼
+          </button>
+          <button
+            type="button"
+            onClick={() => startCall("local-phone")}
+            aria-label={`本机通话 ${item.name}`}
+            disabled={!canCreateCallRecord}
+            className={cn(
+              "inline-flex h-9 min-w-14 items-center justify-center rounded-full px-3 text-[12px] font-semibold",
+              canCreateCallRecord
+                ? "bg-[#eaf3ff] text-[#1677ff]"
+                : "bg-[#f2f4f7] text-[#98a1af]",
+            )}
+          >
+            本机
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1084,7 +1184,11 @@ function CustomersTab({
     assignedTo: string | null;
   }) => void;
   onSelectCustomer: (customer: CustomerListItem) => void;
-  onStartCall: (customer: CustomerListItem, triggerSource: MobileCallTriggerSource) => void;
+  onStartCall: (
+    customer: CustomerListItem,
+    triggerSource: MobileCallTriggerSource,
+    mode: MobileCallMode,
+  ) => void;
 }>) {
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const localQuery = normalizeSearchValue(searchText);
@@ -1173,6 +1277,8 @@ function DialpadTab({
   items,
   dialNumber,
   setDialNumber,
+  callMode,
+  setCallMode,
   canCreateCallRecord,
   recentDialCustomer,
   onSelectCustomer,
@@ -1181,10 +1287,16 @@ function DialpadTab({
   items: CustomerListItem[];
   dialNumber: string;
   setDialNumber: (value: string) => void;
+  callMode: MobileCallMode;
+  setCallMode: (value: MobileCallMode) => void;
   canCreateCallRecord: boolean;
   recentDialCustomer: RecentDialCustomer | null;
   onSelectCustomer: (customer: CustomerListItem) => void;
-  onStartCall: (customer: CustomerListItem, triggerSource: MobileCallTriggerSource) => void;
+  onStartCall: (
+    customer: CustomerListItem,
+    triggerSource: MobileCallTriggerSource,
+    mode: MobileCallMode,
+  ) => void;
 }>) {
   const matchedCustomer = findDialCustomer(items, dialNumber);
   const suggestions = filterDialCustomers(items, dialNumber).filter(
@@ -1199,7 +1311,7 @@ function DialpadTab({
     setDialNumber(`${dialNumber}${value}`);
   }
 
-  function startDial() {
+  function startDial(mode: MobileCallMode = callMode) {
     const normalizedNumber = normalizeDialValue(dialNumber);
 
     if (!normalizedNumber) {
@@ -1207,7 +1319,7 @@ function DialpadTab({
     }
 
     if (matchedCustomer && canCreateCallRecord) {
-      onStartCall(matchedCustomer, "card");
+      onStartCall(matchedCustomer, "card", mode);
       return;
     }
 
@@ -1224,6 +1336,10 @@ function DialpadTab({
           onChange={setDialNumber}
           placeholder="搜索客户或输入号码"
         />
+
+        <div className="mt-3">
+          <CallModeSwitch value={callMode} onChange={setCallMode} />
+        </div>
 
         {recentDialCustomer ? (
           <div className="mt-4 rounded-[20px] bg-white px-4 py-3 shadow-[0_8px_20px_rgba(16,24,40,0.035)]">
@@ -1320,11 +1436,18 @@ function DialpadTab({
           ))}
         </div>
 
-        <div className="mt-5 grid grid-cols-3 items-center">
-          <span />
+        <div className="mt-5 grid grid-cols-3 items-center gap-3">
           <button
             type="button"
-            onClick={startDial}
+            onClick={() => startDial("crm-outbound")}
+            disabled={!matchedCustomer || !canCreateCallRecord}
+            className="inline-flex h-12 items-center justify-center rounded-[16px] bg-[#eaf3ff] px-3 text-[13px] font-semibold text-[#1677ff] disabled:bg-[#f2f4f7] disabled:text-[#98a1af]"
+          >
+            外呼
+          </button>
+          <button
+            type="button"
+            onClick={() => startDial(callMode)}
             disabled={!normalizeDialValue(dialNumber)}
             className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-full bg-[#1677ff] text-white shadow-[0_16px_28px_rgba(22,119,255,0.24)] disabled:bg-[#d0d5dd] disabled:shadow-none"
             aria-label="拨打电话"
@@ -1333,12 +1456,29 @@ function DialpadTab({
           </button>
           <button
             type="button"
-            onClick={() => setDialNumber(dialNumber.slice(0, -1))}
-            className="ml-auto inline-flex h-12 w-12 items-center justify-center rounded-full text-[#475467]"
-            aria-label="删除一位号码"
+            onClick={() => {
+              if (normalizeDialValue(dialNumber)) {
+                startDial("local-phone");
+                return;
+              }
+
+              setDialNumber(dialNumber.slice(0, -1));
+            }}
+            className="inline-flex h-12 items-center justify-center rounded-[16px] bg-white px-3 text-[13px] font-semibold text-[#475467]"
+            aria-label="本机通话"
           >
-            <Delete className="h-7 w-7" aria-hidden />
+            本机
           </button>
+          {dialNumber ? (
+            <button
+              type="button"
+              onClick={() => setDialNumber(dialNumber.slice(0, -1))}
+              className="col-start-3 ml-auto inline-flex h-10 w-10 items-center justify-center rounded-full text-[#475467]"
+              aria-label="删除一位号码"
+            >
+              <Delete className="h-6 w-6" aria-hidden />
+            </button>
+          ) : null}
         </div>
       </div>
     </section>
@@ -1620,6 +1760,129 @@ function AppsTab({
   );
 }
 
+function ConnectionSettingsDrawer({
+  profile,
+  onClose,
+  onSaved,
+}: Readonly<{
+  profile: NativeConnectionProfile | null;
+  onClose: () => void;
+  onSaved: (profile: NativeConnectionProfile) => void;
+}>) {
+  const [serverUrl, setServerUrl] = useState(
+    profile?.serverUrl ?? profile?.defaultServerUrl ?? "https://crm.cclbn.com/mobile",
+  );
+  const [message, setMessage] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function testCurrentConnection() {
+    setPending(true);
+    setMessage("正在检测连接...");
+
+    try {
+      const result = await testNativeConnection(serverUrl);
+      setMessage(
+        result.ok
+          ? `连接正常，HTTP ${result.status ?? 200}`
+          : result.message ?? `连接失败，HTTP ${result.status ?? 0}`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "连接检测失败。");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function saveAndReload() {
+    setPending(true);
+    setMessage("正在保存代理地址...");
+
+    try {
+      const nextProfile = await saveNativeConnectionProfile(serverUrl);
+      onSaved(nextProfile);
+      setMessage("已保存，正在重新连接 CRM。");
+      await reloadNativeApp();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "代理地址保存失败。");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[74] md:hidden">
+      <button
+        type="button"
+        aria-label="关闭连接设置"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/28 backdrop-blur-[8px]"
+      />
+      <section className="absolute inset-x-0 bottom-0 rounded-t-[28px] bg-[#f7f8fb] px-5 pb-6 pt-4 shadow-[0_-22px_60px_rgba(16,24,40,0.18)]">
+        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-[#d0d5dd]" />
+
+        <div className="rounded-[24px] bg-white px-5 py-5 shadow-[0_12px_28px_rgba(16,24,40,0.05)]">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#98a1af]">
+                Proxy
+              </p>
+              <h2 className="mt-1 text-[22px] font-semibold text-[#20242c]">
+                连接代理
+              </h2>
+              <p className="mt-2 text-[13px] leading-5 text-[#667085]">
+                手机不在公司 WiFi 时填写公网 HTTPS 代理入口，入口需反代到 CRM 服务器。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f2f4f7] text-[#667085]"
+              aria-label="关闭"
+            >
+              <X className="h-5 w-5" aria-hidden />
+            </button>
+          </div>
+
+          <label className="mt-5 grid gap-2 text-[13px] font-medium text-[#667085]">
+            CRM / 代理地址
+            <input
+              value={serverUrl}
+              onChange={(event) => setServerUrl(event.target.value)}
+              placeholder="https://crm.cclbn.com/mobile"
+              className="h-12 rounded-[16px] border border-black/5 bg-[#fbfcfe] px-3 text-[15px] text-[#20242c] outline-none"
+            />
+          </label>
+
+          {message ? (
+            <p className="mt-3 rounded-[14px] bg-[#f7f8fb] px-3 py-2 text-[12px] leading-5 text-[#667085]">
+              {message}
+            </p>
+          ) : null}
+
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={testCurrentConnection}
+              className="h-12 rounded-[16px] bg-[#eaf3ff] text-[15px] font-semibold text-[#1677ff] disabled:opacity-60"
+            >
+              检测
+            </button>
+            <button
+              type="button"
+              disabled={pending || !serverUrl.trim()}
+              onClick={saveAndReload}
+              className="h-12 rounded-[16px] bg-[#1677ff] text-[15px] font-semibold text-white shadow-[0_14px_28px_rgba(22,119,255,0.22)] disabled:bg-[#d0d5dd] disabled:shadow-none"
+            >
+              保存并重连
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function MeTab({
   user,
   data,
@@ -1639,6 +1902,24 @@ function MeTab({
   openDialpad: () => void;
   onOpenModule: (module: MobileModuleView) => void;
 }>) {
+  const [connectionProfile, setConnectionProfile] =
+    useState<NativeConnectionProfile | null>(null);
+  const [connectionDrawerOpen, setConnectionDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    let canceled = false;
+
+    void readNativeConnectionProfile().then((profile) => {
+      if (!canceled) {
+        setConnectionProfile(profile);
+      }
+    });
+
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
   const profileRows = [
     {
       icon: UserRound,
@@ -1674,6 +1955,13 @@ function MeTab({
       title: "外呼助手",
       value: nativeRecorderState,
       onClick: openDialpad,
+    },
+    {
+      icon: SlidersHorizontal,
+      tone: "violet" as const,
+      title: "连接代理",
+      value: connectionProfile?.serverUrl ?? "公网代理/服务器入口",
+      onClick: () => setConnectionDrawerOpen(true),
     },
   ];
 
@@ -1779,6 +2067,14 @@ function MeTab({
           退出登录
         </button>
       </div>
+
+      {connectionDrawerOpen ? (
+        <ConnectionSettingsDrawer
+          profile={connectionProfile}
+          onClose={() => setConnectionDrawerOpen(false)}
+          onSaved={setConnectionProfile}
+        />
+      ) : null}
     </section>
   );
 }
@@ -1792,7 +2088,11 @@ function CustomerDetailDrawer({
 }: Readonly<{
   customer: CustomerListItem | null;
   canCreateCallRecord: boolean;
-  onStartCall: (customer: CustomerListItem, triggerSource: MobileCallTriggerSource) => void;
+  onStartCall: (
+    customer: CustomerListItem,
+    triggerSource: MobileCallTriggerSource,
+    mode: MobileCallMode,
+  ) => void;
   onOpenOrder: (customer: CustomerListItem) => void;
   onClose: () => void;
 }>) {
@@ -1810,12 +2110,12 @@ function CustomerDetailDrawer({
   const primaryProduct = getCustomerPrimaryProduct(customer);
   const importSignal = getCustomerImportSignal(customer);
 
-  function startCall() {
+  function startCall(mode: MobileCallMode) {
     if (!canCreateCallRecord || !customer) {
       return;
     }
 
-    onStartCall(customer, "detail");
+    onStartCall(customer, "detail", mode);
   }
 
   return (
@@ -1888,7 +2188,7 @@ function CustomerDetailDrawer({
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3">
+          <div className="mt-5 grid grid-cols-3 gap-3">
             <button
               type="button"
               onClick={() => onOpenOrder(customer)}
@@ -1899,7 +2199,7 @@ function CustomerDetailDrawer({
             </button>
             <button
               type="button"
-              onClick={startCall}
+              onClick={() => startCall("crm-outbound")}
               disabled={!canCreateCallRecord}
               className={cn(
                 "inline-flex h-12 items-center justify-center rounded-[16px] text-[15px] font-semibold",
@@ -1908,8 +2208,20 @@ function CustomerDetailDrawer({
                   : "bg-[#f2f4f7] text-[#98a1af]",
               )}
             >
-              <PhoneCall className="mr-2 h-5 w-5" aria-hidden />
-              拨打
+              外呼
+            </button>
+            <button
+              type="button"
+              onClick={() => startCall("local-phone")}
+              disabled={!canCreateCallRecord}
+              className={cn(
+                "inline-flex h-12 items-center justify-center rounded-[16px] text-[15px] font-semibold",
+                canCreateCallRecord
+                  ? "bg-[#f7f8fb] text-[#475467]"
+                  : "bg-[#f2f4f7] text-[#98a1af]",
+              )}
+            >
+              本机
             </button>
           </div>
         </div>
@@ -1965,7 +2277,11 @@ function CustomerOrderDrawer({
   customer: CustomerListItem | null;
   onClose: () => void;
   onOpenOrders: (customer: CustomerListItem) => void;
-  onStartCall: (customer: CustomerListItem, triggerSource: MobileCallTriggerSource) => void;
+  onStartCall: (
+    customer: CustomerListItem,
+    triggerSource: MobileCallTriggerSource,
+    mode: MobileCallMode,
+  ) => void;
 }>) {
   if (!customer) {
     return null;
@@ -2046,7 +2362,7 @@ function CustomerOrderDrawer({
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="mt-4 grid grid-cols-3 gap-3">
           <button
             type="button"
             onClick={() => onOpenOrders(customer)}
@@ -2057,11 +2373,17 @@ function CustomerOrderDrawer({
           </button>
           <button
             type="button"
-            onClick={() => onStartCall(customer, "detail")}
+            onClick={() => onStartCall(customer, "detail", "crm-outbound")}
             className="inline-flex h-12 items-center justify-center rounded-[16px] bg-white text-[15px] font-semibold text-[#1677ff]"
           >
-            <PhoneCall className="mr-2 h-5 w-5" aria-hidden />
-            确认电话
+            外呼
+          </button>
+          <button
+            type="button"
+            onClick={() => onStartCall(customer, "detail", "local-phone")}
+            className="inline-flex h-12 items-center justify-center rounded-[16px] bg-white text-[15px] font-semibold text-[#475467]"
+          >
+            本机
           </button>
         </div>
       </section>
@@ -2303,9 +2625,11 @@ export function MobileAppShell({
   );
   const [searchText, setSearchText] = useState(data.filters.search);
   const [dialNumber, setDialNumber] = useState("");
+  const [callMode, setCallMode] = useState<MobileCallMode>("crm-outbound");
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerListItem | null>(null);
   const [orderCustomer, setOrderCustomer] = useState<CustomerListItem | null>(null);
   const [activeModule, setActiveModule] = useState<MobileModuleView | null>(null);
+  const [outboundNotice, setOutboundNotice] = useState<MobileOutboundNotice | null>(null);
   const [recentDialCustomer, setRecentDialCustomer] = useState<RecentDialCustomer | null>(
     () => getRecentDialFromRecords(data.queueItems),
   );
@@ -2416,16 +2740,151 @@ export function MobileAppShell({
   function startCustomerCall(
     customer: CustomerListItem,
     triggerSource: MobileCallTriggerSource,
+    mode: MobileCallMode = callMode,
   ) {
-    const recent = createRecentDialCustomer(customer);
+    const recent = createRecentDialCustomer(
+      customer,
+      mode === "crm-outbound" ? "CRM 外呼" : "本机通话",
+    );
     setRecentDialCustomer(recent);
     writeRecentDialCustomer(recent);
+
+    if (mode === "crm-outbound") {
+      void startCrmOutboundCall(customer);
+      return;
+    }
+
     startMobileCallFollowUpDial({
       customerId: customer.id,
       customerName: customer.name,
       phone: customer.phone,
       triggerSource,
     });
+  }
+
+  async function startCrmOutboundCall(customer: CustomerListItem) {
+    setOutboundNotice({
+      tone: "pending",
+      title: "CRM 外呼发起中",
+      description: `${customer.name} · 正在提交到 CTI 线路`,
+    });
+
+    try {
+      const response = await fetch("/api/outbound-calls/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerId: customer.id }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        call?: {
+          sessionId?: string;
+          callRecordId?: string;
+          status?: string;
+        };
+        message?: string;
+      } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.message ?? "CRM 外呼发起失败。");
+      }
+
+      const sessionId = payload?.call?.sessionId;
+      setOutboundNotice({
+        tone: "pending",
+        title: "CRM 外呼已提交",
+        description: "等待坐席接听和客户接通，录音由服务器归档。",
+      });
+
+      if (sessionId) {
+        pollCrmOutboundSession(sessionId, customer.name);
+      }
+    } catch (error) {
+      setOutboundNotice({
+        tone: "failed",
+        title: "CRM 外呼失败",
+        description: error instanceof Error ? error.message : "CRM 外呼发起失败。",
+      });
+    }
+  }
+
+  function pollCrmOutboundSession(sessionId: string, customerName: string) {
+    let attempts = 0;
+
+    async function poll() {
+      attempts += 1;
+
+      try {
+        const response = await fetch(`/api/outbound-calls/${sessionId}`, {
+          cache: "no-store",
+        });
+        const payload = (await response.json().catch(() => null)) as {
+          session?: {
+            status?: string;
+            failureMessage?: string | null;
+            durationSeconds?: number | null;
+            recordingImportedAt?: string | null;
+          };
+        } | null;
+        const session = payload?.session;
+
+        if (!response.ok || !session?.status) {
+          throw new Error("外呼状态读取失败。");
+        }
+
+        if (session.status === "ENDED") {
+          setOutboundNotice({
+            tone: "success",
+            title: "CRM 外呼已结束",
+            description: session.durationSeconds
+              ? `${customerName} · 通话 ${formatCallDuration(session.durationSeconds)}${
+                  session.recordingImportedAt ? "，录音已归档" : ""
+                }`
+              : `${customerName} · 通话已结束`,
+          });
+          router.refresh();
+          return;
+        }
+
+        if (session.status === "FAILED" || session.status === "CANCELED") {
+          setOutboundNotice({
+            tone: "failed",
+            title: "CRM 外呼未接通",
+            description: session.failureMessage ?? "线路返回失败或客户未接通。",
+          });
+          router.refresh();
+          return;
+        }
+
+        if (session.status === "ANSWERED") {
+          setOutboundNotice({
+            tone: "pending",
+            title: "客户已接通",
+            description: `${customerName} · 正在通话，录音由服务器保存。`,
+          });
+        } else if (session.status === "RINGING") {
+          setOutboundNotice({
+            tone: "pending",
+            title: "客户振铃中",
+            description: `${customerName} · 等待客户接听。`,
+          });
+        }
+      } catch {
+        if (attempts > 3) {
+          setOutboundNotice({
+            tone: "failed",
+            title: "外呼状态暂不可用",
+            description: "请稍后在通话记录或录音质检中查看结果。",
+          });
+          return;
+        }
+      }
+
+      if (attempts < 80) {
+        window.setTimeout(poll, 1800);
+      }
+    }
+
+    window.setTimeout(poll, 1000);
   }
 
   return (
@@ -2457,6 +2916,8 @@ export function MobileAppShell({
             items={data.queueItems}
             dialNumber={dialNumber}
             setDialNumber={setDialNumber}
+            callMode={callMode}
+            setCallMode={setCallMode}
             canCreateCallRecord={canCreateCallRecord}
             recentDialCustomer={recentDialCustomer}
             onSelectCustomer={setSelectedCustomer}
@@ -2492,6 +2953,26 @@ export function MobileAppShell({
         <div className="fixed left-1/2 top-4 z-[80] -translate-x-1/2 rounded-full bg-[#20242c] px-3 py-1.5 text-[12px] font-medium text-white shadow-[0_12px_24px_rgba(16,24,40,0.18)]">
           更新中...
         </div>
+      ) : null}
+
+      {outboundNotice ? (
+        <button
+          type="button"
+          onClick={() => setOutboundNotice(null)}
+          className={cn(
+            "fixed left-1/2 top-4 z-[82] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 rounded-[18px] border px-4 py-3 text-left shadow-[0_18px_38px_rgba(16,24,40,0.18)]",
+            outboundNotice.tone === "failed"
+              ? "border-red-200 bg-white text-red-700"
+              : outboundNotice.tone === "success"
+                ? "border-emerald-200 bg-white text-emerald-700"
+                : "border-[#cfe2ff] bg-white text-[#1677ff]",
+          )}
+        >
+          <span className="block text-[14px] font-semibold">{outboundNotice.title}</span>
+          <span className="mt-1 block text-[12px] leading-5 text-[#667085]">
+            {outboundNotice.description}
+          </span>
+        </button>
       ) : null}
 
       {canCreateCallRecord ? (

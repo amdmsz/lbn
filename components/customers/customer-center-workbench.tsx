@@ -41,7 +41,6 @@ export function CustomerCenterWorkbench({
       toolbar={
         <div className={cn(workspaceShellClassName, "relative z-20 mb-3")}>
           <CustomerFilterToolbar
-            key={JSON.stringify(data.filters)}
             filters={data.filters}
             productOptions={data.productOptions}
             tagOptions={data.tagOptions}

@@ -10,11 +10,13 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { upsertCustomerLiveInvitationAction } from "@/app/(dashboard)/customers/[id]/engagement-actions";
 import {
+  CustomerDossierLedgerRow,
   CustomerDossierMeta,
   CustomerDossierNotice,
   CustomerDossierPanel,
-  CustomerDossierRecordCard,
   CustomerDossierSignalRail,
+  type CustomerDossierStatusItem,
+  type CustomerDossierStatusTone,
   type CustomerDossierSignalItem,
 } from "@/components/customers/customer-dossier-primitives";
 import {
@@ -73,6 +75,55 @@ function getDefaultDateTimeLocalValue() {
   const now = new Date();
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
+}
+
+function getInvitationTone(status: InvitationStatus): CustomerDossierStatusTone {
+  switch (status) {
+    case "ACCEPTED":
+      return "success";
+    case "INVITED":
+      return "info";
+    case "REJECTED":
+      return "danger";
+    default:
+      return "warning";
+  }
+}
+
+function getAttendanceTone(status: AttendanceStatus): CustomerDossierStatusTone {
+  switch (status) {
+    case "ATTENDED":
+      return "success";
+    case "LEFT_EARLY":
+      return "warning";
+    default:
+      return "neutral";
+  }
+}
+
+function getLiveSessionTone(status: LiveSessionStatus): CustomerDossierStatusTone {
+  switch (status) {
+    case "LIVE":
+      return "warning";
+    case "ENDED":
+      return "success";
+    case "CANCELED":
+      return "danger";
+    case "SCHEDULED":
+      return "info";
+    default:
+      return "neutral";
+  }
+}
+
+function formatDateTimeLocalInput(value: Date | null) {
+  if (!value) {
+    return "";
+  }
+
+  return new Date(value.getTime() - value.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 16);
 }
 
 export function CustomerLiveRecordsSection({
@@ -328,28 +379,47 @@ export function CustomerLiveRecordsSection({
         actions={<CustomerDossierMeta>{records.length} 条记录</CustomerDossierMeta>}
       >
         {records.length > 0 ? (
-          <div className="space-y-4">
-            {records.map((record) => (
-              <div key={record.id} className="space-y-3">
-                <CustomerDossierRecordCard
-                  title={record.liveSession.title}
-                  meta={[
-                    `主播 ${record.liveSession.hostName}`,
-                    `开播 ${formatDateTime(record.liveSession.startAt)}`,
-                    `场次状态 ${getLiveSessionStatusLabel(record.liveSession.status)}`,
-                    `销售 ${record.sales.name} (@${record.sales.username})`,
-                    `邀约状态 ${getInvitationStatusLabel(record.invitationStatus)}`,
-                    `邀约方式 ${getInvitationMethodLabel(record.invitationMethod)}`,
-                    `到场状态 ${getAttendanceStatusLabel(record.attendanceStatus)}`,
-                    `观看时长 ${record.watchDurationMinutes ?? 0} 分钟`,
-                    `礼品达标 ${record.giftQualified ? "是" : "否"}`,
-                  ]}
-                  summary={record.remark?.trim() || "无备注"}
-                  aside={record.liveSession.targetProduct || "未绑定产品"}
-                />
-
-                {canManage ? (
-                  <CustomerDossierPanel>
+          <div className="space-y-2.5">
+            {records.map((record) => {
+              const statusItems: CustomerDossierStatusItem[] = [
+                {
+                  label: "邀约",
+                  value: getInvitationStatusLabel(record.invitationStatus),
+                  tone: getInvitationTone(record.invitationStatus),
+                },
+                {
+                  label: "到场",
+                  value: getAttendanceStatusLabel(record.attendanceStatus),
+                  tone: getAttendanceTone(record.attendanceStatus),
+                },
+                {
+                  label: "观看",
+                  value: `${record.watchDurationMinutes ?? 0} 分钟`,
+                  tone:
+                    (record.watchDurationMinutes ?? 0) > 0 ? "info" : "neutral",
+                },
+                {
+                  label: "礼品",
+                  value: record.giftQualified ? "已达标" : "未达标",
+                  tone: record.giftQualified ? "success" : "neutral",
+                },
+                {
+                  label: "场次",
+                  value: getLiveSessionStatusLabel(record.liveSession.status),
+                  tone: getLiveSessionTone(record.liveSession.status),
+                },
+                {
+                  label: "方式",
+                  value: getInvitationMethodLabel(record.invitationMethod),
+                  tone: "neutral",
+                },
+              ];
+              const editDetail = canManage ? (
+                <details className="rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2.5">
+                  <summary className="cursor-pointer list-none text-[12px] font-medium text-[var(--foreground)]">
+                    更新该场记录
+                  </summary>
+                  <CustomerDossierPanel className="mt-3 border-none bg-transparent p-0 shadow-none">
                     <form
                       onSubmit={(event) => handleUpdateSubmit(event, record.id)}
                       className="space-y-4"
@@ -380,16 +450,7 @@ export function CustomerLiveRecordsSection({
                           <input
                             type="datetime-local"
                             name="invitedAt"
-                            defaultValue={
-                              record.invitedAt
-                                ? new Date(
-                                    record.invitedAt.getTime() -
-                                      record.invitedAt.getTimezoneOffset() * 60_000,
-                                  )
-                                    .toISOString()
-                                    .slice(0, 16)
-                                : ""
-                            }
+                            defaultValue={formatDateTimeLocalInput(record.invitedAt)}
                             className="crm-input"
                           />
                         </label>
@@ -479,14 +540,36 @@ export function CustomerLiveRecordsSection({
                           disabled={pendingUpdateId === record.id}
                           className="crm-button crm-button-secondary"
                         >
-                          {pendingUpdateId === record.id ? "保存中..." : "更新该场记录"}
+                          {pendingUpdateId === record.id ? "保存中..." : "保存更新"}
                         </button>
                       </div>
                     </form>
                   </CustomerDossierPanel>
-                ) : null}
-              </div>
-            ))}
+                </details>
+              ) : null;
+
+              return (
+                <CustomerDossierLedgerRow
+                  key={record.id}
+                  title={record.liveSession.title}
+                  subtitle={record.remark?.trim() || "无备注"}
+                  meta={[
+                    `主播 ${record.liveSession.hostName}`,
+                    `开播 ${formatDateTime(record.liveSession.startAt)}`,
+                    `销售 ${record.sales.name} (@${record.sales.username})`,
+                    `邀约时间 ${record.invitedAt ? formatDateTime(record.invitedAt) : "暂无"}`,
+                    record.liveSession.roomId
+                      ? `直播间 ${record.liveSession.roomId}`
+                      : "直播间 未填写",
+                  ]}
+                  statusItems={statusItems}
+                  aside={record.liveSession.targetProduct || "未绑定产品"}
+                  href={record.liveSession.roomLink ?? undefined}
+                  hrefLabel={record.liveSession.roomLink ? "打开直播间" : undefined}
+                  detail={editDetail}
+                />
+              );
+            })}
           </div>
         ) : (
           <CustomerEmptyState

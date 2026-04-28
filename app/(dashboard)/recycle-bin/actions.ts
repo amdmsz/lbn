@@ -40,9 +40,14 @@ function buildRestoreActionResult(
   result: RestoreFromRecycleBinResult,
 ): RecycleBinActionResult {
   if (result.status === "restored") {
+    const pairedCount = result.pairedRestoredEntries.length;
+
     return {
       status: "success",
-      message: "对象已从回收站恢复。",
+      message:
+        pairedCount > 0
+          ? `对象已从回收站恢复，并同步恢复 ${pairedCount} 个关联对象。`
+          : "对象已从回收站恢复。",
       restoreStatus: result.status,
     };
   }
@@ -103,24 +108,46 @@ function revalidateTargetRoutes(input: {
     | "TRADE_ORDER"
     | "CUSTOMER";
   restoreRouteSnapshot?: string;
+  pairedRestoredEntries?: Extract<
+    RestoreFromRecycleBinResult,
+    { status: "restored" }
+  >["pairedRestoredEntries"];
 }) {
   revalidatePath("/recycle-bin");
 
-  if (input.targetType === "LIVE_SESSION") {
+  revalidateTargetRoute(input.targetType, input.restoreRouteSnapshot);
+
+  for (const pairedEntry of input.pairedRestoredEntries ?? []) {
+    revalidateTargetRoute(pairedEntry.targetType, pairedEntry.restoreRouteSnapshot);
+  }
+}
+
+function revalidateTargetRoute(
+  targetType:
+    | "PRODUCT"
+    | "PRODUCT_SKU"
+    | "SUPPLIER"
+    | "LIVE_SESSION"
+    | "LEAD"
+    | "TRADE_ORDER"
+    | "CUSTOMER",
+  restoreRouteSnapshot?: string,
+) {
+  if (targetType === "LIVE_SESSION") {
     revalidatePath("/live-sessions");
-  } else if (input.targetType === "LEAD") {
+  } else if (targetType === "LEAD") {
     revalidatePath("/leads");
-  } else if (input.targetType === "TRADE_ORDER") {
+  } else if (targetType === "TRADE_ORDER") {
     revalidatePath("/orders");
     revalidatePath("/fulfillment");
-  } else if (input.targetType === "CUSTOMER") {
+  } else if (targetType === "CUSTOMER") {
     revalidatePath("/customers");
   } else {
     revalidatePath("/products");
   }
 
-  if (input.restoreRouteSnapshot) {
-    revalidatePath(getRedirectPathname(input.restoreRouteSnapshot));
+  if (restoreRouteSnapshot) {
+    revalidatePath(getRedirectPathname(restoreRouteSnapshot));
   }
 }
 
@@ -136,6 +163,8 @@ export async function restoreRecycleBinEntryAction(
     revalidateTargetRoutes({
       targetType: result.targetType,
       restoreRouteSnapshot: result.restoreRouteSnapshot,
+      pairedRestoredEntries:
+        result.status === "restored" ? result.pairedRestoredEntries : [],
     });
 
     return buildRestoreActionResult(result);

@@ -8,8 +8,10 @@ import {
   CustomerDossierMeta,
   CustomerDossierNotice,
   CustomerDossierPanel,
-  CustomerDossierRecordCard,
+  CustomerDossierLedgerRow,
   CustomerDossierSignalRail,
+  type CustomerDossierStatusItem,
+  type CustomerDossierStatusTone,
   type CustomerDossierSignalItem,
 } from "@/components/customers/customer-dossier-primitives";
 import {
@@ -48,6 +50,29 @@ function getDefaultDateTimeLocalValue() {
   const now = new Date();
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
+}
+
+function getWechatStatusTone(status: WechatAddStatus): CustomerDossierStatusTone {
+  switch (status) {
+    case "ADDED":
+      return "success";
+    case "REJECTED":
+    case "BLOCKED":
+      return "danger";
+    case "PENDING":
+      return "warning";
+    default:
+      return "neutral";
+  }
+}
+
+function getWechatPrimaryName(record: WechatRecordItem) {
+  return (
+    record.wechatNickname ||
+    record.wechatRemarkName ||
+    record.wechatAccount ||
+    "未命名微信"
+  );
 }
 
 export function CustomerWechatRecordsSection({
@@ -238,29 +263,53 @@ export function CustomerWechatRecordsSection({
       <CustomerTabSection
         eyebrow="微信轨迹"
         title="微信跟进历史"
-        description="回看加微状态、账号沉淀与后续经营安排。"
+        description="按账号、加微状态、标签和下一步安排快速回看。"
         actions={<CustomerDossierMeta>{records.length} 条记录</CustomerDossierMeta>}
       >
         {records.length > 0 ? (
-          <div className="space-y-3">
-            {records.map((record) => (
-              <CustomerDossierRecordCard
-                key={record.id}
-                title={`${getWechatAddedStatusLabel(record.addedStatus)} · ${
-                  record.wechatNickname || record.wechatAccount || "未命名微信"
-                }`}
-                meta={[
-                  `销售 ${record.sales.name} (@${record.sales.username})`,
-                  `加微时间 ${record.addedAt ? formatDateTime(record.addedAt) : "暂无"}`,
-                  `微信账号 ${record.wechatAccount || "未填写"}`,
-                  `微信备注名 ${record.wechatRemarkName || "未填写"}`,
-                  `标签 ${formatWechatTags(record.tags)}`,
-                  `下次跟进 ${record.nextFollowUpAt ? formatDateTime(record.nextFollowUpAt) : "暂无"}`,
-                ]}
-                summary={record.summary?.trim() || "无总结"}
-                aside={record.wechatAccount || record.wechatRemarkName || "未填写账号"}
-              />
-            ))}
+          <div className="space-y-2.5">
+            {records.map((record) => {
+              const tagSummary = formatWechatTags(record.tags);
+              const statusItems: CustomerDossierStatusItem[] = [
+                {
+                  label: "状态",
+                  value: getWechatAddedStatusLabel(record.addedStatus),
+                  tone: getWechatStatusTone(record.addedStatus),
+                },
+                {
+                  label: "账号",
+                  value: record.wechatAccount || "未填写",
+                  tone: record.wechatAccount ? "info" : "neutral",
+                },
+                {
+                  label: "标签",
+                  value: tagSummary,
+                  tone: tagSummary !== "无标签" ? "info" : "neutral",
+                },
+                {
+                  label: "下次跟进",
+                  value: record.nextFollowUpAt
+                    ? formatDateTime(record.nextFollowUpAt)
+                    : "暂无",
+                  tone: record.nextFollowUpAt ? "warning" : "neutral",
+                },
+              ];
+
+              return (
+                <CustomerDossierLedgerRow
+                  key={record.id}
+                  title={`${getWechatAddedStatusLabel(record.addedStatus)} · ${getWechatPrimaryName(record)}`}
+                  subtitle={record.summary?.trim() || "无总结"}
+                  meta={[
+                    `销售 ${record.sales.name} (@${record.sales.username})`,
+                    `加微时间 ${record.addedAt ? formatDateTime(record.addedAt) : "暂无"}`,
+                    `备注名 ${record.wechatRemarkName || "未填写"}`,
+                  ]}
+                  statusItems={statusItems}
+                  aside={record.wechatAccount || record.wechatRemarkName || "未填写账号"}
+                />
+              );
+            })}
           </div>
         ) : (
           <CustomerEmptyState

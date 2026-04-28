@@ -19,14 +19,15 @@ export function CallTranscriptDialogue({
   className,
 }: Readonly<{
   segments: CallTranscriptSegment[];
-  maxSegments?: number;
+  maxSegments?: number | null;
   className?: string;
 }>) {
   if (segments.length === 0) {
     return null;
   }
 
-  const visibleSegments = segments.slice(0, maxSegments);
+  const shouldLimit = typeof maxSegments === "number" && maxSegments > 0;
+  const visibleSegments = shouldLimit ? segments.slice(0, maxSegments) : segments;
   const remainingCount = Math.max(0, segments.length - visibleSegments.length);
 
   return (

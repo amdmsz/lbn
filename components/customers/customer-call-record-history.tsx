@@ -5,7 +5,11 @@ import {
   CustomerEmptyState,
   formatOptionalDate,
 } from "@/components/customers/customer-record-list";
-import { CustomerDossierRecordCard } from "@/components/customers/customer-dossier-primitives";
+import {
+  CustomerDossierLedgerRow,
+  type CustomerDossierStatusItem,
+  type CustomerDossierStatusTone,
+} from "@/components/customers/customer-dossier-primitives";
 import { formatDurationSeconds } from "@/lib/calls/metadata";
 import {
   callAiAnalysisStatusLabels,
@@ -111,13 +115,67 @@ function getRecordTitle(record: CallRecordHistoryItem) {
   return record.resultLabel;
 }
 
-function renderRecordingSummary(record: CallRecordHistoryItem) {
+function getCallOutcomeTone(record: CallRecordHistoryItem): CustomerDossierStatusTone {
+  const title = getRecordTitle(record);
+
+  if (/拒|失败|无效|空号|停机|忙|CHANUNAVAIL|CONGESTION/i.test(title)) {
+    return "danger";
+  }
+
+  if (/未接|未接通|NO ANSWER|CANCEL/i.test(title)) {
+    return "warning";
+  }
+
+  if (record.durationSeconds > 0) {
+    return "success";
+  }
+
+  return "neutral";
+}
+
+function getRecordingTone(record: CallRecordHistoryItem): CustomerDossierStatusTone {
+  if (!record.recording) {
+    return "neutral";
+  }
+
+  return record.recording.durationSeconds || record.durationSeconds > 0
+    ? "success"
+    : "warning";
+}
+
+function getAiTone(record: CallRecordHistoryItem): CustomerDossierStatusTone {
+  const ai = record.recording?.aiAnalysis;
+
+  if (!ai) {
+    return "neutral";
+  }
+
+  if (ai.status === "FAILED") {
+    return "danger";
+  }
+
+  if (ai.status === "READY") {
+    return "success";
+  }
+
+  return "info";
+}
+
+function getAiLabel(record: CallRecordHistoryItem) {
+  const ai = record.recording?.aiAnalysis;
+
+  if (!ai) {
+    return "未分析";
+  }
+
+  return `${getAiStatusLabel(ai.status)}${ai.qualityScore !== null ? ` / ${ai.qualityScore} 分` : ""}`;
+}
+
+function renderRecordingDetail(record: CallRecordHistoryItem) {
   const recording = record.recording;
 
   if (!recording) {
-    const outboundLabel = getOutboundSessionLabel(record);
-
-    return record.remark?.trim() || outboundLabel || "无备注";
+    return null;
   }
 
   const ai = recording.aiAnalysis;
@@ -129,34 +187,36 @@ function renderRecordingSummary(record: CallRecordHistoryItem) {
     extractStoredCallTranscriptSegments(ai?.transcriptJson);
 
   return (
-    <div className="space-y-2">
-      <p>{record.remark?.trim() || "无备注"}</p>
-      <div className="rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2.5">
-        <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
-          <span>录音 {getRecordingStatusLabel(recording.status)}</span>
-          <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-          <span>{formatRecordingFileSize(recording.fileSizeBytes)}</span>
-          {recording.uploadedAt ? (
-            <>
-              <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-              <span>上传 {formatDateTime(normalizeDate(recording.uploadedAt))}</span>
-            </>
-          ) : null}
+    <details className="group rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2.5">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 text-[12px] font-medium text-[var(--foreground)]">
+        <span>录音与 AI 分析</span>
+        <span className="text-[11px] font-normal text-[var(--color-sidebar-muted)]">
+          {getRecordingStatusLabel(recording.status)} / {formatRecordingFileSize(recording.fileSizeBytes)}
+          {ai ? ` / ${getAiLabel(record)}` : ""}
+        </span>
+      </summary>
+      <div className="mt-3 space-y-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
+            <span>录音 {getRecordingStatusLabel(recording.status)}</span>
+            <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+            <span>{formatRecordingFileSize(recording.fileSizeBytes)}</span>
+            {recording.uploadedAt ? (
+              <>
+                <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+                <span>上传 {formatDateTime(normalizeDate(recording.uploadedAt))}</span>
+              </>
+            ) : null}
+          </div>
+          <RecordingAudioPlayer
+            recordingId={recording.id}
+            status={recording.status}
+            mimeType={recording.mimeType}
+            durationSeconds={recording.durationSeconds ?? record.durationSeconds}
+            className="mt-2"
+          />
         </div>
-        <RecordingAudioPlayer
-          recordingId={recording.id}
-          status={recording.status}
-          mimeType={recording.mimeType}
-          durationSeconds={recording.durationSeconds ?? record.durationSeconds}
-          className="mt-2"
-        />
-      </div>
-      {ai ? (
-        <details className="rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2.5">
-          <summary className="cursor-pointer text-[12px] font-medium text-[var(--foreground)]">
-            AI 分析 {getAiStatusLabel(ai.status)}
-            {ai.qualityScore !== null ? ` / ${ai.qualityScore} 分` : ""}
-          </summary>
+        {ai ? (
           <CallAiInsightPanel
             status={ai.status}
             summary={ai.summary}
@@ -170,11 +230,11 @@ function renderRecordingSummary(record: CallRecordHistoryItem) {
             transcriptText={ai.transcriptText}
             transcriptSegments={transcriptSegments}
             maxTranscriptSegments={6}
-            className="mt-2"
+            className="border-none bg-transparent p-0 shadow-none"
           />
-        </details>
-      ) : null}
-    </div>
+        ) : null}
+      </div>
+    </details>
   );
 }
 
@@ -204,30 +264,38 @@ export function CustomerCallRecordHistory({
   }
 
   return (
-    <div className={cn("space-y-3", className)}>
+    <div className={cn("space-y-2.5", className)}>
       {records.map((record) => {
         const nextFollowUpAt = normalizeOptionalDate(record.nextFollowUpAt);
-        const meta = [
-          `销售 ${record.sales.name} (@${record.sales.username})`,
-          `通话时长 ${formatDurationSeconds(record.durationSeconds)}`,
-        ];
         const outboundLabel = getOutboundSessionLabel(record);
+        const statusItems: CustomerDossierStatusItem[] = [
+          {
+            label: "结果",
+            value: getRecordTitle(record),
+            tone: getCallOutcomeTone(record),
+          },
+          {
+            label: "时长",
+            value: formatDurationSeconds(record.durationSeconds),
+            tone: record.durationSeconds > 0 ? "success" : "neutral",
+          },
+          {
+            label: "录音",
+            value: record.recording
+              ? getRecordingStatusLabel(record.recording.status)
+              : "无录音",
+            tone: getRecordingTone(record),
+          },
+          {
+            label: "AI",
+            value: getAiLabel(record),
+            tone: getAiTone(record),
+          },
+        ];
+        const meta = [`销售 ${record.sales.name} (@${record.sales.username})`];
 
         if (outboundLabel) {
           meta.push(`外呼状态 ${outboundLabel}`);
-        }
-
-        if (record.recording) {
-          meta.push(`录音 ${getRecordingStatusLabel(record.recording.status)}`);
-        }
-
-        if (record.recording?.aiAnalysis) {
-          const ai = record.recording.aiAnalysis;
-          meta.push(
-            `AI ${getAiStatusLabel(ai.status)}${
-              ai.qualityScore !== null ? ` / ${ai.qualityScore} 分` : ""
-            }`,
-          );
         }
 
         if (nextFollowUpAt) {
@@ -235,12 +303,14 @@ export function CustomerCallRecordHistory({
         }
 
         return (
-          <CustomerDossierRecordCard
+          <CustomerDossierLedgerRow
             key={record.id}
             title={getRecordTitle(record)}
+            subtitle={record.remark?.trim() || outboundLabel || "无备注"}
             meta={meta}
-            summary={renderRecordingSummary(record)}
+            statusItems={statusItems}
             aside={formatDateTime(normalizeDate(record.callTime))}
+            detail={renderRecordingDetail(record)}
             className={cardClassName}
           />
         );

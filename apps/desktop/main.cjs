@@ -1,12 +1,71 @@
 const { app, BrowserWindow, shell, Menu, dialog } = require("electron");
+const fs = require("fs");
 const path = require("path");
 
-const DEFAULT_CRM_URL = "http://crm.cclbn.com";
-const CRM_URL = process.env.CRM_SERVER_URL || DEFAULT_CRM_URL;
-const UPDATE_MANIFEST_URL =
-  process.env.CRM_UPDATE_MANIFEST_URL || new URL("/client-update.json", CRM_URL).toString();
+const DEFAULT_CRM_URL = "https://crm.cclbn.com";
 
 let mainWindow = null;
+let crmUrl = DEFAULT_CRM_URL;
+
+function getConfigPath() {
+  return path.join(app.getPath("userData"), "connection.json");
+}
+
+function normalizeCrmUrl(value) {
+  let normalized = String(value || "").trim();
+
+  if (!normalized) {
+    normalized = DEFAULT_CRM_URL;
+  }
+
+  if (!/^https?:\/\//i.test(normalized)) {
+    normalized = `https://${normalized}`;
+  }
+
+  while (normalized.endsWith("/") && normalized.length > "https://x".length) {
+    normalized = normalized.slice(0, -1);
+  }
+
+  try {
+    return new URL(normalized).origin;
+  } catch {
+    return DEFAULT_CRM_URL;
+  }
+}
+
+function loadCrmUrl() {
+  if (process.env.CRM_SERVER_URL) {
+    return normalizeCrmUrl(process.env.CRM_SERVER_URL);
+  }
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(getConfigPath(), "utf8"));
+    return normalizeCrmUrl(parsed.crmUrl);
+  } catch {
+    return DEFAULT_CRM_URL;
+  }
+}
+
+function saveCrmUrl(nextCrmUrl) {
+  crmUrl = normalizeCrmUrl(nextCrmUrl);
+  fs.mkdirSync(path.dirname(getConfigPath()), { recursive: true });
+  fs.writeFileSync(
+    getConfigPath(),
+    JSON.stringify({ crmUrl, updatedAt: new Date().toISOString() }, null, 2),
+    "utf8",
+  );
+}
+
+function getCrmUrl() {
+  return crmUrl;
+}
+
+function getUpdateManifestUrl() {
+  return (
+    process.env.CRM_UPDATE_MANIFEST_URL ||
+    new URL("/client-update.json", getCrmUrl()).toString()
+  );
+}
 
 function compareVersions(currentVersion, nextVersion) {
   const currentParts = currentVersion.split(/[.-]/).map((part) => Number.parseInt(part, 10) || 0);
@@ -27,7 +86,7 @@ function compareVersions(currentVersion, nextVersion) {
 function isAllowedNavigation(url) {
   try {
     const target = new URL(url);
-    const crm = new URL(CRM_URL);
+    const crm = new URL(getCrmUrl());
 
     return target.origin === crm.origin;
   } catch {
@@ -37,7 +96,7 @@ function isAllowedNavigation(url) {
 
 async function checkForUpdates({ manual = false } = {}) {
   try {
-    const response = await fetch(UPDATE_MANIFEST_URL, {
+    const response = await fetch(getUpdateManifestUrl(), {
       cache: "no-store",
       headers: { Accept: "application/json" },
     });
@@ -124,7 +183,26 @@ function createWindow() {
     checkForUpdates();
   });
 
-  mainWindow.loadURL(CRM_URL);
+  mainWindow.loadURL(getCrmUrl());
+}
+
+async function configureServerUrl() {
+  if (!mainWindow) {
+    return;
+  }
+
+  const current = getCrmUrl();
+  const nextValue = await mainWindow.webContents.executeJavaScript(
+    `window.prompt("请输入 CRM 服务器或公网代理地址", ${JSON.stringify(current)})`,
+    true,
+  );
+
+  if (typeof nextValue !== "string" || !nextValue.trim()) {
+    return;
+  }
+
+  saveCrmUrl(nextValue);
+  await mainWindow.loadURL(getCrmUrl());
 }
 
 const menuTemplate = [
@@ -135,7 +213,11 @@ const menuTemplate = [
       {
         label: "重新打开 CRM",
         accelerator: "Ctrl+R",
-        click: () => mainWindow?.loadURL(CRM_URL),
+        click: () => mainWindow?.loadURL(getCrmUrl()),
+      },
+      {
+        label: "设置服务器/代理地址",
+        click: () => configureServerUrl(),
       },
       {
         label: "检查更新",
@@ -148,6 +230,7 @@ const menuTemplate = [
 ];
 
 app.whenReady().then(() => {
+  crmUrl = loadCrmUrl();
   Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate));
   createWindow();
 

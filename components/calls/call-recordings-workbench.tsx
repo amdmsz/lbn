@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Clock,
   FileAudio,
+  FileText,
   Gauge,
   Headphones,
   MessageSquareText,
@@ -18,6 +19,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { CallAiInsightPanel } from "@/components/calls/call-ai-insight-panel";
+import { CallTranscriptDialogue } from "@/components/calls/call-transcript-dialogue";
 import { RecordingAudioPlayer } from "@/components/calls/recording-audio-player";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -224,7 +226,7 @@ function WorkbenchHero({
             录音质检工作台
           </h1>
           <p className="mt-1 max-w-3xl text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">
-            按“客户识别、回听控制、AI 结论”三段式处理录音，减少来回跳转和重复判断。
+            按“客户识别、回听控制、完整转写、AI 结论”处理录音，先听清对话，再做质检判断。
           </p>
         </div>
 
@@ -522,7 +524,7 @@ function RecordingAiBlock({ item }: Readonly<{ item: CallRecordingWorkbenchItem 
           nextActionSuggestion={ai.nextActionSuggestion}
           transcriptText={ai.transcriptText}
           transcriptSegments={ai.transcriptSegments}
-          maxTranscriptSegments={6}
+          showTranscript={false}
           className="mt-2"
         />
       </details>
@@ -568,6 +570,52 @@ function ReviewSummary({ item }: Readonly<{ item: CallRecordingWorkbenchItem }>)
   );
 }
 
+function RecordingTranscriptBlock({
+  item,
+}: Readonly<{
+  item: CallRecordingWorkbenchItem;
+}>) {
+  const ai = item.aiAnalysis;
+  const transcriptText = ai?.transcriptText?.trim();
+  const transcriptSegments = ai?.transcriptSegments ?? [];
+
+  return (
+    <section className="rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[var(--foreground)]">
+          <FileText className="h-3.5 w-3.5 text-[var(--color-accent)]" aria-hidden="true" />
+          <span>语音转文字</span>
+        </div>
+        <span className="text-[11px] font-medium text-[var(--color-sidebar-muted)]">
+          {transcriptSegments.length > 0
+            ? `${transcriptSegments.length} 段`
+            : transcriptText
+              ? `${transcriptText.length} 字`
+              : "待生成"}
+        </span>
+      </div>
+
+      {transcriptSegments.length > 0 ? (
+        <CallTranscriptDialogue
+          segments={transcriptSegments}
+          maxSegments={null}
+          className="mt-3 max-h-[34rem] overflow-y-auto pr-1"
+        />
+      ) : transcriptText ? (
+        <p className="mt-3 max-h-[34rem] overflow-y-auto whitespace-pre-wrap pr-1 text-[12.5px] leading-6 text-[var(--foreground)]/84">
+          {transcriptText}
+        </p>
+      ) : (
+        <div className="mt-3 rounded-[0.75rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+          {ai
+            ? "AI 暂未返回有效转写。可检查录音时长、文件大小、ASR 配置或重新入队分析。"
+            : "暂无 AI 转写。录音进入 AI 处理后，这里会显示完整对话文本。"}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function RecordingQueueItem({ item }: Readonly<{ item: CallRecordingWorkbenchItem }>) {
   const callDuration = item.durationSeconds ?? item.callRecord.durationSeconds;
   const uploadMeta = item.uploadedAt
@@ -576,87 +624,93 @@ function RecordingQueueItem({ item }: Readonly<{ item: CallRecordingWorkbenchIte
   const tone = getQualityTone(item.aiAnalysis?.qualityScore);
 
   return (
-    <article className="group relative grid overflow-hidden rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-xs)] transition-[border-color,background-color,box-shadow] hover:border-[rgba(30,64,175,0.18)] hover:shadow-[var(--color-shell-shadow-sm)] lg:grid-cols-[minmax(15rem,0.82fr)_minmax(20rem,1fr)_minmax(20rem,1.05fr)]">
+    <article className="group relative grid overflow-hidden rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-xs)] transition-[border-color,background-color,box-shadow] hover:border-[rgba(30,64,175,0.18)] hover:shadow-[var(--color-shell-shadow-sm)] lg:grid-cols-[minmax(0,1fr)_minmax(21rem,0.42fr)]">
       <div className={cn("absolute inset-y-0 left-0 w-1", getQualityRailClass(tone))} />
 
-      <section className="min-w-0 space-y-3 px-4 py-4 pl-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <Link
-              href={`/customers/${item.customer.id}?tab=calls`}
-              className="crm-text-link block truncate text-[14px] font-semibold"
-            >
-              {item.customer.name}
-            </Link>
-            <p className="mt-1 truncate text-[11.5px] tabular-nums text-[var(--color-sidebar-muted)]">
-              {item.customer.phone}
-            </p>
+      <section className="min-w-0 space-y-4 px-4 py-4 pl-5">
+        <div className="grid gap-3 xl:grid-cols-[minmax(14rem,0.55fr)_minmax(22rem,1fr)]">
+          <div className="min-w-0 space-y-3 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <Link
+                  href={`/customers/${item.customer.id}?tab=calls`}
+                  className="crm-text-link block truncate text-[14px] font-semibold"
+                >
+                  {item.customer.name}
+                </Link>
+                <p className="mt-1 truncate text-[11.5px] tabular-nums text-[var(--color-sidebar-muted)]">
+                  {item.customer.phone}
+                </p>
+              </div>
+              <StatusBadge
+                label={getRecordingStatusLabel(item.status)}
+                variant={getRecordingStatusVariant(item.status)}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <FieldLine
+                icon={Clock}
+                label="通话"
+                value={formatDateTime(item.callRecord.callTime)}
+              />
+              <FieldLine
+                icon={Timer}
+                label="时长"
+                value={formatDurationSeconds(item.callRecord.durationSeconds)}
+              />
+              <FieldLine
+                icon={UserRound}
+                label="员工"
+                value={`${item.sales.name} (@${item.sales.username})`}
+              />
+            </div>
+
+            <div className="border-t border-[var(--color-border-soft)] pt-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2 py-0.5 text-[11px] font-semibold text-[var(--foreground)]">
+                  {item.callRecord.resultLabel}
+                </span>
+                <span className="text-[11px] tabular-nums text-[var(--color-sidebar-muted)]">
+                  {formatDurationSeconds(callDuration)}
+                </span>
+              </div>
+              <p className="mt-2 line-clamp-3 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                {item.callRecord.remark?.trim() || "无备注"}
+              </p>
+            </div>
           </div>
-          <StatusBadge
-            label={getRecordingStatusLabel(item.status)}
-            variant={getRecordingStatusVariant(item.status)}
-          />
+
+          <div className="min-w-0 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-3">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--color-sidebar-muted)]">
+              <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--foreground)]">
+                <FileAudio className="h-3.5 w-3.5 text-[var(--color-accent)]" />
+                录音播放
+              </span>
+              <span>{formatRecordingFileSize(item.fileSizeBytes)}</span>
+            </div>
+            <RecordingAudioPlayer
+              recordingId={item.id}
+              status={item.status}
+              mimeType={item.mimeType}
+              durationSeconds={callDuration}
+              className="shadow-none"
+            />
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--color-sidebar-muted)]">
+              <span>{uploadMeta}</span>
+              <span className="tabular-nums">{item.mimeType}</span>
+            </div>
+          </div>
         </div>
 
-        <div className="space-y-1.5">
-          <FieldLine
-            icon={Clock}
-            label="通话"
-            value={formatDateTime(item.callRecord.callTime)}
-          />
-          <FieldLine
-            icon={Timer}
-            label="时长"
-            value={formatDurationSeconds(item.callRecord.durationSeconds)}
-          />
-          <FieldLine
-            icon={UserRound}
-            label="员工"
-            value={`${item.sales.name} (@${item.sales.username})`}
-          />
-        </div>
-
-        <div className="border-t border-[var(--color-border-soft)] pt-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--foreground)]">
-              {item.callRecord.resultLabel}
-            </span>
-            <span className="text-[11px] tabular-nums text-[var(--color-sidebar-muted)]">
-              {formatDurationSeconds(callDuration)}
-            </span>
-          </div>
-          <p className="mt-2 line-clamp-3 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
-            {item.callRecord.remark?.trim() || "无备注"}
-          </p>
-        </div>
+        <RecordingTranscriptBlock item={item} />
       </section>
 
-      <section className="min-w-0 border-t border-[var(--color-border-soft)] px-4 py-4 lg:border-l lg:border-t-0">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--color-sidebar-muted)]">
-          <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--foreground)]">
-            <FileAudio className="h-3.5 w-3.5 text-[var(--color-accent)]" />
-            回听控制
-          </span>
-          <span>{formatRecordingFileSize(item.fileSizeBytes)}</span>
-        </div>
-        <RecordingAudioPlayer
-          recordingId={item.id}
-          status={item.status}
-          mimeType={item.mimeType}
-          durationSeconds={callDuration}
-          className="shadow-none"
-        />
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--color-sidebar-muted)]">
-          <span>{uploadMeta}</span>
-          <span className="tabular-nums">{item.mimeType}</span>
-        </div>
-      </section>
-
-      <section className="min-w-0 space-y-3 border-t border-[var(--color-border-soft)] px-4 py-4 lg:border-l lg:border-t-0">
+      <aside className="min-w-0 space-y-3 border-t border-[var(--color-border-soft)] px-4 py-4 lg:border-l lg:border-t-0 lg:self-start">
         <div className="flex items-center justify-between gap-2">
           <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[var(--foreground)]">
             <Sparkles className="h-3.5 w-3.5 text-[var(--color-accent)]" />
-            AI 结论
+            AI 分析
           </span>
           <span
             className={cn(
@@ -669,7 +723,7 @@ function RecordingQueueItem({ item }: Readonly<{ item: CallRecordingWorkbenchIte
         </div>
         <RecordingAiBlock item={item} />
         <ReviewSummary item={item} />
-      </section>
+      </aside>
     </article>
   );
 }
@@ -690,10 +744,9 @@ function RecordingQueueList({
 
   return (
     <div className="space-y-3">
-      <div className="hidden grid-cols-[minmax(15rem,0.82fr)_minmax(20rem,1fr)_minmax(20rem,1.05fr)] gap-0 px-4 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)] lg:grid">
-        <span>Identify / Customer</span>
-        <span>Listen / Playback</span>
-        <span>Decide / AI Review</span>
+      <div className="hidden grid-cols-[minmax(0,1fr)_minmax(21rem,0.42fr)] gap-0 px-4 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)] lg:grid">
+        <span>Playback + Transcript</span>
+        <span>AI Analysis</span>
       </div>
       {items.map((item) => (
         <RecordingQueueItem key={item.id} item={item} />

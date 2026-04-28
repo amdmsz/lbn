@@ -1,9 +1,9 @@
 # Staging Checklist
 
-更新时间：2026-04-10
+更新时间：2026-04-28
 
 本清单用于当前仓库进入 staging 时的最小验收。
-只覆盖已经进入真实基线的功能，不覆盖 PBX、新 schema 里程碑或额外的 schema 重构。
+只覆盖已经进入真实基线的功能。外呼 / 录音 / Call AI 已进入正式运行基线；如果目标环境启用这些能力，需要按本清单对应小节验收。仍不覆盖新 schema 里程碑或额外的 schema 重构。
 
 它不是生产部署说明。
 生产部署步骤、systemd / Nginx 模板、备份和回滚口径请看：[docs/deployment-baseline.md](./deployment-baseline.md)
@@ -23,6 +23,23 @@
 - [ ] 若需要远程物流轨迹：
   - [ ] `XXAPI_API_KEY` 已配置
   - [ ] `XXAPI_EXPRESS_ENDPOINT` 已按需配置或留空走默认值
+- [ ] 若启用服务端录音：
+  - [ ] `CALL_RECORDING_STORAGE_PROVIDER=LOCAL_MOUNT`
+  - [ ] `CALL_RECORDING_STORAGE_DIR` 指向 PBX / CRM 都可访问的录音目录
+  - [ ] `CALL_RECORDING_UPLOAD_TMP_DIR` 可写
+  - [ ] `CALL_RECORDING_FFMPEG_PATH` 已按需配置或服务器已安装 `ffmpeg`
+- [ ] 若启用 CTI 外呼：
+  - [ ] `OUTBOUND_CALL_ENABLED=1`
+  - [ ] `OUTBOUND_CALL_PROVIDER` 与实际 gateway 模式一致
+  - [ ] `OUTBOUND_CALL_GATEWAY_BASE_URL` 指向 `jiuzhuang-crm-cti-gateway`
+  - [ ] `OUTBOUND_CALL_WEBHOOK_BASE_URL` 指向当前 CRM 对外地址
+  - [ ] `OUTBOUND_CALL_WEBHOOK_SECRET` 已配置且未写入代码
+- [ ] 若启用 Call AI：
+  - [ ] `CALL_AI_ENABLED=1` 或 `/settings/audit` 已启用 Call AI worker
+  - [ ] ASR provider 已配置，例如 `OPENAI + gpt-4o-transcribe-diarize` 或 `LOCAL_HTTP_ASR`
+  - [ ] LLM provider 已配置为 `DEEPSEEK + deepseek-v4-pro`
+  - [ ] API Key 通过环境变量或 `/settings/call-ai` secret 保存
+  - [ ] 若使用系统设置保存 secret，`SYSTEM_SETTING_ENCRYPTION_KEY` 已稳定配置
 
 ### Prisma、构建与运行
 
@@ -36,8 +53,11 @@
 - [ ] 确认 `npm run build` 已在 preflight 内通过
 - [ ] 执行 `npm run start`
 - [ ] 执行 `npm run worker:lead-imports`
-- [ ] 确认 Web 与 worker 是两个独立可运行进程
+- [ ] 确认 Web 与 lead import worker 是两个独立可运行进程
+- [ ] 若启用外呼，执行或启动 `npm run cti-gateway`
+- [ ] 若启用 Call AI，安装并启用 `jiuzhuang-crm-call-ai-worker.timer`
 - [ ] 执行 `REQUIRE_LEAD_IMPORT_WORKER=1 npm run check:lead-import-runtime`
+- [ ] 若启用 Call AI，执行 `npm run worker:call-ai -- --enqueue-missing --dry-run --limit=3`
 - [ ] 执行 `bash scripts/release-smoke.sh <staging-base-url>`
 
 ### 管理员初始化
@@ -93,6 +113,10 @@
 - [ ] 客户列表筛选正常
 - [ ] 客户卡片可进入详情
 - [ ] `/customers/[id]` 各 tab 正常切换
+- [ ] ADMIN / SUPERVISOR 可在客户详情移交负责人
+- [ ] SALES 不显示也不能执行客户负责人移交
+- [ ] 移交后客户列表可见性与新负责人一致
+- [ ] 移交动作写入 ownership event / `OperationLog`
 
 ### 异步导入主线
 
@@ -105,6 +129,36 @@
 - [ ] worker 日志里可看到 `ready / active / completed / failed`
 - [ ] 停掉 worker 时，能观察到批次不会被正常消费
 - [ ] 恢复 worker 后，批次处理链路恢复正常
+
+### CTI 外呼、WebRTC 坐席与服务端录音
+
+- [ ] `/settings/outbound-call` 已启用真实 provider，且 secret 已保存
+- [ ] `curl http://127.0.0.1:8790/health` 返回 CTI Gateway healthy
+- [ ] Asterisk AMI 用户 ACL 允许 CRM Gateway 来源 IP
+- [ ] Asterisk `res_http_websocket.so` 与 `res_pjsip_transport_websocket.so` 已运行
+- [ ] `chan_sip` 未抢 WebSocket SIP 注册
+- [ ] WebRTC 坐席在 CRM 页面显示在线
+- [ ] `pjsip show contacts` 能看到当前 CRM 登录账号对应 endpoint
+- [ ] 用当前登录账号对应坐席发起一次真实外呼
+- [ ] 员工页面能看到外呼状态从呼叫中进入已结束或失败终态
+- [ ] 挂机后 `OutboundCallSession.status` 不停留在 `PROVIDER_ACCEPTED`
+- [ ] PBX 录音目录能看到新 `.wav` 文件
+- [ ] PBX 能解析 CRM webhook 域名，例如 `getent hosts crm.cclbn.com`
+- [ ] Asterisk post-call webhook 日志出现 `ok`
+- [ ] CRM 录音质检页能看到新录音
+
+### 录音质检与 Call AI
+
+- [ ] `/call-recordings` 正常加载
+- [ ] 录音列表 queue / workbench 布局正常
+- [ ] 录音播放器可播放、暂停、拖动进度条
+- [ ] `/api/call-recordings/[id]/audio` 对 Range 请求返回 `206 Partial Content`
+- [ ] 使用真实录音执行 `npm run check:call-ai-provider -- --audio=<path> --mime-type=audio/wav --transcribe-only`
+- [ ] 使用真实录音执行 `npm run check:call-ai-provider -- --audio=<path> --mime-type=audio/wav`
+- [ ] `npm run worker:call-ai -- --enqueue-missing --limit=3` 可处理待分析录音
+- [ ] `CallAiAnalysis.status` 最终进入 `COMPLETED` 或可解释的 `FAILED`
+- [ ] 录音详情中能看到转写摘要、客户意图、风险、关键词、建议动作和质量分
+- [ ] 如果 worker 输出 `processedCount=0`，已确认当前没有待处理录音，而不是 worker 未启动
 
 ### TradeOrder 主线
 
@@ -236,9 +290,11 @@
 - [ ] 已整理出一份 production 环境变量清单，变量名与 staging 完全一致
 - [ ] 已确认 production 使用独立 MySQL 库、环境文件和 systemd service
 - [ ] 已确认 production Redis 可用且 `REDIS_URL` 已替换为 production 值
+- [ ] 若启用外呼，已确认 production CTI Gateway、PBX 域名解析、AMI ACL、WebRTC/WSS 配置与 staging 等价
+- [ ] 若启用录音 AI，已确认 production ASR / LLM key、Call AI timer、录音挂载路径与 staging 等价
 - [ ] 已记录 staging 验收通过时对应的 Git tag 或 release commit
 - [ ] 已确认 production 首发仍然按空库流程执行，而不是沿用本地 seed 数据
-- [ ] 已确认 production 同时部署 Web service 与 lead import worker service
+- [ ] 已确认 production 同时部署 Web service、lead import worker service，并按需部署 CTI Gateway 与 Call AI timer
 
 ## 验收结论
 
@@ -246,6 +302,7 @@
 
 - 上述 A、B、C、D、E 核心项没有阻塞性失败
 - 登录、异步导入、TradeOrder、`/fulfillment`、公海池、商品中心均可完成最小 smoke
+- 如果启用外呼 / 录音 / Call AI，对应 smoke 没有阻塞性失败
 - 角色权限没有明显误扩权
 - Web、Redis、worker 三段链路完整
 
@@ -259,3 +316,5 @@
 - Redis 不可达
 - lead import worker 无法稳定启动
 - 导入批次无法被 worker 正常消费
+- 启用外呼时 CTI Gateway / Asterisk webhook 不通，导致通话一直停留在呼叫中
+- 启用录音 AI 时 ASR 或 LLM provider 无法完成一次真实录音 smoke

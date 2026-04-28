@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
+  ExternalLink,
   FilePlus2,
   FileText,
   MoreHorizontal,
@@ -266,6 +267,12 @@ export function CustomerListCard({
     router.push(href);
   }
 
+  function openDetailInNewWindow() {
+    onFocusCustomer?.();
+    setMobileActionsOpen(false);
+    window.open(detailHref, "_blank", "noopener,noreferrer");
+  }
+
   function openCallDialog() {
     if (!canCreateCallRecord) {
       return;
@@ -467,6 +474,12 @@ export function CustomerListCard({
             >
               <div className="space-y-1">
                 <CustomerActionButton
+                  icon={ExternalLink}
+                  label="新窗口详情"
+                  onClick={openDetailInNewWindow}
+                  fullWidth
+                />
+                <CustomerActionButton
                   icon={Phone}
                   label="拨打并录音"
                   onClick={startPhoneDial}
@@ -551,6 +564,11 @@ export function CustomerListCard({
 
         <div className="pointer-events-none absolute inset-x-4 bottom-3 hidden justify-end min-[960px]:flex">
           <div className="flex items-center gap-1 rounded-[11px] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-strong)] p-1 shadow-[var(--color-shell-shadow-sm)] opacity-0 backdrop-blur-[8px] transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:pointer-events-auto group-hover:-translate-y-0.5 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:-translate-y-0.5 group-focus-within:opacity-100">
+            <CustomerActionButton
+              icon={ExternalLink}
+              label="新开"
+              onClick={openDetailInNewWindow}
+            />
             <CustomerActionButton
               icon={SquarePen}
               label="记录通话"

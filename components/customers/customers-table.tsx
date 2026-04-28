@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { FormEvent, ReactNode } from "react";
 import { useEffect, useState, useTransition } from "react";
-import { LayoutGrid, Rows3 } from "lucide-react";
+import { ExternalLink, LayoutGrid, Rows3 } from "lucide-react";
 import {
   batchAddCustomerTagAction,
   batchMoveCustomersToRecycleBinAction,
@@ -81,8 +81,17 @@ type FocusedCustomerState = {
   touchedAt: string;
 };
 
+type CustomerListScrollState = {
+  top: number;
+  customerId?: string;
+  touchedAt: string;
+};
+
 const customerViewStorageKey = "customer-center-view-mode";
 const customerFocusStorageKey = "customer-center-last-focused-customer";
+const customerScrollStoragePrefix = "customer-center-scroll:";
+const customerFocusMaxAgeMs = 24 * 60 * 60 * 1000;
+const customerScrollMaxAgeMs = 30 * 60 * 1000;
 const initialBatchTagNoticeState =
   createInitialCustomerBatchActionNoticeState("已有标签");
 const initialBatchRecycleNoticeState =
@@ -156,6 +165,31 @@ function getSuggestedFollowUpResult(item: CustomerListItem) {
   }
 
   return item.callRecords[0]?.resultCode ?? getCustomerExecutionClassQuickResult(item.executionClass);
+}
+
+function isRecentIsoDate(value: string | undefined, maxAgeMs: number) {
+  if (!value) {
+    return false;
+  }
+
+  const time = Date.parse(value);
+
+  return Number.isFinite(time) && Date.now() - time <= maxAgeMs;
+}
+
+function readJsonStorageValue<T>(storage: Storage, key: string): T | null {
+  const stored = storage.getItem(key);
+
+  if (!stored) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(stored) as T;
+  } catch {
+    storage.removeItem(key);
+    return null;
+  }
 }
 
 function FilterHiddenInputs({
@@ -502,6 +536,9 @@ export function CustomersTable({
   const [batchTagPending, startBatchTagTransition] = useTransition();
   const [batchRecyclePending, startBatchRecycleTransition] = useTransition();
   const router = useRouter();
+  const pathname = usePathname() || "/customers";
+  const searchParams = useSearchParams();
+  const scrollStateKey = `${customerScrollStoragePrefix}${pathname}?${searchParams.toString()}`;
 
   const manualSelectedIds =
     pageSelection.pageKey === currentPageSelectionKey ? pageSelection.ids : [];
@@ -521,6 +558,9 @@ export function CustomersTable({
     selectionMode === "filtered" && filteredSelectionExceedsLimit;
   const showBatchIdleBar = canBatchSelect && selectedCount === 0;
   const showBatchActiveBar = canBatchSelect && selectedCount > 0;
+  const focusedCustomerVisible = focusedCustomer
+    ? items.some((item) => item.id === focusedCustomer.id)
+    : false;
 
   useEffect(() => {
     const stored = window.localStorage.getItem(customerViewStorageKey);
@@ -539,28 +579,87 @@ export function CustomersTable({
   }, []);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(customerFocusStorageKey);
+    const parsed = readJsonStorageValue<Partial<FocusedCustomerState>>(
+      window.localStorage,
+      customerFocusStorageKey,
+    );
 
-    if (!stored) {
+    if (!parsed) {
       return;
     }
 
-    try {
-      const parsed = JSON.parse(stored) as Partial<FocusedCustomerState> | null;
-
-      if (parsed?.id && parsed.name && parsed.phone) {
-        const timer = window.setTimeout(() => {
-          setFocusedCustomer(parsed as FocusedCustomerState);
-        }, 0);
-
-        return () => {
-          window.clearTimeout(timer);
-        };
-      }
-    } catch {
+    if (
+      !parsed.id ||
+      !parsed.name ||
+      !parsed.phone ||
+      !isRecentIsoDate(parsed.touchedAt, customerFocusMaxAgeMs)
+    ) {
       window.localStorage.removeItem(customerFocusStorageKey);
+      return;
     }
+
+    const timer = window.setTimeout(() => {
+      setFocusedCustomer(parsed as FocusedCustomerState);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, []);
+
+  useEffect(() => {
+    const parsed = readJsonStorageValue<Partial<CustomerListScrollState>>(
+      window.sessionStorage,
+      scrollStateKey,
+    );
+
+    if (
+      !parsed ||
+      typeof parsed.top !== "number" ||
+      !Number.isFinite(parsed.top) ||
+      !isRecentIsoDate(parsed.touchedAt, customerScrollMaxAgeMs)
+    ) {
+      window.sessionStorage.removeItem(scrollStateKey);
+      return;
+    }
+
+    const restoredTop = parsed.top;
+    const restoredCustomerId = parsed.customerId;
+
+    const timer = window.setTimeout(() => {
+      const focusedRow = restoredCustomerId
+        ? document.getElementById(`customer-row-${restoredCustomerId}`)
+        : null;
+
+      if (focusedRow) {
+        focusedRow.scrollIntoView({
+          block: "center",
+          inline: "nearest",
+        });
+        return;
+      }
+
+      window.scrollTo({
+        top: Math.max(0, restoredTop),
+        behavior: "auto",
+      });
+    }, 80);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [scrollStateKey]);
+
+  function rememberListPosition(customerId?: string) {
+    window.sessionStorage.setItem(
+      scrollStateKey,
+      JSON.stringify({
+        top: window.scrollY,
+        customerId,
+        touchedAt: new Date().toISOString(),
+      } satisfies CustomerListScrollState),
+    );
+  }
 
   function rememberFocusedCustomer(item: CustomerListItem) {
     const nextFocusedCustomer = {
@@ -571,6 +670,7 @@ export function CustomersTable({
     } satisfies FocusedCustomerState;
 
     setFocusedCustomer(nextFocusedCustomer);
+    rememberListPosition(item.id);
     window.localStorage.setItem(
       customerFocusStorageKey,
       JSON.stringify(nextFocusedCustomer),
@@ -861,12 +961,24 @@ export function CustomersTable({
         verticalAlign: "middle",
       },
       render: (row: CustomerListItem) => (
-        <div className="flex w-full items-center justify-center">
+        <div className="flex w-full items-center justify-center gap-1.5">
           <Link
             href={`/customers/${row.id}`}
+            onClick={() => rememberFocusedCustomer(row)}
             className="crm-button crm-button-secondary inline-flex h-7 items-center rounded-[9px] px-2.5 text-[11px] font-medium motion-safe:hover:-translate-y-[1px] xl:h-8 xl:rounded-[10px] xl:px-3 xl:text-[12px]"
           >
             详情
+          </Link>
+          <Link
+            href={`/customers/${row.id}`}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => rememberFocusedCustomer(row)}
+            aria-label={`新窗口打开 ${row.name} 详情`}
+            title="新窗口打开详情"
+            className="crm-button crm-button-secondary inline-flex h-7 w-7 items-center justify-center rounded-[9px] px-0 text-[var(--color-sidebar-muted)] motion-safe:hover:-translate-y-[1px] hover:text-[var(--foreground)] xl:h-8 xl:w-8 xl:rounded-[10px]"
+          >
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
           </Link>
         </div>
       ),
@@ -1089,7 +1201,7 @@ export function CustomersTable({
                 </div>
               ) : null}
 
-              {focusedCustomer ? (
+              {focusedCustomer && focusedCustomerVisible ? (
                 <div className="flex flex-col gap-2 rounded-[0.95rem] border border-[rgba(79,125,247,0.16)] bg-[linear-gradient(180deg,rgba(248,250,255,0.98),rgba(255,255,255,0.96))] px-4 py-3 text-sm shadow-[var(--color-shell-shadow-sm)] sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-accent-strong)]">

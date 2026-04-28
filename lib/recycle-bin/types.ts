@@ -123,6 +123,14 @@ export type RestoreFromRecycleBinInput = {
   entryId: string;
 };
 
+export type RecyclePairedRestoreEntry = {
+  entryId: string;
+  targetType: RecycleTargetType;
+  targetId: string;
+  titleSnapshot: string;
+  restoreRouteSnapshot: string;
+};
+
 export type RestoreFromRecycleBinResult =
   | {
       status: "restored";
@@ -132,6 +140,7 @@ export type RestoreFromRecycleBinResult =
       targetId: string;
       restoreRouteSnapshot: string;
       guard: RecycleRestoreGuard;
+      pairedRestoredEntries: RecyclePairedRestoreEntry[];
     }
   | {
       status: "blocked";

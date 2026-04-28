@@ -10,7 +10,7 @@ Group=__APP_GROUP__
 WorkingDirectory=__APP_ROOT__
 Environment=NODE_ENV=production
 EnvironmentFile=__ENV_FILE__
-ExecStart=/usr/bin/env bash -lc 'npm run worker:call-ai -- --enqueue-missing --limit="${CALL_AI_WORKER_BATCH_LIMIT:-5}"'
+ExecStart=/usr/bin/env bash -c 'npm run worker:call-ai -- --enqueue-missing --limit="${CALL_AI_WORKER_BATCH_LIMIT:-5}"'
 TimeoutStartSec=1800
 NoNewPrivileges=true
 PrivateTmp=true

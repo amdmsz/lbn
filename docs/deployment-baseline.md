@@ -1,6 +1,6 @@
 # 正式部署基线
 
-更新时间：2026-04-10
+更新时间：2026-04-28
 
 本文档是当前仓库正式部署主文档。
 
@@ -52,6 +52,8 @@ staging 验收请看：[docs/staging-checklist.md](./staging-checklist.md)
 - systemd 模板：[deploy/systemd/jiuzhuang-crm.service](../deploy/systemd/jiuzhuang-crm.service)
 - lead import worker systemd 模板：[deploy/systemd/jiuzhuang-crm-import-worker.service](../deploy/systemd/jiuzhuang-crm-import-worker.service)
 - CTI Gateway systemd 模板：[deploy/systemd/jiuzhuang-crm-cti-gateway.service](../deploy/systemd/jiuzhuang-crm-cti-gateway.service)
+- Call AI worker systemd 模板：[deploy/systemd/jiuzhuang-crm-call-ai-worker.service](../deploy/systemd/jiuzhuang-crm-call-ai-worker.service)
+- Call AI worker timer 模板：[deploy/systemd/jiuzhuang-crm-call-ai-worker.timer](../deploy/systemd/jiuzhuang-crm-call-ai-worker.timer)
 - Nginx 模板：[deploy/nginx/jiuzhuang-crm.conf](../deploy/nginx/jiuzhuang-crm.conf)
 - MySQL 初始化 SQL 模板：[deploy/mysql/init-database.sql](../deploy/mysql/init-database.sql)
 - MySQL 备份脚本：[scripts/backup-mysql.sh](../scripts/backup-mysql.sh)
@@ -67,11 +69,14 @@ staging 验收请看：[docs/staging-checklist.md](./staging-checklist.md)
 - 旧环境 migration metadata 对齐脚本：[scripts/reconcile-prisma-migration-baseline.mjs](../scripts/reconcile-prisma-migration-baseline.mjs)
 - Prisma migration rebaseline 说明：[docs/prisma-migration-rebaseline.md](./prisma-migration-rebaseline.md)
 - CTI 外呼接入说明：[docs/cti-outbound-call-runbook.md](./cti-outbound-call-runbook.md)
+- 录音 AI 生产说明：[docs/call-ai-production-runbook.md](./call-ai-production-runbook.md)
 
 注意：
 
-- 当前仓库已经内置 Web 与 lead import worker 两份 systemd 模板
+- 当前仓库已经内置 Web、lead import worker、CTI Gateway 与 Call AI timer systemd 模板
 - lead import worker 仍然需要以独立 systemd service 运行，执行 `npm run worker:lead-imports`
+- 如果启用 CRM 外呼，CTI Gateway 需要以独立 systemd service 运行，执行 `npm run cti-gateway`
+- 如果启用录音 AI，Call AI worker 推荐按 systemd timer 每分钟 one-shot 触发，执行 `npm run worker:call-ai -- --enqueue-missing --limit=<N>`
 - recycle auto finalize 不推荐做成常驻 service；当前正式基线应按 one-shot 调度执行，具体命令、dry-run 演练、停用和回滚口径见 [docs/recycle-auto-finalize-runbook.md](./recycle-auto-finalize-runbook.md)
 
 当前正式 migration 链除了 baseline 外，还包含首发后新增的正式 additive migration：
@@ -202,6 +207,8 @@ npm run db:migration-baseline:reconcile -- --apply
 5. 启动或重启 Web service 与 worker service
 6. `bash scripts/release-smoke.sh <base-url>`
 7. `REQUIRE_LEAD_IMPORT_WORKER=1 npm run check:lead-import-runtime`
+8. 若启用外呼，确认 `jiuzhuang-crm-cti-gateway` 健康检查通过
+9. 若启用录音 AI，确认 `jiuzhuang-crm-call-ai-worker.timer` active，并跑一次 `npm run worker:call-ai -- --enqueue-missing --dry-run --limit=3`
 
 其中 `release-preflight.sh` 已固定包含：
 
@@ -221,8 +228,9 @@ npm run db:migration-baseline:reconcile -- --apply
 - build 未通过时，不允许执行 `prisma migrate deploy`
 - `npm run start` 与 `npm run worker:lead-imports` 是两个独立进程
 - 如果启用 CRM 外呼，`npm run cti-gateway` 也应作为独立进程运行
+- 如果启用录音 AI，`npm run worker:call-ai` 应由 timer 触发，不要塞进 Web 进程
 - 正式环境不能只起 Web，不起 worker
-- 如果通过 systemd 启动，则这两个进程应由两个独立 service 托管
+- 如果通过 systemd 启动，则 Web、lead import worker、CTI Gateway、Call AI timer 应分别托管
 - 推荐在 Web 与 worker 重启完成后，再执行一次 `REQUIRE_LEAD_IMPORT_WORKER=1 npm run check:lead-import-runtime`，把 Redis 连通性、queue 状态和 worker presence 一次性确认掉
 
 staging -> production 推荐执行顺序
@@ -362,7 +370,7 @@ sudo systemctl reload nginx
 
 10. 运行时目录与权限
 
-当前仓库存在两个正式部署时必须关注的本地写盘目录：
+当前仓库存在这些正式部署时必须关注的本地写盘目录和构建产物权限：
 
 A. 发货导出目录
 物理目录：public/exports/shipping
@@ -385,13 +393,43 @@ B. 头像上传目录
 目录不存在时允许自动创建
 如果你希望头像在部署后持续保留，必须纳入备份
 
+C. 录音存储目录
+物理目录：由 `CALL_RECORDING_STORAGE_DIR` 指定，例如 `/mnt/lbn-storage/recordings`
+写入点：PBX / Asterisk 服务端录音，以及 CRM mobile upload / webhook import 映射
+访问方式：通过 `/api/call-recordings/[id]/audio` 读取，支持 HTTP Range
+
+要求：
+
+CRM 进程必须能读取录音文件
+如果 CRM 需要接收移动端上传，`CALL_RECORDING_UPLOAD_TMP_DIR` 必须可写
+如果 Asterisk 与 CRM 共用挂载盘，`CTI_ASTERISK_RECORDING_DIR` 必须等于或位于 `CALL_RECORDING_STORAGE_DIR` 下面
+录音目录必须纳入独立容量监控和备份策略
+
+D. Next.js 构建产物与 runtime
+物理目录：`.next`、`runtime`
+
+要求：
+
+`npm run build` 后，运行 `next start` 的系统用户必须拥有 `.next`。否则 Next.js 运行时更新 prerender cache 时可能出现 `EACCES: permission denied, open '.next/server/app/...'`。
+`runtime` 用于导入临时文件、本地任务输出和部分运行时产物，也应归属应用用户。
+
 推荐初始化：
 
+```bash
 sudo mkdir -p /srv/jiuzhuang-crm/current/public/exports/shipping
 sudo mkdir -p /srv/jiuzhuang-crm/current/public/uploads/avatars
-sudo chown -R crm:crm /srv/jiuzhuang-crm/current/public/exports /srv/jiuzhuang-crm/current/public/uploads
+sudo mkdir -p /srv/jiuzhuang-crm/current/runtime
+sudo mkdir -p /mnt/lbn-storage/recordings
+sudo chown -R crm:crm \
+  /srv/jiuzhuang-crm/current/public/exports \
+  /srv/jiuzhuang-crm/current/public/uploads \
+  /srv/jiuzhuang-crm/current/runtime
+if [ -d /srv/jiuzhuang-crm/current/.next ]; then
+  sudo chown -R crm:crm /srv/jiuzhuang-crm/current/.next
+fi
+```
 
-如果通过单机更新脚本执行发布，脚本也会先确保这两个目录存在；但首次上线仍建议在 systemd 启动前手动创建并校验权限。
+如果通过单机更新脚本执行发布，脚本也会先确保常见 runtime 目录存在；但首次上线仍建议在 systemd 启动前手动创建并校验权限，尤其是外部录音挂载盘和 `.next` 所有权。
 
 11. 备份最低方案
 
@@ -412,6 +450,8 @@ BACKUP_DIR=/srv/backups/jiuzhuang-crm/runtime-assets bash scripts/backup-runtime
 
 public/exports
 public/uploads
+
+录音目录通常在独立挂载盘，例如 `/mnt/lbn-storage/recordings`，不由 `backup-runtime-assets.sh` 默认归档。生产需要单独做容量监控、周期备份和恢复演练。
 
 至少在这些场景前执行备份：
 
@@ -488,6 +528,8 @@ systemctl restart <service>
 Next.js 标准输出 / 标准错误交给 systemd
 Web 日志查看使用 journalctl -u jiuzhuang-crm
 lead import worker 日志查看使用 journalctl -u jiuzhuang-crm-import-worker
+CTI Gateway 日志查看使用 journalctl -u jiuzhuang-crm-cti-gateway
+Call AI worker 日志查看使用 journalctl -u jiuzhuang-crm-call-ai-worker.service
 
 常用命令：
 
@@ -495,6 +537,8 @@ sudo journalctl -u jiuzhuang-crm -n 200 --no-pager
 sudo journalctl -u jiuzhuang-crm -f
 sudo journalctl -u jiuzhuang-crm-import-worker -n 200 --no-pager
 sudo journalctl -u jiuzhuang-crm-import-worker -f
+sudo journalctl -u jiuzhuang-crm-cti-gateway -n 200 --no-pager
+sudo journalctl -u jiuzhuang-crm-call-ai-worker.service -n 100 --no-pager
 回滚
 
 每次正式发布至少满足：

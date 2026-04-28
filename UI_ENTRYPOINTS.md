@@ -27,6 +27,7 @@ This file should be updated whenever a capability is cut over, redirected, or re
 - Shipping execution mainline: `/fulfillment?tab=shipping`
 - Batch records mainline: `/fulfillment?tab=batches`
 - Customer-scoped order creation mainline: `/customers/[id]?tab=orders&createTradeOrder=1`
+- Call recording QA mainline: `/call-recordings`
 - Customer public-pool mainline: `/customers/public-pool`
 - Public-pool rules mainline: `/customers/public-pool/settings`
 - Public-pool reports mainline: `/customers/public-pool/reports`
@@ -235,6 +236,64 @@ Compatibility routes currently still in use:
 - `/settings/outbound-call` provider and seat binding forms
 - Dashboard shell WebRTC softphone status and controls
 - Webhook signature and idempotent event update behavior
+
+### 2B. Call Recording QA And AI Analysis
+
+**唯一主链（当前真实主入口）**
+
+- `/call-recordings`
+
+**主入口列表**
+
+- Left navigation recording entry for roles allowed by `canAccessCallRecordingModule`
+- Customer detail calls / recording context links
+- Audio stream API: `GET /api/call-recordings/[id]/audio`
+- Review API: `POST /api/call-recordings/[id]/reviews`
+- Admin config: `/settings/recording-storage`
+- Admin config: `/settings/call-ai`
+
+**当前边界**
+
+- `/call-recordings` is the QA workbench, not a second customer workbench.
+- Audio playback must keep HTTP Range support so users can drag the progress slider.
+- AI output is an assistant for review; it does not replace manual supervisor QA.
+- Call AI worker is a background batch process and should not block the recording page from loading.
+
+**每次改该能力时必须同步检查的入口**
+
+- Recording QA list / queue filters
+- Audio player seek behavior
+- `/api/call-recordings/[id]/audio` range response
+- `CallAiAnalysis` display state: pending / processing / ready / failed
+- `/settings/call-ai` provider config and secret handling
+- `jiuzhuang-crm-call-ai-worker.timer` production runbook
+
+### 2C. Transfer Customer Owner
+
+**唯一主链（当前真实主入口）**
+
+- Customer detail owner action in `/customers/[id]`
+
+**主入口列表**
+
+- Customer detail shell action in `components/customers/customer-detail-workbench.tsx`
+- Server action in `app/(dashboard)/customers/[id]/actions.ts`
+- Ownership service in `lib/customers/ownership.ts`
+
+**当前边界**
+
+- Only `ADMIN / SUPERVISOR` may transfer customer owner.
+- `SALES` must not see or execute the action.
+- The action changes `Customer.ownerId` through the ownership lifecycle path and must keep auditability.
+
+**每次改该能力时必须同步检查的入口**
+
+- Customer detail owner controls
+- `canTransferCustomerOwner` role guard
+- Transfer target options and team scope
+- `CustomerOwnershipEvent`
+- `OperationLog`
+- Customer list visibility after transfer
 
 ---
 

@@ -7,11 +7,13 @@ import {
   OperationModule,
   OperationTargetType,
   Prisma,
+  RecycleEntryStatus,
   PublicPoolReason,
   type RecycleDomain,
   type RecycleTargetType,
 } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { isRecycleCascadeFrom } from "@/lib/recycle-bin/paired-restore";
 import { findHiddenRecycleEntry } from "@/lib/recycle-bin/repository";
 import type {
   RecycleGuardBlocker,
@@ -495,11 +497,30 @@ export async function buildLeadRestoreGuard(
     );
 
     if (hiddenCustomerEntry) {
-      blockers.push({
-        code: "lead_customer_still_recycled",
-        name: "关联客户仍在回收站",
-        description: "该导入线索关联的轻客户仍在回收站中，请先恢复关联客户后再恢复线索。",
-      });
+      const isCascadeCustomerEntry = isRecycleCascadeFrom(
+        hiddenCustomerEntry.blockerSnapshotJson,
+        {
+          targetType: "LEAD",
+          targetId: lead.id,
+        },
+      );
+
+      if (
+        hiddenCustomerEntry.status !== RecycleEntryStatus.ACTIVE ||
+        !isCascadeCustomerEntry
+      ) {
+        blockers.push({
+          code:
+            hiddenCustomerEntry.status === RecycleEntryStatus.ARCHIVED
+              ? "lead_customer_recycle_finalized"
+              : "lead_customer_still_recycled",
+          name: "关联客户仍在回收站",
+          description:
+            hiddenCustomerEntry.status === RecycleEntryStatus.ARCHIVED
+              ? "该导入线索关联的轻客户已完成回收站最终处理，不能再恢复线索。"
+              : "该线索关联的客户仍在回收站中，且不是本次导入级联轻客户，请先处理关联客户后再恢复线索。",
+        });
+      }
     }
   }
 

@@ -1,4 +1,9 @@
-import { Prisma, RecycleEntryStatus, type RecycleTargetType } from "@prisma/client";
+import {
+  Prisma,
+  RecycleEntryStatus,
+  type RecycleBinEntry,
+  type RecycleTargetType,
+} from "@prisma/client";
 import {
   canAccessLeadModule,
   canAccessCustomerModule,
@@ -51,11 +56,13 @@ import {
   createActiveRecycleEntry,
   findRecycleEntryById,
   findActiveRecycleEntry,
+  findHiddenRecycleEntry,
   isRecycleEntryUniqueConflict,
   resolveRecycleEntryAsArchived,
   resolveRecycleEntryAsPurged,
   resolveRecycleEntryAsRestored,
 } from "@/lib/recycle-bin/repository";
+import { isRecycleCascadeFrom, getRecycleCascadeSource } from "@/lib/recycle-bin/paired-restore";
 import {
   type FinalizeRecycleBinInput,
   type FinalizeRecycleBinResult,
@@ -68,9 +75,11 @@ import {
   type PurgeFromRecycleBinResult,
   type RecycleFinalizePreview,
   type RecyclePurgeGuard,
+  type RecycleRestoreBlocker,
   type RecycleReasonInputCode,
   type RecycleRestoreGuard,
   type RecycleLifecycleActor,
+  type RecyclePairedRestoreEntry,
   type RestoreFromRecycleBinInput,
   type RestoreFromRecycleBinResult,
   type RecycleTargetSnapshot,
@@ -79,6 +88,32 @@ import {
 export const RECYCLE_RETENTION_DAYS = 3;
 
 type RecycleTx = Prisma.TransactionClient;
+
+type RecycleEntryForRestore = Pick<
+  RecycleBinEntry,
+  | "id"
+  | "targetType"
+  | "targetId"
+  | "domain"
+  | "titleSnapshot"
+  | "restoreRouteSnapshot"
+  | "recycleExpiresAt"
+  | "status"
+  | "blockerSnapshotJson"
+>;
+
+type PairedRestoreResolution =
+  | {
+      status: "none";
+    }
+  | {
+      status: "active";
+      entry: RecycleEntryForRestore;
+    }
+  | {
+      status: "blocked";
+      blocker: RecycleRestoreBlocker;
+    };
 
 function ensureMoveToRecycleBinPermission(
   actor: RecycleLifecycleActor,
@@ -191,6 +226,77 @@ function buildExpiredRestoreGuard(restoreRouteSnapshot: string): RecycleRestoreG
       },
     ],
     restoreRouteSnapshot,
+  };
+}
+
+function buildRestoreBlockedResult(
+  entry: RecycleEntryForRestore,
+  guard: RecycleRestoreGuard,
+): RestoreFromRecycleBinResult {
+  return {
+    status: "blocked",
+    message: guard.blockerSummary,
+    entryId: entry.id,
+    targetType: entry.targetType,
+    targetId: entry.targetId,
+    restoreRouteSnapshot: entry.restoreRouteSnapshot,
+    guard,
+  };
+}
+
+function getRecycleTargetTypeLabel(targetType: RecycleTargetType) {
+  if (targetType === "LEAD") {
+    return "线索";
+  }
+
+  if (targetType === "CUSTOMER") {
+    return "客户";
+  }
+
+  if (targetType === "TRADE_ORDER") {
+    return "成交主单";
+  }
+
+  if (targetType === "LIVE_SESSION") {
+    return "直播场次";
+  }
+
+  if (targetType === "PRODUCT") {
+    return "商品";
+  }
+
+  if (targetType === "PRODUCT_SKU") {
+    return "商品 SKU";
+  }
+
+  if (targetType === "SUPPLIER") {
+    return "供应商";
+  }
+
+  return "对象";
+}
+
+function buildGuardWithPairedBlocker(
+  restoreRouteSnapshot: string,
+  blocker: RecycleRestoreBlocker,
+): RecycleRestoreGuard {
+  return {
+    canRestore: false,
+    blockerSummary: blocker.description,
+    blockers: [blocker],
+    restoreRouteSnapshot,
+  };
+}
+
+function buildPairedRestoreEntry(
+  entry: RecycleEntryForRestore,
+): RecyclePairedRestoreEntry {
+  return {
+    entryId: entry.id,
+    targetType: entry.targetType,
+    targetId: entry.targetId,
+    titleSnapshot: entry.titleSnapshot,
+    restoreRouteSnapshot: entry.restoreRouteSnapshot,
   };
 }
 
@@ -403,6 +509,128 @@ async function buildRestoreGuard(
     ],
     restoreRouteSnapshot: input.restoreRouteSnapshot,
   };
+}
+
+function buildPairedFinalizedBlocker(entry: RecycleEntryForRestore): RecycleRestoreBlocker {
+  const targetLabel = getRecycleTargetTypeLabel(entry.targetType);
+
+  return {
+    code: "paired_restore_target_finalized",
+    name: `关联${targetLabel}已最终处理`,
+    description: `关联${targetLabel}「${entry.titleSnapshot}」已经完成回收站最终处理，当前对象不能再与它一起恢复。`,
+    group: "object_state",
+    suggestedAction: "确认该关联对象是否已经封存或永久删除；如需恢复，请先按数据修复流程处理关联对象。",
+  };
+}
+
+function buildPairedExpiredBlocker(entry: RecycleEntryForRestore): RecycleRestoreBlocker {
+  const targetLabel = getRecycleTargetTypeLabel(entry.targetType);
+
+  return {
+    code: "paired_restore_target_expired",
+    name: `关联${targetLabel}恢复窗口已关闭`,
+    description: `关联${targetLabel}「${entry.titleSnapshot}」的 3 天恢复窗口已关闭，当前对象不能单独恢复。`,
+    group: "object_state",
+    suggestedAction: "改走最终处理或人工数据修复流程，不要只恢复其中一边。",
+  };
+}
+
+function buildPairedGuardBlocker(
+  entry: RecycleEntryForRestore,
+  guard: RecycleRestoreGuard,
+): RecycleRestoreBlocker {
+  const targetLabel = getRecycleTargetTypeLabel(entry.targetType);
+
+  return {
+    code: "paired_restore_target_blocked",
+    name: `关联${targetLabel}不能恢复`,
+    description: `关联${targetLabel}「${entry.titleSnapshot}」暂不能恢复：${guard.blockerSummary}`,
+    group: "object_state",
+    suggestedAction: "先处理关联对象恢复阻断，再重新恢复当前对象。",
+  };
+}
+
+async function findPairedRestoreEntry(
+  tx: RecycleTx,
+  entry: RecycleEntryForRestore,
+): Promise<PairedRestoreResolution> {
+  if (entry.targetType === "LEAD") {
+    const lead = await tx.lead.findUnique({
+      where: {
+        id: entry.targetId,
+      },
+      select: {
+        customerId: true,
+      },
+    });
+
+    if (!lead?.customerId) {
+      return { status: "none" };
+    }
+
+    const hiddenCustomerEntry = await findHiddenRecycleEntry(
+      tx,
+      "CUSTOMER",
+      lead.customerId,
+    );
+
+    if (!hiddenCustomerEntry) {
+      return { status: "none" };
+    }
+
+    if (
+      !isRecycleCascadeFrom(hiddenCustomerEntry.blockerSnapshotJson, {
+        targetType: "LEAD",
+        targetId: entry.targetId,
+      })
+    ) {
+      return { status: "none" };
+    }
+
+    if (hiddenCustomerEntry.status !== RecycleEntryStatus.ACTIVE) {
+      return {
+        status: "blocked",
+        blocker: buildPairedFinalizedBlocker(hiddenCustomerEntry),
+      };
+    }
+
+    return {
+      status: "active",
+      entry: hiddenCustomerEntry,
+    };
+  }
+
+  if (entry.targetType === "CUSTOMER") {
+    const cascadeSource = getRecycleCascadeSource(entry.blockerSnapshotJson);
+
+    if (cascadeSource?.targetType !== "LEAD") {
+      return { status: "none" };
+    }
+
+    const hiddenLeadEntry = await findHiddenRecycleEntry(
+      tx,
+      "LEAD",
+      cascadeSource.targetId,
+    );
+
+    if (!hiddenLeadEntry) {
+      return { status: "none" };
+    }
+
+    if (hiddenLeadEntry.status !== RecycleEntryStatus.ACTIVE) {
+      return {
+        status: "blocked",
+        blocker: buildPairedFinalizedBlocker(hiddenLeadEntry),
+      };
+    }
+
+    return {
+      status: "active",
+      entry: hiddenLeadEntry,
+    };
+  }
+
+  return { status: "none" };
 }
 
 async function buildPurgeGuard(
@@ -642,6 +870,42 @@ function getRestoreOperationMeta(input: {
   }
 
   throw new Error("Unsupported recycle-bin restore target type.");
+}
+
+async function resolveRecycleEntryAsRestoredWithAudit(
+  tx: RecycleTx,
+  input: {
+    actor: RecycleLifecycleActor;
+    entry: RecycleEntryForRestore;
+    extraAfterData?: Record<string, unknown>;
+  },
+) {
+  await resolveRecycleEntryAsRestored(tx, {
+    entryId: input.entry.id,
+    resolvedById: input.actor.id,
+  });
+
+  const operationMeta = getRestoreOperationMeta({
+    targetType: input.entry.targetType,
+    titleSnapshot: input.entry.titleSnapshot,
+  });
+
+  await tx.operationLog.create({
+    data: {
+      actorId: input.actor.id,
+      module: operationMeta.module,
+      action: operationMeta.action,
+      targetType: operationMeta.targetType,
+      targetId: input.entry.targetId,
+      description: operationMeta.description,
+      afterData: {
+        recycleEntryId: input.entry.id,
+        recycleStatus: RecycleEntryStatus.RESTORED,
+        restoreRouteSnapshot: input.entry.restoreRouteSnapshot,
+        ...(input.extraAfterData ?? {}),
+      },
+    },
+  });
 }
 
 function getPurgeOperationMeta(input: {
@@ -906,15 +1170,7 @@ export async function restoreFromRecycleBin(
     if (isRecycleEntryExpired(entry)) {
       const guard = buildExpiredRestoreGuard(entry.restoreRouteSnapshot);
 
-      return {
-        status: "blocked",
-        message: guard.blockerSummary,
-        entryId: entry.id,
-        targetType: entry.targetType,
-        targetId: entry.targetId,
-        restoreRouteSnapshot: entry.restoreRouteSnapshot,
-        guard,
-      };
+      return buildRestoreBlockedResult(entry, guard);
     }
 
     const guard = await buildRestoreGuard(tx, {
@@ -925,42 +1181,93 @@ export async function restoreFromRecycleBin(
     });
 
     if (!guard.canRestore) {
-      return {
-        status: "blocked",
-        message: guard.blockerSummary,
-        entryId: entry.id,
-        targetType: entry.targetType,
-        targetId: entry.targetId,
-        restoreRouteSnapshot: entry.restoreRouteSnapshot,
-        guard,
-      };
+      return buildRestoreBlockedResult(entry, guard);
     }
 
-    await resolveRecycleEntryAsRestored(tx, {
-      entryId: entry.id,
-      resolvedById: actor.id,
+    const pairedResolution = await findPairedRestoreEntry(tx, entry);
+    let pairedEntry: RecycleEntryForRestore | null = null;
+
+    if (pairedResolution.status === "blocked") {
+      return buildRestoreBlockedResult(
+        entry,
+        buildGuardWithPairedBlocker(
+          entry.restoreRouteSnapshot,
+          pairedResolution.blocker,
+        ),
+      );
+    }
+
+    if (
+      pairedResolution.status === "active" &&
+      pairedResolution.entry.id !== entry.id
+    ) {
+      pairedEntry = pairedResolution.entry;
+
+      await ensureActorCanAccessRecycleEntry(tx, actor, pairedEntry);
+      ensureRestorePermission(actor, pairedEntry.targetType);
+
+      if (isRecycleEntryExpired(pairedEntry)) {
+        return buildRestoreBlockedResult(
+          entry,
+          buildGuardWithPairedBlocker(
+            entry.restoreRouteSnapshot,
+            buildPairedExpiredBlocker(pairedEntry),
+          ),
+        );
+      }
+
+      const pairedGuard = await buildRestoreGuard(tx, {
+        targetType: pairedEntry.targetType,
+        targetId: pairedEntry.targetId,
+        domain: pairedEntry.domain,
+        restoreRouteSnapshot: pairedEntry.restoreRouteSnapshot,
+      });
+
+      if (!pairedGuard.canRestore) {
+        return buildRestoreBlockedResult(
+          entry,
+          buildGuardWithPairedBlocker(
+            entry.restoreRouteSnapshot,
+            buildPairedGuardBlocker(pairedEntry, pairedGuard),
+          ),
+        );
+      }
+    }
+
+    const pairedRestoredEntries = pairedEntry
+      ? [buildPairedRestoreEntry(pairedEntry)]
+      : [];
+
+    await resolveRecycleEntryAsRestoredWithAudit(tx, {
+      actor,
+      entry,
+      extraAfterData:
+        pairedRestoredEntries.length > 0
+          ? {
+              pairedRestoreEntryIds: pairedRestoredEntries.map(
+                (paired) => paired.entryId,
+              ),
+              pairedRestoreTargets: pairedRestoredEntries.map((paired) => ({
+                targetType: paired.targetType,
+                targetId: paired.targetId,
+                titleSnapshot: paired.titleSnapshot,
+              })),
+            }
+          : undefined,
     });
 
-    const operationMeta = getRestoreOperationMeta({
-      targetType: entry.targetType,
-      titleSnapshot: entry.titleSnapshot,
-    });
-
-    await tx.operationLog.create({
-      data: {
-        actorId: actor.id,
-        module: operationMeta.module,
-        action: operationMeta.action,
-        targetType: operationMeta.targetType,
-        targetId: entry.targetId,
-        description: operationMeta.description,
-        afterData: {
-          recycleEntryId: entry.id,
-          recycleStatus: RecycleEntryStatus.RESTORED,
-          restoreRouteSnapshot: entry.restoreRouteSnapshot,
+    if (pairedEntry) {
+      await resolveRecycleEntryAsRestoredWithAudit(tx, {
+        actor,
+        entry: pairedEntry,
+        extraAfterData: {
+          pairedRestoreSourceEntryId: entry.id,
+          pairedRestoreSourceTargetType: entry.targetType,
+          pairedRestoreSourceTargetId: entry.targetId,
+          pairedRestoreSourceTitle: entry.titleSnapshot,
         },
-      },
-    });
+      });
+    }
 
     return {
       status: "restored",
@@ -970,6 +1277,7 @@ export async function restoreFromRecycleBin(
       targetId: entry.targetId,
       restoreRouteSnapshot: entry.restoreRouteSnapshot,
       guard,
+      pairedRestoredEntries,
     };
   });
 }

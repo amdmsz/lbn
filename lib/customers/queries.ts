@@ -121,6 +121,7 @@ type CustomerStateSource = {
   callRecords: Array<{
     callTime: Date;
     result: CallResult | null;
+    resultCode: string | null;
     nextFollowUpAt: Date | null;
   }>;
   wechatRecords: Array<{
@@ -421,12 +422,6 @@ const nonConnectedCallResultCodes = [
   "HUNG_UP",
 ] as const;
 
-const disconnectedExecutionCallResults: CallResult[] = [
-  CallResult.NOT_CONNECTED,
-  CallResult.INVALID_NUMBER,
-  CallResult.HUNG_UP,
-];
-
 const activeCustomerOwnershipModes = [
   CustomerOwnershipMode.PRIVATE,
   CustomerOwnershipMode.LOCKED,
@@ -529,6 +524,7 @@ const customerSnapshotSelect = {
       id: true,
       callTime: true,
       result: true,
+      resultCode: true,
       remark: true,
       nextFollowUpAt: true,
     },
@@ -594,6 +590,7 @@ const customerDashboardSnapshotSelect = {
     select: {
       callTime: true,
       result: true,
+      resultCode: true,
       nextFollowUpAt: true,
     },
   },
@@ -1407,14 +1404,44 @@ function buildPendingFollowUpMatcher(snapshot: CustomerStateSource, now: Date) {
 function buildSuccessfulWechatMatcher(snapshot: CustomerStateSource) {
   return (
     snapshot.wechatRecords.some((record) => record.addedStatus === WechatAddStatus.ADDED) ||
-    snapshot.callRecords.some((record) => record.result === CallResult.WECHAT_ADDED)
+    snapshot.callRecords.some((record) => isSuccessfulWechatCallSignal(record))
   );
 }
 
-function getLatestCallResult(snapshot: CustomerStateSource) {
+type CustomerCallExecutionSignal = {
+  result: CallResult | null;
+  resultCode?: string | null;
+};
+
+function resolveCallExecutionSignalCode(record: CustomerCallExecutionSignal) {
+  return record.resultCode?.trim() || record.result || null;
+}
+
+function isSuccessfulWechatCallSignal(record: CustomerCallExecutionSignal) {
+  return resolveCallExecutionSignalCode(record) === CallResult.WECHAT_ADDED;
+}
+
+function isRefusedWechatCallSignal(record: CustomerCallExecutionSignal | null) {
+  return Boolean(
+    record && resolveCallExecutionSignalCode(record) === CallResult.REFUSED_WECHAT,
+  );
+}
+
+function isDisconnectedExecutionCallSignal(record: CustomerCallExecutionSignal | null) {
+  const resultCode = record ? resolveCallExecutionSignalCode(record) : null;
+
+  return Boolean(
+    resultCode &&
+      nonConnectedCallResultCodes.includes(
+        resultCode as (typeof nonConnectedCallResultCodes)[number],
+      ),
+  );
+}
+
+function getLatestCallSignal(snapshot: CustomerStateSource) {
   const latestRecord = snapshot.callRecords.reduce<(typeof snapshot.callRecords)[number] | null>(
     (currentLatest, candidate) => {
-      if (!candidate.result) {
+      if (!resolveCallExecutionSignalCode(candidate)) {
         return currentLatest;
       }
 
@@ -1427,28 +1454,21 @@ function getLatestCallResult(snapshot: CustomerStateSource) {
     null,
   );
 
-  return latestRecord?.result ?? null;
+  return latestRecord;
 }
 
 function deriveCustomerExecutionClassFromSignals(input: {
   approvedSalesOrderCount: number;
   hasLiveInvitation: boolean;
   hasSuccessfulWechatSignal: boolean;
-  latestCallResult: CallResult | null;
+  latestCall: CustomerCallExecutionSignal | null;
 }): CustomerExecutionClass {
   if (input.approvedSalesOrderCount >= 2) {
     return "A";
   }
 
-  if (input.latestCallResult === CallResult.REFUSED_WECHAT) {
+  if (isRefusedWechatCallSignal(input.latestCall)) {
     return "E";
-  }
-
-  if (
-    input.latestCallResult &&
-    disconnectedExecutionCallResults.includes(input.latestCallResult)
-  ) {
-    return "D";
   }
 
   if (input.hasLiveInvitation) {
@@ -1457,6 +1477,10 @@ function deriveCustomerExecutionClassFromSignals(input: {
 
   if (input.hasSuccessfulWechatSignal) {
     return "B";
+  }
+
+  if (isDisconnectedExecutionCallSignal(input.latestCall)) {
+    return "D";
   }
 
   return "D";
@@ -1469,7 +1493,7 @@ function deriveCustomerExecutionClass(snapshot: CustomerStateSource): CustomerEx
     ).length,
     hasLiveInvitation: snapshot.liveInvitations.length > 0,
     hasSuccessfulWechatSignal: buildSuccessfulWechatMatcher(snapshot),
-    latestCallResult: getLatestCallResult(snapshot),
+    latestCall: getLatestCallSignal(snapshot),
   });
 }
 
@@ -3734,7 +3758,7 @@ export async function getCustomerDetailShell(
       prisma.callRecord.findFirst({
         where: { customerId: detail.customer.id },
         orderBy: { callTime: "desc" },
-        select: { callTime: true, result: true },
+        select: { callTime: true, result: true, resultCode: true },
       }),
       prisma.wechatRecord.findFirst({
         where: { customerId: detail.customer.id },
@@ -3756,7 +3780,10 @@ export async function getCustomerDetailShell(
       prisma.callRecord.findFirst({
         where: {
           customerId: detail.customer.id,
-          result: CallResult.WECHAT_ADDED,
+          OR: [
+            { result: CallResult.WECHAT_ADDED },
+            { resultCode: CallResult.WECHAT_ADDED },
+          ],
         },
         select: { id: true },
       }),
@@ -3798,7 +3825,7 @@ export async function getCustomerDetailShell(
     approvedSalesOrderCount,
     hasLiveInvitation: Boolean(latestLive),
     hasSuccessfulWechatSignal: Boolean(successfulWechatRecord || successfulWechatCall),
-    latestCallResult: latestCall?.result ?? null,
+    latestCall,
   });
   const now = new Date();
   const todayStart = startOfDay(now);

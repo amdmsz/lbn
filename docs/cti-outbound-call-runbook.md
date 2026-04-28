@@ -21,6 +21,60 @@ CRM Web / Android
   -> CallRecord / OutboundCallSession / CallRecording / CallAiAnalysis
 ```
 
+## 当前生产基线（2026-04-28）
+
+当前已验证的生产形态：
+
+- CRM 主机：`192.168.11.101`
+- PBX / Asterisk 主机：`192.168.11.103`
+- CRM 域名：`crm.cclbn.com`
+- CTI Gateway：`ASTERISK_AMI`
+- 坐席方式：浏览器 WebRTC 坐席注册到 Asterisk PJSIP endpoint
+- 录音方式：Asterisk `MixMonitor` 服务端保存 `.wav`
+- 录音导入：Asterisk post-call webhook 回传 `recordingPath`
+- 后续处理：CRM 录音质检页 + Call AI worker
+
+关键不变量（Invariant）：
+
+- `seatNo` 默认等于 CRM 登录账号。员工用 `admin` 登录时，坐席 endpoint 也应是 `admin`。
+- 外呼客户号码走 trunk，例如 `PJSIP/152...@lbn-provider`；不要把客户号误填成坐席号。
+- `chan_sip` 不应处理浏览器 WebSocket SIP 注册。生产应 `noload => chan_sip.so`，并确保 `res_pjsip_transport_websocket.so` 是 `Running`。
+- PBX 必须能解析 `crm.cclbn.com`，否则 webhook 无法回写录音。内网部署可在 PBX `/etc/hosts` 固定 `192.168.11.101 crm.cclbn.com`。
+- AMI 用户 ACL 必须允许 CTI Gateway 来源 IP。如果 gateway 跑在 CRM 主机，Asterisk 侧应允许 `192.168.11.101`。
+
+生产最小验证：
+
+```bash
+curl -i --http1.1 --resolve crm.cclbn.com:443:127.0.0.1 \
+  -H 'Connection: Upgrade' \
+  -H 'Upgrade: websocket' \
+  -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+  -H 'Sec-WebSocket-Version: 13' \
+  -H 'Sec-WebSocket-Protocol: sip' \
+  https://crm.cclbn.com/asterisk/ws
+```
+
+期望返回 `101 Switching Protocols` 且带 `Sec-WebSocket-Protocol: sip`。
+
+Asterisk 侧：
+
+```bash
+sudo asterisk -rx "module show like websocket"
+sudo asterisk -rx "pjsip show contacts"
+sudo asterisk -rx "pjsip show channels"
+sudo tail -80 /var/log/asterisk/lbn-crm-post-call-webhook.log || true
+```
+
+CRM 侧：
+
+```bash
+curl http://127.0.0.1:8790/health
+sudo journalctl -u jiuzhuang-crm-cti-gateway.service -n 80 --no-pager
+curl -I https://crm.cclbn.com/api/outbound-calls/webhooks/freeswitch
+```
+
+`curl -I` 返回 `405 Method Not Allowed` 可以接受，表示 endpoint 存在但不接受 HEAD；真实 webhook 使用 `POST`。
+
 ## CRM 配置
 
 优先在 `/settings/outbound-call` 配置。也可以使用环境变量作为 fallback：
@@ -216,8 +270,11 @@ asterisk -rx "manager reload"
 挂机回调脚本不要放进 `/etc/asterisk/*.conf` include，复制到脚本路径并限制权限：
 
 ```bash
-sudo install -m 700 runtime/cti/asterisk/lbn-crm-post-call-webhook.sh /usr/local/bin/lbn-crm-post-call-webhook.sh
+sudo install -m 750 -o root -g asterisk runtime/cti/asterisk/lbn-crm-post-call-webhook.sh /usr/local/bin/lbn-crm-post-call-webhook.sh
+sudo -u asterisk /bin/bash -n /usr/local/bin/lbn-crm-post-call-webhook.sh
 ```
+
+权限不变量（Invariant）：Asterisk 的挂机回调由 `asterisk` 用户执行，脚本必须对 `asterisk` 组可读可执行。不要用 `700 root:root`，否则外呼会停在 `PROVIDER_ACCEPTED`，CRM 收不到结束状态和录音路径。
 
 ## 录音存储与 AI 入队
 
@@ -293,6 +350,151 @@ npm run check:outbound-webhook -- --endpoint=http://127.0.0.1:3000/api/outbound-
 npm run check:outbound-webhook -- --endpoint=http://127.0.0.1:3000/api/outbound-calls/webhooks/freeswitch --secret=replace-with-local-secret --session-id=<sessionId> --call-record-id=<callRecordId> --status=ENDED --duration-seconds=35 --recording-path=/data/lbn-call-recordings/20260427/test.wav --recording-mime-type=audio/wav --recording-codec=alaw
 ```
 
+## 生产排查速查
+
+### 端到端巡检：外呼 / 录音 / AI
+
+CRM 服务器：
+
+```bash
+cd /var/www/jiuzhuang-crm
+set -a
+. /etc/jiuzhuang-crm/jiuzhuang-crm.env
+set +a
+
+sudo systemctl status jiuzhuang-crm --no-pager
+sudo systemctl status jiuzhuang-crm-cti-gateway --no-pager
+systemctl list-timers 'jiuzhuang-crm-call-ai-worker*'
+sudo journalctl -u jiuzhuang-crm -n 120 --no-pager | grep -Ei 'outbound|webhook|recording|call_ai|error|failed|permission' || true
+sudo journalctl -u jiuzhuang-crm-call-ai-worker.service -n 120 --no-pager || true
+
+npm run worker:call-ai -- --enqueue-missing --dry-run --limit=5
+```
+
+PBX 服务器：
+
+```bash
+hostname
+whoami
+id asterisk
+sudo asterisk -rx "pjsip show contacts"
+sudo asterisk -rx "pjsip show registrations"
+sudo asterisk -rx "core show channels concise"
+sudo asterisk -rx "pjsip show channels"
+sudo asterisk -rx "dialplan show crm-outbound"
+sudo asterisk -rx "module show like mixmonitor"
+
+sudo ls -l /usr/local/bin/lbn-crm-post-call-webhook.sh
+sudo -u asterisk /bin/bash -n /usr/local/bin/lbn-crm-post-call-webhook.sh
+getent hosts crm.cclbn.com || true
+curl -I --connect-timeout 8 https://crm.cclbn.com/api/outbound-calls/webhooks/freeswitch || true
+sudo tail -80 /var/log/asterisk/lbn-crm-post-call-webhook.log || true
+
+find /mnt/lbn-storage/recordings -type f \( -name '*.wav' -o -name '*.m4a' -o -name '*.mp3' \) -mmin -1440 -printf '%TY-%Tm-%Td %TH:%TM size=%s %p\n' | sort | tail -50
+```
+
+数据库核对最近外呼状态：
+
+```bash
+cd /var/www/jiuzhuang-crm
+set -a
+. /etc/jiuzhuang-crm/jiuzhuang-crm.env
+set +a
+
+ENV_FILE=/etc/jiuzhuang-crm/jiuzhuang-crm.env node - <<'NODE'
+require("dotenv").config({ path: process.env.ENV_FILE, quiet: true });
+const { PrismaClient } = require("@prisma/client");
+const { PrismaMariaDb } = require("@prisma/adapter-mariadb");
+const prisma = new PrismaClient({ adapter: new PrismaMariaDb(process.env.DATABASE_URL) });
+
+(async () => {
+  const rows = await prisma.outboundCallSession.findMany({
+    take: 15,
+    orderBy: { requestedAt: "desc" },
+    select: {
+      id: true,
+      callRecordId: true,
+      status: true,
+      durationSeconds: true,
+      failureCode: true,
+      failureMessage: true,
+      requestedAt: true,
+      endedAt: true,
+      recordingImportedAt: true,
+      seatNo: true,
+      customer: { select: { name: true, phone: true } },
+      callRecord: {
+        select: {
+          durationSeconds: true,
+          recording: { select: { id: true, status: true, storageKey: true, fileSizeBytes: true } },
+        },
+      },
+    },
+  });
+
+  console.table(rows.map((r) => ({
+    sessionId: r.id,
+    callRecordId: r.callRecordId,
+    customer: r.customer?.name ?? "",
+    phone: r.customer?.phone ?? "",
+    seatNo: r.seatNo,
+    status: r.status,
+    sessionSec: r.durationSeconds ?? "",
+    recordSec: r.callRecord?.durationSeconds ?? "",
+    endedAt: r.endedAt?.toISOString?.() ?? "",
+    importedAt: r.recordingImportedAt?.toISOString?.() ?? "",
+    recStatus: r.callRecord?.recording?.status ?? "",
+    recSize: r.callRecord?.recording?.fileSizeBytes ?? "",
+    storageKey: r.callRecord?.recording?.storageKey ?? "",
+    failure: [r.failureCode, r.failureMessage].filter(Boolean).join(" "),
+  })));
+})().finally(() => prisma.$disconnect());
+NODE
+```
+
+判定标准：
+
+- `ANSWER/ANSWERED` 且 `billsec > 0`：PBX 应有大于 44 字节的录音文件，CRM 应变成 `ENDED` 并出现 `storageKey`。
+- `NO ANSWER`、`BUSY`、`CHANUNAVAIL`、`billsec=0`：不应导入录音；如果 PBX 产生 44 字节 wav，可以删除。
+- PBX 没有活动通道但 CRM 仍是 `PROVIDER_ACCEPTED`：优先查挂机 webhook 脚本权限、DNS、secret 和 `/var/log/asterisk/lbn-crm-post-call-webhook.log`。
+- AI worker `processedCount=0` 不一定是问题；有 pending 录音时才应该处理。真实失败看 `failedCount`、`CallAiAnalysis.failureMessage` 和 worker journal。
+
+CRM 页面一直显示“呼叫中”：
+
+- 先查 Asterisk 当前是否还有真实通道：
+  ```bash
+  sudo asterisk -rx "core show channels concise"
+  sudo asterisk -rx "pjsip show channels"
+  ```
+- 如果没有通道但 CRM 仍是 `PROVIDER_ACCEPTED`，通常是挂机 webhook 没回到 CRM。
+- 在 PBX 上确认域名解析：
+  ```bash
+  getent hosts crm.cclbn.com
+  curl -I --connect-timeout 8 https://crm.cclbn.com/api/outbound-calls/webhooks/freeswitch
+  sudo tail -80 /var/log/asterisk/lbn-crm-post-call-webhook.log || true
+  ```
+- `curl -I` 返回 `405 Method Not Allowed` 表示 API 路由可达；真实回调必须是 signed `POST`。
+
+CRM 没看到录音：
+
+- 先确认 PBX 录音文件真实存在：
+  ```bash
+  find /mnt/lbn-storage/recordings -type f -name '*.wav' -mmin -120 -ls | tail -20
+  ```
+- 再确认 webhook 日志出现 `ok`，并且 `recordingPath` 位于 `CALL_RECORDING_STORAGE_DIR` 下。
+- 如果日志是 `could not resolve host`，在 PBX 侧修复 `crm.cclbn.com` 解析。
+- 如果 CRM 有通话但 `CallRecording` 为空，优先检查 `CALL_RECORDING_STORAGE_DIR`、`CALL_RECORDING_STORAGE_PROVIDER` 与 webhook secret。
+
+坐席无法注册或日志出现 `chan_sip wrong password`：
+
+- 确认 `chan_sip` 没有抢注册：
+  ```bash
+  sudo asterisk -rx "module unload chan_sip.so"
+  sudo asterisk -rx "module load res_pjsip_transport_websocket.so"
+  sudo asterisk -rx "module show like websocket"
+  ```
+- 持久配置应写入 `/etc/asterisk/modules.conf`：`noload => chan_sip.so`，并加载 `res_http_websocket.so` 与 `res_pjsip_transport_websocket.so`。
+
 ## 上线前检查
 
 ```bash
@@ -317,5 +519,5 @@ Phase 2 需要在 CTI Gateway / PBX 侧实现：
 - HTTP `/calls/start`，接受 CRM 标准 JSON。（已完成基础版）
 - FreeSWITCH ESL `bgapi originate` 发起呼叫。（已完成基础版）
 - FreeSWITCH ESL / Asterisk AMI/ARI 持久事件消费，不再依赖轮询。
-- FreeSWITCH ESL / Asterisk AMI/ARI 持久事件消费，不再依赖只在挂机时上报。
+- FreeSWITCH ESL / Asterisk AMI/ARI 持久事件消费，不再只依赖挂机时 webhook 上报。
 - 生产录音盘挂载、备份、容量告警和定期巡检脚本。
