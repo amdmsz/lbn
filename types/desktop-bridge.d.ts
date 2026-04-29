@@ -29,6 +29,10 @@ type LbnDesktopBridge = {
     hangupActiveCall(): Promise<{ handled: boolean }>;
     onCommand(listener: (payload: LbnDesktopSoftphoneCommand) => void): () => void;
   };
+  autoLaunch: {
+    get(): Promise<{ configurable: boolean; enabled: boolean }>;
+    set(enabled: boolean): Promise<{ configurable: boolean; enabled: boolean }>;
+  };
 };
 
 declare global {

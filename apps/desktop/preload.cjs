@@ -81,4 +81,12 @@ contextBridge.exposeInMainWorld("lbnDesktop", {
       };
     },
   },
+  autoLaunch: {
+    get() {
+      return ipcRenderer.invoke("desktop:get-auto-launch-enabled");
+    },
+    set(enabled) {
+      return ipcRenderer.invoke("desktop:set-auto-launch-enabled", Boolean(enabled));
+    },
+  },
 });

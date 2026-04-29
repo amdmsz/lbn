@@ -9,6 +9,7 @@ const {
   Notification,
   powerMonitor,
   powerSaveBlocker,
+  screen,
   session,
   Tray,
 } = require("electron");
@@ -26,6 +27,28 @@ let powerSaveBlockerId = null;
 
 function getConfigPath() {
   return path.join(app.getPath("userData"), "connection.json");
+}
+
+function readUserConfig() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(getConfigPath(), "utf8"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveUserConfig(patch) {
+  const nextConfig = {
+    ...readUserConfig(),
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
+
+  fs.mkdirSync(path.dirname(getConfigPath()), { recursive: true });
+  fs.writeFileSync(getConfigPath(), JSON.stringify(nextConfig, null, 2), "utf8");
 }
 
 function normalizeCrmUrl(value) {
@@ -55,22 +78,12 @@ function loadCrmUrl() {
     return normalizeCrmUrl(process.env.CRM_SERVER_URL);
   }
 
-  try {
-    const parsed = JSON.parse(fs.readFileSync(getConfigPath(), "utf8"));
-    return normalizeCrmUrl(parsed.crmUrl);
-  } catch {
-    return DEFAULT_CRM_URL;
-  }
+  return normalizeCrmUrl(readUserConfig().crmUrl);
 }
 
 function saveCrmUrl(nextCrmUrl) {
   crmUrl = normalizeCrmUrl(nextCrmUrl);
-  fs.mkdirSync(path.dirname(getConfigPath()), { recursive: true });
-  fs.writeFileSync(
-    getConfigPath(),
-    JSON.stringify({ crmUrl, updatedAt: new Date().toISOString() }, null, 2),
-    "utf8",
-  );
+  saveUserConfig({ crmUrl });
 }
 
 function getCrmUrl() {
@@ -144,6 +157,66 @@ function getDesktopIcon() {
   return nativeImage.createFromPath(iconPath);
 }
 
+function canConfigureAutoLaunch() {
+  return app.isPackaged && (process.platform === "win32" || process.platform === "darwin");
+}
+
+function getAutoLaunchPreference() {
+  const value = readUserConfig().autoLaunchEnabled;
+  return typeof value === "boolean" ? value : null;
+}
+
+function getAutoLaunchState() {
+  if (!canConfigureAutoLaunch()) {
+    return { configurable: false, enabled: false };
+  }
+
+  return {
+    configurable: true,
+    enabled: app.getLoginItemSettings({ path: process.execPath }).openAtLogin,
+  };
+}
+
+function setAutoLaunchEnabled(enabled, options = {}) {
+  const nextEnabled = Boolean(enabled);
+  const { persist = true, refresh = true } = options;
+
+  if (!canConfigureAutoLaunch()) {
+    return getAutoLaunchState();
+  }
+
+  app.setLoginItemSettings({
+    openAtLogin: nextEnabled,
+    path: process.execPath,
+  });
+
+  if (persist) {
+    saveUserConfig({ autoLaunchEnabled: nextEnabled });
+  }
+
+  if (refresh) {
+    refreshApplicationMenu();
+    refreshTrayMenu();
+  }
+
+  return getAutoLaunchState();
+}
+
+function initializeAutoLaunch() {
+  if (!canConfigureAutoLaunch()) {
+    return;
+  }
+
+  const preference = getAutoLaunchPreference();
+
+  if (preference === null) {
+    setAutoLaunchEnabled(true, { persist: true, refresh: false });
+    return;
+  }
+
+  setAutoLaunchEnabled(preference, { persist: false, refresh: false });
+}
+
 function showMainWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) {
     createWindow();
@@ -182,6 +255,14 @@ function refreshTrayMenu() {
         label: "挂断当前通话",
         enabled: callActive,
         click: () => sendSoftphoneCommand("hangupActiveCall"),
+      },
+      { type: "separator" },
+      {
+        label: "开机自启",
+        type: "checkbox",
+        checked: getAutoLaunchState().enabled,
+        enabled: getAutoLaunchState().configurable,
+        click: (menuItem) => setAutoLaunchEnabled(menuItem.checked),
       },
       { type: "separator" },
       {
@@ -307,6 +388,22 @@ function registerIpcHandlers() {
 
     return { handled: true };
   });
+
+  ipcMain.handle("desktop:get-auto-launch-enabled", (event) => {
+    if (!isTrustedSender(event)) {
+      return { configurable: false, enabled: false };
+    }
+
+    return getAutoLaunchState();
+  });
+
+  ipcMain.handle("desktop:set-auto-launch-enabled", (event, enabled) => {
+    if (!isTrustedSender(event)) {
+      return { configurable: false, enabled: false };
+    }
+
+    return setAutoLaunchEnabled(Boolean(enabled));
+  });
 }
 
 function registerPowerMonitorEvents() {
@@ -378,6 +475,27 @@ async function checkForUpdates({ manual = false } = {}) {
   }
 }
 
+function getPopupWindowOptions() {
+  const display = mainWindow && !mainWindow.isDestroyed()
+    ? screen.getDisplayMatching(mainWindow.getBounds())
+    : screen.getPrimaryDisplay();
+  const { workArea } = display;
+  const margin = 48;
+  const maxWidth = Math.max(720, workArea.width - margin);
+  const maxHeight = Math.max(560, workArea.height - margin);
+  const width = Math.min(1560, maxWidth);
+  const height = Math.min(980, maxHeight);
+
+  return {
+    width,
+    height,
+    minWidth: Math.min(1100, width),
+    minHeight: Math.min(720, height),
+    x: workArea.x + Math.max(0, Math.round((workArea.width - width) / 2)),
+    y: workArea.y + Math.max(0, Math.round((workArea.height - height) / 2)),
+  };
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -419,6 +537,7 @@ function createWindow() {
       return {
         action: "allow",
         overrideBrowserWindowOptions: {
+          ...getPopupWindowOptions(),
           frame: false,
           autoHideMenuBar: true,
           titleBarStyle: "hidden",
@@ -493,53 +612,69 @@ async function configureServerUrl() {
   await mainWindow.loadURL(getCrmUrl());
 }
 
-const menuTemplate = [
-  {
-    label: "操作",
-    submenu: [
-      {
-        label: "打开拨号盘",
-        accelerator: "CommandOrControl+D",
-        click: () => {
-          showMainWindow();
-          sendSoftphoneCommand("focusDialpad");
+function buildMenuTemplate() {
+  const autoLaunchState = getAutoLaunchState();
+
+  return [
+    {
+      label: "操作",
+      submenu: [
+        {
+          label: "打开拨号盘",
+          accelerator: "CommandOrControl+D",
+          click: () => {
+            showMainWindow();
+            sendSoftphoneCommand("focusDialpad");
+          },
         },
-      },
-      {
-        label: "全局搜索",
-        accelerator: "CommandOrControl+F",
-        click: () => {
-          showMainWindow();
-          sendSoftphoneCommand("focusGlobalSearch");
+        {
+          label: "全局搜索",
+          accelerator: "CommandOrControl+F",
+          click: () => {
+            showMainWindow();
+            sendSoftphoneCommand("focusGlobalSearch");
+          },
         },
-      },
-      { type: "separator" },
-      { label: "刷新", accelerator: "F5", click: () => mainWindow?.reload() },
-      {
-        label: "重新打开 CRM",
-        accelerator: "CommandOrControl+R",
-        click: () => mainWindow?.loadURL(getCrmUrl()),
-      },
-      {
-        label: "设置服务器/代理地址",
-        click: () => configureServerUrl(),
-      },
-      {
-        label: "检查更新",
-        click: () => checkForUpdates({ manual: true }),
-      },
-      { type: "separator" },
-      { label: "退出", click: () => quitApplication() },
-    ],
-  },
-];
+        { type: "separator" },
+        { label: "刷新", accelerator: "F5", click: () => mainWindow?.reload() },
+        {
+          label: "重新打开 CRM",
+          accelerator: "CommandOrControl+R",
+          click: () => mainWindow?.loadURL(getCrmUrl()),
+        },
+        {
+          label: "设置服务器/代理地址",
+          click: () => configureServerUrl(),
+        },
+        {
+          label: "开机自启",
+          type: "checkbox",
+          checked: autoLaunchState.enabled,
+          enabled: autoLaunchState.configurable,
+          click: (menuItem) => setAutoLaunchEnabled(menuItem.checked),
+        },
+        {
+          label: "检查更新",
+          click: () => checkForUpdates({ manual: true }),
+        },
+        { type: "separator" },
+        { label: "退出", click: () => quitApplication() },
+      ],
+    },
+  ];
+}
+
+function refreshApplicationMenu() {
+  Menu.setApplicationMenu(Menu.buildFromTemplate(buildMenuTemplate()));
+}
 
 app.whenReady().then(() => {
   crmUrl = loadCrmUrl();
+  initializeAutoLaunch();
   configurePermissions();
   registerIpcHandlers();
   registerPowerMonitorEvents();
-  Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate));
+  refreshApplicationMenu();
   createWindow();
   createTray();
 
