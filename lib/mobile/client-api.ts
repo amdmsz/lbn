@@ -213,6 +213,9 @@ export async function fetchMobileCustomers(input: {
   page?: number;
   limit?: number;
   level?: string | null;
+  levels?: readonly string[];
+  queue?: string | null;
+  search?: string | null;
 } = {}) {
   const params = new URLSearchParams();
 
@@ -224,8 +227,18 @@ export async function fetchMobileCustomers(input: {
     params.set("limit", String(input.limit));
   }
 
-  if (input.level) {
+  if (input.levels && input.levels.length > 0) {
+    params.set("level", input.levels.join(","));
+  } else if (input.level) {
     params.set("level", input.level);
+  }
+
+  if (input.queue && input.queue !== "all") {
+    params.set("queue", input.queue);
+  }
+
+  if (input.search) {
+    params.set("search", input.search);
   }
 
   const query = params.toString();

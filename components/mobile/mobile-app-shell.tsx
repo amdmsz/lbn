@@ -1,7 +1,7 @@
 "use client";
 
 import type { ComponentType } from "react";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { signOut } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -24,6 +24,7 @@ import {
   PackageCheck,
   Phone,
   PhoneCall,
+  RefreshCw,
   Search,
   Settings,
   ShieldCheck,
@@ -133,7 +134,9 @@ type MobileCustomersApiState = {
   items: MobileApiCustomerListItem[] | null;
   pagination: MobileApiPagination | null;
   loading: boolean;
+  loadingMore: boolean;
   error: string | null;
+  lastSyncedAt: Date | null;
 };
 
 const tabs: Array<{
@@ -353,6 +356,23 @@ function createMobileApiCustomerListItem(
     },
     customerTags: fallback?.customerTags ?? [],
   } satisfies CustomerListItem;
+}
+
+function mergeMobileApiCustomerItems(
+  current: readonly MobileApiCustomerListItem[],
+  next: readonly MobileApiCustomerListItem[],
+) {
+  const itemsById = new Map<string, MobileApiCustomerListItem>();
+
+  for (const item of current) {
+    itemsById.set(item.id, item);
+  }
+
+  for (const item of next) {
+    itemsById.set(item.id, item);
+  }
+
+  return Array.from(itemsById.values());
 }
 
 function getCustomerPrimaryProduct(item: CustomerListItem) {
@@ -1296,17 +1316,21 @@ function CustomerRow({
 function CustomersTab({
   data,
   mobileCustomersState,
+  mobileCustomersApiEnabled,
   searchText,
   setSearchText,
   canCreateCallRecord,
   onSearchSubmit,
   onQueueChange,
   onApplyFilters,
+  onRefreshCustomers,
+  onLoadMoreCustomers,
   onSelectCustomer,
   onStartCall,
 }: Readonly<{
   data: CustomerCenterData;
   mobileCustomersState: MobileCustomersApiState;
+  mobileCustomersApiEnabled: boolean;
   searchText: string;
   setSearchText: (value: string) => void;
   canCreateCallRecord: boolean;
@@ -1318,6 +1342,8 @@ function CustomersTab({
     assignedFrom: string | null;
     assignedTo: string | null;
   }) => void;
+  onRefreshCustomers: () => void;
+  onLoadMoreCustomers: () => void;
   onSelectCustomer: (customer: CustomerListItem) => void;
   onStartCall: (
     customer: CustomerListItem,
@@ -1355,20 +1381,48 @@ function CustomersTab({
   const totalCount =
     mobileCustomersState.pagination?.total ??
     (apiItems ? filteredItems.length : data.pagination.totalCount);
+  const hasMore =
+    mobileCustomersState.pagination?.hasMore ??
+    (!apiItems && data.pagination.page < data.pagination.totalPages);
+  const listCountLabel =
+    mobileCustomersState.pagination?.total === null
+      ? `${sourceItems.length}+ 位`
+      : `${totalCount} 位`;
 
   return (
     <section>
       <MobileHeader
         title="客户"
         action={
-          <button
-            type="button"
-            onClick={() => setFilterDrawerOpen(true)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#20242c] shadow-[0_8px_24px_rgba(16,24,40,0.08)]"
-            aria-label="打开客户筛选"
-          >
-            <Filter className="h-5 w-5" aria-hidden />
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={onRefreshCustomers}
+              disabled={!mobileCustomersApiEnabled || mobileCustomersState.loading}
+              className={cn(
+                "inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#20242c] shadow-[0_8px_24px_rgba(16,24,40,0.08)]",
+                (!mobileCustomersApiEnabled || mobileCustomersState.loading) &&
+                  "text-[#98a1af]",
+              )}
+              aria-label="刷新客户列表"
+            >
+              <RefreshCw
+                className={cn(
+                  "h-5 w-5",
+                  mobileCustomersState.loading ? "animate-spin" : "",
+                )}
+                aria-hidden
+              />
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterDrawerOpen(true)}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#20242c] shadow-[0_8px_24px_rgba(16,24,40,0.08)]"
+              aria-label="打开客户筛选"
+            >
+              <Filter className="h-5 w-5" aria-hidden />
+            </button>
+          </>
         }
       />
 
@@ -1389,13 +1443,19 @@ function CustomersTab({
         <div className="mt-4 flex items-center justify-between">
           <h2 className="text-[18px] font-semibold text-[#20242c]">客户列表</h2>
           <span className="text-[12px] text-[#98a1af]">
-            {mobileCustomersState.loading ? "同步中" : `${totalCount} 位`}
+            {mobileCustomersState.loading ? "同步中" : listCountLabel}
           </span>
         </div>
 
         {mobileCustomersState.error ? (
           <div className="mt-2.5 rounded-[16px] bg-[#fff4f4] px-4 py-3 text-[13px] text-[#b42318]">
             {mobileCustomersState.error}
+          </div>
+        ) : null}
+
+        {!mobileCustomersApiEnabled ? (
+          <div className="mt-2.5 rounded-[16px] bg-white px-4 py-3 text-[12px] leading-5 text-[#667085] shadow-[0_8px_20px_rgba(16,24,40,0.035)]">
+            当前筛选使用页面结果，移动 JSON API 将在后续补齐日期/标签等高级过滤。
           </div>
         ) : null}
 
@@ -1416,6 +1476,26 @@ function CustomersTab({
             </div>
           )}
         </div>
+
+        {apiItems ? (
+          <button
+            type="button"
+            onClick={onLoadMoreCustomers}
+            disabled={!hasMore || mobileCustomersState.loading || mobileCustomersState.loadingMore}
+            className={cn(
+              "mt-3 h-12 w-full rounded-[16px] text-[14px] font-semibold transition",
+              hasMore && !mobileCustomersState.loading && !mobileCustomersState.loadingMore
+                ? "bg-white text-[#1677ff] shadow-[0_8px_20px_rgba(16,24,40,0.04)]"
+                : "bg-[#eef1f5] text-[#98a1af]",
+            )}
+          >
+            {mobileCustomersState.loadingMore
+              ? "加载中..."
+              : hasMore
+                ? "加载更多"
+                : "没有更多客户"}
+          </button>
+        ) : null}
       </div>
 
       {filterDrawerOpen ? (
@@ -2970,13 +3050,25 @@ export function MobileAppShell({
       items: null,
       pagination: null,
       loading: true,
+      loadingMore: false,
       error: null,
+      lastSyncedAt: null,
     });
+  const mobileCustomerRequestRef = useRef(0);
   const [recentDialCustomer, setRecentDialCustomer] = useState<RecentDialCustomer | null>(
     () => getRecentDialFromRecords(data.queueItems),
   );
   const [nativeRecorderState, setNativeRecorderState] = useState("浏览器模式");
-  const mobileLevelFilter = data.filters.executionClasses[0] ?? null;
+  const mobileLevelFilters = useMemo(
+    () => normalizeExecutionClasses(data.filters.executionClasses),
+    [data.filters.executionClasses],
+  );
+  const mobileCustomersApiEnabled =
+    !data.filters.assignedFrom &&
+    !data.filters.assignedTo &&
+    data.filters.productKeys.length === 0 &&
+    !data.filters.productKeyword &&
+    data.filters.tagIds.length === 0;
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -3026,48 +3118,80 @@ export function MobileAppShell({
     };
   }, []);
 
-  useEffect(() => {
-    let canceled = false;
+  const loadMobileCustomers = useCallback(
+    async (input: { page?: number; append?: boolean } = {}) => {
+      if (!mobileCustomersApiEnabled) {
+        setMobileCustomersState({
+          items: null,
+          pagination: null,
+          loading: false,
+          loadingMore: false,
+          error: null,
+          lastSyncedAt: null,
+        });
+        return;
+      }
 
-    setMobileCustomersState((current) => ({
-      ...current,
-      loading: true,
-      error: null,
-    }));
+      const requestId = mobileCustomerRequestRef.current + 1;
+      mobileCustomerRequestRef.current = requestId;
+      const page = input.page ?? 1;
+      const append = Boolean(input.append);
 
-    void fetchMobileCustomers({
-      page: data.pagination.page,
-      limit: data.pagination.pageSize,
-      level: mobileLevelFilter,
-    })
-      .then((payload) => {
-        if (canceled) {
+      setMobileCustomersState((current) => ({
+        ...current,
+        loading: !append,
+        loadingMore: append,
+        error: null,
+      }));
+
+      try {
+        const payload = await fetchMobileCustomers({
+          page,
+          limit: data.pagination.pageSize,
+          levels: mobileLevelFilters,
+          queue: data.filters.queue,
+          search: data.filters.search,
+        });
+
+        if (mobileCustomerRequestRef.current !== requestId) {
           return;
         }
 
-        setMobileCustomersState({
-          items: payload.customers,
+        setMobileCustomersState((current) => ({
+          items: append
+            ? mergeMobileApiCustomerItems(current.items ?? [], payload.customers)
+            : payload.customers,
           pagination: payload.pagination,
           loading: false,
+          loadingMore: false,
           error: null,
-        });
-      })
-      .catch((error) => {
-        if (canceled) {
+          lastSyncedAt: new Date(),
+        }));
+      } catch (error) {
+        if (mobileCustomerRequestRef.current !== requestId) {
           return;
         }
 
         setMobileCustomersState((current) => ({
           ...current,
           loading: false,
+          loadingMore: false,
           error: error instanceof Error ? error.message : "移动端客户列表同步失败。",
         }));
-      });
+      }
+    },
+    [
+      data.filters.queue,
+      data.filters.search,
+      data.pagination.pageSize,
+      mobileCustomersApiEnabled,
+      mobileLevelFilters,
+    ],
+  );
 
-    return () => {
-      canceled = true;
-    };
-  }, [data.pagination.page, data.pagination.pageSize, mobileLevelFilter]);
+  useEffect(() => {
+    void loadMobileCustomers({ page: 1 });
+  }, [loadMobileCustomers]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -3141,6 +3265,26 @@ export function MobileAppShell({
     assignedTo: string | null;
   }) {
     replaceMobileQuery(next);
+  }
+
+  function refreshMobileCustomers() {
+    void loadMobileCustomers({ page: 1 });
+  }
+
+  function loadMoreMobileCustomers() {
+    if (
+      !mobileCustomersApiEnabled ||
+      mobileCustomersState.loading ||
+      mobileCustomersState.loadingMore ||
+      !mobileCustomersState.pagination?.hasMore
+    ) {
+      return;
+    }
+
+    void loadMobileCustomers({
+      page: mobileCustomersState.pagination.page + 1,
+      append: true,
+    });
   }
 
   function openModule(module: MobileModuleView) {
@@ -3356,12 +3500,15 @@ export function MobileAppShell({
           <CustomersTab
             data={data}
             mobileCustomersState={mobileCustomersState}
+            mobileCustomersApiEnabled={mobileCustomersApiEnabled}
             searchText={searchText}
             setSearchText={setSearchText}
             canCreateCallRecord={canCreateCallRecord}
             onSearchSubmit={submitSearch}
             onQueueChange={changeQueue}
             onApplyFilters={applyCustomerFilters}
+            onRefreshCustomers={refreshMobileCustomers}
+            onLoadMoreCustomers={loadMoreMobileCustomers}
             onSelectCustomer={setSelectedCustomer}
             onStartCall={startCustomerCall}
           />

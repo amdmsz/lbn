@@ -6,6 +6,7 @@ import {
   maskMobilePhone,
   parseMobilePagination,
   resolveMobileCustomerLevel,
+  resolveMobileCustomerLevels,
 } from "../../lib/mobile/api-contract.ts";
 
 test("mobile phone masking keeps only prefix and suffix", () => {
@@ -87,5 +88,6 @@ test("mobile pagination and level parsing are bounded", () => {
     skip: 100,
   });
   assert.equal(resolveMobileCustomerLevel(params.get("level")), "B");
+  assert.deepEqual(resolveMobileCustomerLevels("b类,C，E,E,x"), ["B", "C", "E"]);
   assert.equal(resolveMobileCustomerLevel("x"), null);
 });

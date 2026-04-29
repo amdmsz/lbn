@@ -59,6 +59,20 @@ export function resolveMobileCustomerLevel(value: string | null | undefined) {
     : null;
 }
 
+export function resolveMobileCustomerLevels(value: string | null | undefined) {
+  const levels = new Set<MobileCustomerLevel>();
+
+  for (const item of value?.split(/[,，]/) ?? []) {
+    const level = resolveMobileCustomerLevel(item);
+
+    if (level) {
+      levels.add(level);
+    }
+  }
+
+  return Array.from(levels);
+}
+
 function resolveCallSignalCode(record: MobileCallSignal | null | undefined) {
   return record?.resultCode?.trim() || record?.result || null;
 }

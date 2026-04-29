@@ -10,10 +10,11 @@ import { auth } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import {
   deriveMobileCustomerLevelFromSignals,
+  getLocalDayRange,
   getLatestMobileCallSignal,
   maskMobilePhone,
   parseMobilePagination,
-  resolveMobileCustomerLevel,
+  resolveMobileCustomerLevels,
   toDecimalString,
   toIsoString,
   type MobileCustomerLevel,
@@ -170,13 +171,17 @@ export async function GET(request: Request) {
   try {
     const searchParams = new URL(request.url).searchParams;
     const pagination = parseMobilePagination(searchParams);
-    const requestedLevel = resolveMobileCustomerLevel(searchParams.get("level"));
-    const where = buildScopedCustomerWhere(customerScope, requestedLevel);
+    const requestedLevels = resolveMobileCustomerLevels(searchParams.get("level"));
+    const where = buildScopedCustomerWhere(customerScope, {
+      levels: requestedLevels,
+      queue: searchParams.get("queue"),
+      search: searchParams.get("search"),
+    });
 
-    if (requestedLevel) {
-      const filtered = await findCustomersByComputedLevel(
+    if (requestedLevels.length > 0) {
+      const filtered = await findCustomersByComputedLevels(
         where,
-        requestedLevel,
+        requestedLevels,
         pagination.skip,
         pagination.limit,
       );
@@ -230,16 +235,34 @@ export async function GET(request: Request) {
 
 function buildScopedCustomerWhere(
   customerScope: Prisma.CustomerWhereInput,
-  level: MobileCustomerLevel | null,
+  filters: {
+    levels: readonly MobileCustomerLevel[];
+    queue: string | null;
+    search: string | null;
+  },
 ): Prisma.CustomerWhereInput {
-  const levelCandidateWhere = level ? buildLevelCandidateWhere(level) : {};
+  const levelCandidateWhere = buildLevelCandidateWhere(filters.levels);
+  const queueWhere = buildQueueWhere(filters.queue);
+  const searchWhere = buildSearchWhere(filters.search);
 
   return {
-    AND: [customerScope, levelCandidateWhere],
+    AND: [customerScope, levelCandidateWhere, queueWhere, searchWhere],
   };
 }
 
-function buildLevelCandidateWhere(level: MobileCustomerLevel): Prisma.CustomerWhereInput {
+function buildLevelCandidateWhere(
+  levels: readonly MobileCustomerLevel[],
+): Prisma.CustomerWhereInput {
+  if (levels.length === 0 || levels.includes("D")) {
+    return {};
+  }
+
+  return {
+    OR: levels.map((level) => buildSingleLevelCandidateWhere(level)),
+  };
+}
+
+function buildSingleLevelCandidateWhere(level: MobileCustomerLevel): Prisma.CustomerWhereInput {
   switch (level) {
     case "A":
       return {
@@ -284,12 +307,69 @@ function buildLevelCandidateWhere(level: MobileCustomerLevel): Prisma.CustomerWh
   }
 }
 
-async function findCustomersByComputedLevel(
+function buildQueueWhere(queue: string | null): Prisma.CustomerWhereInput {
+  if (queue !== "new_imported") {
+    return {};
+  }
+
+  const { start, next } = getLocalDayRange();
+
+  return {
+    leads: {
+      some: {
+        rolledBackAt: null,
+        createdAt: {
+          gte: start,
+          lt: next,
+        },
+      },
+    },
+  };
+}
+
+function buildSearchWhere(value: string | null): Prisma.CustomerWhereInput {
+  const search = value?.trim();
+
+  if (!search) {
+    return {};
+  }
+
+  return {
+    OR: [
+      { name: { contains: search } },
+      { phone: { contains: search } },
+      { remark: { contains: search } },
+      {
+        owner: {
+          is: {
+            OR: [
+              { name: { contains: search } },
+              { username: { contains: search } },
+            ],
+          },
+        },
+      },
+      {
+        leads: {
+          some: {
+            OR: [
+              { interestedProduct: { contains: search } },
+              { remark: { contains: search } },
+            ],
+          },
+        },
+      },
+    ],
+  };
+}
+
+async function findCustomersByComputedLevels(
   where: Prisma.CustomerWhereInput,
-  level: MobileCustomerLevel,
+  levels: readonly MobileCustomerLevel[],
   skip: number,
   limit: number,
 ) {
+  const levelSet = new Set(levels);
   const targetMatchCount = skip + limit + 1;
   const matches: MobileCustomerListRecord[] = [];
   let scanned = 0;
@@ -318,7 +398,7 @@ async function findCustomersByComputedLevel(
     dbSkip += batch.length;
 
     for (const customer of batch) {
-      if (deriveCustomerLevel(customer) === level) {
+      if (levelSet.has(deriveCustomerLevel(customer))) {
         matches.push(customer);
       }
     }
