@@ -63,6 +63,10 @@ import type {
   CustomerOperatingDashboardData,
   CustomerOperatingDashboardEmployeeRow,
 } from "@/lib/customers/queries";
+import {
+  fetchMobileCustomerDetail,
+  type MobileCustomerDetail,
+} from "@/lib/mobile/client-api";
 import type {
   NavigationGroup,
   NavigationIconName,
@@ -242,6 +246,13 @@ function formatCallDuration(seconds: number) {
     2,
     "0",
   )}`;
+}
+
+function formatMobileDetailCallLabel(record: {
+  result: string | null;
+  resultCode: string | null;
+}) {
+  return record.resultCode || record.result || "通话记录";
 }
 
 function getCustomerPrimaryProduct(item: CustomerListItem) {
@@ -2094,12 +2105,68 @@ function CustomerDetailDrawer({
   onOpenOrder: (customer: CustomerListItem) => void;
   onClose: () => void;
 }>) {
+  const [detailState, setDetailState] = useState<{
+    customerId: string;
+    detail: MobileCustomerDetail | null;
+    error: string | null;
+  } | null>(null);
+  const customerId = customer?.id ?? null;
+
+  useEffect(() => {
+    if (!customerId) {
+      return;
+    }
+
+    let canceled = false;
+
+    void fetchMobileCustomerDetail(customerId)
+      .then((payload) => {
+        if (canceled) {
+          return;
+        }
+
+        setDetailState({
+          customerId,
+          detail: payload.customer,
+          error: null,
+        });
+      })
+      .catch((error) => {
+        if (canceled) {
+          return;
+        }
+
+        setDetailState({
+          customerId,
+          detail: null,
+          error: error instanceof Error ? error.message : "客户详情加载失败。",
+        });
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [customerId]);
+
   if (!customer) {
     return null;
   }
 
+  const activeDetailState =
+    detailState?.customerId === customer.id ? detailState : null;
+  const detail = activeDetailState?.detail ?? null;
+  const detailError = activeDetailState?.error ?? null;
+  const detailLoading = !activeDetailState;
   const latestCall = customer.callRecords[0] ?? null;
-  const region = formatRegion(customer.province, customer.city, customer.district);
+  const detailCalls = detail?.timeline.callRecords ?? [];
+  const detailOrders = detail?.orders ?? [];
+  const region = detail
+    ? formatRegion(
+        detail.profile.province,
+        detail.profile.city,
+        detail.profile.district,
+      )
+    : formatRegion(customer.province, customer.city, customer.district);
   const executionVariant = getCustomerExecutionDisplayVariant({
     executionClass: customer.executionClass,
     newImported: customer.newImported,
@@ -2107,6 +2174,8 @@ function CustomerDetailDrawer({
   });
   const primaryProduct = getCustomerPrimaryProduct(customer);
   const importSignal = getCustomerImportSignal(customer);
+  const displayPhone = detail?.phone ?? customer.phone;
+  const displayRemark = detail?.profile.remark ?? customer.remark;
 
   function startCall(mode: MobileCallMode) {
     if (!canCreateCallRecord || !customer) {
@@ -2146,8 +2215,13 @@ function CustomerDetailDrawer({
                   variant={executionVariant}
                 />
               </div>
-              <p className="mt-1 truncate text-[15px] text-[#667085]">{customer.phone}</p>
+              <p className="mt-1 truncate text-[15px] text-[#667085]">{displayPhone}</p>
               <p className="mt-1 truncate text-[13px] text-[#98a1af]">{region}</p>
+              {detail?.wechatId ? (
+                <p className="mt-1 truncate text-[13px] text-[#667085]">
+                  微信 · {detail.wechatId}
+                </p>
+              ) : null}
               {primaryProduct ? (
                 <p className="mt-2 line-clamp-1 text-[13px] text-[#667085]">
                   意向 · {primaryProduct}
@@ -2165,22 +2239,56 @@ function CustomerDetailDrawer({
             </button>
           </div>
 
+          {detailLoading ? (
+            <div className="mt-4 rounded-[16px] bg-[#f7f8fb] px-4 py-3 text-[13px] text-[#667085]">
+              正在同步移动端详情...
+            </div>
+          ) : null}
+
+          {detailError ? (
+            <div className="mt-4 rounded-[16px] bg-[#fff4f4] px-4 py-3 text-[13px] text-[#b42318]">
+              {detailError}
+            </div>
+          ) : null}
+
+          {detail?.tags.length ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {detail.tags.slice(0, 6).map((tag) => (
+                <span
+                  key={tag.id}
+                  className="inline-flex max-w-[120px] truncate rounded-full bg-[#f2f4f7] px-2.5 py-1 text-[12px] font-medium text-[#667085]"
+                >
+                  {tag.name}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
           <div className="mt-5 grid grid-cols-3 gap-3">
             <div className="rounded-[16px] bg-[#f7f8fb] px-3 py-3">
               <div className="text-[20px] font-semibold text-[#20242c]">
-                {customer._count.callRecords}
+                {detail ? detail.timeline.callRecords.length : customer._count.callRecords}
               </div>
               <div className="mt-1 text-[12px] text-[#98a1af]">通话</div>
             </div>
             <div className="rounded-[16px] bg-[#f7f8fb] px-3 py-3">
               <div className="text-[20px] font-semibold text-[#20242c]">
-                {customer.approvedTradeOrderCount}
+                {detail ? detailOrders.length : customer.approvedTradeOrderCount}
               </div>
               <div className="mt-1 text-[12px] text-[#98a1af]">成交</div>
             </div>
             <div className="rounded-[16px] bg-[#f7f8fb] px-3 py-3">
               <div className="truncate text-[20px] font-semibold text-[#20242c]">
-                {formatMoney(customer.lifetimeTradeAmount)}
+                {formatMoney(
+                  detail
+                    ? String(
+                        detailOrders.reduce(
+                          (sum, order) => sum + Number(order.finalAmount || 0),
+                          0,
+                        ),
+                      )
+                    : customer.lifetimeTradeAmount,
+                )}
               </div>
               <div className="mt-1 text-[12px] text-[#98a1af]">金额</div>
             </div>
@@ -2227,7 +2335,28 @@ function CustomerDetailDrawer({
         <div className="mt-4 rounded-[22px] bg-white px-5 py-5">
           <h3 className="text-[18px] font-semibold text-[#20242c]">最近通话</h3>
           <div className="mt-3 space-y-3">
-            {customer.callRecords.slice(0, 3).map((record) => (
+            {detailCalls.length > 0
+              ? detailCalls.slice(0, 3).map((record) => (
+                  <div
+                    key={record.id}
+                    className="rounded-[16px] border border-black/5 bg-[#fbfcfe] px-4 py-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[15px] font-medium text-[#20242c]">
+                        {formatMobileDetailCallLabel(record)}
+                      </span>
+                      <span className="shrink-0 text-[12px] text-[#98a1af]">
+                        {formatNullableRelativeDate(record.callTime)}
+                      </span>
+                    </div>
+                    {record.remark ? (
+                      <p className="mt-2 line-clamp-2 text-[13px] leading-5 text-[#667085]">
+                        {record.remark}
+                      </p>
+                    ) : null}
+                  </div>
+                ))
+              : customer.callRecords.slice(0, 3).map((record) => (
               <div
                 key={record.id}
                 className="rounded-[16px] border border-black/5 bg-[#fbfcfe] px-4 py-3"
@@ -2247,7 +2376,7 @@ function CustomerDetailDrawer({
                 ) : null}
               </div>
             ))}
-            {!latestCall ? (
+            {!latestCall && detailCalls.length === 0 ? (
               <div className="rounded-[16px] bg-[#f7f8fb] px-4 py-6 text-center text-[14px] text-[#98a1af]">
                 暂无通话记录
               </div>
@@ -2255,10 +2384,65 @@ function CustomerDetailDrawer({
           </div>
         </div>
 
-        {customer.remark ? (
+        {detail?.timeline.followUpTasks.length ? (
+          <div className="mt-4 rounded-[22px] bg-white px-5 py-5">
+            <h3 className="text-[18px] font-semibold text-[#20242c]">跟进待办</h3>
+            <div className="mt-3 space-y-3">
+              {detail.timeline.followUpTasks.slice(0, 3).map((task) => (
+                <div
+                  key={task.id}
+                  className="rounded-[16px] border border-black/5 bg-[#fbfcfe] px-4 py-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate text-[15px] font-medium text-[#20242c]">
+                      {task.subject}
+                    </span>
+                    <span className="shrink-0 text-[12px] text-[#98a1af]">
+                      {formatNullableRelativeDate(task.dueAt)}
+                    </span>
+                  </div>
+                  {task.content ? (
+                    <p className="mt-2 line-clamp-2 text-[13px] leading-5 text-[#667085]">
+                      {task.content}
+                    </p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {detailOrders.length > 0 ? (
+          <div className="mt-4 rounded-[22px] bg-white px-5 py-5">
+            <h3 className="text-[18px] font-semibold text-[#20242c]">历史订单</h3>
+            <div className="mt-3 space-y-3">
+              {detailOrders.slice(0, 3).map((order) => (
+                <div
+                  key={order.id}
+                  className="rounded-[16px] border border-black/5 bg-[#fbfcfe] px-4 py-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate text-[15px] font-medium text-[#20242c]">
+                      {order.tradeNo}
+                    </span>
+                    <span className="shrink-0 text-[13px] font-semibold text-[#1677ff]">
+                      ¥{formatMoney(order.finalAmount)}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between gap-3 text-[12px] text-[#98a1af]">
+                    <span>{order.tradeStatus}</span>
+                    <span>{formatNullableRelativeDate(order.createdAt)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {displayRemark ? (
           <div className="mt-4 rounded-[22px] bg-white px-5 py-5">
             <h3 className="text-[18px] font-semibold text-[#20242c]">客户备注</h3>
-            <p className="mt-2 text-[14px] leading-6 text-[#667085]">{customer.remark}</p>
+            <p className="mt-2 text-[14px] leading-6 text-[#667085]">{displayRemark}</p>
           </div>
         ) : null}
       </section>
