@@ -2,10 +2,10 @@ import { cn } from "@/lib/utils";
 
 const badgeVariants = {
   neutral:
-    "bg-[var(--color-shell-surface-soft)] text-[var(--color-sidebar-muted)] border-[var(--color-border-soft)]",
+    "bg-muted/30 text-muted-foreground border-border/50",
   info: "bg-[rgba(61,124,255,0.08)] text-[var(--color-info)] border-[rgba(61,124,255,0.12)]",
   success:
-    "bg-[rgba(15,159,120,0.08)] text-[var(--color-success)] border-[rgba(15,159,120,0.12)]",
+    "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300",
   warning:
     "bg-[rgba(201,138,30,0.08)] text-[var(--color-warning)] border-[rgba(201,138,30,0.12)]",
   danger:

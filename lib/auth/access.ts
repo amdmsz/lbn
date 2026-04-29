@@ -142,10 +142,6 @@ export function canAccessPath(
     return canAccessOrderModule(role);
   }
 
-  if (pathname === "/gifts" || pathname.startsWith("/gifts/")) {
-    return canAccessGiftModule(role);
-  }
-
   if (pathname === "/shipping" || pathname.startsWith("/shipping/")) {
     return canAccessShippingModule(role);
   }
@@ -378,18 +374,6 @@ export function canViewProductFinanceCategory(
   );
 }
 
-export function canAccessGiftModule(role: RoleCode) {
-  return role === "ADMIN" || role === "SUPERVISOR" || role === "SALES" || role === "OPS";
-}
-
-export function canCreateGiftRecord(role: RoleCode) {
-  return canAccessGiftModule(role);
-}
-
-export function canReviewGiftRecord(role: RoleCode) {
-  return role === "ADMIN" || role === "SUPERVISOR" || role === "OPS";
-}
-
 export function canAccessShippingModule(role: RoleCode) {
   return role === "ADMIN" || role === "SUPERVISOR" || role === "SHIPPER";
 }
@@ -588,33 +572,6 @@ export function getOrderScope(role: RoleCode, userId: string, teamId?: string | 
           ],
         }
       : { id: buildMissingScopeId("order_team") };
-  }
-
-  if (isOwnDataOnly(role)) {
-    return {
-      customer: {
-        ownerId: userId,
-      },
-    };
-  }
-
-  return null;
-}
-
-export function getGiftScope(role: RoleCode, userId: string, teamId?: string | null) {
-  if (role === "ADMIN" || role === "OPS") {
-    return {};
-  }
-
-  if (role === "SUPERVISOR") {
-    return teamId
-      ? {
-          OR: [
-            { sales: { is: { teamId } } },
-            { customer: { owner: { is: { teamId } } } },
-          ],
-        }
-      : { id: buildMissingScopeId("gift_team") };
   }
 
   if (isOwnDataOnly(role)) {

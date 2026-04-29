@@ -64,9 +64,9 @@ export function LeadRecycleDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(8,11,18,0.32)] px-4 py-6 backdrop-blur-[10px]">
-      <div className="w-full max-w-[40rem] overflow-hidden rounded-[1.35rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-lg)]">
-        <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-5 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-6 backdrop-blur-sm dark:bg-black/50">
+      <div className="w-full max-w-[40rem] overflow-hidden rounded-2xl border border-border/60 bg-card shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-border/50 bg-background/60 px-5 py-4">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge
@@ -76,10 +76,10 @@ export function LeadRecycleDialog({
               <LeadStatusBadge status={item.status} />
             </div>
             <div>
-              <h3 className="text-[1.06rem] font-semibold tracking-[-0.03em] text-[var(--foreground)]">
+              <h3 className="text-[1.06rem] font-semibold text-foreground">
                 移入回收站
               </h3>
-              <p className="mt-1 text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
+              <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
                 确认这条线索是否退出当前工作台。
               </p>
             </div>
@@ -88,7 +88,7 @@ export function LeadRecycleDialog({
           <button
             type="button"
             onClick={onClose}
-            className="crm-button crm-button-ghost min-h-0 rounded-full px-3 py-2 text-sm"
+            className="inline-flex min-h-0 items-center rounded-full px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             关闭
           </button>
@@ -109,7 +109,7 @@ export function LeadRecycleDialog({
           </div>
 
           <div className="space-y-2 rounded-[0.98rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-sidebar-muted)]">
+            <p className="text-[10px] font-semibold uppercase text-muted-foreground">
               原因
             </p>
             <select
@@ -129,7 +129,7 @@ export function LeadRecycleDialog({
 
           {guard.blockers.length > 0 ? (
             <div className="space-y-2 rounded-[0.98rem] border border-[rgba(209,91,118,0.16)] bg-[rgba(209,91,118,0.06)] px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-danger)]">
+              <p className="text-[10px] font-semibold uppercase text-destructive">
                 阻断原因
               </p>
               <div className="space-y-2">
@@ -166,8 +166,8 @@ export function LeadRecycleDialog({
           )}
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-          <p className="text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+        <div className="flex flex-col gap-3 border-t border-border/50 bg-background/60 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <p className="text-[12px] leading-5 text-muted-foreground">
             {guard.canMoveToRecycleBin
               ? "后续如需恢复，请在回收站治理页处理。"
               : `${guard.blockerSummary}${guard.fallbackActionLabel ? ` 建议改走：${guard.fallbackActionLabel}。` : ""}`}
@@ -176,7 +176,7 @@ export function LeadRecycleDialog({
             <button
               type="button"
               onClick={onClose}
-              className="crm-button crm-button-secondary"
+              className="inline-flex min-h-0 items-center justify-center rounded-lg border border-border/60 bg-card px-3 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-all hover:border-primary/40 hover:text-primary"
             >
               取消
             </button>
@@ -185,7 +185,7 @@ export function LeadRecycleDialog({
                 type="button"
                 onClick={onConfirm}
                 disabled={pending || !onConfirm}
-                className="crm-button crm-button-primary disabled:cursor-not-allowed disabled:opacity-55"
+                className="inline-flex min-h-0 items-center justify-center rounded-lg bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground shadow-sm transition-all hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-55"
               >
                 {pending ? "处理中..." : "移入回收站"}
               </button>

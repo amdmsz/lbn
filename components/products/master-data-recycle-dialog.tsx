@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import { ActionBanner } from "@/components/shared/action-banner";
+import { ClientPortal } from "@/components/shared/client-portal";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { formatDateTime } from "@/lib/customers/metadata";
 import {
@@ -38,6 +40,19 @@ export function MasterDataRecycleDialog({
   onFallbackAction?: () => void;
   pending?: boolean;
 }>) {
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
   if (!open) {
     return null;
   }
@@ -46,7 +61,8 @@ export function MasterDataRecycleDialog({
   const hasReferenceSnapshots = guard.blockers.length > 0 && !hasBlockingBlockers;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/34 px-4 py-8">
+    <ClientPortal>
+    <div className="fixed inset-0 z-[10040] flex items-center justify-center bg-black/70 px-4 py-8 backdrop-blur-sm">
       <div className="w-full max-w-2xl overflow-hidden rounded-[1.1rem] border border-black/10 bg-[rgba(255,255,255,0.98)] shadow-[0_24px_60px_rgba(18,24,31,0.18)]">
         <div className="flex items-start justify-between gap-4 border-b border-black/7 bg-[rgba(247,248,250,0.88)] px-5 py-4">
           <div className="space-y-2">
@@ -227,6 +243,7 @@ export function MasterDataRecycleDialog({
         </div>
       </div>
     </div>
+    </ClientPortal>
   );
 }
 

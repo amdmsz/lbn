@@ -1,6 +1,7 @@
 "use client";
 
 import { ActionBanner } from "@/components/shared/action-banner";
+import { ClientPortal } from "@/components/shared/client-portal";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { formatDateTime } from "@/lib/customers/metadata";
 import {
@@ -90,17 +91,18 @@ export function LiveSessionActionDialog({
     fallbackAction === "none" || (mode === "recycle" && recycleGuard?.canMoveToRecycleBin);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-8">
-      <div className="w-full max-w-2xl overflow-hidden rounded-[1.05rem] border border-black/10 bg-[rgba(255,255,255,0.98)] shadow-[0_24px_60px_rgba(18,24,31,0.16)]">
-        <div className="flex items-start justify-between gap-4 border-b border-black/7 bg-[rgba(247,248,250,0.88)] px-5 py-4">
+    <ClientPortal>
+    <div className="fixed inset-0 z-[10040] flex items-center justify-center bg-black/70 px-4 py-8 backdrop-blur-sm">
+      <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-border bg-card text-foreground shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-border/50 bg-muted/30 px-5 py-4">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge label={meta.badgeLabel} variant={meta.badgeVariant} />
               <StatusBadge label="\u76f4\u64ad\u573a\u6b21" variant="neutral" />
             </div>
             <div>
-              <h3 className="text-[1.02rem] font-semibold text-black/86">{meta.title}</h3>
-              <p className="mt-1 text-sm leading-6 text-black/58">{meta.description}</p>
+              <h3 className="text-[1.02rem] font-semibold text-foreground">{meta.title}</h3>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">{meta.description}</p>
             </div>
           </div>
           <button
@@ -113,7 +115,7 @@ export function LiveSessionActionDialog({
         </div>
 
         <div className="space-y-4 px-5 py-4">
-          <div className="grid gap-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.78)] p-4 sm:grid-cols-2">
+          <div className="grid gap-3 rounded-xl border border-border/50 bg-muted/20 p-4 sm:grid-cols-2">
             <SummaryRow label="\u573a\u6b21\u540d\u79f0" value={item.title} />
             <SummaryRow label="\u5bf9\u8c61\u7c7b\u578b" value="\u76f4\u64ad\u573a\u6b21" />
             <SummaryRow
@@ -137,12 +139,12 @@ export function LiveSessionActionDialog({
 
           {mode === "recycle" && recycleGuard ? (
             <>
-              <div className="space-y-2 rounded-[0.95rem] border border-black/7 bg-white/82 p-4">
+              <div className="space-y-2 rounded-xl border border-border/50 bg-background p-4">
                 <div>
-                  <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                  <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                     {"\u5220\u9664\u539f\u56e0"}
                   </p>
-                  <p className="mt-1 text-[13px] leading-5 text-black/54">
+                  <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
                     {
                       "\u7528\u4e8e\u8bb0\u5f55\u8fd9\u662f\u8bef\u5efa\u3001\u6d4b\u8bd5\u6216\u91cd\u590d\u573a\u6b21\uff0c\u540e\u7eed\u56de\u6536\u7ad9\u4e2d\u5fc3\u4f1a\u6cbf\u7528\u8fd9\u7ec4\u539f\u56e0\u4fe1\u606f\u3002"
                     }
@@ -166,7 +168,7 @@ export function LiveSessionActionDialog({
               </div>
 
               {recycleGuard.blockers.length > 0 ? (
-                <div className="space-y-2 rounded-[0.95rem] border border-[rgba(141,59,51,0.14)] bg-[rgba(255,247,246,0.86)] p-4">
+                <div className="space-y-2 rounded-xl border border-destructive/20 bg-destructive/5 p-4">
                   <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--color-danger)]">
                     {"\u5f15\u7528\u5173\u7cfb"}
                   </p>
@@ -174,13 +176,13 @@ export function LiveSessionActionDialog({
                     {recycleGuard.blockers.map((blocker) => (
                       <div
                         key={blocker.name}
-                        className="flex items-start justify-between gap-4 rounded-[0.85rem] border border-[rgba(141,59,51,0.12)] bg-white/78 px-3 py-2.5"
+                        className="flex items-start justify-between gap-4 rounded-lg border border-destructive/15 bg-background/70 px-3 py-2.5"
                       >
                         <div className="space-y-1">
-                          <p className="text-sm font-semibold text-black/82">
+                          <p className="text-sm font-semibold text-foreground">
                             {blocker.name}
                           </p>
-                          <p className="text-[13px] leading-5 text-black/56">
+                          <p className="text-[13px] leading-5 text-muted-foreground">
                             {blocker.description}
                           </p>
                         </div>
@@ -202,11 +204,11 @@ export function LiveSessionActionDialog({
             </>
           ) : null}
 
-          <div className="space-y-2 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.74)] p-4">
-            <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+          <div className="space-y-2 rounded-xl border border-border/50 bg-muted/20 p-4">
+            <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
               {mode === "recycle" ? "\u5f71\u54cd\u8bf4\u660e" : "\u52a8\u4f5c\u5f71\u54cd"}
             </p>
-            <ul className="space-y-1.5 text-[13px] leading-5 text-black/56">
+            <ul className="space-y-1.5 text-[13px] leading-5 text-muted-foreground">
               {mode === "cancel" ? (
                 <>
                   <li>
@@ -258,8 +260,8 @@ export function LiveSessionActionDialog({
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-black/7 bg-[rgba(247,248,250,0.8)] px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-          <p className="text-[13px] leading-5 text-black/56">
+        <div className="flex flex-col gap-3 border-t border-border/50 bg-muted/30 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <p className="text-[13px] leading-5 text-muted-foreground">
             {mode === "recycle" && recycleGuard
               ? recycleGuard.canMoveToRecycleBin
                 ? meta.hint
@@ -280,7 +282,7 @@ export function LiveSessionActionDialog({
                   type="button"
                   onClick={onConfirm}
                   disabled={pending || !onConfirm}
-                  className="crm-button crm-button-primary disabled:cursor-not-allowed disabled:opacity-55"
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55"
                 >
                   {pending ? "\u5904\u7406\u4e2d..." : meta.primaryActionLabel}
                 </button>
@@ -289,7 +291,7 @@ export function LiveSessionActionDialog({
                   type="button"
                   onClick={onConfirm}
                   disabled={pending || disabledFallback}
-                  className="crm-button crm-button-primary disabled:cursor-not-allowed disabled:opacity-55"
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55"
                 >
                   {pending
                     ? "\u5904\u7406\u4e2d..."
@@ -302,7 +304,7 @@ export function LiveSessionActionDialog({
                 type="button"
                 onClick={onConfirm}
                 disabled={pending}
-                className="crm-button crm-button-primary"
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-55"
               >
                 {pending ? "\u5904\u7406\u4e2d..." : meta.primaryActionLabel}
               </button>
@@ -311,6 +313,7 @@ export function LiveSessionActionDialog({
         </div>
       </div>
     </div>
+    </ClientPortal>
   );
 }
 
@@ -323,8 +326,8 @@ function SummaryRow({
 }>) {
   return (
     <div className="space-y-1">
-      <p className="text-[12px] text-black/42">{label}</p>
-      <p className="text-sm font-medium leading-5 text-black/78">{value}</p>
+      <p className="text-[12px] text-muted-foreground">{label}</p>
+      <p className="text-sm font-medium leading-5 text-foreground">{value}</p>
     </div>
   );
 }

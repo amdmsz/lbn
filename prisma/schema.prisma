@@ -443,6 +443,13 @@ enum LogisticsFollowUpTaskStatus {
   CANCELED
 }
 
+enum LogisticsExceptionType {
+  ADDRESS_MISMATCH
+  RETURN_OR_REJECTED
+  TRACE_QUERY_FAILED
+  OVERDUE_NOT_SIGNED
+}
+
 enum CodCollectionStatus {
   PENDING_COLLECTION
   COLLECTED
@@ -1952,6 +1959,13 @@ model ShippingTask {
   reportedAt       DateTime?
   shippedAt        DateTime?
   completedAt      DateTime?
+  logisticsLastCheckedAt       DateTime?
+  logisticsLastStatusCode      String?
+  logisticsLastStatusLabel     String?
+  logisticsLastEventAt         DateTime?
+  logisticsExceptionType       LogisticsExceptionType?
+  logisticsExceptionDetectedAt DateTime?
+  logisticsExceptionMessage    String?                    @db.Text
   remark           String?                    @db.Text
   paymentPlans     PaymentPlan[]
   paymentRecords   PaymentRecord[]
@@ -1968,6 +1982,7 @@ model ShippingTask {
   @@index([tradeOrderId, supplierId, reportStatus, shippingStatus, createdAt], map: "shiptask_trade_scope_idx")
   @@index([exportBatchId])
   @@index([trackingNumber])
+  @@index([logisticsExceptionType, shippingStatus, createdAt], map: "shiptask_logistics_exception_idx")
   @@map("shippingtask")
 }
 

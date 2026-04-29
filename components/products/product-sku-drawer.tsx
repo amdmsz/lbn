@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { ActionBanner } from "@/components/shared/action-banner";
+import { ClientPortal } from "@/components/shared/client-portal";
 import { cn } from "@/lib/utils";
 
 type ProductActionResult = {
@@ -21,10 +22,10 @@ export type ProductSkuDraft = {
 };
 
 const drawerOverlayClassName =
-  "absolute inset-0 bg-[rgba(15,23,42,0.14)] backdrop-blur-[3px]";
+  "fixed inset-0 z-[10030] bg-black/70 backdrop-blur-sm";
 
 const drawerPanelClassName =
-  "absolute inset-y-0 right-0 flex w-full max-w-[42rem] flex-col border-l border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[-18px_0_48px_rgba(15,23,42,0.12)]";
+  "fixed inset-y-0 right-0 z-[10031] flex h-[100dvh] max-h-[100dvh] w-full max-w-[42rem] flex-col overflow-hidden border-l border-[var(--color-border-soft)] bg-background shadow-2xl";
 
 const drawerSectionClassName =
   "rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-4 shadow-[var(--color-shell-shadow-sm)]";
@@ -69,12 +70,26 @@ export function ProductSkuDrawer({
       ? "先保存规格，其他设置按需展开。"
       : "当前只维护规格主字段。";
 
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
   if (!open) {
     return null;
   }
 
   return (
-    <div className="fixed inset-0 z-50">
+    <ClientPortal>
+    <div className="fixed inset-0 z-[10030]">
       <button
         type="button"
         aria-label="关闭 SKU 抽屉"
@@ -311,5 +326,6 @@ export function ProductSkuDrawer({
         </form>
       </div>
     </div>
+    </ClientPortal>
   );
 }

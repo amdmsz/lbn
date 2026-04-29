@@ -22,7 +22,6 @@ export type NavigationIconName =
   | "fulfillmentCenter"
   | "paymentRecords"
   | "collectionTasks"
-  | "gifts"
   | "shipping"
   | "shippingExportBatches"
   | "reports"
@@ -161,13 +160,6 @@ const navigationItems = {
     iconName: "shippingExportBatches",
     activePrefixes: ["/shipping/export-batches"],
   }),
-  gifts: createItem({
-    title: "礼品管理",
-    href: "/gifts",
-    description: "处理礼品资格、礼品履约与兼容路径。",
-    iconName: "gifts",
-    activePrefixes: ["/gifts"],
-  }),
   reports: createItem({
     title: "报表中心",
     href: "/reports",
@@ -253,12 +245,6 @@ const navigationTree: NavigationTree = {
       ],
     },
     {
-      key: "fulfillment",
-      title: "履约中心",
-      description: "礼品协同和履约相关结果回看。",
-      sections: [{ items: [navigationItems.gifts] }],
-    },
-    {
       key: "analytics",
       title: "数据分析",
       description: "经营分析和管理视图入口。",
@@ -307,12 +293,6 @@ const navigationTree: NavigationTree = {
           items: [navigationItems.paymentRecords, navigationItems.collectionTasks],
         },
       ],
-    },
-    {
-      key: "fulfillment",
-      title: "履约中心",
-      description: "查看团队履约、报单和礼品结果。",
-      sections: [{ items: [navigationItems.gifts] }],
     },
     {
       key: "analytics",
@@ -365,8 +345,8 @@ const navigationTree: NavigationTree = {
     {
       key: "operations",
       title: "运营协同",
-      description: "直播场次和礼品协同。",
-      sections: [{ items: [navigationItems.liveSessions, navigationItems.gifts] }],
+      description: "直播场次协同。",
+      sections: [{ items: [navigationItems.liveSessions] }],
     },
     {
       key: "product-collaboration",

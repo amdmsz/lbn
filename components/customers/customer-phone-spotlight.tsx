@@ -1,11 +1,13 @@
 "use client";
 
+import { Phone } from "lucide-react";
 import { CustomerMobileDialButton } from "@/components/customers/mobile-call-followup-sheet";
 import { CustomerOutboundCallButton } from "@/components/customers/customer-outbound-call-button";
 import type { MobileCallTriggerSource } from "@/lib/calls/mobile-call-followup";
 import { cn } from "@/lib/utils";
 
 type CustomerPhoneSpotlightVariant = "table" | "dialog";
+type CustomerPhoneSpotlightOutboundPlacement = "actions" | "icon";
 
 export function CustomerPhoneSpotlight({
   customerId,
@@ -14,8 +16,10 @@ export function CustomerPhoneSpotlight({
   triggerSource,
   variant = "table",
   className,
+  phoneClassName,
   onFocusCustomer,
   outboundCallEnabled = false,
+  outboundCallPlacement = "actions",
 }: Readonly<{
   customerId: string;
   customerName: string;
@@ -23,30 +27,47 @@ export function CustomerPhoneSpotlight({
   triggerSource: MobileCallTriggerSource;
   variant?: CustomerPhoneSpotlightVariant;
   className?: string;
+  phoneClassName?: string;
   onFocusCustomer?: () => void;
   outboundCallEnabled?: boolean;
+  outboundCallPlacement?: CustomerPhoneSpotlightOutboundPlacement;
 }>) {
   const normalizedPhone = phone.trim();
   const hasPhone = normalizedPhone.length > 0 && normalizedPhone !== "暂无电话";
+  const isDialog = variant === "dialog";
+  const shouldUseOutboundIcon =
+    isDialog && hasPhone && outboundCallEnabled && outboundCallPlacement === "icon";
 
   return (
     <div
       className={cn(
         "flex flex-wrap items-center gap-x-3 gap-y-2",
-        variant === "dialog"
-          ? "justify-between rounded-[0.98rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3"
-          : "justify-between rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2.5 py-2",
+        isDialog ? "justify-between px-0 py-0" : "justify-start px-0 py-0",
         className,
       )}
     >
-      <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        {shouldUseOutboundIcon ? (
+          <CustomerOutboundCallButton
+            customerId={customerId}
+            customerName={customerName}
+            label="CRM 外呼"
+            showLabel={false}
+            className="h-8 w-8 border-primary/20 bg-primary/10 px-0 text-primary hover:border-primary/30 hover:bg-primary/15"
+          />
+        ) : isDialog ? (
+          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground">
+            <Phone className="h-4 w-4" aria-hidden="true" />
+          </span>
+        ) : null}
         <p
           title={hasPhone ? normalizedPhone : undefined}
           className={cn(
-            "truncate font-semibold tabular-nums text-[var(--foreground)]",
-            variant === "dialog"
-              ? "text-[1.22rem] leading-none tracking-[0.08em] md:text-[1.38rem]"
-              : "text-[15px] leading-none tracking-[0.06em]",
+            "truncate font-mono font-semibold tabular-nums tracking-tight text-foreground",
+            isDialog
+              ? "text-2xl leading-none"
+              : "text-base font-bold leading-6 tracking-tight",
+            phoneClassName,
           )}
         >
           {hasPhone ? normalizedPhone : "暂无电话"}
@@ -55,14 +76,14 @@ export function CustomerPhoneSpotlight({
 
       {hasPhone ? (
         <div className="flex shrink-0 items-center gap-2">
-          {outboundCallEnabled ? (
+          {outboundCallEnabled && !shouldUseOutboundIcon ? (
             <CustomerOutboundCallButton
               customerId={customerId}
               customerName={customerName}
-              label={variant === "dialog" ? "CRM 外呼" : "外呼"}
+              label={isDialog ? "CRM 外呼" : "外呼"}
               className={cn(
-                variant === "dialog"
-                  ? "h-10 border-[rgba(79,125,247,0.22)] bg-[var(--foreground)] px-4 text-[12px] text-[var(--color-panel)] hover:border-[rgba(79,125,247,0.34)] hover:bg-[var(--foreground)]/92"
+                isDialog
+                  ? "h-9 border-primary/20 bg-primary px-3.5 text-[12px] text-primary-foreground hover:border-primary/30 hover:bg-primary/90"
                   : "h-7 border-[var(--color-border-soft)] bg-[var(--color-shell-surface-strong)] px-2.5 text-[11px] text-[var(--foreground)]",
               )}
             />
@@ -73,11 +94,11 @@ export function CustomerPhoneSpotlight({
               phone={normalizedPhone}
               triggerSource={triggerSource}
               onClick={onFocusCustomer}
-              label={variant === "dialog" ? "拨打并录音" : "拨打"}
+              label={isDialog ? "拨打并录音" : "拨打"}
               className={cn(
                 "inline-flex items-center justify-center rounded-full border font-medium shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,transform,box-shadow] duration-150 motion-safe:hover:-translate-y-[1px] md:hidden",
-                variant === "dialog"
-                  ? "h-10 border-[rgba(79,125,247,0.22)] bg-[var(--foreground)] px-4 text-[12px] text-[var(--color-panel)] hover:border-[rgba(79,125,247,0.34)] hover:bg-[var(--foreground)]/92"
+                isDialog
+                  ? "h-9 border-primary/20 bg-primary px-3.5 text-[12px] text-primary-foreground hover:border-primary/30 hover:bg-primary/90"
                   : "h-7 border-[var(--color-border-soft)] bg-[var(--color-shell-surface-strong)] px-2.5 text-[11px] text-[var(--foreground)]",
               )}
             />

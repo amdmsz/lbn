@@ -211,6 +211,14 @@ function getExceptionLabels(item: ShippingOperationsItem) {
     !item.exportBatch.fileUrl
   )
     labels.push("批次文件缺失");
+  if (item.logisticsExceptionType === "ADDRESS_MISMATCH")
+    labels.push("地址异常");
+  if (item.logisticsExceptionType === "RETURN_OR_REJECTED")
+    labels.push("退回 / 拒收");
+  if (item.logisticsExceptionType === "TRACE_QUERY_FAILED")
+    labels.push("物流查询失败");
+  if (item.logisticsExceptionType === "OVERDUE_NOT_SIGNED")
+    labels.push("超 7 天未签收");
   return labels;
 }
 
@@ -1202,6 +1210,11 @@ function ShippedAndExceptionWorkspace({
                           />
                         ))}
                       </div>
+                      {item.logisticsExceptionMessage ? (
+                        <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs leading-5 text-destructive">
+                          {item.logisticsExceptionMessage}
+                        </div>
+                      ) : null}
                       <div>
                         <div className="text-xs uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
                           {identity.tradeNo

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { MasterDataRecycleDialog } from "@/components/products/master-data-recycle-dialog";
@@ -19,6 +19,7 @@ import {
 } from "@/components/products/product-sku-drawer";
 import { type SupplierOption } from "@/components/products/product-supplier-field";
 import { ActionBanner } from "@/components/shared/action-banner";
+import { ClientPortal } from "@/components/shared/client-portal";
 import type { ProductCenterDictionaryOption } from "@/lib/products/metadata";
 import type {
   MasterDataRecycleGuard,
@@ -175,6 +176,19 @@ export function ProductWorkspaceDetailDrawer({
     useState<MasterDataRecycleReasonCode>("mistaken_creation");
   const [pendingAction, startActionTransition] = useTransition();
 
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
   if (!open || !product) {
     return null;
   }
@@ -301,17 +315,17 @@ export function ProductWorkspaceDetailDrawer({
   }
 
   return (
-    <>
-      <div className="fixed inset-0 z-40">
+    <ClientPortal>
+      <div className="fixed inset-0 z-[9999]">
         <button
           type="button"
           aria-label="关闭商品详情抽屉"
           onClick={onClose}
-          className="absolute inset-0 bg-[rgba(15,23,42,0.18)] backdrop-blur-[2px]"
+          className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm"
         />
 
-        <aside className="absolute inset-y-0 right-0 flex w-full max-w-[56rem] flex-col border-l border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[-18px_0_40px_rgba(15,23,42,0.08)]">
-          <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-5 py-3 sm:px-6">
+        <aside className="fixed inset-y-0 right-0 z-[10000] flex h-[100dvh] max-h-[100dvh] w-full max-w-[56rem] flex-col overflow-hidden border-l border-border/60 bg-background shadow-2xl">
+          <div className="flex items-start justify-between gap-4 border-b border-border/50 bg-background px-5 py-3 sm:px-6">
             <div className="min-w-0 space-y-1">
               <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
                 <span>商品</span>
@@ -331,14 +345,14 @@ export function ProductWorkspaceDetailDrawer({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] text-[var(--color-sidebar-muted)] transition-colors hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-card text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
 
           {notice ? (
-            <div className="border-b border-[var(--color-border-soft)] px-5 py-3 sm:px-6">
+            <div className="border-b border-border/50 px-5 py-3 sm:px-6">
               <ActionBanner
                 tone={notice.status === "success" ? "success" : "danger"}
               >
@@ -347,7 +361,7 @@ export function ProductWorkspaceDetailDrawer({
             </div>
           ) : null}
 
-          <div className="flex-1 overflow-y-auto px-5 py-4 sm:px-6">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 [scrollbar-width:none] [-ms-overflow-style:none] sm:px-6 [&::-webkit-scrollbar]:hidden">
             <div className="space-y-3">
               <ProductWorkbenchHero
                 product={currentProduct}
@@ -359,7 +373,7 @@ export function ProductWorkspaceDetailDrawer({
                     <button
                       type="button"
                       onClick={() => openQuickSkuCreate()}
-                      className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
+                      className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium px-4 py-2 rounded-md transition-colors"
                     >
                       添加规格
                     </button>
@@ -492,7 +506,7 @@ export function ProductWorkspaceDetailDrawer({
                     <button
                       type="button"
                       onClick={() => openQuickSkuCreate()}
-                      className="crm-button crm-button-primary"
+                      className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium px-4 py-2 rounded-md transition-colors"
                     >
                       {quickCreateButtonLabel}
                     </button>
@@ -611,6 +625,6 @@ export function ProductWorkspaceDetailDrawer({
             : undefined
         }
       />
-    </>
+    </ClientPortal>
   );
 }

@@ -61,25 +61,34 @@ const DESKTOP_COLUMNS =
   "xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1.05fr)_minmax(0,1.1fr)]";
 
 const tradeOrderCardClassName =
-  "overflow-hidden rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-sm)]";
+  "overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm";
 
 const tradeOrderHeaderClassName =
-  "flex flex-col gap-3 border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 lg:flex-row lg:items-start lg:justify-between";
+  "flex flex-col gap-3 border-b border-border/50 bg-transparent px-4 py-3.5 lg:flex-row lg:items-start lg:justify-between";
 
 const tradeOrderMetaClassName =
-  "flex flex-wrap gap-x-3 gap-y-1 text-xs text-[var(--color-sidebar-muted)]";
+  "flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground";
 
 const tradeOrderInsetClassName =
-  "rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)]";
+  "border-l border-border/40 pl-4";
 
 const tradeOrderQuietActionClassName =
-  "inline-flex min-h-0 items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-1.5 text-xs font-medium text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]";
+  "inline-flex min-h-0 items-center rounded-full border border-border/60 bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-[border-color,background-color,color] hover:border-primary/40 hover:bg-primary/5 hover:text-primary";
 
 const tradeOrderMenuItemClassName =
-  "block rounded-[0.75rem] px-3 py-2 text-sm text-[var(--color-sidebar-muted)] transition-colors hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]";
+  "block rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary";
 
 const tradeOrderMetricTileClassName =
-  "rounded-[0.82rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2.5 py-2";
+  "flex flex-col items-center justify-center p-2 text-center";
+
+const tradeOrderPrimaryButtonClassName =
+  "inline-flex min-h-0 items-center justify-center rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60";
+
+const tradeOrderSecondaryButtonClassName =
+  "inline-flex min-h-0 items-center justify-center rounded-lg border border-border/60 bg-card px-3.5 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60";
+
+const tradeOrderInputClassName =
+  "min-h-[2.6rem] w-full rounded-lg border border-border/60 bg-background px-3 py-2 text-sm text-foreground shadow-sm transition-colors placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
 
 const tradeStatusMeta: Record<
   TradeOrderItem["tradeStatus"],
@@ -311,14 +320,14 @@ function TradeOrderRowHeader({
     <div className={tradeOrderHeaderClassName}>
       <div className="min-w-0 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-[15px] font-semibold tracking-tight text-[var(--foreground)]">
+          <h3 className="font-mono text-lg font-bold text-foreground">
             {item.tradeNo}
           </h3>
           <StatusBadge
             label={tradeStatusMeta[item.tradeStatus].label}
             variant={tradeStatusMeta[item.tradeStatus].variant}
           />
-          <span className="rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
+          <span className="rounded-full border border-border/60 bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
             子单 {subOrderCount}
           </span>
           <StatusBadge label={priorityMeta.label} variant={priorityMeta.variant} />
@@ -331,14 +340,14 @@ function TradeOrderRowHeader({
       </div>
 
       <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-        <div className={cn(tradeOrderInsetClassName, "px-3 py-2 text-right")}>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
+        <div className={cn(tradeOrderInsetClassName, "py-1 text-right")}>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             成交金额
           </p>
-          <p className="mt-1 text-[1.02rem] font-semibold tracking-tight text-[var(--foreground)]">
+          <p className="mt-1 font-mono text-xl font-semibold text-foreground">
             {formatCurrency(item.finalAmount)}
           </p>
-          <p className="text-xs text-[var(--color-sidebar-muted)]">
+          <p className="text-xs text-muted-foreground">
             待收 {formatCurrency(item.remainingAmount)}
           </p>
         </div>
@@ -362,7 +371,7 @@ function TradeOrderRowHeader({
           >
             更多
           </summary>
-          <div className="absolute right-0 z-20 mt-2 w-40 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-1.5 shadow-[var(--color-shell-shadow-sm)]">
+          <div className="absolute right-0 z-20 mt-2 w-40 rounded-xl border border-border/60 bg-card p-1.5 shadow-lg">
             <Link href={batchHref} className={tradeOrderMenuItemClassName}>
               查看批次
             </Link>
@@ -413,15 +422,15 @@ function TradeOrderExecutionStrip({
   return (
     <div
       className={cn(
-        "grid gap-px bg-[var(--color-border-soft)] md:grid-cols-2 xl:grid-cols-none xl:grid",
+        "grid divide-y divide-border/40 md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-none xl:grid",
         DESKTOP_COLUMNS,
       )}
     >
-      <div className="bg-[var(--color-panel)] px-4 py-3">
+      <div className="bg-transparent px-4 py-3.5">
         <div className="space-y-2">
           {product.lines.map((line) => (
             <div key={line.id} className="flex items-start gap-2">
-              <span className="mt-0.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2 py-0.5 text-[10px] text-[var(--color-sidebar-muted)]">
+              <span className="mt-0.5 rounded-full border border-border/50 bg-background px-2 py-0.5 text-[10px] text-muted-foreground">
                 {line.type === "GIFT"
                   ? "赠品"
                   : line.type === "BUNDLE"
@@ -429,10 +438,10 @@ function TradeOrderExecutionStrip({
                     : "商品"}
               </span>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-[var(--foreground)]">
+                <div className="truncate text-sm font-medium text-foreground">
                   {line.label}
                 </div>
-                <div className="text-xs text-[var(--color-sidebar-muted)]">
+                <div className="text-xs text-muted-foreground">
                   x {line.qty}
                 </div>
               </div>
@@ -445,39 +454,39 @@ function TradeOrderExecutionStrip({
             <span>最近批次 {latestBatchLabel}</span>
           </div>
           {supplierNames.length > 0 ? (
-            <div className="truncate text-xs text-[var(--color-sidebar-muted)]">
+            <div className="truncate text-xs text-muted-foreground">
               {supplierNames.slice(0, 3).join(" / ")}
               {supplierNames.length > 3 ? ` 等 ${supplierNames.length} 个` : ""}
             </div>
           ) : null}
           {product.rest > 0 ? (
-            <div className="text-xs text-[var(--color-sidebar-muted)]">
+            <div className="text-xs text-muted-foreground">
               其余 {product.rest} 项商品已收起
             </div>
           ) : null}
         </div>
       </div>
 
-      <div className="bg-[var(--color-panel)] px-4 py-3">
+      <div className="bg-transparent px-4 py-3.5">
         <div className="flex flex-wrap gap-2">
           <StatusBadge
             label={getSalesOrderPaymentSchemeLabel(item.paymentScheme)}
             variant={getSalesOrderPaymentSchemeVariant(item.paymentScheme)}
           />
-          <span className="rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
+          <span className="rounded-full border border-border/50 bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
             已收 {formatCurrency(item.collectedAmount)}
           </span>
-          <span className="rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
+          <span className="rounded-full border border-border/50 bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
             物流任务 {shippingTaskCount}
           </span>
         </div>
-        <div className="mt-2 grid grid-cols-2 gap-2">
+        <div className="mt-3 grid grid-cols-4 divide-x divide-border/40">
           {fulfillmentSummary.map((entry) => (
             <div key={entry.label} className={tradeOrderMetricTileClassName}>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-sidebar-muted)]">
+              <div className="text-xs text-muted-foreground">
                 {entry.label}
               </div>
-              <div className="mt-1 text-sm font-semibold text-[var(--foreground)]">
+              <div className="mt-1 text-lg font-semibold text-foreground">
                 {entry.count}
               </div>
             </div>
@@ -485,7 +494,7 @@ function TradeOrderExecutionStrip({
         </div>
       </div>
 
-      <div className="bg-[var(--color-panel)] px-4 py-3">
+      <div className="bg-transparent px-4 py-3.5">
         <TradeOrderLogisticsCell
           receiverName={item.receiverNameSnapshot}
           receiverPhone={item.receiverPhoneSnapshot}
@@ -514,13 +523,13 @@ function TradeOrderReviewPanel({
   }
 
   return (
-    <details className="border-t border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)]">
+    <details className="border-t border-border/50 bg-transparent">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Review
           </p>
-          <p className="text-sm text-[var(--color-sidebar-muted)]">
+          <p className="text-sm text-muted-foreground">
             待审核父单，展开后处理通过或驳回。
           </p>
         </div>
@@ -530,22 +539,25 @@ function TradeOrderReviewPanel({
       <div className="grid gap-3 px-4 pb-4 lg:grid-cols-2">
         <form
           action={reviewAction}
-          className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3.5 py-3"
+          className="rounded-xl border border-border/50 bg-card px-3.5 py-3"
         >
           <input type="hidden" name="tradeOrderId" value={item.id} />
           <input type="hidden" name="reviewStatus" value="APPROVED" />
           <input type="hidden" name="redirectTo" value={redirectTo} />
-          <p className="text-xs leading-5 text-[var(--color-sidebar-muted)]">
+          <p className="text-xs leading-5 text-muted-foreground">
             审核通过后，父单会进入正式履约与收款执行阶段。
           </p>
-          <button type="submit" className="crm-button crm-button-primary mt-3 w-full">
+          <button
+            type="submit"
+            className={cn(tradeOrderPrimaryButtonClassName, "mt-3 w-full")}
+          >
             审核通过
           </button>
         </form>
 
         <form
           action={reviewAction}
-          className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3.5 py-3"
+          className="rounded-xl border border-border/50 bg-card px-3.5 py-3"
         >
           <input type="hidden" name="tradeOrderId" value={item.id} />
           <input type="hidden" name="reviewStatus" value="REJECTED" />
@@ -555,9 +567,12 @@ function TradeOrderReviewPanel({
             rows={3}
             required
             placeholder="填写驳回原因"
-            className="crm-textarea"
+            className={cn(tradeOrderInputClassName, "min-h-[5.8rem] resize-y")}
           />
-          <button type="submit" className="crm-button crm-button-secondary mt-3 w-full">
+          <button
+            type="submit"
+            className={cn(tradeOrderSecondaryButtonClassName, "mt-3 w-full")}
+          >
             驳回父单
           </button>
         </form>
@@ -855,8 +870,9 @@ export function TradeOrdersSection({
         title="父单工作池"
         description="先按工作队列切换焦点，再用搜索和高级筛选收窄父单池。"
         density="compact"
+        className="border-border/60 bg-card shadow-sm [&>div:first-child]:border-border/50 [&>div:first-child]:bg-transparent"
         actions={
-          <div className="flex flex-wrap gap-1.5 text-[12px] text-[var(--color-sidebar-muted)]">
+          <div className="flex flex-wrap gap-1.5 text-[12px] text-muted-foreground">
             <span>待审核 {summary.focusCounts.pendingReview}</span>
             <span>·</span>
             <span>待报单 {summary.focusCounts.pendingReport}</span>
@@ -883,7 +899,7 @@ export function TradeOrdersSection({
                 <input
                   name="keyword"
                   defaultValue={filters.keyword}
-                  className="crm-input"
+                  className={tradeOrderInputClassName}
                   placeholder="tradeNo / subOrderNo / supplier / 收件人 / 手机"
                 />
               </label>
@@ -893,13 +909,13 @@ export function TradeOrdersSection({
                 <input
                   name="customerKeyword"
                   defaultValue={filters.customerKeyword}
-                  className="crm-input"
+                  className={tradeOrderInputClassName}
                   placeholder="客户名 / 手机"
                 />
               </label>
 
               <div className="crm-filter-actions lg:justify-end">
-                <button type="submit" className="crm-button crm-button-primary">
+                <button type="submit" className={tradeOrderPrimaryButtonClassName}>
                   搜索
                 </button>
                 <Link
@@ -918,17 +934,19 @@ export function TradeOrdersSection({
                     basePath,
                     baseSearchParams,
                   )}
-                  className="crm-button crm-button-secondary"
+                  className={tradeOrderSecondaryButtonClassName}
                 >
                   重置
                 </Link>
               </div>
             </div>
 
-            <details className="rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2">
-              <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 text-xs font-medium text-[var(--color-sidebar-muted)]">
-                <span>高级筛选</span>
-                <span>
+            <details className="border-t border-border/50 pt-3">
+              <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 text-xs font-medium text-muted-foreground">
+                <span className="font-semibold uppercase tracking-widest">
+                  高级筛选
+                </span>
+                <span className="text-muted-foreground/80">
                   审核 {filters.statusView || "全部"} · {getSupplierCountFilterLabel(filters.supplierCount)} · {getSortFilterLabel(filters.sortBy)}
                 </span>
               </summary>
@@ -939,7 +957,7 @@ export function TradeOrdersSection({
                   <select
                     name="statusView"
                     defaultValue={filters.statusView}
-                    className="crm-select"
+                    className={tradeOrderInputClassName}
                   >
                     <option value="">全部审核状态</option>
                     <option value="DRAFT">草稿</option>
@@ -954,7 +972,7 @@ export function TradeOrdersSection({
                   <select
                     name="supplierCount"
                     defaultValue={filters.supplierCount}
-                    className="crm-select"
+                    className={tradeOrderInputClassName}
                   >
                     <option value="">全部 supplier 数</option>
                     <option value="1">1 个 supplier</option>
@@ -968,7 +986,7 @@ export function TradeOrdersSection({
                   <select
                     name="sortBy"
                     defaultValue={filters.sortBy}
-                    className="crm-select"
+                    className={tradeOrderInputClassName}
                   >
                     <option value="UPDATED_DESC">最近更新</option>
                     <option value="UPDATED_ASC">最早更新</option>
@@ -981,7 +999,7 @@ export function TradeOrdersSection({
                   <select
                     name="supplierId"
                     defaultValue={filters.supplierId}
-                    className="crm-select"
+                    className={tradeOrderInputClassName}
                   >
                     <option value="">全部 supplier</option>
                     {suppliers.map((supplier) => (
@@ -1003,8 +1021,9 @@ export function TradeOrdersSection({
           title="父单总览"
           description="父单行只展示聚合态：金额、supplier 数、物流任务数和异常；具体物流单号下钻到发货执行或详情。"
           density="compact"
+          className="border-border/60 bg-card shadow-sm [&>div:first-child]:border-border/50 [&>div:first-child]:bg-transparent"
           actions={
-            <div className="flex flex-wrap gap-2 text-xs text-[var(--color-sidebar-muted)]">
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
               <span>共 {pagination.totalCount} 张父单</span>
               <span>审核 {filters.statusView || "全部"}</span>
               <span>{getSupplierCountFilterLabel(filters.supplierCount)}</span>
@@ -1015,14 +1034,14 @@ export function TradeOrdersSection({
           <div className="space-y-3.5">
             <div
               className={cn(
-                "hidden gap-px overflow-hidden rounded-[0.92rem] border border-[var(--color-border-soft)] bg-[var(--color-border-soft)] xl:grid",
+                "hidden border-b border-border/50 pb-3 xl:grid",
                 DESKTOP_COLUMNS,
               )}
             >
               {["父单与商品", "履约摘要", "收件与物流"].map((label) => (
                 <div
                   key={label}
-                  className="bg-[var(--color-shell-surface-soft)] px-4 py-2 text-[11px] font-semibold tracking-[0.08em] text-[var(--color-sidebar-muted)]"
+                  className="px-4 text-xs font-semibold uppercase tracking-widest text-muted-foreground"
                 >
                   {label}
                 </div>
@@ -1070,7 +1089,7 @@ export function TradeOrdersSection({
           description="当前筛选条件下没有记录。"
           action={
             canCreate ? (
-              <Link href="/customers" className="crm-button crm-button-primary">
+              <Link href="/customers" className={tradeOrderPrimaryButtonClassName}>
                 去客户中心建单
               </Link>
             ) : null

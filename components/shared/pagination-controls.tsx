@@ -54,9 +54,12 @@ export function PaginationControls({
             key={pageNumber}
             href={buildHref(pageNumber)}
             scrollTargetId={scrollTargetId}
+            aria-current={pageNumber === page ? "page" : undefined}
             className={cn(
               "crm-button min-h-0 px-3 py-2 text-sm",
-              pageNumber === page ? "crm-button-primary" : "crm-button-secondary",
+              pageNumber === page
+                ? "border-primary bg-primary text-primary-foreground shadow-sm hover:border-primary hover:bg-primary/90 hover:text-primary-foreground"
+                : "crm-button-secondary",
             )}
           >
             {pageNumber}

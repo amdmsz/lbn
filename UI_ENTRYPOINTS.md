@@ -45,6 +45,10 @@ Compatibility routes currently still in use:
 - `/suppliers` -> redirects to `/products?tab=suppliers`
 - `/orders/[id]` -> parent-first detail, child fallback compatibility route
 
+Decommissioned entrypoints:
+
+- `/gifts` -> redirects to `/dashboard`; Gift Management is no longer an active user-facing workflow. `GiftRecord` schema references are retained only for historical compatibility.
+
 ---
 
 ## Home And Daily Workbench Mainlines

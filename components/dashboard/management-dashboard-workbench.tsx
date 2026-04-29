@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { RoleCode } from "@prisma/client";
 import {
   ArrowUpRight,
@@ -8,15 +9,22 @@ import {
   LineChart,
   PhoneCall,
   RotateCcw,
-  Sparkles,
   Target,
   TrendingUp,
   UsersRound,
 } from "lucide-react";
+import {
+  BentoActionLink,
+  BentoCard,
+  BentoGrid,
+  BentoMetricCard,
+  BentoMiniStat,
+  BentoRadialMetric,
+  type BentoTone,
+} from "@/components/dashboard/dashboard-bento";
 import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
-import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import {
   formatRelativeDateTime,
@@ -28,28 +36,15 @@ import type {
 } from "@/lib/customers/queries";
 import { cn } from "@/lib/utils";
 
-type MetricTone = "blue" | "green" | "amber" | "violet" | "rose" | "slate";
-
 type ManagementMetric = {
   key: string;
   label: string;
   value: string;
   note: string;
-  tone: MetricTone;
+  tone: BentoTone;
 };
 
 const workspaceShellClassName = "crm-workspace-shell";
-const actionClassName =
-  "inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 text-[11px] font-medium text-[var(--color-sidebar-muted)] shadow-[var(--color-shell-shadow-sm)] transition-[border-color,color,background-color] duration-200 hover:border-[rgba(111,141,255,0.2)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]";
-
-const toneClassNames: Record<MetricTone, string> = {
-  blue: "from-blue-50 to-sky-50 text-blue-700 ring-blue-100",
-  green: "from-emerald-50 to-green-50 text-emerald-700 ring-emerald-100",
-  amber: "from-amber-50 to-orange-50 text-amber-700 ring-amber-100",
-  violet: "from-violet-50 to-fuchsia-50 text-violet-700 ring-violet-100",
-  rose: "from-rose-50 to-pink-50 text-rose-700 ring-rose-100",
-  slate: "from-slate-50 to-zinc-50 text-slate-700 ring-slate-100",
-};
 
 function getRoleMeta(role: RoleCode) {
   if (role === "ADMIN") {
@@ -98,30 +93,6 @@ function buildEmployeePoolHref(row: CustomerOperatingDashboardEmployeeRow) {
   return `/customers?${params.toString()}`;
 }
 
-function MetricCard({ metric }: Readonly<{ metric: ManagementMetric }>) {
-  return (
-    <div className="rounded-[1.15rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4 shadow-[var(--color-shell-shadow-xs)]">
-      <div
-        className={cn(
-          "mb-4 inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br ring-1",
-          toneClassNames[metric.tone],
-        )}
-      >
-        <Sparkles className="h-4 w-4" />
-      </div>
-      <div className="text-[12px] font-medium text-[var(--color-sidebar-muted)]">
-        {metric.label}
-      </div>
-      <div className="mt-1 text-3xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">
-        {metric.value}
-      </div>
-      <div className="mt-2 text-[11px] leading-5 text-[var(--color-sidebar-muted)]">
-        {metric.note}
-      </div>
-    </div>
-  );
-}
-
 function ProgressRow({
   label,
   value,
@@ -136,15 +107,18 @@ function ProgressRow({
   const percent = toPercent(value, total);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       <div className="flex items-center justify-between gap-3 text-sm">
-        <span className="font-medium text-[var(--foreground)]">{label}</span>
-        <span className="tabular-nums text-[var(--color-sidebar-muted)]">
+        <span className="font-medium text-foreground">{label}</span>
+        <span className="font-mono text-xs text-muted-foreground">
           {value} / {total}
         </span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-[var(--color-shell-hover)]">
-        <div className={cn("h-full rounded-full", tone)} style={{ width: `${percent}%` }} />
+      <div className="h-2 overflow-hidden rounded-full bg-muted/60 shadow-inner">
+        <div
+          className={cn("h-full rounded-full", tone)}
+          style={{ width: `${percent}%` }}
+        />
       </div>
     </div>
   );
@@ -160,40 +134,43 @@ function ManagementDashboardDateToolbar({
   return (
     <form
       action="/dashboard"
-      className="flex flex-col gap-2 rounded-[1.1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-2.5 shadow-[var(--color-shell-shadow-xs)] md:flex-row md:items-center md:justify-between"
+      className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-3 shadow-sm md:flex-row md:items-center md:justify-between"
     >
-      <div className="flex items-center gap-2 px-1 text-[12px] font-medium text-[var(--color-sidebar-muted)]">
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent-strong)]">
+      <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-muted text-foreground">
           <CalendarDays className="h-4 w-4" />
         </span>
         时间筛选
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <label className="flex h-9 items-center gap-2 rounded-[0.8rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 text-[12px] text-[var(--color-sidebar-muted)]">
+        <label className="flex h-9 items-center gap-2 rounded-xl border border-border bg-muted/35 px-3 text-xs text-muted-foreground">
           开始
           <input
             type="date"
             name="from"
             defaultValue={from}
-            className="bg-transparent text-[13px] font-medium text-[var(--foreground)] outline-none"
+            className="bg-transparent text-sm font-medium text-foreground outline-none"
           />
         </label>
-        <label className="flex h-9 items-center gap-2 rounded-[0.8rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 text-[12px] text-[var(--color-sidebar-muted)]">
+        <label className="flex h-9 items-center gap-2 rounded-xl border border-border bg-muted/35 px-3 text-xs text-muted-foreground">
           结束
           <input
             type="date"
             name="to"
             defaultValue={to}
-            className="bg-transparent text-[13px] font-medium text-[var(--foreground)] outline-none"
+            className="bg-transparent text-sm font-medium text-foreground outline-none"
           />
         </label>
-        <button type="submit" className={actionClassName}>
+        <button
+          type="submit"
+          className="inline-flex h-9 items-center rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground transition hover:bg-primary/90"
+        >
           应用
         </button>
-        <Link href="/dashboard" className={actionClassName}>
+        <BentoActionLink href="/dashboard">
           <RotateCcw className="h-3.5 w-3.5" />
           今日
-        </Link>
+        </BentoActionLink>
       </div>
     </form>
   );
@@ -209,9 +186,9 @@ function ExecutionClassStrip({
       {(["A", "B", "C", "D", "E"] as const).map((value) => (
         <span
           key={value}
-          className="inline-flex min-w-[44px] items-center justify-between gap-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2.5 py-1 text-[11px] font-medium tabular-nums text-[var(--color-sidebar-muted)]"
+          className="inline-flex min-w-[44px] items-center justify-between gap-1.5 rounded-full border border-border bg-muted/35 px-2.5 py-1 text-xs font-medium tabular-nums text-muted-foreground"
         >
-          <span className="font-semibold text-[var(--foreground)]">{value}</span>
+          <span className="font-semibold text-foreground">{value}</span>
           <span>{counts[value]}</span>
         </span>
       ))}
@@ -233,38 +210,41 @@ function EmployeePerformanceCard({
   return (
     <Link
       href={buildEmployeePoolHref(row)}
-      className="group block rounded-[1.05rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-3.5 shadow-[var(--color-shell-shadow-xs)] transition hover:-translate-y-[1px] hover:bg-[var(--color-panel)] hover:shadow-[var(--color-shell-shadow-sm)]"
+      className="group block rounded-2xl border border-border bg-muted/25 p-4 transition hover:-translate-y-px hover:border-primary/30 hover:bg-muted/40"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-[var(--color-accent-soft)] px-1.5 text-[11px] font-semibold text-[var(--color-accent-strong)]">
+            <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-primary/10 px-2 font-mono text-xs font-semibold text-primary">
               {rank}
             </span>
-            <div className="truncate text-sm font-semibold text-[var(--foreground)]">
-              {row.name}
-            </div>
+            <div className="truncate text-sm font-semibold text-foreground">{row.name}</div>
           </div>
-          <div className="mt-1 text-[11px] text-[var(--color-sidebar-muted)]">
+          <div className="mt-1 text-xs text-muted-foreground">
             {row.teamName ?? "未分组"} · @{row.username}
           </div>
         </div>
-        <ArrowUpRight className="h-4 w-4 text-[var(--color-sidebar-muted)] transition group-hover:text-[var(--foreground)]" />
+        <ArrowUpRight className="h-4 w-4 text-muted-foreground transition group-hover:text-primary" />
       </div>
-      <div className="mt-4 flex items-end justify-between gap-3">
+      <div className="mt-5 flex items-end justify-between gap-3">
         <div>
-          <div className="text-[11px] text-[var(--color-sidebar-muted)]">成交金额</div>
-          <div className="mt-1 text-xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">
+          <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            成交金额
+          </div>
+          <div className="mt-1 font-mono text-2xl font-semibold tracking-tight text-foreground">
             {row.todayRevenue}
           </div>
         </div>
-        <div className="text-right text-[11px] leading-5 text-[var(--color-sidebar-muted)]">
+        <div className="text-right text-xs leading-5 text-muted-foreground">
           <div>出单 {row.todayDealCount}</div>
           <div>邀约 {row.todayInvitationCount}</div>
         </div>
       </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--color-shell-hover)]">
-        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.max(8, revenuePercent)}%` }} />
+      <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
+        <div
+          className="h-full rounded-full bg-primary"
+          style={{ width: `${Math.max(8, revenuePercent)}%` }}
+        />
       </div>
     </Link>
   );
@@ -278,39 +258,50 @@ function EmployeeRowCard({
   metricPrefix: string;
 }>) {
   return (
-    <div className="rounded-[1.05rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-3.5 shadow-[var(--color-shell-shadow-xs)]">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <div className="rounded-2xl border border-border bg-muted/20 p-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0 lg:w-[18rem]">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="truncate text-sm font-semibold text-[var(--foreground)]">
+            <div className="truncate text-base font-semibold text-foreground">
               {row.name}
             </div>
             <StatusBadge label={row.teamName ?? "未分组"} variant="neutral" />
           </div>
-          <div className="mt-1 text-[11px] text-[var(--color-sidebar-muted)]">
+          <div className="mt-1 text-xs text-muted-foreground">
             @{row.username} · 当前 {row.customerCount} 位客户
           </div>
-          <div className="mt-2">
+          <div className="mt-3">
             <ExecutionClassStrip counts={row.executionClassCounts} />
           </div>
         </div>
 
         <div className="grid flex-1 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-          <MiniStat label={`${metricPrefix}资源`} value={String(row.todayAssignedCount)} />
-          <MiniStat label="接通率" value={row.connectRate} note={`${row.connectedAssignedCount}/${row.todayAssignedCount}`} />
-          <MiniStat label="加微" value={String(row.todayWechatAddedCount)} note={`历史 ${row.historicalWechatAddedCount}`} />
-          <MiniStat label="邀约" value={String(row.todayInvitationCount)} />
-          <MiniStat label="出单" value={String(row.todayDealCount)} />
-          <MiniStat label="销售额" value={row.todayRevenue} />
+          <BentoMiniStat label={`${metricPrefix}资源`} value={row.todayAssignedCount} />
+          <BentoMiniStat
+            label="接通率"
+            value={row.connectRate}
+            note={`${row.connectedAssignedCount}/${row.todayAssignedCount}`}
+          />
+          <BentoMiniStat
+            label="加微"
+            value={row.todayWechatAddedCount}
+            note={`历史 ${row.historicalWechatAddedCount}`}
+          />
+          <BentoMiniStat label="邀约" value={row.todayInvitationCount} />
+          <BentoMiniStat label="出单" value={row.todayDealCount} />
+          <BentoMiniStat label="销售额" value={row.todayRevenue} />
         </div>
 
         <div className="flex min-w-[8rem] items-center justify-between gap-3 lg:flex-col lg:items-end">
-          <div className="text-[11px] text-[var(--color-sidebar-muted)]">
+          <div className="text-xs text-muted-foreground">
             {row.latestFollowUpAt
               ? `最近跟进 ${formatRelativeDateTime(row.latestFollowUpAt)}`
               : "最近跟进 暂无"}
           </div>
-          <Link href={buildEmployeePoolHref(row)} className={actionClassName}>
+          <Link
+            href={buildEmployeePoolHref(row)}
+            className="inline-flex h-9 items-center rounded-full border border-border bg-card px-3 text-xs font-medium text-muted-foreground transition hover:border-primary/30 hover:bg-muted hover:text-foreground"
+          >
             进入客户池
           </Link>
         </div>
@@ -319,36 +310,102 @@ function EmployeeRowCard({
   );
 }
 
-function MiniStat({
-  label,
-  value,
-  note,
-}: Readonly<{
-  label: string;
-  value: string;
-  note?: string;
-}>) {
-  return (
-    <div className="rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2">
-      <div className="text-[10px] font-medium text-[var(--color-sidebar-muted)]">{label}</div>
-      <div className="mt-1 truncate text-sm font-semibold tabular-nums text-[var(--foreground)]">
-        {value}
-      </div>
-      {note ? <div className="mt-0.5 text-[10px] text-[var(--color-sidebar-muted)]">{note}</div> : null}
-    </div>
-  );
-}
-
 function buildMetrics(data: CustomerOperatingDashboardData): ManagementMetric[] {
-  const tones: MetricTone[] = ["blue", "green", "violet", "amber", "rose", "green", "slate", "violet"];
+  const tones: BentoTone[] = [
+    "primary",
+    "success",
+    "primary",
+    "warning",
+    "danger",
+    "success",
+    "muted",
+    "primary",
+  ];
 
   return data.summary.map((item, index) => ({
     key: `${item.label}-${index}`,
     label: item.label,
     value: item.value,
     note: item.note,
-    tone: tones[index] ?? "slate",
+    tone: tones[index] ?? "muted",
   }));
+}
+
+function ActionStrengthRings({
+  items,
+  maxActivity,
+}: Readonly<{
+  items: Array<[string, number, BentoTone]>;
+  maxActivity: number;
+}>) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      {items.map(([label, value, tone]) => {
+        const percent = Math.round((value / maxActivity) * 100);
+
+        return (
+          <BentoRadialMetric
+            key={label}
+            label={label}
+            value={value}
+            percent={percent}
+            tone={tone}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function HealthCard({
+  icon,
+  label,
+  value,
+  percent,
+  tone,
+}: Readonly<{
+  icon: ReactNode;
+  label: string;
+  value: string;
+  percent: number;
+  tone: string;
+}>) {
+  return (
+    <div className="rounded-2xl border border-border bg-muted/25 p-4">
+      <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground">
+        {icon}
+      </div>
+      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
+      <div className="mt-1 font-mono text-3xl font-semibold tracking-tight text-foreground">
+        {value}
+      </div>
+      <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
+        <div className={cn("h-full rounded-full", tone)} style={{ width: `${percent}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function InsightPill({
+  icon,
+  label,
+  value,
+}: Readonly<{
+  icon: ReactNode;
+  label: string;
+  value: string;
+}>) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/25 px-3 py-2.5">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="text-foreground">{icon}</span>
+        {label}
+      </div>
+      <div className="font-mono text-sm font-semibold tabular-nums text-foreground">{value}</div>
+    </div>
+  );
 }
 
 export function ManagementDashboardWorkbench({
@@ -405,9 +462,15 @@ export function ManagementDashboardWorkbench({
       return right.todayAssignedCount - left.todayAssignedCount;
     })
     .slice(0, 3);
+  const averageConnectRate = Math.round(
+    data.employees.reduce((sum, row) => sum + parsePercent(row.connectRate), 0) /
+      data.employees.length,
+  );
 
   return (
     <WorkbenchLayout
+      className="[gap:0.75rem] md:[gap:0.9rem]"
+      contentClassName="space-y-3"
       header={
         <div className={workspaceShellClassName}>
           <PageHeader
@@ -415,25 +478,25 @@ export function ManagementDashboardWorkbench({
             title={meta.title}
             description={meta.description}
             meta={
-              <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.06em] text-[var(--color-sidebar-muted)]">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 <span>{data.scopeLabel}</span>
-                <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+                <span className="h-1 w-1 rounded-full bg-border" />
                 <span>{data.periodLabel}</span>
               </div>
             }
             actions={
-              <div className="flex flex-wrap gap-1.5 lg:justify-end">
-                <Link href="/customers" className={actionClassName}>
+              <div className="flex flex-wrap gap-2 lg:justify-end">
+                <BentoActionLink href="/customers">
                   客户中心
                   <ArrowUpRight className="h-3.5 w-3.5" />
-                </Link>
-                <Link href="/customers/public-pool" className={actionClassName}>
+                </BentoActionLink>
+                <BentoActionLink href="/customers/public-pool">
                   公海池
                   <ArrowUpRight className="h-3.5 w-3.5" />
-                </Link>
+                </BentoActionLink>
               </div>
             }
-            className="rounded-[1rem] bg-[var(--color-shell-surface)] px-4 py-3 shadow-[var(--color-shell-shadow-sm)] md:px-4 md:py-3.5"
+            className="border-border bg-card shadow-sm"
           />
         </div>
       }
@@ -445,83 +508,92 @@ export function ManagementDashboardWorkbench({
     >
       {data.employees.length === 0 ? (
         <div className={workspaceShellClassName}>
-          <EmptyState
-            title="还没有可展示的员工数据"
-            description="当前统计范围内没有匹配到启用中的销售账号，或暂无客户运营数据。"
-          />
+          <BentoCard>
+            <EmptyState
+              title="还没有可展示的员工数据"
+              description="当前统计范围内没有匹配到启用中的销售账号，或暂无客户运营数据。"
+            />
+          </BentoCard>
         </div>
       ) : (
-        <div className={cn(workspaceShellClassName, "space-y-3")}> 
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-            {metrics.slice(0, 8).map((metric) => (
-              <MetricCard key={metric.key} metric={metric} />
+        <div className={workspaceShellClassName}>
+          <BentoGrid>
+            {metrics.slice(0, 4).map((metric) => (
+              <BentoMetricCard
+                key={metric.key}
+                label={metric.label}
+                value={metric.value}
+                note={metric.note}
+                tone={metric.tone}
+              />
             ))}
-          </div>
 
-          <div className="grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
-            <SectionCard eyebrow={`${metricPrefix}转化`} title="团队资源漏斗">
+            <BentoCard
+              eyebrow={`${metricPrefix}转化`}
+              title="团队资源漏斗"
+              className="md:col-span-2 lg:col-span-2 lg:row-span-2"
+            >
               <div className="space-y-5">
                 <ProgressRow
                   label={`${metricPrefix}资源 -> 接听`}
                   value={totals.connected}
                   total={totals.assigned}
-                  tone="bg-blue-500"
+                  tone="bg-primary"
                 />
                 <ProgressRow
                   label={`${metricPrefix}资源 -> 加微`}
                   value={totals.assignedWechat}
                   total={totals.assigned}
-                  tone="bg-violet-500"
+                  tone="bg-foreground/70"
                 />
                 <ProgressRow
                   label={`${metricPrefix}资源 -> 邀约`}
                   value={totals.invitation}
                   total={totals.assigned}
-                  tone="bg-rose-500"
+                  tone="bg-muted-foreground"
                 />
                 <ProgressRow
                   label={`${metricPrefix}资源 -> 成交`}
                   value={totals.deal}
                   total={totals.assigned}
-                  tone="bg-emerald-500"
+                  tone="bg-primary/70"
                 />
               </div>
-            </SectionCard>
+            </BentoCard>
 
-            <SectionCard eyebrow="行动分布" title={`${metricPrefix}团队动作强度`}>
-              <div className="flex h-64 items-end gap-3 px-1 pt-4">
-                {[
-                  ["资源", totals.assigned, "bg-blue-500"],
-                  ["通话", totals.call, "bg-sky-500"],
-                  ["加微", totals.wechat, "bg-violet-500"],
-                  ["邀约", totals.invitation, "bg-rose-500"],
-                  ["成交", totals.deal, "bg-emerald-500"],
-                ].map(([label, rawValue, color]) => {
-                  const value = Number(rawValue);
-                  const height = Math.max(10, Math.round((value / maxActivity) * 100));
+            <BentoCard
+              eyebrow="行动分布"
+              title={`${metricPrefix}团队动作强度`}
+              className="md:col-span-1 lg:col-span-2"
+            >
+              <ActionStrengthRings
+                maxActivity={maxActivity}
+                items={[
+                  ["资源", totals.assigned, "primary"],
+                  ["通话", totals.call, "success"],
+                  ["加微", totals.wechat, "primary"],
+                  ["邀约", totals.invitation, "warning"],
+                  ["成交", totals.deal, "success"],
+                ]}
+              />
+            </BentoCard>
 
-                  return (
-                    <div key={String(label)} className="flex flex-1 flex-col items-center gap-2">
-                      <div className="text-xs font-semibold tabular-nums text-[var(--foreground)]">
-                        {value}
-                      </div>
-                      <div className="flex h-40 w-full items-end rounded-full bg-[var(--color-shell-hover)] p-1">
-                        <div
-                          className={cn("w-full rounded-full", String(color))}
-                          style={{ height: `${height}%` }}
-                        />
-                      </div>
-                      <div className="text-[11px] text-[var(--color-sidebar-muted)]">{label}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </SectionCard>
-          </div>
+            {metrics.slice(4, 8).map((metric) => (
+              <BentoMetricCard
+                key={metric.key}
+                label={metric.label}
+                value={metric.value}
+                note={metric.note}
+                tone={metric.tone}
+              />
+            ))}
 
-          <div className="grid gap-3 xl:grid-cols-[0.95fr_1.05fr]">
-            <SectionCard eyebrow="员工排行" title={`${metricPrefix}成交先锋`}>
-              <div className="grid gap-2 md:grid-cols-3 xl:grid-cols-1">
+            <BentoCard
+              eyebrow="员工排行"
+              title={`${metricPrefix}成交先锋`}
+              className="md:col-span-3 lg:col-span-2"
+            >
+              <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-1">
                 {topEmployees.map((row, index) => (
                   <EmployeePerformanceCard
                     key={row.userId}
@@ -531,99 +603,74 @@ export function ManagementDashboardWorkbench({
                   />
                 ))}
               </div>
-            </SectionCard>
+            </BentoCard>
 
-            <SectionCard eyebrow="质量观察" title="团队转化健康度">
+            <BentoCard
+              eyebrow="质量观察"
+              title="团队转化健康度"
+              className="md:col-span-3 lg:col-span-2"
+            >
               <div className="grid gap-3 sm:grid-cols-3">
                 <HealthCard
                   icon={<PhoneCall className="h-5 w-5" />}
                   label="资源接听率"
                   value={`${toPercent(totals.connected, totals.assigned)}%`}
                   percent={toPercent(totals.connected, totals.assigned)}
-                  tone="bg-blue-500"
+                  tone="bg-primary"
                 />
                 <HealthCard
                   icon={<Target className="h-5 w-5" />}
                   label="资源加微率"
                   value={`${toPercent(totals.assignedWechat, totals.assigned)}%`}
                   percent={toPercent(totals.assignedWechat, totals.assigned)}
-                  tone="bg-violet-500"
+                  tone="bg-foreground/70"
                 />
                 <HealthCard
                   icon={<TrendingUp className="h-5 w-5" />}
                   label="加微成交率"
                   value={`${toPercent(totals.deal, totals.wechat)}%`}
                   percent={toPercent(totals.deal, totals.wechat)}
-                  tone="bg-emerald-500"
+                  tone="bg-primary/70"
                 />
               </div>
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                <InsightPill icon={<UsersRound className="h-4 w-4" />} label="销售人数" value={`${data.employees.length} 人`} />
-                <InsightPill icon={<LineChart className="h-4 w-4" />} label="平均接通率" value={`${Math.round(data.employees.reduce((sum, row) => sum + parsePercent(row.connectRate), 0) / data.employees.length)}%`} />
-                <InsightPill icon={<BarChart3 className="h-4 w-4" />} label="当前客户池" value={`${data.employees.reduce((sum, row) => sum + row.customerCount, 0)} 位`} />
-                <InsightPill icon={<Crown className="h-4 w-4" />} label="最高成交" value={topEmployees[0]?.todayRevenue ?? "¥0"} />
+                <InsightPill
+                  icon={<UsersRound className="h-4 w-4" />}
+                  label="销售人数"
+                  value={`${data.employees.length} 人`}
+                />
+                <InsightPill
+                  icon={<LineChart className="h-4 w-4" />}
+                  label="平均接通率"
+                  value={`${averageConnectRate}%`}
+                />
+                <InsightPill
+                  icon={<BarChart3 className="h-4 w-4" />}
+                  label="当前客户池"
+                  value={`${data.employees.reduce((sum, row) => sum + row.customerCount, 0)} 位`}
+                />
+                <InsightPill
+                  icon={<Crown className="h-4 w-4" />}
+                  label="最高成交"
+                  value={topEmployees[0]?.todayRevenue ?? "¥0"}
+                />
               </div>
-            </SectionCard>
-          </div>
+            </BentoCard>
 
-          <SectionCard eyebrow="员工执行明细" title="销售员工客户池推进">
-            <div className="space-y-2">
-              {data.employees.map((row) => (
-                <EmployeeRowCard key={row.userId} row={row} metricPrefix={metricPrefix} />
-              ))}
-            </div>
-          </SectionCard>
+            <BentoCard
+              eyebrow="员工执行明细"
+              title="销售员工客户池推进"
+              className="md:col-span-3 lg:col-span-4"
+            >
+              <div className="space-y-3">
+                {data.employees.map((row) => (
+                  <EmployeeRowCard key={row.userId} row={row} metricPrefix={metricPrefix} />
+                ))}
+              </div>
+            </BentoCard>
+          </BentoGrid>
         </div>
       )}
     </WorkbenchLayout>
-  );
-}
-
-function HealthCard({
-  icon,
-  label,
-  value,
-  percent,
-  tone,
-}: Readonly<{
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  percent: number;
-  tone: string;
-}>) {
-  return (
-    <div className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-4">
-      <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-shell-surface)] text-[var(--foreground)]">
-        {icon}
-      </div>
-      <div className="text-[12px] text-[var(--color-sidebar-muted)]">{label}</div>
-      <div className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">
-        {value}
-      </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--color-shell-hover)]">
-        <div className={cn("h-full rounded-full", tone)} style={{ width: `${percent}%` }} />
-      </div>
-    </div>
-  );
-}
-
-function InsightPill({
-  icon,
-  label,
-  value,
-}: Readonly<{
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}>) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2.5">
-      <div className="flex items-center gap-2 text-[12px] text-[var(--color-sidebar-muted)]">
-        <span className="text-[var(--foreground)]">{icon}</span>
-        {label}
-      </div>
-      <div className="text-sm font-semibold tabular-nums text-[var(--foreground)]">{value}</div>
-    </div>
   );
 }

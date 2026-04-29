@@ -219,17 +219,12 @@ export const customerDetailTabs = [
   {
     value: "live",
     label: "直播推进",
-    description: "查看直播邀约、到场、观看和礼品达标等经营动作。",
+    description: "查看直播邀约、到场和观看等经营动作。",
   },
   {
     value: "orders",
     label: "成交结果",
     description: "围绕成交主单、提审、履约与 COD 结果回看成交推进情况。",
-  },
-  {
-    value: "gifts",
-    label: "礼品履约",
-    description: "查看礼品资格、审核、运费与发货履约，不混入订单真相。",
   },
   {
     value: "logs",
@@ -256,8 +251,8 @@ export const customerDetailTabGroups = [
   {
     value: "results",
     label: "成交结果",
-    description: "集中回看成交主单、礼品履约和后续经营结果。",
-    tabs: ["orders", "gifts"],
+    description: "集中回看成交主单和后续经营结果。",
+    tabs: ["orders"],
   },
   {
     value: "logs",

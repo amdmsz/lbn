@@ -407,10 +407,6 @@ export async function submitPaymentRecordAction(formData: FormData) {
       revalidatePath(`/customers/${result.customerId}`);
     }
 
-    if (result.giftRecordId) {
-      revalidatePath("/gifts");
-    }
-
     redirect(buildRedirectTarget(redirectTo, "success", "收款记录已提交。"));
   } catch (error) {
     rethrowRedirectError(error);
@@ -454,10 +450,6 @@ export async function reviewPaymentRecordAction(formData: FormData) {
 
     if (result.customerId) {
       revalidatePath(`/customers/${result.customerId}`);
-    }
-
-    if (result.giftRecordId) {
-      revalidatePath("/gifts");
     }
 
     redirect(buildRedirectTarget(redirectTo, "success", "收款记录已完成审核。"));
@@ -507,10 +499,6 @@ export async function upsertCollectionTaskAction(formData: FormData) {
       revalidatePath(`/customers/${result.customerId}`);
     }
 
-    if (result.giftRecordId) {
-      revalidatePath("/gifts");
-    }
-
     redirect(buildRedirectTarget(redirectTo, "success", "催收任务已保存。"));
   } catch (error) {
     rethrowRedirectError(error);
@@ -556,10 +544,6 @@ export async function updateCollectionTaskAction(formData: FormData) {
 
     if (result.customerId) {
       revalidatePath(`/customers/${result.customerId}`);
-    }
-
-    if (result.giftRecordId) {
-      revalidatePath("/gifts");
     }
 
     redirect(buildRedirectTarget(redirectTo, "success", "催收任务已更新。"));

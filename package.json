@@ -15,6 +15,7 @@
     "cti:sip-relay:local": "tsx scripts/local-sip-udp-relay.ts",
     "worker:lead-imports": "tsx scripts/lead-import-worker.ts",
     "worker:call-ai": "tsx scripts/call-ai-worker.ts",
+    "worker:logistics-auto-status": "tsx scripts/logistics-auto-status-worker.ts",
     "dev:local-asr-smoke": "tsx scripts/local-asr-smoke-server.ts",
     "check:call-ai-provider": "tsx scripts/check-call-ai-provider.ts",
     "dev:local-cti-smoke": "tsx scripts/local-cti-smoke-gateway.ts",

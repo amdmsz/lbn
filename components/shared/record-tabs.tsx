@@ -34,8 +34,8 @@ export function RecordTabs({
           className={cn(
             "crm-tab min-h-7 min-w-0 shrink-0 px-2.5 py-1.25 text-[12.5px] md:shrink",
             item.value === activeValue
-              ? "crm-tab-active text-[var(--foreground)]"
-              : "",
+              ? "border-primary/30 bg-primary/10 text-primary shadow-sm hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+              : "text-muted-foreground hover:border-primary/20 hover:bg-primary/5 hover:text-foreground",
           )}
         >
           <span className="max-w-[9rem] truncate md:max-w-[10rem]">
@@ -45,7 +45,9 @@ export function RecordTabs({
             <span
               className={cn(
                 "crm-tab-count px-1.25 py-0.5 text-[10px]",
-                item.value === activeValue ? "text-[var(--foreground)]" : "",
+                item.value === activeValue
+                  ? "bg-primary/10 text-primary"
+                  : "bg-background text-muted-foreground",
               )}
             >
               {item.count}

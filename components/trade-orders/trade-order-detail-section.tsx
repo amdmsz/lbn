@@ -400,6 +400,34 @@ function getTradeOrderNextAction(summary: TradeOrderDetail["executionSummary"]) 
   };
 }
 
+const detailLabelClassName =
+  "text-xs font-medium text-muted-foreground";
+const detailValueClassName =
+  "text-sm font-medium text-foreground";
+const detailAmountClassName =
+  "font-mono text-lg font-semibold tracking-tight text-foreground";
+const detailActionClassName =
+  "inline-flex items-center rounded-lg border border-border/60 bg-transparent px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary";
+const subtleInlineLinkClassName =
+  "text-xs font-medium text-muted-foreground transition-colors hover:text-primary";
+
+function DetailPair({
+  label,
+  children,
+  valueClassName = detailValueClassName,
+}: Readonly<{
+  label: string;
+  children: ReactNode;
+  valueClassName?: string;
+}>) {
+  return (
+    <div className="space-y-1">
+      <div className={detailLabelClassName}>{label}</div>
+      <div className={valueClassName}>{children}</div>
+    </div>
+  );
+}
+
 function OverviewCard({
   eyebrow,
   title,
@@ -412,16 +440,16 @@ function OverviewCard({
   footer?: ReactNode;
 }>) {
   return (
-    <div className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)]">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
+    <div className="rounded-2xl border border-border/60 bg-card px-5 py-4 shadow-sm">
+      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
         {eyebrow}
       </div>
-      <div className="mt-2 text-base font-semibold text-[var(--foreground)]">{title}</div>
-      <div className="mt-3 space-y-1.5 text-sm leading-6 text-[var(--color-sidebar-muted)]">
+      <div className="mt-2 font-mono text-lg font-semibold tracking-tight text-foreground">{title}</div>
+      <div className="mt-3 grid gap-2 text-sm leading-6 text-muted-foreground">
         {children}
       </div>
       {footer ? (
-        <div className="mt-3 border-t border-[var(--color-border-soft)] pt-3 text-xs text-[var(--color-sidebar-muted)]">
+        <div className="mt-4 border-t border-border/40 pt-3 text-xs text-muted-foreground">
           {footer}
         </div>
       ) : null}
@@ -457,79 +485,85 @@ function TradeOrderItemsSection({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-3">
+      <div className="mt-5 divide-y divide-border/40">
         {order.items.map((item) => (
-          <div key={item.id} className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4">
+          <div key={item.id} className="py-5 first:pt-0 last:pb-0">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold text-[var(--foreground)]">
-                    閻?{item.lineNo} / {getTradeItemHeadline(item)}
+                  <span className="text-base font-semibold text-foreground">
+                    第 {item.lineNo} 行 / {getTradeItemHeadline(item)}
                   </span>
                   <StatusBadge
                     label={getTradeItemTypeLabel(item.itemType)}
                     variant={getTradeItemTypeVariant(item.itemType)}
                   />
                 </div>
-                <div className="text-xs leading-6 text-[var(--color-sidebar-muted)]">{getTradeItemSubline(item)}</div>
+                <div className="text-sm leading-6 text-muted-foreground">{getTradeItemSubline(item)}</div>
               </div>
               <div className="text-right">
-                <div className="text-base font-semibold text-[var(--foreground)]">
+                <div className={detailAmountClassName}>
                   {formatCurrency(item.subtotal)}
                 </div>
-                <div className="text-xs text-[var(--color-sidebar-muted)]">
+                <div className="text-xs text-muted-foreground">
                   成交价 {formatCurrency(item.dealUnitPriceSnapshot)} / 原价{" "}
                   {formatCurrency(item.listUnitPriceSnapshot)}
                 </div>
               </div>
             </div>
 
-            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-[var(--color-sidebar-muted)]">
-              <span>
-                数量：{item.qty}
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <DetailPair label="商品数量">
+                {item.qty}
                 {item.unitSnapshot || ""}
-              </span>
-              <span>折扣：{formatCurrency(item.discountAmount)}</span>
+              </DetailPair>
+              <DetailPair label="折扣金额" valueClassName="font-mono text-sm font-medium text-foreground">
+                {formatCurrency(item.discountAmount)}
+              </DetailPair>
               {item.itemType === "BUNDLE" && item.bundleCodeSnapshot ? (
-                <span>套餐编码：{item.bundleCodeSnapshot}</span>
+                <DetailPair label="套餐编码">{item.bundleCodeSnapshot}</DetailPair>
               ) : null}
               {item.itemType === "BUNDLE" && item.bundleVersionSnapshot !== null ? (
-                <span>套餐版本：{item.bundleVersionSnapshot}</span>
+                <DetailPair label="套餐版本">{item.bundleVersionSnapshot}</DetailPair>
               ) : null}
             </div>
 
             {item.remark ? (
-              <div className="mt-3 rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2 text-xs leading-6 text-[var(--color-sidebar-muted)]">
-                备注：{item.remark}
+              <div className="mt-4 border-l-2 border-border/50 pl-4 text-sm leading-6 text-muted-foreground">
+                {item.remark}
               </div>
             ) : null}
 
             {item.components.length > 0 ? (
-              <div className="mt-3 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
+              <div className="mt-5 border-l-2 border-border/50 pl-4">
+                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   {item.itemType === "BUNDLE" ? "执行组件" : "执行去向"}
                 </div>
-                <div className="mt-3 grid gap-2">
+                <div className="mt-3 divide-y divide-border/40">
                   {item.components.map((component) => {
                     const mappedSalesOrder = component.salesOrderItems[0]?.salesOrder ?? null;
                     return (
                       <div
                         key={component.id}
-                        className="rounded-[0.8rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-2.5 text-xs text-[var(--color-sidebar-muted)]"
+                        className="py-3 text-xs text-muted-foreground first:pt-0 last:pb-0"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="font-medium text-[var(--foreground)]">
+                          <div className="text-sm font-medium text-foreground">
                             {component.productNameSnapshot}
                             {component.skuNameSnapshot ? ` / ${component.skuNameSnapshot}` : ""}
                           </div>
-                          <div>{component.supplierNameSnapshot}</div>
+                          <div className="text-xs font-medium text-muted-foreground">
+                            {component.supplierNameSnapshot}
+                          </div>
                         </div>
                         <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
                           <span>
                             数量：{component.qty}
                             {component.unitSnapshot || ""}
                           </span>
-                          <span>拆分小计：{formatCurrency(component.allocatedSubtotal)}</span>
+                          <span className="font-mono font-medium text-foreground">
+                            {formatCurrency(component.allocatedSubtotal)}
+                          </span>
                           <span>
                             去向：{" "}
                             {mappedSalesOrder
@@ -586,7 +620,7 @@ function SupplierExecutionSection({
       </div>
 
       {order.salesOrders.length > 0 ? (
-        <div className="mt-5 grid gap-4">
+        <div className="mt-5 divide-y divide-border/40">
           {order.salesOrders.map((salesOrder) => {
             const salesOrderExecution = executionSummaryBySalesOrderId.get(salesOrder.id);
             const latestSalesOrderBatch = salesOrder.shippingTask?.exportBatch ?? null;
@@ -603,14 +637,14 @@ function SupplierExecutionSection({
             return (
               <div
                 key={salesOrder.id}
-                className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-4"
+                className="py-5 first:pt-0 last:pb-0"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-1">
-                    <div className="text-sm font-semibold text-[var(--foreground)]">
+                    <div className="text-base font-semibold text-foreground">
                       {salesOrder.supplier.name}
                     </div>
-                    <div className="text-xs text-[var(--color-sidebar-muted)]">
+                    <div className="font-mono text-xs text-muted-foreground">
                       {order.tradeNo} / {salesOrder.subOrderNo || salesOrder.orderNo}
                     </div>
                   </div>
@@ -641,62 +675,58 @@ function SupplierExecutionSection({
                   </div>
                 </div>
 
-                <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)_minmax(0,0.95fr)]">
-                  <div className="rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
-                      商品摘要
-                    </div>
-                    <div className="mt-2 text-sm font-medium leading-6 text-[var(--foreground)]">
+                <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)_minmax(0,0.95fr)] lg:divide-x lg:divide-border/40">
+                  <div className="space-y-3 lg:pr-5">
+                    <DetailPair label="商品摘要">
                       {getSalesOrderProductSummary(salesOrder.items)}
-                    </div>
-                    <div className="mt-2 text-xs leading-6 text-[var(--color-sidebar-muted)]">
-                      子单状态：{formatSubOrderStatus(salesOrder.subOrderStatus)}
-                    </div>
+                    </DetailPair>
+                    <DetailPair label="子单状态">
+                      {formatSubOrderStatus(salesOrder.subOrderStatus)}
+                    </DetailPair>
                   </div>
 
-                  <div className="rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
-                      金额与支付
-                    </div>
-                    <div className="mt-2 space-y-1.5 text-sm leading-6 text-[var(--color-sidebar-muted)]">
-                      <div>子单金额：{formatCurrency(salesOrder.finalAmount)}</div>
-                      <div>已录金额：{formatCurrency(salesOrder.collectedAmount)}</div>
-                      <div>待收金额：{formatCurrency(salesOrder.remainingAmount)}</div>
-                      <div>支付方案：{getSalesOrderPaymentSchemeLabel(salesOrder.paymentScheme)}</div>
-                    </div>
+                  <div className="grid gap-3 lg:px-5">
+                    <DetailPair label="子单金额" valueClassName={detailAmountClassName}>
+                      {formatCurrency(salesOrder.finalAmount)}
+                    </DetailPair>
+                    <DetailPair label="已录金额" valueClassName="font-mono text-sm font-medium text-foreground">
+                      {formatCurrency(salesOrder.collectedAmount)}
+                    </DetailPair>
+                    <DetailPair label="待收金额" valueClassName="font-mono text-sm font-medium text-foreground">
+                      {formatCurrency(salesOrder.remainingAmount)}
+                    </DetailPair>
+                    <DetailPair label="支付方案">
+                      {getSalesOrderPaymentSchemeLabel(salesOrder.paymentScheme)}
+                    </DetailPair>
                   </div>
 
-                  <div className="rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
-                      发货与物流
-                    </div>
-                    <div className="mt-2 space-y-1.5 text-sm leading-6 text-[var(--color-sidebar-muted)]">
-                      <div>{getShippingSummaryText(salesOrder, salesOrderExecution)}</div>
-                      <div>
+                  <div className="grid gap-3 lg:pl-5">
+                    <DetailPair label="发货与物流">
+                      {getShippingSummaryText(salesOrder, salesOrderExecution)}
+                    </DetailPair>
+                    <DetailPair label="收款与催收">
                         收款记录：{salesOrderExecution?.paymentRecordCount ?? 0}
-                        <span className="mx-1 text-[var(--color-border-strong)]">/</span>
+                        <span className="mx-1 text-border">/</span>
                         催收中：{salesOrderExecution?.openCollectionTaskCount ?? 0}
-                      </div>
-                      <div>
-                        最近批次：
+                    </DetailPair>
+                    <DetailPair label="最近批次">
                         {latestSalesOrderBatch
                           ? `${latestSalesOrderBatch.exportNo} / ${formatDateTime(
                               latestSalesOrderBatch.exportedAt,
                             )}`
                           : "暂无批次"}
-                      </div>
-                    </div>
+                    </DetailPair>
                   </div>
                 </div>
 
-                <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
-                  <Link href={salesOrderShippingHref} className="crm-text-link">
+                <div className="mt-5 flex flex-wrap items-center gap-3 text-xs">
+                  <Link href={salesOrderShippingHref} className={subtleInlineLinkClassName}>
                     去发货执行
                   </Link>
-                  <Link href={`/orders/${salesOrder.id}`} className="crm-text-link">
+                  <Link href={`/orders/${salesOrder.id}`} className={subtleInlineLinkClassName}>
                     查看子单详情
                   </Link>
-                  <Link href={salesOrderBatchHref} className="crm-text-link">
+                  <Link href={salesOrderBatchHref} className={subtleInlineLinkClassName}>
                     {latestSalesOrderBatch ? "看最近批次" : "看批次记录"}
                   </Link>
                   {latestSalesOrderBatch ? (
@@ -712,21 +742,24 @@ function SupplierExecutionSection({
         </div>
       ) : (
         <div className="mt-5 space-y-3">
-          <div className="rounded-[0.95rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4 text-sm leading-7 text-[var(--color-sidebar-muted)]">
+          <div className="border-l-2 border-dashed border-border/60 pl-4 text-sm leading-7 text-muted-foreground">
             当前父单尚未物化 supplier 子单。通常在提交审核后，系统才会根据 supplier 规划自动拆出
             SalesOrder 子单。
           </div>
           {plannedSupplierGroups.length > 0 ? (
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="divide-y divide-border/40">
               {plannedSupplierGroups.map((group) => (
                 <div
                   key={group.supplierId}
-                  className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3.5"
+                  className="py-3 first:pt-0 last:pb-0"
                 >
-                  <div className="text-sm font-medium text-[var(--foreground)]">{group.supplierName}</div>
-                  <div className="mt-2 text-xs leading-6 text-[var(--color-sidebar-muted)]">
-                    妫板嫯顓搁幏鍡樺灇 1 瀵姴鐡欓敓?/ 缂佸嫪娆?{group.lineCount} 閿?/ 妫板嫯顓搁柌鎴︻杺{" "}
-                    {formatCurrency(String(group.subtotal))}
+                  <div className="text-sm font-medium text-foreground">{group.supplierName}</div>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs leading-6 text-muted-foreground">
+                    <span>规划子单 1 张</span>
+                    <span>成交行 {group.lineCount} 行</span>
+                    <span className="font-mono font-medium text-foreground">
+                      {formatCurrency(String(group.subtotal))}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -770,12 +803,12 @@ function FulfillmentSummaryCards({
         title={formatCurrency(order.remainingAmount)}
         footer={
           <div className="flex flex-wrap items-center gap-3">
-            <Link href={buildTradeOrderPaymentHref(order.tradeNo)} className="crm-text-link">
+            <Link href={buildTradeOrderPaymentHref(order.tradeNo)} className={subtleInlineLinkClassName}>
               去支付记录
             </Link>
             <Link
               href={buildTradeOrderCollectionHref(order.tradeNo, { statusView: "OPEN" })}
-              className="crm-text-link"
+              className={subtleInlineLinkClassName}
             >
               去催收任务
             </Link>
@@ -794,7 +827,7 @@ function FulfillmentSummaryCards({
         title={`${executionSummary?.reportedSubOrderCount ?? 0} / ${executionSummary?.totalSubOrderCount ?? totalSubOrders} 已报单`}
         footer={
           <div className="flex flex-wrap items-center gap-3">
-            <Link href={primaryShippingHref} className="crm-text-link">
+            <Link href={primaryShippingHref} className={subtleInlineLinkClassName}>
               去发货执行
             </Link>
             <Link
@@ -802,10 +835,10 @@ function FulfillmentSummaryCards({
                 keyword: order.tradeNo,
                 stageView: "EXCEPTION",
               })}
-              className="crm-text-link"
+              className={subtleInlineLinkClassName}
             >
-            </Link>
               查看异常队列
+            </Link>
           </div>
         }
       >
@@ -820,13 +853,13 @@ function FulfillmentSummaryCards({
         title={latestBatch ? latestBatch.exportNo : "暂无批次"}
         footer={
           <div className="flex flex-wrap items-center gap-3">
-            <Link href={batchHref} className="crm-text-link">
+            <Link href={batchHref} className={subtleInlineLinkClassName}>
               去批次记录
             </Link>
             {latestBatch ? (
               <Link
                 href={buildFulfillmentBatchesHref({ keyword: latestBatch.exportNo })}
-                className="crm-text-link"
+                className={subtleInlineLinkClassName}
               >
                 看最近批次
               </Link>
@@ -879,11 +912,11 @@ function ParentOrderAlertsSection({
       </div>
       <div className="mt-5 grid gap-3">
         {unreportedSubOrders.length > 0 ? (
-          <div className="rounded-[0.95rem] border border-[rgba(155,106,29,0.16)] bg-[rgba(255,251,242,0.84)] px-4 py-3.5">
+          <div className="border-l-2 border-amber-500/30 pl-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-1">
-                <div className="text-sm font-medium text-[var(--foreground)]">仍有子单未报单</div>
-                <div className="text-xs leading-6 text-[var(--color-sidebar-muted)]">
+                <div className="text-sm font-medium text-foreground">仍有子单未报单</div>
+                <div className="text-xs leading-6 text-muted-foreground">
                   {unreportedSubOrders.length} 个子单还未进入 supplier 报单批次。
                 </div>
               </div>
@@ -892,7 +925,7 @@ function ParentOrderAlertsSection({
                   keyword: order.tradeNo,
                   stageView: "PENDING_REPORT",
                 })}
-                className="crm-text-link text-xs"
+                className={subtleInlineLinkClassName}
               >
                 去看待报单子单
               </Link>
@@ -901,15 +934,15 @@ function ParentOrderAlertsSection({
         ) : null}
 
         {shippedWithoutPaymentSubOrders.length > 0 ? (
-          <div className="rounded-[0.95rem] border border-[rgba(141,59,51,0.14)] bg-[rgba(255,247,246,0.84)] px-4 py-3.5">
+          <div className="border-l-2 border-destructive/30 pl-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-1">
-                <div className="text-sm font-medium text-[var(--foreground)]">已发货但未见收款</div>
-                <div className="text-xs leading-6 text-[var(--color-sidebar-muted)]">
+                <div className="text-sm font-medium text-foreground">已发货但未见收款</div>
+                <div className="text-xs leading-6 text-muted-foreground">
                   {shippedWithoutPaymentSubOrders.length} 个子单已发货，但当前父单下还没有对应收款记录。
                 </div>
               </div>
-              <Link href={buildTradeOrderPaymentHref(order.tradeNo)} className="crm-text-link text-xs">
+              <Link href={buildTradeOrderPaymentHref(order.tradeNo)} className={subtleInlineLinkClassName}>
                 去看收款记录
               </Link>
             </div>
@@ -917,17 +950,17 @@ function ParentOrderAlertsSection({
         ) : null}
 
         {openCollectionSubOrders.length > 0 ? (
-          <div className="rounded-[0.95rem] border border-[rgba(155,106,29,0.16)] bg-[rgba(255,251,242,0.84)] px-4 py-3.5">
+          <div className="border-l-2 border-amber-500/30 pl-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-1">
-                <div className="text-sm font-medium text-[var(--foreground)]">仍有催收任务进行中</div>
-                <div className="text-xs leading-6 text-[var(--color-sidebar-muted)]">
+                <div className="text-sm font-medium text-foreground">仍有催收任务进行中</div>
+                <div className="text-xs leading-6 text-muted-foreground">
                   {openCollectionSubOrders.length} 个子单仍在催收链路里，建议优先确认是否已收款未回填。
                 </div>
               </div>
               <Link
                 href={buildTradeOrderCollectionHref(order.tradeNo, { statusView: "OPEN" })}
-                className="crm-text-link text-xs"
+                className={subtleInlineLinkClassName}
               >
                 去看催收任务
               </Link>
@@ -936,15 +969,15 @@ function ParentOrderAlertsSection({
         ) : null}
 
         {isClearlySplit ? (
-          <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3.5">
+          <div className="border-l-2 border-border/60 pl-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-1">
-                <div className="text-sm font-medium text-[var(--foreground)]">父单内推进状态分裂明显</div>
-                <div className="text-xs leading-6 text-[var(--color-sidebar-muted)]">
+                <div className="text-sm font-medium text-foreground">父单内推进状态分裂明显</div>
+                <div className="text-xs leading-6 text-muted-foreground">
                   同一 tradeNo 下的子单已出现待报单、已发货、收款和催收状态并行的情况。
                 </div>
               </div>
-              <Link href={primaryShippingHref} className="crm-text-link text-xs">
+              <Link href={primaryShippingHref} className={subtleInlineLinkClassName}>
                 去执行工作台继续看
               </Link>
             </div>
@@ -977,21 +1010,23 @@ function TimelineAndOperationLogSection({
             这里只聚合审核、子单报单、发货、收款与催收关键事件，用来快速理解这单整体推进到哪。
           </p>
         </div>
-        <div className="mt-5 grid gap-3">
+        <div className="mt-5 divide-y divide-border/40">
           {timelineEntries.length > 0 ? (
             timelineEntries.map((entry) => (
               <div
                 key={entry.id}
-                className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3.5"
+                className="py-4 first:pt-0 last:pb-0"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-1">
-                    <div className="text-sm font-medium text-[var(--foreground)]">{entry.title}</div>
-                    <div className="text-xs leading-6 text-[var(--color-sidebar-muted)]">{entry.detail}</div>
+                    <div className="text-sm font-medium text-foreground">{entry.title}</div>
+                    <div className="text-xs leading-6 text-muted-foreground">{entry.detail}</div>
                   </div>
-                  <div className="space-y-1 text-right text-xs text-[var(--color-sidebar-muted)]">
-                    <div>{formatDateTime(entry.occurredAt)}</div>
-                    <Link href={entry.href} className="crm-text-link">
+                  <div className="space-y-1 text-right">
+                    <div className="font-mono text-xs text-muted-foreground">
+                      {formatDateTime(entry.occurredAt)}
+                    </div>
+                    <Link href={entry.href} className={subtleInlineLinkClassName}>
                       查看上下文
                     </Link>
                   </div>
@@ -999,7 +1034,7 @@ function TimelineAndOperationLogSection({
               </div>
             ))
           ) : (
-            <div className="rounded-[0.95rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4 text-sm text-[var(--color-sidebar-muted)]">
+            <div className="border-l-2 border-dashed border-border/60 pl-4 text-sm text-muted-foreground">
               当前还没有可展示的关键动作时间线。
             </div>
           )}
@@ -1013,29 +1048,31 @@ function TimelineAndOperationLogSection({
             这里聚合父单、supplier 子单和已生成发货任务的关键操作，保证从成交到执行的链路可追踪。
           </p>
         </div>
-        <div className="mt-5 grid gap-3">
+        <div className="mt-5 divide-y divide-border/40">
           {operationLogs.length > 0 ? (
             operationLogs.map((record) => (
               <div
                 key={record.id}
-                className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3.5"
+                className="py-4 first:pt-0 last:pb-0"
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="text-sm font-medium text-[var(--foreground)]">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="text-sm font-medium text-foreground">
                     {record.module} / {record.action}
                   </div>
-                  <div className="text-xs text-[var(--color-sidebar-muted)]">{formatDateTime(record.createdAt)}</div>
+                  <div className="font-mono text-xs text-muted-foreground">
+                    {formatDateTime(record.createdAt)}
+                  </div>
                 </div>
-                <div className="mt-2 text-sm leading-6 text-[var(--color-sidebar-muted)]">
+                <div className="mt-2 text-sm leading-6 text-muted-foreground">
                   {record.description || "无描述"}
                 </div>
-                <div className="mt-2 text-xs text-[var(--color-sidebar-muted)]">
+                <div className="mt-2 text-xs text-muted-foreground">
                   操作人：{record.actor?.name || record.actor?.username || "系统"}
                 </div>
               </div>
             ))
           ) : (
-            <div className="rounded-[0.95rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4 text-sm text-[var(--color-sidebar-muted)]">
+            <div className="border-l-2 border-dashed border-border/60 pl-4 text-sm text-muted-foreground">
               当前还没有操作日志记录。
             </div>
           )}
@@ -1281,7 +1318,7 @@ export function TradeOrderDetailSection({
 
       <section className="crm-section-card">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-3">
+          <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge
                 label={getTradeStatusLabel(order.tradeStatus)}
@@ -1303,13 +1340,13 @@ export function TradeOrderDetailSection({
               ) : null}
             </div>
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
+              <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 父单身份
               </div>
-              <h2 className="mt-1 text-[1.55rem] font-semibold tracking-[-0.03em] text-[var(--foreground)]">
+              <h2 className="mt-1 font-mono text-3xl font-semibold tracking-tight text-foreground">
                 {order.tradeNo}
               </h2>
-              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-[var(--color-sidebar-muted)]">
+              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-muted-foreground">
                 <span>客户：{order.customer.name}</span>
                 <span>
                   归属销售：{order.customer.owner?.name || order.customer.owner?.username || "暂无"}
@@ -1323,20 +1360,20 @@ export function TradeOrderDetailSection({
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href={buildFulfillmentTradeOrdersHref()}
-              className="crm-button crm-button-secondary"
+              className={detailActionClassName}
             >
               返回交易单列表
             </Link>
-            <Link href={primaryShippingHref} className="crm-button crm-button-secondary">
+            <Link href={primaryShippingHref} className={detailActionClassName}>
               去发货执行
             </Link>
-            <Link href={batchHref} className="crm-button crm-button-secondary">
+            <Link href={batchHref} className={detailActionClassName}>
               看批次记录
             </Link>
             <button
               type="button"
               onClick={openRecycleDialog}
-              className="crm-button crm-button-secondary"
+              className={detailActionClassName}
             >
               {recycleGuard.canMoveToRecycleBin ? "移入回收站" : "查看阻断关系"}
             </button>
@@ -1344,26 +1381,26 @@ export function TradeOrderDetailSection({
         </div>
       </section>
 
-      <section className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)]">
+      <section className="rounded-2xl border border-border/60 bg-card px-5 py-4 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge label={nextAction.label} variant={nextAction.variant} />
-              <span className="text-xs font-medium text-[var(--color-sidebar-muted)]">
+              <span className="text-xs font-medium text-muted-foreground">
                 Parent-first execution hint
               </span>
             </div>
-            <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
+            <p className="text-sm leading-6 text-muted-foreground">
               {nextAction.description}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link href={primaryShippingHref} className="crm-button crm-button-secondary">
+            <Link href={primaryShippingHref} className={detailActionClassName}>
               去发货执行
             </Link>
             <Link
               href={buildTradeOrderCollectionHref(order.tradeNo, { statusView: "OPEN" })}
-              className="crm-button crm-button-secondary"
+              className={detailActionClassName}
             >
               看催收任务
             </Link>
@@ -1442,11 +1479,11 @@ export function TradeOrderDetailSection({
         canContinueEdit ||
         (canReview && order.tradeStatus === "PENDING_REVIEW")) && (
         <section className="grid gap-4 xl:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
-          <div className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3.5">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
+          <div className="border-l-2 border-border/50 pl-4">
+            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               备注与说明
             </div>
-            <div className="mt-3 space-y-2.5 text-sm leading-6 text-[var(--color-sidebar-muted)]">
+            <div className="mt-3 space-y-2.5 text-sm leading-6 text-muted-foreground">
               {order.remark ? <div>父单备注：{order.remark}</div> : null}
               {order.rejectReason ? <div>驳回原因：{order.rejectReason}</div> : null}
               {order.tradeStatus === "APPROVED" ? (
@@ -1465,13 +1502,13 @@ export function TradeOrderDetailSection({
 
           <div className="space-y-3">
             {canContinueEdit && continueEditHref ? (
-              <div className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3.5">
-                <div className="text-sm font-medium text-[var(--foreground)]">回到客户详情继续编辑</div>
-                <div className="mt-1 text-xs leading-6 text-[var(--color-sidebar-muted)]">
+              <div className="border-l-2 border-border/50 pl-4">
+                <div className="text-sm font-medium text-foreground">回到客户详情继续编辑</div>
+                <div className="mt-1 text-xs leading-6 text-muted-foreground">
                   适用于草稿或驳回父单，编辑完成后再重新提交审核。
                 </div>
                 <div className="mt-3">
-                  <Link href={continueEditHref} className="crm-button crm-button-secondary">
+                  <Link href={continueEditHref} className={detailActionClassName}>
                     去客户详情继续编辑
                   </Link>
                 </div>

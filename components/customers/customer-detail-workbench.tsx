@@ -45,7 +45,6 @@ import {
 } from "@/lib/customers/metadata";
 import {
   getCustomerDetailCallsData,
-  getCustomerDetailGiftsData,
   getCustomerDetailLiveData,
   getCustomerDetailLogsData,
   getCustomerDetailOrdersData,
@@ -65,14 +64,11 @@ import { getCustomerTradeOrderComposerData } from "@/lib/trade-orders/queries";
 import {
   formatCurrency,
   getCodCollectionStatusLabel,
-  getGiftQualificationSourceLabel,
-  getGiftReviewStatusLabel,
   getLogisticsFollowUpTaskStatusLabel,
   getSalesOrderPaymentSchemeLabel,
   getSalesOrderReviewStatusLabel,
   getShippingFulfillmentStatusLabel,
   getShippingReportStatusLabel,
-  getShippingStatusLabel,
 } from "@/lib/fulfillment/metadata";
 import { getLeadSourceLabel, getLeadStatusLabel } from "@/lib/leads/metadata";
 import type {
@@ -101,9 +97,6 @@ type CustomerOrdersData = NonNullable<
 >;
 type TradeOrderComposerData = NonNullable<
   Awaited<ReturnType<typeof getCustomerTradeOrderComposerData>>
->;
-type CustomerGiftsData = NonNullable<
-  Awaited<ReturnType<typeof getCustomerDetailGiftsData>>
 >;
 type CustomerLogsData = NonNullable<
   Awaited<ReturnType<typeof getCustomerDetailLogsData>>
@@ -147,7 +140,6 @@ type CustomerDetailTabDataMap = {
   wechat: CustomerWechatData;
   live: CustomerLiveData;
   orders: CustomerOrdersData;
-  gifts: CustomerGiftsData;
   logs: CustomerLogsData;
 };
 
@@ -183,11 +175,11 @@ type RiskState = {
 };
 
 const summaryToneClassName: Record<SummaryTone, string> = {
-  default: "border-[var(--color-border-soft)]",
-  info: "border-[rgba(111,141,255,0.16)]",
-  warning: "border-[rgba(240,195,106,0.18)]",
-  danger: "border-[rgba(255,148,175,0.18)]",
-  success: "border-[rgba(87,212,176,0.18)]",
+  default: "border-border/50",
+  info: "border-primary/20",
+  warning: "border-amber-400/25",
+  danger: "border-destructive/20",
+  success: "border-emerald-500/20",
 };
 
 const summaryToneBadgeVariant: Record<
@@ -244,8 +236,6 @@ function getActiveTabCount(tab: CustomerDetailTab, shell: CustomerDetailShellDat
       return shell._count.liveInvitations;
     case "orders":
       return shell._count.salesOrders;
-    case "gifts":
-      return shell._count.giftRecords;
     case "logs":
       return shell.operationLogCount;
     default:
@@ -310,15 +300,15 @@ function DetailFieldGrid({
         <div
           key={item.label}
           className={cn(
-            "space-y-1.5 border-b border-[var(--color-border-soft)] pb-3",
+            "flex flex-col gap-1 border-b border-border/40 pb-3",
             item.span === "full" &&
               (isThreeColumn ? "md:col-span-2 xl:col-span-3" : "md:col-span-2"),
           )}
         >
-          <p className="crm-detail-label">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             {item.label}
           </p>
-          <div className="text-sm leading-6 text-[var(--foreground)]">{item.value}</div>
+          <div className="text-sm font-medium leading-6 text-foreground">{item.value}</div>
         </div>
       ))}
     </div>
@@ -478,22 +468,22 @@ function OverviewSummaryCard({
       href={card.href}
       scrollTargetId="customer-main"
       className={cn(
-        "group rounded-[1.08rem] border bg-[var(--color-shell-surface)] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-[1px] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-md)]",
+        "group rounded-2xl border bg-card px-4 py-3.5 shadow-sm transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-[1px] hover:bg-muted/30 hover:shadow-md",
         summaryToneClassName[card.tone ?? "default"],
       )}
     >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-sidebar-muted)]">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
         {card.eyebrow ?? card.label ?? "摘要"}
       </p>
-      <p className="mt-2 text-[1.08rem] font-semibold tracking-[-0.04em] text-[var(--foreground)]">
+      <p className="mt-2 text-[1.08rem] font-semibold text-foreground">
         {card.value}
       </p>
       {card.description ? (
-        <p className="mt-1 text-[12px] leading-5 text-[var(--foreground)]/78">
+        <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
           {card.description}
         </p>
       ) : null}
-      <p className="mt-2 text-[11px] leading-5 text-[var(--color-sidebar-muted)]">
+      <p className="mt-2 text-[11px] leading-5 text-muted-foreground/80">
         {card.note}
       </p>
     </SmartLink>
@@ -510,13 +500,15 @@ function PortraitFact({
   description?: string;
 }>) {
   return (
-    <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3.5 py-3">
-      <p className="crm-detail-label">{label}</p>
-      <div className="mt-1.5 text-[13px] font-medium leading-5 text-[var(--foreground)]">
+    <div className="rounded-xl border border-border/40 bg-card px-3.5 py-3 shadow-sm">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        {label}
+      </p>
+      <div className="mt-1.5 text-[13px] font-semibold leading-5 text-foreground">
         {value}
       </div>
       {description ? (
-        <p className="mt-1 text-[11px] leading-5 text-[var(--color-sidebar-muted)]">
+        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
           {description}
         </p>
       ) : null}
@@ -538,10 +530,10 @@ function PortraitActionLink({
       href={href}
       scrollTargetId="customer-main"
       className={cn(
-        "inline-flex h-8 items-center rounded-full border px-3 text-[12px] font-medium transition-[border-color,background-color,color,transform,box-shadow] duration-150 hover:-translate-y-[1px]",
+        "inline-flex h-9 items-center rounded-full border px-3.5 text-[12px] font-medium shadow-sm transition-[border-color,background-color,color,transform,box-shadow] duration-150 hover:-translate-y-[1px]",
         emphasis === "primary"
-          ? "border-[rgba(122,154,255,0.18)] bg-[var(--color-panel)] text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)] hover:border-[rgba(122,154,255,0.24)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-md)]"
-          : "border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] text-[var(--color-sidebar-muted)] hover:border-[rgba(122,154,255,0.18)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)] hover:shadow-[var(--color-shell-shadow-sm)]",
+          ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
+          : "border-border/60 bg-card text-muted-foreground hover:border-primary/40 hover:bg-muted/40 hover:text-foreground",
       )}
     >
       {label}
@@ -559,14 +551,16 @@ function PortraitSignalRail({
       {items.map((item) => (
         <div
           key={item.label}
-          className="rounded-[0.98rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3"
+          className="rounded-xl border border-border/40 bg-card px-3.5 py-3 shadow-sm"
         >
-          <p className="crm-detail-label">{item.label}</p>
-          <p className="mt-1.5 text-[13px] font-medium leading-5 text-[var(--foreground)]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            {item.label}
+          </p>
+          <p className="mt-1.5 text-[13px] font-semibold leading-5 text-foreground">
             {item.value}
           </p>
           {item.description ? (
-            <p className="mt-1 text-[11px] leading-5 text-[var(--color-sidebar-muted)]">
+            <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
               {item.description}
             </p>
           ) : null}
@@ -654,7 +648,7 @@ function OrderArchiveCard({
       meta={meta}
       statusItems={statusItems}
       aside={
-        <span className="text-[1.02rem] font-semibold tracking-[-0.04em] text-[var(--foreground)]">
+        <span className="text-[1.02rem] font-semibold text-foreground">
           {amount}
         </span>
       }
@@ -1492,214 +1486,6 @@ function renderOrdersTab({
   );
 }
 
-function getGiftReviewTone(
-  status: CustomerGiftsData[number]["reviewStatus"],
-): CustomerDossierStatusTone {
-  switch (status) {
-    case "APPROVED":
-      return "success";
-    case "REJECTED":
-      return "danger";
-    default:
-      return "warning";
-  }
-}
-
-function getGiftShippingTone(
-  status: CustomerGiftsData[number]["shippingStatus"],
-): CustomerDossierStatusTone {
-  switch (status) {
-    case "FINISHED":
-    case "SIGNED":
-      return "success";
-    case "READY":
-    case "SHIPPED":
-      return "info";
-    case "CANCELED":
-      return "danger";
-    default:
-      return "warning";
-  }
-}
-
-function getGiftPaymentPlanTone(
-  status: NonNullable<CustomerGiftsData[number]["paymentPlans"]>[number]["status"] | undefined,
-): CustomerDossierStatusTone {
-  switch (status) {
-    case "COLLECTED":
-      return "success";
-    case "CANCELED":
-      return "danger";
-    case "SUBMITTED":
-    case "PARTIALLY_COLLECTED":
-      return "info";
-    case "PENDING":
-      return "warning";
-    default:
-      return "neutral";
-  }
-}
-
-function getGiftSummarySignals(data: CustomerGiftsData): PortraitSignal[] {
-  const approvedCount = data.filter((record) => record.reviewStatus === "APPROVED").length;
-  const shippedCount = data.filter((record) =>
-    ["SHIPPED", "SIGNED", "FINISHED"].includes(record.shippingStatus),
-  ).length;
-  const totalFreight = data.reduce(
-    (sum, record) => sum + Number(record.freightAmount),
-    0,
-  );
-  const latestGift = data[0] ?? null;
-
-  return [
-    {
-      label: "礼品记录",
-      value: `${data.length} 条`,
-      description: `${approvedCount} 条审核通过`,
-    },
-    {
-      label: "最近礼品",
-      value: latestGift?.giftName ?? "暂无",
-      description: latestGift ? formatDateTime(latestGift.createdAt) : "暂无记录",
-    },
-    {
-      label: "发货推进",
-      value: `${shippedCount} 条已发出`,
-      description: "含已发货、已签收、已完成",
-    },
-    {
-      label: "运费合计",
-      value: formatCurrency(totalFreight),
-      description: "当前列表内礼品运费",
-    },
-  ];
-}
-
-function renderGiftsTab(data: CustomerGiftsData) {
-  const giftSignals = getGiftSummarySignals(data);
-
-  return (
-    <CustomerTabSection
-      eyebrow="礼品履约"
-      title="礼品资格与履约轨迹"
-      description="回看礼品达标、审核、运费与发货状态。"
-      actions={<QuietSectionMeta>{data.length} 条记录</QuietSectionMeta>}
-    >
-      <div className="space-y-4">
-        <PortraitSignalRail items={giftSignals} />
-        {data.length > 0 ? (
-          <div className="space-y-2.5">
-            {data.map((record) => {
-              const freightPlan = record.paymentPlans?.[0] ?? null;
-              const statusItems: CustomerDossierStatusItem[] = [
-                {
-                  label: "审核",
-                  value: getGiftReviewStatusLabel(record.reviewStatus),
-                  tone: getGiftReviewTone(record.reviewStatus),
-                },
-                {
-                  label: "发货",
-                  value: getShippingStatusLabel(record.shippingStatus),
-                  tone: getGiftShippingTone(record.shippingStatus),
-                },
-                {
-                  label: "运费",
-                  value: formatCurrency(record.freightAmount),
-                  tone: Number(record.freightAmount) > 0 ? "info" : "neutral",
-                },
-                {
-                  label: "运费计划",
-                  value: freightPlan
-                    ? `${freightPlan.status} / 待收 ${formatCurrency(freightPlan.remainingAmount)}`
-                    : "未生成",
-                  tone: getGiftPaymentPlanTone(freightPlan?.status),
-                },
-                {
-                  label: "物流",
-                  value: record.shippingTask?.trackingNumber || "未回填",
-                  tone: record.shippingTask?.trackingNumber ? "info" : "neutral",
-                },
-                {
-                  label: "来源",
-                  value: getGiftQualificationSourceLabel(record.qualificationSource),
-                  tone: "neutral",
-                },
-              ];
-              const receiverLine = [
-                record.receiverName,
-                record.receiverPhone,
-                record.receiverAddress,
-              ]
-                .filter(Boolean)
-                .join(" / ");
-              const receiverInfo =
-                typeof record.receiverInfo === "string" ? record.receiverInfo : "";
-              const detail = (
-                <div className="grid gap-3 text-[12px] leading-5 text-[var(--color-sidebar-muted)] md:grid-cols-2 xl:grid-cols-4">
-                  <div>
-                    <p className="crm-detail-label">收件信息</p>
-                    <p className="mt-1 text-[var(--foreground)]">
-                      {receiverLine || receiverInfo || "未填写"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="crm-detail-label">直播场次</p>
-                    <p className="mt-1 text-[var(--foreground)]">
-                      {record.liveSession?.title || "未关联"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="crm-detail-label">物流单号</p>
-                    <p className="mt-1 text-[var(--foreground)]">
-                      {record.shippingTask?.trackingNumber || "未回填"}
-                    </p>
-                    <p className="mt-1">
-                      {record.shippingTask?.shippedAt
-                        ? `发货 ${formatDateTime(record.shippingTask.shippedAt)}`
-                        : "暂无发货时间"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="crm-detail-label">备注</p>
-                    <p className="mt-1 text-[var(--foreground)]">
-                      {record.remark?.trim() || "暂无备注"}
-                    </p>
-                  </div>
-                </div>
-              );
-
-              return (
-                <CustomerDossierLedgerRow
-                  key={record.id}
-                  title={record.giftName}
-                  subtitle={`${getGiftQualificationSourceLabel(record.qualificationSource)} / 创建 ${formatDateTime(record.createdAt)}`}
-                  meta={[
-                    `销售 ${formatOwnerLabel(record.sales)}`,
-                    record.liveSession?.title
-                      ? `直播 ${record.liveSession.title}`
-                      : "直播 未关联",
-                    record.shippingTask?.trackingNumber
-                      ? `物流 ${record.shippingTask.trackingNumber}`
-                      : "物流 未回填",
-                  ]}
-                  statusItems={statusItems}
-                  aside={formatCurrency(record.freightAmount)}
-                  detail={detail}
-                />
-              );
-            })}
-          </div>
-        ) : (
-          <CustomerEmptyState
-            title="暂无礼品记录"
-            description="暂无礼品记录。"
-          />
-        )}
-      </div>
-    </CustomerTabSection>
-  );
-}
-
 function renderLogsTab(data: CustomerLogsData) {
   return (
     <CustomerTabSection
@@ -1839,8 +1625,6 @@ function renderTabContent({
         saveTradeOrderDraftAction,
         submitTradeOrderForReviewAction,
       });
-    case "gifts":
-      return renderGiftsTab(tabData as CustomerGiftsData);
     case "logs":
       return renderLogsTab(tabData as CustomerLogsData);
     default:
@@ -1998,7 +1782,7 @@ export function CustomerDetailWorkbench({
           ? `${totalOrderCount} 笔成交 / 最近成交 ${formatAgeSummary(shell.tradeOrderSummary.latestTradeAt)}`
           : "还没有形成成交记录",
       href: buildCustomerTabHref(shell.id, "orders", navigationContext),
-      note: `成交主单 ${shell.tradeOrderSummary.approvedCount} 笔 / 礼品 ${shell._count.giftRecords} 条`,
+      note: `成交主单 ${shell.tradeOrderSummary.approvedCount} 笔`,
       tone: totalOrderCount > 0 ? "success" : "default",
     },
     {
@@ -2032,264 +1816,324 @@ export function CustomerDetailWorkbench({
   return (
     <WorkbenchLayout
       className="!gap-0"
+      contentClassName="!space-y-0"
       header={
-        <section className="rounded-[1.25rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-4 shadow-[var(--color-shell-shadow-md)] md:px-5 xl:px-6">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.72fr)]">
-            <div className="min-w-0 space-y-3.5">
-              <PageContextLink
-                href={navigationContext.returnTo ?? "/customers"}
-                label={getCustomerDetailBackLabel(navigationContext)}
-                trail={[isPublicPoolContext ? "公海池" : "客户中心", "客户经营总览"]}
-              />
+        <section className="rounded-2xl border border-border/60 bg-card px-4 py-4 shadow-sm md:px-5 xl:px-6">
+          <PageContextLink
+            href={navigationContext.returnTo ?? "/customers"}
+            label={getCustomerDetailBackLabel(navigationContext)}
+            trail={[isPublicPoolContext ? "公海池" : "客户中心", "客户经营总览"]}
+          />
 
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex min-w-0 items-start gap-3">
-                  <div className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] text-[1rem] font-semibold tracking-[0.16em] text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)]">
-                    {getCustomerMonogram(shell.name)}
-                  </div>
-                  <div className="min-w-0 space-y-2">
-                    <div className="flex flex-wrap items-center gap-2.5">
-                      <h1 className="text-[1.62rem] font-semibold tracking-[-0.05em] text-[var(--foreground)] md:text-[1.88rem]">
-                        {shell.name}
-                      </h1>
-                      <CustomerStatusBadge status={shell.status} />
-                      {isPublicPoolContext ? (
-                        <StatusBadge label="来自公海池" variant="warning" />
-                      ) : null}
-                    </div>
-                    <p className="max-w-3xl text-[13px] leading-6 text-[var(--color-sidebar-muted)]">
-                      {getCustomerIdentitySummary(shell)}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <StatusBadge label={executionClassLabel} variant={executionClassVariant} />
-                      <StatusBadge
-                        label={`归属 ${ownershipLabel}`}
-                        variant={shell.ownershipMode === "PUBLIC" ? "warning" : "info"}
-                      />
-                      <StatusBadge
-                        label={riskState.title}
-                        variant={summaryToneBadgeVariant[riskState.tone]}
-                      />
-                    </div>
-                  </div>
+          <div className="mt-4 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div className="min-w-0 flex-1 space-y-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border/60 bg-muted/40 text-[1rem] font-semibold text-foreground shadow-sm">
+                  {getCustomerMonogram(shell.name)}
                 </div>
-
-                <div className="flex shrink-0 flex-wrap gap-2">
-                  <PortraitActionLink
-                    href={primaryAction.href}
-                    label={primaryAction.label}
-                    emphasis="primary"
-                  />
-                  <PortraitActionLink
-                    href={primaryAction.secondaryHref}
-                    label={primaryAction.secondaryLabel}
-                  />
-                </div>
-              </div>
-
-              <div className="grid gap-3 lg:grid-cols-[minmax(18rem,0.72fr)_minmax(0,1fr)]">
-                <CustomerPhoneSpotlight
-                  customerId={shell.id}
-                  customerName={shell.name}
-                  phone={shell.phone}
-                  triggerSource="detail"
-                  variant="dialog"
-                  className="h-full"
-                  outboundCallEnabled={outboundCallEnabled && canCreateCalls}
-                />
-
-                <div className="rounded-[0.98rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3">
-                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                    <div className="min-w-0">
-                      <p className="crm-detail-label">下一步判断</p>
-                      <p className="mt-1 text-[13px] font-medium leading-5 text-[var(--foreground)]">
-                        {riskState.title}
-                      </p>
-                      <p className="mt-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
-                        {portraitNarrative}
-                      </p>
-                    </div>
-                    <PortraitActionLink
-                      href={buildCustomerTabHref(shell.id, riskState.tab, navigationContext)}
-                      label="查看依据"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <PortraitSignalRail items={portraitSignals} />
-            </div>
-
-            <aside className="rounded-[1.08rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4 shadow-[var(--color-shell-shadow-sm)]">
-              <div className="space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="crm-detail-label">行动面板</p>
-                    <h2 className="mt-1 text-[1.02rem] font-semibold text-[var(--foreground)]">
-                      {primaryAction.label}
-                    </h2>
-                    <p className="mt-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
-                      {primaryAction.description}
-                    </p>
-                  </div>
-                  <PortraitActionLink
-                    href={buildCustomerTabHref(shell.id, "profile", navigationContext)}
-                    label="档案"
-                  />
-                </div>
-
-                <div className="rounded-[0.98rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-4 py-3.5">
-                  <div className="flex items-end justify-between gap-3">
-                    <div>
-                      <p className="crm-detail-label">累计成交</p>
-                      <p className="mt-2 text-[1.38rem] font-semibold tracking-[-0.05em] text-[var(--foreground)]">
-                      {totalOrderCount > 0 ? totalPurchaseAmount : "尚未成交"}
-                      </p>
-                    </div>
-                    <p className="pb-0.5 text-[12px] font-medium tabular-nums text-[var(--color-sidebar-muted)]">
-                      {totalOrderCount} 笔
-                    </p>
-                  </div>
-                  <p className="mt-2 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
-                    {totalOrderCount > 0
-                      ? `最近成交 ${formatAgeSummary(shell.tradeOrderSummary.latestTradeAt)} / ${latestTradeSummary}`
-                      : "成交轨迹会在形成首笔成交后显示在这里"}
-                  </p>
-                </div>
-
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                  <PortraitFact
-                    label="当前风险"
-                    value={riskState.title}
-                    description={riskState.description}
-                  />
-                  <PortraitFact
-                    label="最近有效跟进"
-                    value={formatDateTimeSummary(shell.lastEffectiveFollowUpAt, "尚未形成")}
-                    description={shell.latestFollowUpAt ? `最近触达 ${formatDateTime(shell.latestFollowUpAt)}` : "暂无触达记录"}
-                  />
-                </div>
-
-                <div className="rounded-[0.98rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-4 py-3.5">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="crm-detail-label">经营归属</p>
-                      <p className="mt-1 text-[13px] font-medium leading-5 text-[var(--foreground)]">
-                        {currentOwnerLabel}
-                      </p>
-                      <p className="mt-1 text-[11px] leading-5 text-[var(--color-sidebar-muted)]">
-                        {shell.publicPoolTeam?.name ?? shell.owner?.team?.name ?? "暂无团队"} / 保护期 {formatDateTimeSummary(shell.claimLockedUntil, "未锁定")}
-                      </p>
-                    </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <h1 className="text-2xl font-semibold text-foreground md:text-[1.85rem]">
+                      {shell.name}
+                    </h1>
+                    <CustomerStatusBadge status={shell.status} />
+                    {isPublicPoolContext ? (
+                      <StatusBadge label="来自公海池" variant="warning" />
+                    ) : null}
                   </div>
 
-                  {transferCustomerOwnerAction ? (
-                    <CustomerOwnerTransferPanel
-                      customerId={shell.id}
-                      currentOwnerLabel={currentOwnerLabel}
-                      options={ownerTransferOptions}
-                      action={transferCustomerOwnerAction}
-                      className="mt-3 border-t border-[var(--color-border-soft)] pt-3"
-                    />
-                  ) : null}
-                </div>
-
-                {customerRecycleGuard && moveCustomerToRecycleBinAction ? (
-                  <div className="border-t border-[var(--color-border-soft)] pt-3">
-                    <CustomerRecycleEntry
-                      key={`${shell.id}-${customerRecycleGuard.canMoveToRecycleBin ? "move" : "blocked"}-${customerRecycleGuard.blockers.length}`}
+                  <div className="mt-2 max-w-xl">
+                    <CustomerPhoneSpotlight
                       customerId={shell.id}
                       customerName={shell.name}
                       phone={shell.phone}
-                      statusLabel={getCustomerStatusLabel(shell.status)}
-                      ownershipLabel={ownershipLabel}
-                      ownerLabel={formatOwnerLabel(shell.owner)}
-                      lastEffectiveFollowUpAt={shell.lastEffectiveFollowUpAt}
-                      approvedTradeOrderCount={shell.tradeOrderSummary.approvedCount}
-                      linkedLeadCount={shell.importSummary.linkedLeadCount}
-                      initialGuard={customerRecycleGuard}
-                      initialFinalizePreview={customerFinalizePreview}
-                      moveToRecycleBinAction={moveCustomerToRecycleBinAction}
+                      triggerSource="detail"
+                      variant="dialog"
+                      phoneClassName="text-3xl tracking-normal"
+                      outboundCallEnabled={outboundCallEnabled && canCreateCalls}
+                      outboundCallPlacement="icon"
                     />
                   </div>
-                ) : null}
+                </div>
               </div>
-            </aside>
-          </div>
 
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 2xl:grid-cols-4">
-            {summaryCards.map((card) => (
-              <OverviewSummaryCard
-                key={card.label ?? card.eyebrow ?? card.href}
-                card={card}
-              />
-            ))}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[12px] font-medium text-muted-foreground">
+                <span>{getCustomerIdentitySummary(shell) || "暂无画像摘要"}</span>
+                <span className="text-border">•</span>
+                <span>{executionClassLabel}</span>
+                <span className="text-border">•</span>
+                <span>归属 {ownershipLabel}</span>
+                <span className="text-border">•</span>
+                <span>{totalOrderCount > 0 ? `累计成交 ${totalPurchaseAmount}` : "尚未成交"}</span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge label={executionClassLabel} variant={executionClassVariant} />
+                <StatusBadge
+                  label={riskState.title}
+                  variant={summaryToneBadgeVariant[riskState.tone]}
+                />
+              </div>
+            </div>
+
+            <div className="max-w-xl rounded-2xl border border-border/40 bg-muted/30 px-4 py-3">
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    下一步判断
+                  </p>
+                  <p className="mt-1 text-sm font-semibold leading-5 text-foreground">
+                    {riskState.title}
+                  </p>
+                  <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                    {portraitNarrative}
+                  </p>
+                </div>
+                <PortraitActionLink
+                  href={buildCustomerTabHref(shell.id, riskState.tab, navigationContext)}
+                  label="查看依据"
+                />
+              </div>
+            </div>
           </div>
         </section>
       }
     >
-      <section
-        id="customer-main"
-        className="rounded-[1.08rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-4 py-3 shadow-[var(--color-shell-shadow-sm)] md:px-5 md:py-3.5"
-      >
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
-              <span>画像导航</span>
-              <span className="text-[var(--color-border)]">/</span>
-              <span>{activeGroupMeta.label}</span>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <main className="min-w-0 space-y-4 lg:col-span-8">
+          <section
+            id="customer-main"
+            className="sticky top-0 z-10 rounded-2xl border border-border/60 bg-background/90 px-4 py-3 shadow-sm backdrop-blur-md md:px-5"
+          >
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  <span>画像导航</span>
+                  <span className="text-border">/</span>
+                  <span>{activeGroupMeta.label}</span>
+                </div>
+                <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                  {currentTabSummary}
+                </p>
+              </div>
+
+              <p className="text-[12px] leading-5 text-muted-foreground">
+                最近更新 {formatDateTime(shell.updatedAt)}
+              </p>
             </div>
-            <p className="mt-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
-              {currentTabSummary}
-            </p>
+
+            <div className="mt-3.5">
+              <CustomerDetailTabs
+                customerId={shell.id}
+                activeTab={activeTab}
+                buildHref={(tab) => buildCustomerTabHref(shell.id, tab, navigationContext)}
+                scrollTargetId="customer-main"
+                counts={{
+                  calls: shell._count.callRecords,
+                  wechat: shell._count.wechatRecords,
+                  live: shell._count.liveInvitations,
+                  orders: shell._count.salesOrders,
+                  logs: shell.operationLogCount,
+                }}
+              />
+            </div>
+          </section>
+
+          {notice ? <ActionBanner tone={notice.tone}>{notice.message}</ActionBanner> : null}
+
+          {renderTabContent({
+            activeTab,
+            shell,
+            tabData,
+            canCreateCalls,
+            outboundCallEnabled,
+            canCreateWechat,
+            canManageLiveInvitations,
+            canManageTags,
+            canEditProfile,
+            isEditingProfile,
+            canCreateSalesOrders,
+            tradeOrderComposer,
+            navigationContext,
+            updateCustomerProfileAction,
+            saveTradeOrderDraftAction,
+            submitTradeOrderForReviewAction,
+            requestImportedCustomerDeletionAction,
+            reviewImportedCustomerDeletionAction,
+            deleteImportedCustomerDirectAction,
+          })}
+        </main>
+
+        <aside className="min-w-0 lg:col-span-4">
+          <div className="sticky top-6 space-y-4">
+            <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Command Center
+                  </p>
+                  <h2 className="mt-1 text-base font-semibold text-foreground">
+                    {primaryAction.label}
+                  </h2>
+                  <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+                    {primaryAction.description}
+                  </p>
+                </div>
+                <PortraitActionLink
+                  href={buildCustomerTabHref(shell.id, "profile", navigationContext)}
+                  label="档案"
+                />
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <PortraitActionLink
+                  href={primaryAction.href}
+                  label={primaryAction.label}
+                  emphasis="primary"
+                />
+                <PortraitActionLink
+                  href={primaryAction.secondaryHref}
+                  label={primaryAction.secondaryLabel}
+                />
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Quick Stats
+                  </p>
+                  <h2 className="mt-1 text-base font-semibold text-foreground">
+                    经营快照
+                  </h2>
+                </div>
+                <StatusBadge
+                  label={ownershipLabel}
+                  variant={shell.ownershipMode === "PUBLIC" ? "warning" : "info"}
+                />
+              </div>
+
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {portraitSignals.map((item) => (
+                  <div
+                    key={item.label}
+                    className="rounded-xl border border-border/40 bg-muted/30 px-3 py-2.5"
+                  >
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      {item.label}
+                    </p>
+                    <p className="mt-1 text-[13px] font-semibold leading-5 text-foreground">
+                      {item.value}
+                    </p>
+                    {item.description ? (
+                      <p className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
+                        {item.description}
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-3 rounded-xl border border-border/40 bg-background/50 px-3 py-3">
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      累计成交
+                    </p>
+                    <p className="mt-1 text-xl font-semibold text-foreground">
+                      {totalOrderCount > 0 ? totalPurchaseAmount : "尚未成交"}
+                    </p>
+                  </div>
+                  <p className="pb-0.5 text-[12px] font-medium tabular-nums text-muted-foreground">
+                    {totalOrderCount} 笔
+                  </p>
+                </div>
+                <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
+                  {totalOrderCount > 0
+                    ? `最近成交 ${formatAgeSummary(shell.tradeOrderSummary.latestTradeAt)} / ${latestTradeSummary}`
+                    : "成交轨迹会在形成首笔成交后显示在这里"}
+                </p>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Ownership
+                  </p>
+                  <h2 className="mt-1 text-base font-semibold text-foreground">
+                    经营归属
+                  </h2>
+                  <p className="mt-1 text-sm font-medium leading-5 text-foreground">
+                    {currentOwnerLabel}
+                  </p>
+                  <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                    {shell.publicPoolTeam?.name ?? shell.owner?.team?.name ?? "暂无团队"} / 保护期 {formatDateTimeSummary(shell.claimLockedUntil, "未锁定")}
+                  </p>
+                </div>
+              </div>
+
+              {transferCustomerOwnerAction ? (
+                <CustomerOwnerTransferPanel
+                  customerId={shell.id}
+                  currentOwnerLabel={currentOwnerLabel}
+                  options={ownerTransferOptions}
+                  action={transferCustomerOwnerAction}
+                  className="mt-3 border-t border-border/40 pt-3"
+                />
+              ) : null}
+            </section>
+
+            <div className="grid gap-2">
+              {summaryCards.map((card) => (
+                <OverviewSummaryCard
+                  key={card.label ?? card.eyebrow ?? card.href}
+                  card={card}
+                />
+              ))}
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 2xl:grid-cols-2">
+              <PortraitFact
+                label="当前风险"
+                value={riskState.title}
+                description={riskState.description}
+              />
+              <PortraitFact
+                label="最近有效跟进"
+                value={formatDateTimeSummary(shell.lastEffectiveFollowUpAt, "尚未形成")}
+                description={
+                  shell.latestFollowUpAt
+                    ? `最近触达 ${formatDateTime(shell.latestFollowUpAt)}`
+                    : "暂无触达记录"
+                }
+              />
+            </div>
+
+            {customerRecycleGuard && moveCustomerToRecycleBinAction ? (
+              <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
+                <CustomerRecycleEntry
+                  key={`${shell.id}-${customerRecycleGuard.canMoveToRecycleBin ? "move" : "blocked"}-${customerRecycleGuard.blockers.length}`}
+                  customerId={shell.id}
+                  customerName={shell.name}
+                  phone={shell.phone}
+                  statusLabel={getCustomerStatusLabel(shell.status)}
+                  ownershipLabel={ownershipLabel}
+                  ownerLabel={formatOwnerLabel(shell.owner)}
+                  lastEffectiveFollowUpAt={shell.lastEffectiveFollowUpAt}
+                  approvedTradeOrderCount={shell.tradeOrderSummary.approvedCount}
+                  linkedLeadCount={shell.importSummary.linkedLeadCount}
+                  initialGuard={customerRecycleGuard}
+                  initialFinalizePreview={customerFinalizePreview}
+                  moveToRecycleBinAction={moveCustomerToRecycleBinAction}
+                />
+              </section>
+            ) : null}
           </div>
-
-          <p className="text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
-            最近更新 {formatDateTime(shell.updatedAt)}
-          </p>
-        </div>
-
-        <div className="mt-3.5">
-          <CustomerDetailTabs
-            customerId={shell.id}
-            activeTab={activeTab}
-            buildHref={(tab) => buildCustomerTabHref(shell.id, tab, navigationContext)}
-            scrollTargetId="customer-main"
-            counts={{
-              calls: shell._count.callRecords,
-              wechat: shell._count.wechatRecords,
-              live: shell._count.liveInvitations,
-              orders: shell._count.salesOrders,
-              gifts: shell._count.giftRecords,
-              logs: shell.operationLogCount,
-            }}
-          />
-        </div>
-      </section>
-
-      {notice ? <ActionBanner tone={notice.tone}>{notice.message}</ActionBanner> : null}
-
-      {renderTabContent({
-        activeTab,
-        shell,
-        tabData,
-        canCreateCalls,
-        outboundCallEnabled,
-        canCreateWechat,
-        canManageLiveInvitations,
-        canManageTags,
-        canEditProfile,
-        isEditingProfile,
-        canCreateSalesOrders,
-        tradeOrderComposer,
-        navigationContext,
-        updateCustomerProfileAction,
-        saveTradeOrderDraftAction,
-        submitTradeOrderForReviewAction,
-        requestImportedCustomerDeletionAction,
-        reviewImportedCustomerDeletionAction,
-        deleteImportedCustomerDirectAction,
-      })}
+        </aside>
+      </div>
 
       {canCreateCalls ? (
         <MobileCallFollowUpSheet

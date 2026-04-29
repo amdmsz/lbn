@@ -129,22 +129,22 @@ function buildProductIdentityLine(
 }
 
 const productWorkbenchCardClassName =
-  "rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]";
+  "rounded-2xl border border-border/50 bg-card shadow-none";
 
 const productWorkbenchInsetClassName =
-  "rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
+  "border-l border-border/50 py-1 pl-3";
 
 const productWorkbenchPillClassName =
-  "rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-sidebar-muted)]";
+  "rounded-full border border-border/40 bg-muted/30 px-2 py-0.5 text-xs font-medium text-muted-foreground";
 
 const productWorkbenchMetaLineClassName =
-  "flex flex-wrap gap-x-3 gap-y-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]";
+  "flex flex-wrap gap-x-3 gap-y-1 text-[12px] leading-5 text-muted-foreground";
 
 export const productWorkbenchQuietActionClassName =
-  "inline-flex min-h-0 items-center rounded-full border border-transparent px-2.5 py-2 text-sm font-medium text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color,transform] duration-200 hover:-translate-y-[1px] hover:border-[var(--color-border-soft)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex min-h-0 items-center rounded-md border border-transparent px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50";
 
 export const productWorkbenchSoftActionClassName =
-  "inline-flex min-h-0 items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-2 text-sm font-medium text-[var(--foreground)] transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-[1px] hover:border-[rgba(111,141,255,0.16)] hover:bg-[var(--color-shell-surface)] hover:shadow-[var(--color-shell-shadow-xs)]";
+  "inline-flex min-h-0 items-center rounded-md border border-transparent px-2.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50";
 
 export function ProductWorkbenchHero({
   product,
@@ -169,10 +169,10 @@ export function ProductWorkbenchHero({
   ]);
 
   return (
-    <section className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4 shadow-[var(--color-shell-shadow-sm)] sm:p-5">
+    <section className="rounded-2xl border border-border/50 bg-card p-4 shadow-none sm:p-5">
       <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_16rem] xl:items-start">
         <div className="min-w-0 flex flex-1 flex-col gap-4 sm:flex-row">
-          <div className="group shrink-0 rounded-[1.08rem] border border-[var(--color-border-soft)] bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(244,247,250,0.94))] p-3.5 shadow-[var(--color-shell-shadow-xs)]">
+          <div className="group shrink-0 rounded-2xl border border-border/50 bg-background p-3.5">
             <div className="flex h-full flex-col gap-3.5">
               <ProductMainImage
                 mainImagePath={product.mainImagePath}
@@ -184,7 +184,7 @@ export function ProductWorkbenchHero({
 
               <div className="space-y-1 text-center sm:text-left">
                 <p className="crm-detail-label text-[10px]">产品画像</p>
-                <p className="max-w-[9rem] text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                <p className="max-w-[9rem] text-[12px] leading-5 text-muted-foreground">
                   {portraitLine || "未补品牌 / 系列"}
                 </p>
               </div>
@@ -195,7 +195,7 @@ export function ProductWorkbenchHero({
             <div className="flex flex-wrap items-center gap-2">
               <p className="crm-detail-label text-[10px]">Product</p>
               {focusSku ? (
-                <span className="rounded-full border border-[rgba(79,125,247,0.14)] bg-[rgba(79,125,247,0.08)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-accent-strong)]">
+                <span className="rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
                   当前规格
                 </span>
               ) : null}
@@ -203,7 +203,7 @@ export function ProductWorkbenchHero({
 
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-[1.08rem] font-semibold tracking-[-0.03em] text-[var(--foreground)] sm:text-[1.24rem]">
+                <h3 className="text-[1.08rem] font-semibold tracking-[-0.03em] text-foreground sm:text-[1.24rem]">
                   {product.name}
                 </h3>
                 <MasterDataStatusBadge isActive={product.enabled} />
@@ -213,30 +213,30 @@ export function ProductWorkbenchHero({
               </div>
 
               {identityLine ? (
-                <p className="text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
+                <p className="text-[13px] leading-5 text-muted-foreground">
                   {identityLine}
                 </p>
               ) : (
-                <p className="text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
+                <p className="text-[13px] leading-5 text-muted-foreground">
                   当前还没有主档归类。
                 </p>
               )}
 
               {shortDescription ? (
-                <div className="rounded-[0.92rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2.5">
-                  <p className="line-clamp-2 text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">
+                <div className="border-l border-border/50 pl-3">
+                  <p className="line-clamp-2 text-[12.5px] leading-5 text-muted-foreground">
                     {shortDescription}
                   </p>
                 </div>
               ) : null}
 
               {focusSku ? (
-                <div className="rounded-[0.98rem] border border-[rgba(79,125,247,0.14)] bg-[linear-gradient(180deg,rgba(247,250,255,0.94),rgba(255,255,255,0.98))] px-3 py-2.5 shadow-[var(--color-shell-shadow-xs)]">
+                <div className="rounded-xl border border-primary/20 bg-primary/5 px-3 py-2.5">
                   <div className="flex flex-wrap items-center gap-2.5">
-                    <span className="text-sm font-semibold text-[var(--foreground)]">
+                    <span className="text-sm font-semibold text-foreground">
                       {focusSku.skuName}
                     </span>
-                    <span className="rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
+                    <span className="rounded-full bg-muted/30 px-2 py-0.5 text-xs font-medium text-muted-foreground">
                       默认售价{" "}
                       {formatCurrency(
                         asCurrencyNumber(focusSku.defaultUnitPrice),
@@ -250,14 +250,14 @@ export function ProductWorkbenchHero({
         </div>
 
         {primaryActions || utilityActions ? (
-          <div className="flex w-full flex-col gap-2 rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3 xl:min-w-[16rem]">
+          <div className="flex w-full flex-col gap-2 rounded-xl bg-transparent p-0 xl:min-w-[16rem] xl:items-end">
             {primaryActions ? (
-              <div className="flex w-full flex-wrap items-center gap-2">
+              <div className="flex w-full flex-wrap items-center gap-2 xl:justify-end">
                 {primaryActions}
               </div>
             ) : null}
             {utilityActions ? (
-              <div className="flex w-full flex-wrap items-center gap-1.5 border-t border-[var(--color-border-soft)] pt-2.5">
+              <div className="flex w-full flex-wrap items-center gap-1.5 pt-1 xl:justify-end">
                 {utilityActions}
               </div>
             ) : null}
@@ -300,23 +300,23 @@ export function ProductSkuWorkspaceSection({
   emptyAction?: ReactNode;
 }>) {
   return (
-    <section className={cn(productWorkbenchCardClassName, "overflow-hidden")}>
-      <div className="flex flex-col gap-2 border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
+    <section className={cn(productWorkbenchCardClassName, "px-4 py-4 sm:px-5")}>
+      <div className="mb-4 flex flex-col gap-2 border-b border-border/40 pb-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-1">
           <p className="crm-detail-label text-[11px]">规格列表</p>
-          <h4 className="text-[0.96rem] font-semibold text-[var(--foreground)]">
+          <h4 className="text-[0.96rem] font-semibold text-foreground">
             {product.name} 的可售规格
           </h4>
         </div>
 
-        <p className="text-[12px] text-[var(--color-sidebar-muted)]">
+        <p className="text-[12px] text-muted-foreground">
           规格 {product.skus.length} · 启用 {activeSkuCount}
           {focusSkuId ? " · 当前聚焦单个规格" : ""}
         </p>
       </div>
 
       {product.skus.length > 0 ? (
-        <div className="space-y-2.5 px-4 py-4 sm:px-5">
+        <div className="space-y-2.5">
           {product.skus.map((sku) => {
             const isFocused = focusSkuId === sku.id;
             const insuranceAmount = asCurrencyNumber(
@@ -327,20 +327,20 @@ export function ProductSkuWorkspaceSection({
               <article key={sku.id} className="group">
                 <div
                   className={[
-                    "rounded-[0.98rem] border px-3.5 py-3 transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-[1px]",
+                    "rounded-xl border px-3.5 py-3 transition-colors duration-200",
                     isFocused
-                      ? "border-[rgba(122,154,255,0.18)] bg-[linear-gradient(180deg,rgba(247,250,255,0.94),rgba(255,255,255,0.98))] shadow-[var(--color-shell-shadow-xs)]"
-                      : "border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-xs)] hover:border-[rgba(111,141,255,0.1)] hover:bg-[var(--color-shell-surface)]",
+                      ? "border-primary/30 bg-primary/5"
+                      : "border-border/50 bg-transparent hover:border-primary/20 hover:bg-muted/20",
                   ].join(" ")}
                 >
                   <div className="flex flex-col gap-3 xl:grid xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
                     <div className="min-w-0 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="truncate text-[14px] font-semibold text-[var(--foreground)]">
+                        <span className="truncate text-[14px] font-semibold text-foreground">
                           {sku.skuName}
                         </span>
                         {isFocused ? (
-                          <span className="rounded-full border border-[var(--color-accent)]/14 bg-[var(--color-accent)]/6 px-2 py-0.5 text-[11px] font-medium text-[var(--color-accent)]">
+                          <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
                             当前聚焦
                           </span>
                         ) : null}
@@ -360,7 +360,7 @@ export function ProductSkuWorkspaceSection({
                         ) : null}
                       </div>
 
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs leading-5 text-muted-foreground">
                         <span>订单引用 {sku._count.salesOrderItems}</span>
                         <span>更新于 {formatDateTime(sku.updatedAt)}</span>
                       </div>
@@ -378,15 +378,15 @@ export function ProductSkuWorkspaceSection({
           })}
         </div>
       ) : (
-        <div className="px-4 py-5 sm:px-5">
-          <div className="rounded-[1rem] border border-dashed border-[var(--color-border-soft)] bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(244,247,250,0.95))] px-5 py-6 text-center shadow-none">
-            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] text-[1.1rem] font-medium text-[var(--color-sidebar-muted)] shadow-[var(--color-shell-shadow-xs)]">
+        <div className="py-3">
+          <div className="rounded-xl border border-dashed border-border/60 bg-transparent px-5 py-6 text-center shadow-none">
+            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full border border-border/60 bg-card text-[1.1rem] font-medium text-muted-foreground">
               +
             </div>
-            <h5 className="mt-4 text-[0.95rem] font-semibold tracking-[-0.02em] text-[var(--foreground)]">
+            <h5 className="mt-4 text-[0.95rem] font-semibold tracking-[-0.02em] text-foreground">
               当前商品还没有销售规格
             </h5>
-            <p className="mx-auto mt-2 max-w-[24rem] text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">
+            <p className="mx-auto mt-2 max-w-[24rem] text-[12.5px] leading-5 text-muted-foreground">
               先补一个首个规格，后续再继续复制销售变体。
             </p>
             {emptyAction ? (
@@ -409,19 +409,19 @@ export function ProductExecutionSummarySection({
   canViewSupplyIdentity: boolean;
 }>) {
   return (
-    <details className="group rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-4 shadow-[var(--color-shell-shadow-sm)] sm:p-5">
+    <details className="group rounded-2xl border border-border/50 bg-card p-4 shadow-none sm:p-5">
       <summary className="cursor-pointer list-none">
         <div className="flex items-center justify-between gap-3">
           <div className="space-y-1">
             <p className="crm-detail-label text-[11px]">更多资料</p>
-            <h4 className="text-[0.96rem] font-semibold text-[var(--foreground)]">
+            <h4 className="text-[0.96rem] font-semibold text-foreground">
               执行供货、归类与内部备注
             </h4>
-            <p className="text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">
+            <p className="text-[12.5px] leading-5 text-muted-foreground">
               默认收起，不打断“产品名 + 规格”的主工作流。
             </p>
           </div>
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] text-[var(--color-sidebar-muted)] transition-transform duration-200 group-open:rotate-180">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-card text-muted-foreground transition-transform duration-200 group-open:rotate-180">
             <ChevronDown className="h-4 w-4" />
           </span>
         </div>
@@ -432,16 +432,16 @@ export function ProductExecutionSummarySection({
           <p className="crm-detail-label text-[11px]">执行供货</p>
           {canViewSupplyIdentity && product.supplier ? (
             <div className="mt-2.5 space-y-1.5">
-              <p className="text-sm font-semibold text-[var(--foreground)]">
+              <p className="text-sm font-semibold text-foreground">
                 {product.supplier.name}
               </p>
-              <p className="text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
+              <p className="text-[13px] leading-5 text-muted-foreground">
                 {product.supplier.code}
                 {product.supplier.enabled ? "" : " / 停用"}
               </p>
             </div>
           ) : (
-            <p className="mt-2.5 text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
+            <p className="mt-2.5 text-[13px] leading-5 text-muted-foreground">
               当前角色默认隐藏 supplier identity。
             </p>
           )}
@@ -449,10 +449,10 @@ export function ProductExecutionSummarySection({
 
         <div className={productWorkbenchInsetClassName}>
           <p className="crm-detail-label text-[11px]">经营归类</p>
-          <dl className="mt-2.5 space-y-2 text-sm text-[var(--color-sidebar-muted)]">
+          <dl className="mt-2.5 space-y-2 text-sm text-muted-foreground">
             <div className="flex items-start justify-between gap-3">
               <dt>供货归类</dt>
-              <dd className="text-right font-medium text-[var(--foreground)]">
+              <dd className="text-right font-medium text-foreground">
                 {resolveDictionaryLabel(
                   dictionaries.supplyGroupOptions,
                   product.supplyGroupCode,
@@ -461,7 +461,7 @@ export function ProductExecutionSummarySection({
             </div>
             <div className="flex items-start justify-between gap-3">
               <dt>财务归类</dt>
-              <dd className="text-right font-medium text-[var(--foreground)]">
+              <dd className="text-right font-medium text-foreground">
                 {resolveDictionaryLabel(
                   dictionaries.financeCategoryOptions,
                   product.financeCategoryCode,
@@ -474,10 +474,10 @@ export function ProductExecutionSummarySection({
         <div className={productWorkbenchInsetClassName}>
           <p className="crm-detail-label text-[11px]">备注与审计</p>
           <div className="mt-2.5 space-y-3">
-            <p className="text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
+            <p className="text-[13px] leading-5 text-muted-foreground">
               {product.internalSupplyRemark || "当前未填写内部供货备注。"}
             </p>
-            <div className="space-y-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+            <div className="space-y-1 text-[12px] leading-5 text-muted-foreground">
               <p>创建 {formatDateTime(product.createdAt)}</p>
               <p>更新 {formatDateTime(product.updatedAt)}</p>
             </div>

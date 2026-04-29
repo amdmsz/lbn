@@ -71,6 +71,8 @@ type CallRecordHistoryItem = {
   };
 };
 
+type CustomerCallRecordHistoryVariant = "ledger" | "timeline";
+
 function normalizeDate(value: Date | string) {
   return value instanceof Date ? value : new Date(value);
 }
@@ -171,7 +173,10 @@ function getAiLabel(record: CallRecordHistoryItem) {
   return `${getAiStatusLabel(ai.status)}${ai.qualityScore !== null ? ` / ${ai.qualityScore} 分` : ""}`;
 }
 
-function renderRecordingDetail(record: CallRecordHistoryItem) {
+function renderRecordingDetail(
+  record: CallRecordHistoryItem,
+  variant: CustomerCallRecordHistoryVariant = "ledger",
+) {
   const recording = record.recording;
 
   if (!recording) {
@@ -187,7 +192,14 @@ function renderRecordingDetail(record: CallRecordHistoryItem) {
     extractStoredCallTranscriptSegments(ai?.transcriptJson);
 
   return (
-    <details className="group rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2.5">
+    <details
+      className={cn(
+        "group px-3 py-2.5",
+        variant === "timeline"
+          ? "rounded-md border-0 bg-muted/30 px-2.5 py-2"
+          : "rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)]",
+      )}
+    >
       <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 text-[12px] font-medium text-[var(--foreground)]">
         <span>录音与 AI 分析</span>
         <span className="text-[11px] font-normal text-[var(--color-sidebar-muted)]">
@@ -238,10 +250,79 @@ function renderRecordingDetail(record: CallRecordHistoryItem) {
   );
 }
 
+function getRecordStatusItems(record: CallRecordHistoryItem) {
+  const statusItems: CustomerDossierStatusItem[] = [
+    {
+      label: "结果",
+      value: getRecordTitle(record),
+      tone: getCallOutcomeTone(record),
+    },
+    {
+      label: "时长",
+      value: formatDurationSeconds(record.durationSeconds),
+      tone: record.durationSeconds > 0 ? "success" : "neutral",
+    },
+    {
+      label: "录音",
+      value: record.recording
+        ? getRecordingStatusLabel(record.recording.status)
+        : "无录音",
+      tone: getRecordingTone(record),
+    },
+    {
+      label: "AI",
+      value: getAiLabel(record),
+      tone: getAiTone(record),
+    },
+  ];
+
+  return statusItems;
+}
+
+function getRecordMetaItems(record: CallRecordHistoryItem) {
+  const nextFollowUpAt = normalizeOptionalDate(record.nextFollowUpAt);
+  const outboundLabel = getOutboundSessionLabel(record);
+  const meta = [`销售 ${record.sales.name} (@${record.sales.username})`];
+
+  if (outboundLabel) {
+    meta.push(`外呼状态 ${outboundLabel}`);
+  }
+
+  if (nextFollowUpAt) {
+    meta.push(`计划跟进 ${formatOptionalDate(nextFollowUpAt)}`);
+  }
+
+  return { meta, outboundLabel };
+}
+
+function getTimelineFactItems(record: CallRecordHistoryItem) {
+  const nextFollowUpAt = normalizeOptionalDate(record.nextFollowUpAt);
+  const outboundLabel = getOutboundSessionLabel(record);
+  const facts = [
+    `时长: ${formatDurationSeconds(record.durationSeconds)}`,
+    record.recording
+      ? getRecordingStatusLabel(record.recording.status)
+      : "无录音",
+    getAiLabel(record),
+    `销售 ${record.sales.name}`,
+  ];
+
+  if (outboundLabel && outboundLabel !== getRecordTitle(record)) {
+    facts.push(`外呼: ${outboundLabel}`);
+  }
+
+  if (nextFollowUpAt) {
+    facts.push(`计划: ${formatOptionalDate(nextFollowUpAt)}`);
+  }
+
+  return facts;
+}
+
 export function CustomerCallRecordHistory({
   records,
   emptyTitle = "暂无通话记录",
   emptyDescription = "当前客户还没有通话记录。",
+  variant = "ledger",
   className,
   cardClassName,
   emptyClassName,
@@ -249,6 +330,7 @@ export function CustomerCallRecordHistory({
   records: CallRecordHistoryItem[];
   emptyTitle?: string;
   emptyDescription?: string;
+  variant?: CustomerCallRecordHistoryVariant;
   className?: string;
   cardClassName?: string;
   emptyClassName?: string;
@@ -263,44 +345,70 @@ export function CustomerCallRecordHistory({
     );
   }
 
+  if (variant === "timeline") {
+    return (
+      <div className={cn("space-y-0", className)}>
+        {records.map((record) => {
+          const { outboundLabel } = getRecordMetaItems(record);
+          const timelineFacts = getTimelineFactItems(record);
+          const title = getRecordTitle(record);
+
+          return (
+            <article
+              key={record.id}
+              className={cn(
+                "border-b border-border/40 bg-transparent py-3 first:pt-0 last:border-b-0 last:pb-0",
+                cardClassName,
+              )}
+            >
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="min-w-0 break-words text-sm font-semibold leading-5 text-foreground [word-break:normal]">
+                    {title}
+                  </p>
+                  <p className="mt-1 min-w-0 break-words text-[12px] leading-5 text-muted-foreground [word-break:normal]">
+                    {record.remark?.trim() || outboundLabel || "无备注"}
+                  </p>
+                </div>
+                <time className="shrink-0 pt-0.5 text-right text-[11px] font-medium leading-4 tabular-nums text-muted-foreground">
+                  {formatDateTime(normalizeDate(record.callTime))}
+                </time>
+              </div>
+
+              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-muted-foreground">
+                {timelineFacts.map((item, index) => (
+                  <span
+                    key={`${item}:${index}`}
+                    className="inline-flex max-w-full items-center gap-2"
+                  >
+                    {index > 0 ? (
+                      <span className="text-border" aria-hidden="true">
+                        •
+                      </span>
+                    ) : null}
+                    <span className="min-w-0 break-words [word-break:normal]">
+                      {item}
+                    </span>
+                  </span>
+                ))}
+              </div>
+
+              {record.recording ? (
+                <div className="mt-2 border-t border-border/30 pt-2">
+                  {renderRecordingDetail(record, "timeline")}
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <div className={cn("space-y-2.5", className)}>
       {records.map((record) => {
-        const nextFollowUpAt = normalizeOptionalDate(record.nextFollowUpAt);
-        const outboundLabel = getOutboundSessionLabel(record);
-        const statusItems: CustomerDossierStatusItem[] = [
-          {
-            label: "结果",
-            value: getRecordTitle(record),
-            tone: getCallOutcomeTone(record),
-          },
-          {
-            label: "时长",
-            value: formatDurationSeconds(record.durationSeconds),
-            tone: record.durationSeconds > 0 ? "success" : "neutral",
-          },
-          {
-            label: "录音",
-            value: record.recording
-              ? getRecordingStatusLabel(record.recording.status)
-              : "无录音",
-            tone: getRecordingTone(record),
-          },
-          {
-            label: "AI",
-            value: getAiLabel(record),
-            tone: getAiTone(record),
-          },
-        ];
-        const meta = [`销售 ${record.sales.name} (@${record.sales.username})`];
-
-        if (outboundLabel) {
-          meta.push(`外呼状态 ${outboundLabel}`);
-        }
-
-        if (nextFollowUpAt) {
-          meta.push(`计划跟进 ${formatOptionalDate(nextFollowUpAt)}`);
-        }
+        const { meta, outboundLabel } = getRecordMetaItems(record);
 
         return (
           <CustomerDossierLedgerRow
@@ -308,7 +416,7 @@ export function CustomerCallRecordHistory({
             title={getRecordTitle(record)}
             subtitle={record.remark?.trim() || outboundLabel || "无备注"}
             meta={meta}
-            statusItems={statusItems}
+            statusItems={getRecordStatusItems(record)}
             aside={formatDateTime(normalizeDate(record.callTime))}
             detail={renderRecordingDetail(record)}
             className={cardClassName}

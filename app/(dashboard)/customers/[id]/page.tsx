@@ -17,7 +17,6 @@ import { getEnabledCallResultOptions } from "@/lib/calls/settings";
 import type { CustomerDetailTab } from "@/lib/customers/metadata";
 import {
   getCustomerDetailCallsData,
-  getCustomerDetailGiftsData,
   getCustomerDetailLiveData,
   getCustomerDetailLogsData,
   getCustomerDetailOrdersData,
@@ -80,8 +79,6 @@ async function getActiveTabData(
       return getCustomerDetailLiveData(viewer, customerId);
     case "orders":
       return getCustomerDetailOrdersData(viewer, customerId);
-    case "gifts":
-      return getCustomerDetailGiftsData(viewer, customerId);
     case "logs":
       return getCustomerDetailLogsData(viewer, customerId);
     default:

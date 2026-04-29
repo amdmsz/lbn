@@ -185,6 +185,7 @@ export function CustomerListCard({
   callResultOptions,
   canCreateCallRecord,
   canCreateSalesOrder = false,
+  outboundCallEnabled = false,
   moveToRecycleBinAction,
   selectable = false,
   selected = false,
@@ -196,6 +197,7 @@ export function CustomerListCard({
   callResultOptions: CallResultOption[];
   canCreateCallRecord: boolean;
   canCreateSalesOrder?: boolean;
+  outboundCallEnabled?: boolean;
   moveToRecycleBinAction?: MoveCustomerToRecycleBinAction;
   selectable?: boolean;
   selected?: boolean;
@@ -405,7 +407,7 @@ export function CustomerListCard({
               </div>
 
               <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center">
-                <p className="text-[18px] font-semibold leading-none tracking-[0.02em] text-[var(--foreground)] tabular-nums">
+                <p className="font-mono text-xl font-bold leading-none tracking-tight text-[var(--foreground)] tabular-nums">
                   {phoneText}
                 </p>
                 {canDialFromCard ? (
@@ -429,7 +431,7 @@ export function CustomerListCard({
                 </span>
                 <p
                   title={recentInterest}
-                  className="min-w-0 truncate font-medium text-[var(--foreground)]"
+                  className="min-w-0 truncate font-normal text-[var(--color-sidebar-muted)]"
                 >
                   {recentInterest}
                 </p>
@@ -633,6 +635,7 @@ export function CustomerListCard({
         resultOptions={callResultOptions}
         canCreateCallRecord={canCreateCallRecord}
         canCreateSalesOrder={canCreateSalesOrder}
+        outboundCallEnabled={outboundCallEnabled}
         initialResult={followUpInitialResult}
         remarkAutoFocus={followUpRemarkAutoFocus}
         triggerSource="card"

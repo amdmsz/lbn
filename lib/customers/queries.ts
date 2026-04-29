@@ -470,7 +470,6 @@ const detailTabSchema = z.enum([
   "wechat",
   "live",
   "orders",
-  "gifts",
   "logs",
 ]);
 
@@ -4288,84 +4287,6 @@ export async function getCustomerDetailOrdersData(
                   occurredAt: true,
                 },
               },
-            },
-          },
-        },
-      },
-    },
-  });
-}
-
-export async function getCustomerDetailGiftsData(
-  viewer: CustomerViewer,
-  customerId: string,
-) {
-  const detail = await getVisibleCustomerDetailBase(viewer, customerId);
-
-  if (!detail) {
-    return null;
-  }
-
-  return prisma.giftRecord.findMany({
-    where: { customerId: detail.customer.id },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-    select: {
-      id: true,
-      giftName: true,
-      qualificationSource: true,
-      freightAmount: true,
-      reviewStatus: true,
-      shippingStatus: true,
-      receiverInfo: true,
-      receiverName: true,
-      receiverPhone: true,
-      receiverAddress: true,
-      remark: true,
-      createdAt: true,
-      sales: {
-        select: {
-          name: true,
-          username: true,
-        },
-      },
-      liveSession: {
-        select: {
-          title: true,
-        },
-      },
-      shippingTask: {
-        select: {
-          id: true,
-          status: true,
-          trackingNumber: true,
-          shippedAt: true,
-          remark: true,
-        },
-      },
-      paymentPlans: {
-        orderBy: [{ sequence: "asc" }, { createdAt: "asc" }],
-        select: {
-          id: true,
-          subjectType: true,
-          stageType: true,
-          collectionChannel: true,
-          plannedAmount: true,
-          confirmedAmount: true,
-          remainingAmount: true,
-          status: true,
-          collectionTasks: {
-            where: {
-              status: {
-                in: ["PENDING", "IN_PROGRESS"],
-              },
-            },
-            take: 1,
-            orderBy: [{ createdAt: "desc" }],
-            select: {
-              id: true,
-              taskType: true,
-              status: true,
             },
           },
         },

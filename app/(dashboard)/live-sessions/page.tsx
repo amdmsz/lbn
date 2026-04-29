@@ -40,17 +40,9 @@ export default async function LiveSessionsPage() {
       ? [
           {
             title: "场次协同",
-            description: "OPS 在这里维护直播场次基础信息，并为后续直播商品和礼品资格协同提供入口。",
+            description: "OPS 在这里维护直播场次基础信息，并为后续直播商品和客户邀约协同提供入口。",
             badgeLabel: "运营主线",
             badgeVariant: "info" as const,
-          },
-          {
-            title: "礼品资格联动",
-            description: "礼品资格和直播场次有关时，后续回到礼品管理继续处理。",
-            href: "/gifts",
-            hrefLabel: "进入礼品管理",
-            badgeLabel: "礼品协同",
-            badgeVariant: "warning" as const,
           },
         ]
       : session.user.role === "SHIPPER" && canManage
@@ -121,13 +113,13 @@ export default async function LiveSessionsPage() {
 
       <WorkspaceGuide
         title="直播场次承接方式"
-        description="直播场次是客户运营域中的协同入口。场次维护、邀请参考和礼品资格都从这里出发，再回流到客户或礼品页面。"
+        description="直播场次是客户运营域中的协同入口。场次维护和邀请参考从这里出发，再回流到客户详情。"
         items={guideItems}
       />
 
       <DataTableWrapper
         title="直播场次列表"
-        description="支持创建直播场次、查看房间信息、邀约数量和礼品记录概览。"
+        description="支持创建直播场次、查看房间信息和邀约数量概览。"
       >
         <LiveSessionsSection items={data.items} canManage={canManage} />
       </DataTableWrapper>

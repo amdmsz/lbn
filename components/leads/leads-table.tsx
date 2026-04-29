@@ -130,6 +130,21 @@ const initialAssignBatchNoticeState =
 const initialRecycleBatchNoticeState =
   createInitialLeadBatchActionNoticeState("已在回收站");
 
+const leadPrimaryButtonClassName =
+  "inline-flex min-h-0 items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50";
+
+const leadSecondaryButtonClassName =
+  "inline-flex min-h-0 items-center justify-center rounded-lg border border-border/60 bg-card px-3 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-all hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50";
+
+const leadActionLinkClassName =
+  "text-sm font-medium text-muted-foreground transition-colors hover:text-primary";
+
+const leadTableShellClassName =
+  "overflow-x-auto rounded-2xl border border-border/60 bg-card shadow-sm";
+
+const leadTableClassName =
+  "min-w-full border-separate border-spacing-0 text-sm [&_thead]:bg-transparent [&_th]:border-b [&_th]:border-border/40 [&_th]:bg-transparent [&_th]:px-4 [&_th]:py-3 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:text-muted-foreground [&_td]:border-b [&_td]:border-border/40 [&_td]:px-4 [&_td]:py-5 [&_td]:align-top [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-muted/30";
+
 function normalizeDate(value: Date | string) {
   return value instanceof Date ? value : new Date(value);
 }
@@ -282,27 +297,22 @@ function SnapshotCard({
   return (
     <div
       className={cn(
-        "rounded-[1rem] border px-3.5 py-3 shadow-[var(--color-shell-shadow-sm)]",
-        tone === "info" &&
-          "border-[rgba(111,141,255,0.16)] bg-[rgba(111,141,255,0.06)]",
-        tone === "success" &&
-          "border-[rgba(87,212,176,0.16)] bg-[rgba(87,212,176,0.06)]",
-        tone === "danger" &&
-          "border-[rgba(209,91,118,0.16)] bg-[rgba(209,91,118,0.06)]",
-        tone === "default" &&
-          "border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)]",
+        "rounded-xl border border-border/60 bg-card p-5 shadow-sm",
+        tone === "info" && "border-primary/20",
+        tone === "success" && "border-emerald-500/20",
+        tone === "danger" && "border-destructive/20",
       )}
     >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
+      <p className="text-xs font-semibold uppercase text-muted-foreground">
         {label}
       </p>
       {typeof value !== "undefined" ? (
-        <div className="mt-2 text-[1.28rem] font-semibold tracking-[-0.04em] text-[var(--foreground)]">
+        <div className="mt-2 text-2xl font-semibold text-foreground">
           {value}
         </div>
       ) : null}
       {note ? (
-        <p className="mt-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+        <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
           {note}
         </p>
       ) : null}
@@ -328,21 +338,17 @@ function SelectionStateBanner({
   return (
     <div
       className={cn(
-        "rounded-[0.98rem] border px-3.5 py-3",
-        tone === "info" &&
-          "border-[var(--color-accent-soft)] bg-[var(--color-accent)]/8",
-        tone === "danger" &&
-          "border-[rgba(209,91,118,0.16)] bg-[rgba(209,91,118,0.06)]",
-        tone === "default" &&
-          "border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)]",
+        "rounded-xl border border-border/60 bg-card px-4 py-3 shadow-sm",
+        tone === "info" && "border-primary/20 bg-primary/5",
+        tone === "danger" && "border-destructive/20 bg-destructive/5",
       )}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-0.5">
-          <p className="text-[13px] font-medium text-[var(--foreground)]">
+          <p className="text-[13px] font-medium text-foreground">
             {title}
           </p>
-          <p className="text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+          <p className="text-[12px] leading-5 text-muted-foreground">
             {description}
           </p>
         </div>
@@ -366,18 +372,18 @@ function LeadWorkbenchDialog({
   footer: ReactNode;
 }>) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(8,11,18,0.32)] px-4 py-6 backdrop-blur-[10px]">
-      <div className="w-full max-w-[36rem] overflow-hidden rounded-[1.4rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-lg)]">
-        <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-5 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-6 backdrop-blur-sm dark:bg-black/50">
+      <div className="w-full max-w-[36rem] overflow-hidden rounded-2xl border border-border/60 bg-card shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-border/50 bg-background/60 px-5 py-4">
           <div className="space-y-1.5">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-sidebar-muted)]">
+            <p className="text-[10px] font-semibold uppercase text-muted-foreground">
               批量操作
             </p>
             <div>
-              <h3 className="text-[1.08rem] font-semibold tracking-[-0.03em] text-[var(--foreground)]">
+              <h3 className="text-[1.08rem] font-semibold text-foreground">
                 {title}
               </h3>
-              <p className="mt-1 text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
+              <p className="mt-1 text-[13px] leading-5 text-muted-foreground">
                 {description}
               </p>
             </div>
@@ -385,7 +391,7 @@ function LeadWorkbenchDialog({
           <button
             type="button"
             onClick={onClose}
-            className="crm-button crm-button-ghost min-h-0 rounded-full px-3 py-2 text-sm"
+            className="inline-flex min-h-0 items-center rounded-full px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             关闭
           </button>
@@ -393,7 +399,7 @@ function LeadWorkbenchDialog({
 
         <div className="space-y-4 px-5 py-4">{children}</div>
 
-        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-5 py-4">
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border/50 bg-background/60 px-5 py-4">
           {footer}
         </div>
       </div>
@@ -488,7 +494,7 @@ function AssignmentSummaryStrip({
           <Link
             href={assignedViewHref}
             scroll={false}
-            className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+              className={leadSecondaryButtonClassName}
           >
             查看已分配结果
           </Link>
@@ -543,8 +549,8 @@ function AssignedReviewTable({
   onRecycle: (item: LeadListItem) => void;
 }>) {
   return (
-    <div className="crm-table-shell">
-      <table className="crm-table">
+    <div className={leadTableShellClassName}>
+      <table className={leadTableClassName}>
         <thead>
           <tr>
             <th>线索</th>
@@ -564,10 +570,10 @@ function AssignedReviewTable({
               <tr key={item.id}>
                 <td>
                   <div className="space-y-0.5">
-                    <div className="font-medium text-[var(--foreground)]">
+                    <div className="font-medium text-foreground">
                       {item.name?.trim() || "未填写姓名"}
                     </div>
-                    <div className="text-xs tabular-nums text-[var(--color-sidebar-muted)]">
+                    <div className="font-mono text-xs tabular-nums text-muted-foreground">
                       {item.phone}
                     </div>
                   </div>
@@ -575,26 +581,26 @@ function AssignedReviewTable({
                 <td>
                   {item.owner ? (
                     <div>
-                      <div className="text-[var(--foreground)]">
+                      <div className="text-foreground">
                         {item.owner.name}
                       </div>
-                      <div className="text-xs text-[var(--color-sidebar-muted)]">
+                      <div className="text-xs text-muted-foreground">
                         @{item.owner.username}
                       </div>
                     </div>
                   ) : (
-                    <span className="text-[var(--color-sidebar-muted)]">
+                    <span className="text-muted-foreground">
                       未分配
                     </span>
                   )}
                 </td>
-                <td className="text-[13px] text-[var(--color-sidebar-muted)]">
+                <td className="text-[13px] text-muted-foreground">
                   {item.interestedProduct?.trim() || "暂无最近意向"}
                 </td>
                 <td>
                   <LeadStatusBadge status={item.status} />
                 </td>
-                <td className="whitespace-nowrap text-sm text-[var(--color-sidebar-muted)]">
+                <td className="whitespace-nowrap text-sm text-muted-foreground">
                   {formatDateTime(normalizeDate(assignedAt))}
                 </td>
                 <td>
@@ -602,7 +608,7 @@ function AssignedReviewTable({
                     <Link
                       href={`/leads/${item.id}`}
                       scroll={false}
-                      className="crm-text-link"
+                      className={leadActionLinkClassName}
                     >
                       查看详情
                     </Link>
@@ -610,7 +616,7 @@ function AssignedReviewTable({
                       <button
                         type="button"
                         onClick={() => onReassign(item.id)}
-                        className="crm-text-link"
+                        className={leadActionLinkClassName}
                       >
                         改分配
                       </button>
@@ -618,7 +624,7 @@ function AssignedReviewTable({
                     <button
                       type="button"
                       onClick={() => onRecycle(item)}
-                      className="crm-text-link"
+                      className={leadActionLinkClassName}
                     >
                       {item.recycleGuard.canMoveToRecycleBin
                         ? "移入回收站"
@@ -836,13 +842,13 @@ export function LeadsTable({
   const pageSizeControl = (
     <form
       onSubmit={(event) => event.preventDefault()}
-      className="flex items-center gap-2 rounded-[10px] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-1.5 text-[12px] text-[var(--color-sidebar-muted)]"
+          className="flex items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-1.5 text-[12px] text-muted-foreground shadow-sm"
     >
       <span>每页</span>
       <select
         name="pageSize"
         defaultValue={String(filters.pageSize)}
-        className="crm-select min-h-0 h-7 w-[78px] border-0 bg-transparent px-0 py-0 pr-5 text-[12px] text-[var(--foreground)] shadow-none"
+        className="h-7 w-[78px] min-h-0 border-0 bg-transparent px-0 py-0 pr-5 text-[12px] text-foreground shadow-none outline-none focus:ring-0"
         onChange={(event) => {
           const nextPageSize = Number(event.currentTarget.value);
           const nextHref = buildLeadHref(filters, {
@@ -912,14 +918,14 @@ export function LeadsTable({
           density="compact"
           anchorId={scrollTargetId}
           description="只在需要时进入回看，不再占据默认主工作台。"
-          className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+          className="rounded-2xl border-border/60 bg-card shadow-sm"
           actions={
-            <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--color-sidebar-muted)]">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <span>共 {assigned.totalCount} 条</span>
               <Link
                 href={unassignedViewHref}
                 scroll={false}
-                className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                className={leadSecondaryButtonClassName}
               >
                 返回未分配
               </Link>
@@ -935,7 +941,7 @@ export function LeadsTable({
                 <Link
                   href={unassignedViewHref}
                   scroll={false}
-                  className="crm-button crm-button-secondary"
+                  className={leadSecondaryButtonClassName}
                 >
                   返回未分配
                 </Link>
@@ -955,16 +961,16 @@ export function LeadsTable({
           title="未分配"
           density="compact"
           anchorId={scrollTargetId}
-          className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+          className="rounded-2xl border-border/60 bg-card shadow-sm"
           description="优先承接本次导入、今日导入与全部未分配线索。"
           actions={
-            <div className="flex flex-wrap items-center gap-2 text-sm text-[var(--color-sidebar-muted)]">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <span>共 {unassigned.totalCount} 条</span>
               <Link
                 href={unassignedExportHref}
                 prefetch={false}
                 download
-                className="crm-button crm-button-secondary min-h-0 gap-1.5 px-3 py-2 text-sm"
+                className={cn(leadSecondaryButtonClassName, "gap-1.5")}
               >
                 <Download className="h-4 w-4" aria-hidden="true" />
                 导出未分配
@@ -975,7 +981,7 @@ export function LeadsTable({
                     type="button"
                     disabled={selectedCount === 0 || salesOptions.length === 0}
                     onClick={openAssignDialog}
-                    className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
+                    className={leadPrimaryButtonClassName}
                   >
                     批量分配
                   </button>
@@ -983,7 +989,7 @@ export function LeadsTable({
                     type="button"
                     disabled={selectedCount === 0}
                     onClick={openBatchRecycleDialog}
-                    className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                    className={leadSecondaryButtonClassName}
                   >
                     批量移入回收站
                   </button>
@@ -1002,7 +1008,7 @@ export function LeadsTable({
                   <button
                     type="button"
                     onClick={resetSelection}
-                    className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                    className={leadSecondaryButtonClassName}
                   >
                     取消跨页选择
                   </button>
@@ -1030,7 +1036,7 @@ export function LeadsTable({
                         setSelectionMode("filtered");
                         setSelectedIds([]);
                       }}
-                      className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                      className={leadSecondaryButtonClassName}
                     >
                       选择全部 {unassigned.totalCount} 条
                     </button>
@@ -1048,7 +1054,7 @@ export function LeadsTable({
                   <Link
                     href={assignedViewHref}
                     scroll={false}
-                    className="crm-button crm-button-secondary"
+                    className={leadSecondaryButtonClassName}
                   >
                     查看已分配结果
                   </Link>
@@ -1056,8 +1062,8 @@ export function LeadsTable({
               />
             ) : (
               <>
-                <div className="crm-table-shell">
-                  <table className="crm-table">
+                <div className={leadTableShellClassName}>
+                  <table className={leadTableClassName}>
                     <thead>
                       <tr>
                         {canAssign ? (
@@ -1099,25 +1105,25 @@ export function LeadsTable({
                           ) : null}
                           <td>
                             <div className="space-y-0.5">
-                              <div className="font-medium text-[var(--foreground)]">
+                              <div className="font-medium text-foreground">
                                 {item.name?.trim() || "未填写姓名"}
                               </div>
-                              <div className="text-xs tabular-nums text-[var(--color-sidebar-muted)]">
+                              <div className="font-mono text-xs tabular-nums text-muted-foreground">
                                 {item.phone}
                               </div>
                             </div>
                           </td>
-                          <td className="text-[13px] text-[var(--color-sidebar-muted)]">
+                          <td className="text-[13px] text-muted-foreground">
                             {getLeadSourceLabel(item.source)}
                           </td>
-                          <td className="text-[13px] text-[var(--color-sidebar-muted)]">
+                          <td className="text-[13px] text-muted-foreground">
                             {item.interestedProduct?.trim() || "暂无最近意向"}
                           </td>
                           <td>
                             <LeadStatusBadge status={item.status} />
                           </td>
                           <td>{renderLeadTagPreview(item)}</td>
-                          <td className="whitespace-nowrap text-sm text-[var(--color-sidebar-muted)]">
+                          <td className="whitespace-nowrap text-sm text-muted-foreground">
                             {formatDateTime(normalizeDate(item.createdAt))}
                           </td>
                           <td>
@@ -1125,14 +1131,14 @@ export function LeadsTable({
                               <Link
                                 href={`/leads/${item.id}`}
                                 scroll={false}
-                                className="crm-text-link"
+                                className={leadActionLinkClassName}
                               >
                                 查看详情
                               </Link>
                               <button
                                 type="button"
                                 onClick={() => openRecycleDialog(item)}
-                                className="crm-text-link"
+                                className={leadActionLinkClassName}
                               >
                                 {item.recycleGuard.canMoveToRecycleBin
                                   ? "移入回收站"
@@ -1178,7 +1184,7 @@ export function LeadsTable({
               <button
                 type="button"
                 onClick={() => setDialogOpen(false)}
-                className="crm-button crm-button-secondary"
+                className={leadSecondaryButtonClassName}
               >
                 取消
               </button>
@@ -1186,23 +1192,23 @@ export function LeadsTable({
                 type="submit"
                 form="lead-batch-assign-form"
                 disabled={pending || selectedCount === 0}
-                className="crm-button crm-button-primary"
+                className={leadPrimaryButtonClassName}
               >
                 {pending ? "分配中..." : "确认分配"}
               </button>
             </>
           }
         >
-          <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
+          <div className="rounded-xl border border-border/60 bg-background/50 px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase text-muted-foreground">
               当前范围
             </p>
-            <p className="mt-1 text-[13px] font-medium text-[var(--foreground)]">
+            <p className="mt-1 text-[13px] font-medium text-foreground">
               {selectionMode === "filtered"
                 ? `全部筛选结果 ${unassigned.totalCount} 条`
                 : `已选线索 ${selectedIds.length} 条`}
             </p>
-            <p className="mt-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+            <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
               分配后会沿用当前承接链路进入客户侧继续跟进。
             </p>
           </div>
@@ -1282,7 +1288,7 @@ export function LeadsTable({
               <button
                 type="button"
                 onClick={closeBatchRecycleDialog}
-                className="crm-button crm-button-secondary"
+                className={leadSecondaryButtonClassName}
               >
                 取消
               </button>
@@ -1290,23 +1296,23 @@ export function LeadsTable({
                 type="submit"
                 form="lead-batch-recycle-form"
                 disabled={batchRecyclePending || selectedCount === 0}
-                className="crm-button crm-button-primary"
+                className={leadPrimaryButtonClassName}
               >
                 {batchRecyclePending ? "移入中..." : "确认移入回收站"}
               </button>
             </>
           }
         >
-          <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
+          <div className="rounded-xl border border-border/60 bg-background/50 px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase text-muted-foreground">
               当前范围
             </p>
-            <p className="mt-1 text-[13px] font-medium text-[var(--foreground)]">
+            <p className="mt-1 text-[13px] font-medium text-foreground">
               {selectionMode === "filtered"
                 ? `全部筛选结果 ${unassigned.totalCount} 条`
                 : `已选线索 ${selectedCount} 条`}
             </p>
-            <p className="mt-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+            <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
               成功、已在回收站与被阻断会分别统计；被阻断对象会继续留在当前工作台。
             </p>
           </div>

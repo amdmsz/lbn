@@ -135,13 +135,22 @@ const EMPTY_DICTIONARIES = {
 };
 
 const skuQuietActionClassName =
-  "inline-flex min-h-0 items-center rounded-full border border-transparent px-2.5 py-2 text-sm font-medium text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color] hover:border-[var(--color-border-soft)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex min-h-0 items-center rounded-full border border-transparent px-2.5 py-2 text-sm font-medium text-muted-foreground transition-[border-color,background-color,color] hover:border-border/60 hover:bg-muted/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50";
+
+const skuPrimaryButtonClassName =
+  "inline-flex min-h-0 items-center justify-center rounded-lg bg-primary text-sm font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60";
+
+const skuSecondaryButtonClassName =
+  "inline-flex min-h-0 items-center justify-center rounded-lg border border-border/60 bg-card text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60";
 
 const skuControlSurfaceClassName =
-  "rounded-[1.08rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3.5 py-3.5 shadow-[var(--color-shell-shadow-sm)]";
+  "rounded-2xl border border-border/50 bg-card px-3.5 py-3.5 shadow-sm";
 
 const skuMetricPillClassName =
-  "rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-sidebar-muted)]";
+  "rounded-full border border-border/60 bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground";
+
+const skuSpatialTableClassName =
+  "w-full min-w-[980px] border-separate border-spacing-0 text-sm [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-muted/30 [&_td]:border-b [&_td]:border-border/40 [&_td]:px-4 [&_td]:py-4 [&_td]:align-top [&_th]:border-b [&_th]:border-border/40 [&_th]:bg-transparent [&_th]:px-4 [&_th]:py-3 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wider [&_th]:text-muted-foreground [&_thead]:bg-transparent";
 
 function resolveDictionaryLabel(
   options: ProductCenterDictionaryOption[],
@@ -359,7 +368,7 @@ export function ProductSkusSection({
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
           <label className="relative min-w-0 flex-1">
             <span className="sr-only">搜索 SKU</span>
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-sidebar-muted)]" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               name="q"
               defaultValue={filters.q}
@@ -415,14 +424,20 @@ export function ProductSkusSection({
             <button
               type="button"
               onClick={() => setAdvancedOpen((current) => !current)}
-              className="crm-button crm-button-secondary min-h-[2.85rem] gap-2 px-3.5"
+              className={cn(
+                skuSecondaryButtonClassName,
+                "min-h-[2.85rem] gap-2 px-3.5",
+              )}
             >
               <SlidersHorizontal className="h-4 w-4" />
               {advancedOpen ? "收起筛选" : "筛选"}
             </button>
             <button
               type="submit"
-              className="crm-button crm-button-primary min-h-[2.85rem] px-4"
+              className={cn(
+                skuPrimaryButtonClassName,
+                "min-h-[2.85rem] px-4",
+              )}
             >
               查看结果
             </button>
@@ -430,15 +445,18 @@ export function ProductSkusSection({
               href={buildProductCenterHref(PRODUCT_CENTER_EMPTY_FILTERS, {
                 tab: "skus",
               })}
-              className="crm-button crm-button-secondary min-h-[2.85rem] px-3.5"
+              className={cn(
+                skuSecondaryButtonClassName,
+                "min-h-[2.85rem] px-3.5",
+              )}
             >
               清空
             </Link>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--color-border-soft)] pt-3">
-          <span className="text-[11px] font-medium tracking-[0.08em] text-[var(--color-sidebar-muted)]">
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/50 pt-3">
+          <span className="text-[11px] font-medium tracking-[0.08em] text-muted-foreground">
             当前范围
           </span>
           <span className={skuMetricPillClassName}>{visibleStatusLabel}</span>
@@ -460,7 +478,7 @@ export function ProductSkusSection({
         </div>
 
         {advancedOpen ? (
-          <div className="grid gap-3 rounded-[0.98rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3.5 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 rounded-xl border border-border/50 bg-background/50 p-3.5 md:grid-cols-2 xl:grid-cols-3">
             <label className="space-y-2">
               <span className="crm-label">品牌</span>
               <input
@@ -562,24 +580,24 @@ export function ProductSkusSection({
         </ActionBanner>
       ) : null}
 
-      <div className="rounded-[1.12rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-sm)]">
+      <div className="rounded-2xl border border-border/60 bg-card shadow-sm">
         {items.length > 0 ? (
           <div className="space-y-0 overflow-hidden">
-            <div className="flex flex-col gap-2 border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-2 border-b border-border/50 bg-card px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
               <div className="space-y-1">
                 <p className="crm-detail-label text-[11px]">SKU 工作台</p>
-                <h3 className="text-[0.96rem] font-semibold text-[var(--foreground)]">
+                <h3 className="text-[0.96rem] font-semibold text-foreground">
                   规格与商品母档的轻维护视图
                 </h3>
               </div>
-              <p className="text-[12px] text-[var(--color-sidebar-muted)]">
+              <p className="text-[12px] text-muted-foreground">
                 本页显示 {pageStart} - {pageEnd} 条，共 {pagination.totalCount}{" "}
                 条
               </p>
             </div>
 
-            <div className="crm-table-shell overflow-x-auto rounded-none border-0 shadow-none">
-              <table className="crm-table">
+            <div className="overflow-x-auto">
+              <table className={skuSpatialTableClassName}>
                 <thead>
                   <tr>
                     <th>规格</th>
@@ -632,11 +650,11 @@ export function ProductSkusSection({
                             <button
                               type="button"
                               onClick={() => openDetail(item)}
-                              className="truncate text-left text-sm font-semibold text-[var(--foreground)] transition-colors hover:text-[var(--color-accent-strong)]"
+                              className="truncate text-left text-sm font-semibold text-foreground transition-colors hover:text-primary"
                             >
                               {item.skuName}
                             </button>
-                            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[12px] leading-5 text-muted-foreground">
                               <span>
                                 订单引用 {item._count.salesOrderItems}
                               </span>
@@ -658,11 +676,11 @@ export function ProductSkusSection({
                               <button
                                 type="button"
                                 onClick={() => openDetail(item)}
-                                className="block min-w-0 truncate text-left text-sm font-semibold text-[var(--foreground)] transition-colors hover:text-[var(--color-accent-strong)]"
+                                className="block min-w-0 truncate text-left text-sm font-semibold text-foreground transition-colors hover:text-primary"
                               >
                                 {item.product.name}
                               </button>
-                              <div className="flex flex-wrap gap-x-2 gap-y-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                              <div className="flex flex-wrap gap-x-2 gap-y-1 text-[12px] leading-5 text-muted-foreground">
                                 <span>{item.product.code}</span>
                                 {productIdentityLine ? (
                                   <span>{productIdentityLine}</span>
@@ -674,23 +692,23 @@ export function ProductSkusSection({
 
                         <td>
                           <div className="space-y-1.5">
-                            <p className="text-[0.95rem] font-semibold text-[var(--foreground)]">
+                            <p className="text-[0.95rem] font-semibold text-foreground">
                               {formatCurrency(item.defaultUnitPrice)}
                             </p>
-                            <p className="text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                            <p className="text-[12px] leading-5 text-muted-foreground">
                               当前规格默认销售价
                             </p>
                           </div>
                         </td>
 
                         <td>
-                          <div className="space-y-1.5 text-sm text-[var(--color-sidebar-muted)]">
-                            <p className="font-medium text-[var(--foreground)]">
+                          <div className="space-y-1.5 text-sm text-muted-foreground">
+                            <p className="font-medium text-foreground">
                               {canViewSupplyIdentity
                                 ? item.product.supplier?.name || "未绑定供应"
                                 : businessLine || "轻维护规格"}
                             </p>
-                            <div className="flex flex-wrap gap-x-2 gap-y-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                            <div className="flex flex-wrap gap-x-2 gap-y-1 text-[12px] leading-5 text-muted-foreground">
                               {canViewSupplyIdentity &&
                               item.product.supplier ? (
                                 <span>
@@ -726,15 +744,15 @@ export function ProductSkusSection({
                                 className={cn(
                                   "relative inline-flex h-7 w-11 items-center rounded-full border p-[3px] transition-[border-color,background-color]",
                                   item.enabled
-                                    ? "border-[rgba(79,125,247,0.18)] bg-[rgba(79,125,247,0.12)]"
-                                    : "border-[var(--color-border-soft)] bg-[var(--color-shell-active)]",
+                                    ? "border-primary/30 bg-primary/15"
+                                    : "border-border/60 bg-muted",
                                   pendingAction &&
                                     "cursor-not-allowed opacity-70",
                                 )}
                               >
                                 <span
                                   className={cn(
-                                    "h-5 w-5 rounded-full bg-white shadow-[0_2px_8px_rgba(18,24,31,0.14)] transition-transform duration-200",
+                                    "h-5 w-5 rounded-full bg-card shadow-[0_2px_8px_rgba(18,24,31,0.14)] transition-transform duration-200",
                                     item.enabled
                                       ? "translate-x-4"
                                       : "translate-x-0",
@@ -744,10 +762,10 @@ export function ProductSkusSection({
                             ) : (
                               <MasterDataStatusBadge isActive={item.enabled} />
                             )}
-                            <p className="text-[11px] font-medium text-[var(--color-sidebar-muted)]">
+                            <p className="text-[11px] font-medium text-muted-foreground">
                               {item.enabled ? "已上架" : "已停用"}
                             </p>
-                            <p className="text-[11px] text-[var(--color-sidebar-muted)]">
+                            <p className="text-[11px] text-muted-foreground">
                               更新 {formatDateTime(item.updatedAt)}
                             </p>
                           </div>
@@ -758,7 +776,10 @@ export function ProductSkusSection({
                             <button
                               type="button"
                               onClick={() => openDetail(item)}
-                              className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                              className={cn(
+                                skuSecondaryButtonClassName,
+                                "px-3 py-2",
+                              )}
                             >
                               详情
                             </button>
@@ -815,7 +836,7 @@ export function ProductSkusSection({
                         PRODUCT_CENTER_EMPTY_FILTERS,
                         { tab: "skus" },
                       )}
-                      className="crm-button crm-button-secondary"
+                      className={cn(skuSecondaryButtonClassName, "px-3 py-2")}
                     >
                       清空筛选
                     </Link>
@@ -825,7 +846,7 @@ export function ProductSkusSection({
                       href={buildProductCenterHref(filters, {
                         createProduct: "1",
                       })}
-                      className="crm-button crm-button-primary"
+                      className={cn(skuPrimaryButtonClassName, "px-3 py-2")}
                     >
                       新建商品
                     </Link>
@@ -833,7 +854,7 @@ export function ProductSkusSection({
                   {!activeFilters && canAccessSupplierTab ? (
                     <Link
                       href={manageSuppliersHref}
-                      className="crm-button crm-button-secondary"
+                      className={cn(skuSecondaryButtonClassName, "px-3 py-2")}
                     >
                       查看供应商
                     </Link>

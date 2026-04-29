@@ -64,8 +64,8 @@ function PanelRow({
 }>) {
   return (
     <div className="flex items-start justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
-      <p className="text-[12px] text-black/44">{label}</p>
-      <div className="max-w-[70%] text-right text-[13px] leading-5 text-black/72">
+      <p className="text-[12px] text-muted-foreground">{label}</p>
+      <div className="max-w-[70%] text-right text-[13px] leading-5 text-foreground/75">
         {value}
       </div>
     </div>
@@ -74,12 +74,12 @@ function PanelRow({
 
 function getAvailabilityContent(guard: ImportedCustomerDeletionGuard) {
   if (guard.blockedReason) {
-    return <span className="text-[var(--color-danger)]">{guard.blockedReason}</span>;
+    return <span className="text-destructive">{guard.blockedReason}</span>;
   }
 
   if (guard.canDirectDelete) {
     return (
-      <span className="text-[var(--color-success)]">
+      <span className="text-emerald-600 dark:text-emerald-400">
         当前角色可以直接删除这位导入新建客户。
       </span>
     );
@@ -87,7 +87,7 @@ function getAvailabilityContent(guard: ImportedCustomerDeletionGuard) {
 
   if (guard.canRequestDeletion) {
     return (
-      <span className="text-[var(--color-success)]">
+      <span className="text-emerald-600 dark:text-emerald-400">
         当前角色可以发起删除申请，等待团队主管审批。
       </span>
     );
@@ -95,13 +95,13 @@ function getAvailabilityContent(guard: ImportedCustomerDeletionGuard) {
 
   if (guard.canReviewPendingRequest && guard.pendingRequest) {
     return (
-      <span className="text-[var(--color-success)]">
+      <span className="text-emerald-600 dark:text-emerald-400">
         当前有一条待你审批的删除申请。
       </span>
     );
   }
 
-  return <span className="text-black/56">当前可查看删除状态与审批历史。</span>;
+  return <span className="text-muted-foreground">当前可查看删除状态与审批历史。</span>;
 }
 
 export function ImportedCustomerDeletionPanel({
@@ -146,14 +146,14 @@ export function ImportedCustomerDeletionPanel({
   }
 
   return (
-    <section className="rounded-[1rem] border border-[rgba(141,59,51,0.12)] bg-[rgba(255,251,250,0.88)] px-4 py-4 shadow-[0_8px_18px_rgba(18,24,31,0.04)]">
+    <section className="rounded-2xl border border-destructive/20 bg-card px-4 py-4 shadow-sm">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-1.5">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-black/38">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             删除审批
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-[0.98rem] font-semibold text-black/84">
+            <h3 className="text-[0.98rem] font-semibold text-foreground">
               导入客户删除与审批
             </h3>
             {guard.source ? (
@@ -168,7 +168,7 @@ export function ImportedCustomerDeletionPanel({
               />
             ) : null}
           </div>
-          <p className="text-sm leading-6 text-black/56">
+          <p className="text-sm leading-6 text-muted-foreground">
             这里只处理导入新建客户的硬删除，客户本体和客户侧运营记录会删除，但导入批次、
             线索真相和操作审计会保留。
           </p>
@@ -176,14 +176,14 @@ export function ImportedCustomerDeletionPanel({
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-        <div className="rounded-[0.95rem] border border-black/7 bg-white/78 px-4 py-3.5">
+        <div className="rounded-xl border border-border/40 bg-background/50 px-4 py-3.5">
           <PanelRow
             label="导入来源"
             value={
               guard.source ? (
                 <span>{guard.source.modeLabel}</span>
               ) : (
-                <span className="text-black/46">当前客户不是导入新建客户</span>
+                <span className="text-muted-foreground">当前客户不是导入新建客户</span>
               )
             }
           />
@@ -195,7 +195,7 @@ export function ImportedCustomerDeletionPanel({
                   {guard.source.batchFileName}
                 </Link>
               ) : (
-                <span className="text-black/46">暂无</span>
+                <span className="text-muted-foreground">暂无</span>
               )
             }
           />
@@ -213,17 +213,17 @@ export function ImportedCustomerDeletionPanel({
                   {guard.suggestedReviewer.name} (@{guard.suggestedReviewer.username})
                 </span>
               ) : (
-                <span className="text-black/46">未找到团队主管</span>
+                <span className="text-muted-foreground">未找到团队主管</span>
               )
             }
           />
           <PanelRow label="当前限制" value={getAvailabilityContent(guard)} />
         </div>
 
-        <div className="rounded-[0.95rem] border border-black/7 bg-white/78 px-4 py-3.5">
+        <div className="rounded-xl border border-border/40 bg-background/50 px-4 py-3.5">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-semibold text-black/82">最近流程</p>
+              <p className="text-sm font-semibold text-foreground">最近流程</p>
               {latestRequest ? (
                 <StatusBadge
                   label={latestRequest.statusLabel}
@@ -235,7 +235,7 @@ export function ImportedCustomerDeletionPanel({
             </div>
 
             {latestRequest ? (
-              <div className="space-y-2 text-sm leading-6 text-black/60">
+              <div className="space-y-2 text-sm leading-6 text-muted-foreground">
                 <p>申请原因：{latestRequest.requestReason}</p>
                 <p>
                   申请时间：{formatDateTime(latestRequest.createdAt)} / 申请人：
@@ -251,12 +251,12 @@ export function ImportedCustomerDeletionPanel({
                   <p>审批时间：{formatDateTime(latestRequest.reviewedAt)}</p>
                 ) : null}
                 {latestRequest.rejectReason ? (
-                  <p className="text-[var(--color-danger)]">
+                  <p className="text-destructive">
                     驳回原因：{latestRequest.rejectReason}
                   </p>
                 ) : null}
                 {latestRequest.executedAt ? (
-                  <p className="text-[var(--color-success)]">
+                  <p className="text-emerald-600 dark:text-emerald-400">
                     执行时间：{formatDateTime(latestRequest.executedAt)}
                     {latestRequest.executedBy
                       ? ` / 执行人：${latestRequest.executedBy.name}`
@@ -265,7 +265,7 @@ export function ImportedCustomerDeletionPanel({
                 ) : null}
               </div>
             ) : (
-              <p className="text-sm leading-6 text-black/56">
+              <p className="text-sm leading-6 text-muted-foreground">
                 当前还没有删除申请记录。满足条件时，管理员或主管可以直接删除，销售可以发起审批。
               </p>
             )}
@@ -283,10 +283,10 @@ export function ImportedCustomerDeletionPanel({
 
       <div className="mt-4 space-y-4">
         {guard.canDirectDelete ? (
-          <div className="rounded-[0.95rem] border border-[rgba(141,59,51,0.12)] bg-[rgba(255,255,255,0.76)] px-4 py-3.5">
+          <div className="rounded-xl border border-destructive/20 bg-background/50 px-4 py-3.5">
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-black/82">直接删除客户</p>
-              <p className="text-[13px] leading-6 text-black/56">
+              <p className="text-sm font-semibold text-foreground">直接删除客户</p>
+              <p className="text-[13px] leading-6 text-muted-foreground">
                 当前角色可以直接执行硬删除。删除后会回到客户列表或公海列表，同时保留导入与审计记录。
               </p>
             </div>
@@ -303,7 +303,7 @@ export function ImportedCustomerDeletionPanel({
                 <button
                   type="button"
                   disabled={isPending || directReason.trim().length === 0}
-                  className="crm-button crm-button-primary"
+                  className="inline-flex h-9 items-center rounded-lg bg-destructive px-3.5 text-sm font-medium text-destructive-foreground shadow-sm transition-all hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-55"
                   onClick={() =>
                     handleAction(
                       () =>
@@ -323,10 +323,10 @@ export function ImportedCustomerDeletionPanel({
         ) : null}
 
         {guard.canRequestDeletion ? (
-          <div className="rounded-[0.95rem] border border-black/7 bg-[rgba(255,255,255,0.76)] px-4 py-3.5">
+          <div className="rounded-xl border border-destructive/15 bg-background/50 px-4 py-3.5">
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-black/82">发起删除申请</p>
-              <p className="text-[13px] leading-6 text-black/56">
+              <p className="text-sm font-semibold text-foreground">发起删除申请</p>
+              <p className="text-[13px] leading-6 text-muted-foreground">
                 删除申请会路由给团队主管审批。审批通过后，系统会立即执行客户删除。
               </p>
             </div>
@@ -343,7 +343,7 @@ export function ImportedCustomerDeletionPanel({
                 <button
                   type="button"
                   disabled={isPending || requestReason.trim().length === 0}
-                  className="crm-button crm-button-primary"
+                  className="inline-flex h-9 items-center rounded-lg bg-destructive px-3.5 text-sm font-medium text-destructive-foreground shadow-sm transition-all hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-55"
                   onClick={() =>
                     handleAction(
                       () =>
@@ -363,14 +363,14 @@ export function ImportedCustomerDeletionPanel({
         ) : null}
 
         {guard.canReviewPendingRequest && pendingRequest ? (
-          <div className="rounded-[0.95rem] border border-[rgba(54,95,135,0.12)] bg-[rgba(248,251,255,0.82)] px-4 py-3.5">
+          <div className="rounded-xl border border-border/40 bg-background/50 px-4 py-3.5">
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-black/82">审批当前申请</p>
-              <p className="text-[13px] leading-6 text-black/56">
+              <p className="text-sm font-semibold text-foreground">审批当前申请</p>
+              <p className="text-[13px] leading-6 text-muted-foreground">
                 批准后会立即执行客户删除；驳回后会保留客户，并记录审批意见。
               </p>
             </div>
-            <div className="mt-3 space-y-2 text-sm leading-6 text-black/60">
+            <div className="mt-3 space-y-2 text-sm leading-6 text-muted-foreground">
               <p>申请原因：{pendingRequest.requestReason}</p>
               <p>
                 申请人：{pendingRequest.requestedBy.name} / 申请时间：
@@ -408,7 +408,7 @@ export function ImportedCustomerDeletionPanel({
                 <button
                   type="button"
                   disabled={isPending}
-                  className="crm-button crm-button-primary"
+                  className="inline-flex h-9 items-center rounded-lg bg-destructive px-3.5 text-sm font-medium text-destructive-foreground shadow-sm transition-all hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-55"
                   onClick={() =>
                     handleAction(
                       () =>

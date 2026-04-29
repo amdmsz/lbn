@@ -31,8 +31,8 @@ export function DataTableWrapper({
     <section
       className={cn(
         isCompact
-          ? "crm-animate-enter overflow-hidden rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow]"
-          : "crm-card crm-animate-enter overflow-hidden border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-md)]",
+          ? "crm-animate-enter overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm transition-[border-color,background-color,box-shadow]"
+          : "crm-card crm-animate-enter overflow-hidden border border-border/60 bg-card shadow-sm",
         className,
       )}
     >
@@ -41,8 +41,8 @@ export function DataTableWrapper({
           className={cn(
             "flex flex-col border-b border-[var(--color-border-soft)] lg:flex-row lg:justify-between",
             isCompact
-              ? "gap-2 bg-[var(--color-shell-surface-soft)] px-4 py-2.5 md:px-5 md:py-3 lg:items-center"
-              : "gap-3 bg-[var(--color-shell-surface)] px-5 py-4 lg:items-center",
+              ? "gap-2 bg-transparent px-4 py-2.5 md:px-5 md:py-3 lg:items-center"
+              : "gap-3 bg-transparent px-5 py-4 lg:items-center",
           )}
         >
           <div className="crm-section-heading">

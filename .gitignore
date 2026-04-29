@@ -33,6 +33,9 @@
 /public/uploads/
 /runtime/
 /backups/
+/output/
+/tmp/
+/reports/
 /reports/*.json
 /reports/**/*.json
 /reports/*.sql

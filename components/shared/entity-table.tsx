@@ -22,6 +22,7 @@ export function EntityTable<T>({
   className,
   dense = false,
   density = "compact",
+  variant = "table",
 }: Readonly<{
   columns: EntityTableColumn<T>[];
   rows: T[];
@@ -33,6 +34,7 @@ export function EntityTable<T>({
   className?: string;
   dense?: boolean;
   density?: "default" | "compact";
+  variant?: "table" | "list";
 }>) {
   if (rows.length === 0) {
     return (
@@ -48,16 +50,20 @@ export function EntityTable<T>({
   return (
     <div
       className={cn(
-        "crm-table-shell overflow-x-auto overflow-y-hidden rounded-[1.2rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-md)]",
+        "crm-table-shell overflow-x-auto overflow-y-hidden rounded-2xl border border-border/60 bg-card shadow-sm",
+        variant === "list" &&
+          "rounded-2xl border-border/50 bg-card shadow-sm",
         className,
       )}
     >
       <table
         className={cn(
-          "crm-table min-w-full",
+          "crm-table min-w-full [&_tbody]:bg-transparent [&_td]:border-b [&_td]:border-border/40 [&_thead]:bg-transparent [&_th]:border-b [&_th]:border-border/40 [&_tr]:transition-colors [&_tbody_tr:hover]:bg-muted/30",
+          variant === "list" && "crm-table-list",
           density === "compact"
-            ? "[&_th]:px-3.5 [&_th]:py-3 [&_td]:px-3.5 [&_td]:py-3"
-            : "[&_th]:px-4 [&_td]:px-4",
+            ? "[&_th]:px-3.5 [&_th]:py-3 [&_td]:px-3.5 [&_td]:py-4"
+            : "[&_th]:px-4 [&_th]:py-3.5 [&_td]:px-4 [&_td]:py-4",
+          variant === "list" && "[&_td]:py-5",
         )}
       >
         <thead>
@@ -66,7 +72,7 @@ export function EntityTable<T>({
               <th
                 key={column.key}
                 className={cn(
-                  "whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]",
+                  "whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground",
                   column.headerClassName,
                 )}
               >
@@ -87,7 +93,7 @@ export function EntityTable<T>({
                   key={column.key}
                   style={column.cellStyle}
                   className={cn(
-                    "align-top text-[13px] leading-5 text-[var(--foreground)]",
+                    "align-top text-[13px] leading-5 text-foreground",
                     dense ? "py-3" : "",
                     column.className,
                   )}

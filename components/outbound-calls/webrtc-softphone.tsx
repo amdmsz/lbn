@@ -3,7 +3,6 @@
 import type { RoleCode } from "@prisma/client";
 import {
   ChevronDown,
-  ChevronUp,
   Clock3,
   Loader2,
   Mic,
@@ -15,7 +14,7 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type SimpleUser = import("sip.js/lib/platform/web").SimpleUser;
 type SimpleUserDelegate = import("sip.js/lib/platform/web").SimpleUserDelegate;
@@ -69,6 +68,17 @@ const statusCopy: Record<SoftphoneStatus, string> = {
   failed: "异常",
 };
 
+const pillStatusCopy: Record<SoftphoneStatus, string> = {
+  loading: "Agent Sync",
+  disabled: "Agent Off",
+  idle: "Agent Idle",
+  connecting: "Connecting",
+  online: "Agent Ready",
+  incoming: "Incoming",
+  in_call: "In Call",
+  failed: "Agent Error",
+};
+
 function formatElapsed(seconds: number) {
   const safeSeconds = Math.max(0, seconds);
   const minutes = Math.floor(safeSeconds / 60);
@@ -78,6 +88,38 @@ function formatElapsed(seconds: number) {
     2,
     "0",
   )}`;
+}
+
+function getStatusDotClassName(status: SoftphoneStatus) {
+  if (status === "online" || status === "in_call") {
+    return "bg-[var(--color-success)] animate-pulse";
+  }
+
+  if (status === "incoming") {
+    return "bg-primary animate-pulse";
+  }
+
+  if (status === "connecting" || status === "loading") {
+    return "bg-[var(--color-warning)]";
+  }
+
+  return "bg-[var(--color-danger)]";
+}
+
+function getStatusBadgeClassName(status: SoftphoneStatus) {
+  if (status === "online" || status === "in_call") {
+    return "border-border bg-muted/55 text-[var(--color-success)]";
+  }
+
+  if (status === "incoming") {
+    return "border-primary/20 bg-primary/10 text-primary";
+  }
+
+  if (status === "connecting" || status === "loading") {
+    return "border-border bg-muted/55 text-[var(--color-warning)]";
+  }
+
+  return "border-border bg-muted/55 text-[var(--color-danger)]";
 }
 
 function StatusIcon({ status }: Readonly<{ status: SoftphoneStatus }>) {
@@ -149,22 +191,6 @@ export function WebRtcSoftphone({
   const userRef = useRef<SimpleUser | null>(null);
   const mountedRef = useRef(true);
   const callStartedAtRef = useRef<number | null>(null);
-
-  const statusTone = useMemo(() => {
-    if (status === "online" || status === "in_call") {
-      return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    }
-
-    if (status === "incoming") {
-      return "border-sky-200 bg-sky-50 text-sky-700";
-    }
-
-    if (status === "failed") {
-      return "border-red-200 bg-red-50 text-red-700";
-    }
-
-    return "border-neutral-200 bg-white text-neutral-600";
-  }, [status]);
 
   const safeSetStatus = useCallback(
     (nextStatus: SoftphoneStatus, nextMessage?: string) => {
@@ -572,87 +598,104 @@ export function WebRtcSoftphone({
     return null;
   }
 
+  const activeCall = status === "incoming" || status === "in_call";
+  const widgetExpanded = expanded || activeCall;
+  const statusDotClassName = getStatusDotClassName(status);
+  const statusBadgeClassName = getStatusBadgeClassName(status);
+  const pillLabel = activeSeconds !== null ? formatElapsed(activeSeconds) : pillStatusCopy[status];
+  const seatLabel = config?.seatNo ?? config?.authorizationUser ?? "No seat";
+
   return (
-    <div className="fixed bottom-4 right-4 z-40 flex w-[min(21rem,calc(100vw-2rem))] justify-end text-[13px]">
+    <div className="fixed bottom-6 right-6 z-50 flex max-w-[calc(100vw-3rem)] justify-end text-[13px]">
       <audio ref={audioRef} autoPlay />
 
-      {!expanded ? (
+      {!widgetExpanded ? (
         <button
           type="button"
           onClick={() => setExpanded(true)}
           aria-expanded="false"
           aria-label={`打开网页坐席，当前状态：${statusCopy[status]}`}
-          className="inline-flex h-11 max-w-full items-center gap-2 rounded-lg border border-neutral-200 bg-white/95 px-3 text-left shadow-[0_12px_40px_rgba(15,23,42,0.12)] backdrop-blur transition hover:border-neutral-300 hover:bg-white"
+          className="group inline-flex max-w-full items-center gap-2 rounded-full border border-border/50 bg-background/85 px-4 py-2 text-left text-foreground shadow-2xl backdrop-blur-xl transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] hover:-translate-y-0.5 hover:bg-background/95 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
         >
-          <span
-            className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2 text-xs font-medium ${statusTone}`}
-          >
+          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${statusDotClassName}`} />
+          <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted/70 text-muted-foreground transition group-hover:bg-muted">
             <StatusIcon status={status} />
-            {statusCopy[status]}
           </span>
-          <span className="min-w-0 truncate text-xs font-medium text-neutral-800">
-            网页坐席
-          </span>
+          <span className="min-w-0 truncate text-xs font-semibold">{pillLabel}</span>
           {config?.seatNo ? (
-            <span className="hidden max-w-20 truncate text-xs text-neutral-500 sm:inline">
+            <span className="hidden max-w-20 truncate font-mono text-[11px] text-muted-foreground sm:inline">
               {config.seatNo}
             </span>
           ) : null}
-          <ChevronUp className="h-4 w-4 shrink-0 text-neutral-400" />
         </button>
       ) : (
-        <div className="w-full rounded-lg border border-neutral-200 bg-white/95 p-3 shadow-[0_12px_40px_rgba(15,23,42,0.12)] backdrop-blur">
+        <div className="w-72 rounded-2xl border border-border/50 bg-background/85 p-4 text-foreground shadow-2xl backdrop-blur-xl transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]">
           <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
+            <div className="min-w-0 space-y-1">
               <div className="flex items-center gap-2">
-                <span
-                  className={`inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs font-medium ${statusTone}`}
-                >
-                  <StatusIcon status={status} />
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${statusDotClassName}`} />
+                <p className="truncate text-sm font-semibold">WebRTC Agent</p>
+              </div>
+              <div className="flex min-w-0 items-center gap-2">
+                <span className={`inline-flex h-6 items-center gap-1.5 rounded-full border px-2 text-[11px] font-medium ${statusBadgeClassName}`}>
                   {statusCopy[status]}
                 </span>
-                {config?.seatNo ? (
-                  <span className="truncate text-xs text-neutral-500">
-                    {config.seatNo}
-                  </span>
-                ) : null}
-                {activeSeconds !== null ? (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs tabular-nums text-neutral-600">
-                    <Clock3 className="h-3.5 w-3.5" />
-                    {formatElapsed(activeSeconds)}
-                  </span>
-                ) : null}
+                <span className="truncate font-mono text-xs text-muted-foreground">
+                  {seatLabel}
+                </span>
               </div>
-              <p className="mt-2 line-clamp-2 text-xs leading-5 text-neutral-500">
-                {message}
-              </p>
-              {lastCallSeconds !== null ? (
-                <p className="mt-1 text-xs tabular-nums text-neutral-500">
-                  上次坐席通话 {formatElapsed(lastCallSeconds)}
-                </p>
-              ) : null}
             </div>
             <button
               type="button"
               onClick={() => setExpanded(false)}
+              disabled={activeCall}
               aria-label="收起网页坐席"
               aria-expanded="true"
-              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-neutral-200 bg-white text-neutral-500 transition hover:bg-neutral-50 hover:text-neutral-700"
+              title={activeCall ? "通话中保持展开" : "收起"}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-background/70 text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
             >
               <ChevronDown className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="mt-4 rounded-2xl border border-border/60 bg-muted/35 px-3 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  Session
+                </p>
+                <p className="mt-1 truncate font-mono text-lg font-semibold tabular-nums text-foreground">
+                  {activeSeconds !== null
+                    ? formatElapsed(activeSeconds)
+                    : lastCallSeconds !== null
+                      ? formatElapsed(lastCallSeconds)
+                      : "--:--"}
+                </p>
+              </div>
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-background/70 text-muted-foreground">
+                <Clock3 className="h-4 w-4" />
+              </div>
+            </div>
+            <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
+              {message}
+            </p>
+            {lastCallSeconds !== null && activeSeconds === null ? (
+              <p className="mt-1 font-mono text-[11px] tabular-nums text-muted-foreground">
+                Last call {formatElapsed(lastCallSeconds)}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="mt-4 flex items-center justify-end gap-2">
             {status === "idle" || status === "failed" ? (
               <button
                 type="button"
                 disabled={!config?.enabled}
                 onClick={() => void connect()}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md bg-neutral-950 px-3 text-xs font-medium text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:bg-neutral-300"
+                className="inline-flex h-10 items-center gap-2 rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground transition hover:brightness-95 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
               >
                 <PhoneCall className="h-3.5 w-3.5" />
-                启用网页坐席
+                启用坐席
               </button>
             ) : null}
 
@@ -661,18 +704,20 @@ export function WebRtcSoftphone({
                 <button
                   type="button"
                   onClick={() => void answer()}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-emerald-600 px-3 text-xs font-medium text-white transition hover:bg-emerald-700"
+                  aria-label="接听"
+                  title="接听"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-success)] text-white shadow-lg transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
                 >
                   <PhoneCall className="h-3.5 w-3.5" />
-                  接听
                 </button>
                 <button
                   type="button"
                   onClick={() => void decline()}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50"
+                  aria-label="拒接"
+                  title="拒接"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-background/70 text-muted-foreground transition hover:bg-muted hover:text-[var(--color-danger)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
                 >
                   <PhoneOff className="h-3.5 w-3.5" />
-                  拒接
                 </button>
               </>
             ) : null}
@@ -682,22 +727,33 @@ export function WebRtcSoftphone({
                 <button
                   type="button"
                   onClick={toggleMute}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50"
+                  aria-label={muted ? "取消静音" : "静音"}
+                  title={muted ? "取消静音" : "静音"}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-background/70 text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
                 >
                   {muted ? (
                     <MicOff className="h-3.5 w-3.5" />
                   ) : (
                     <Mic className="h-3.5 w-3.5" />
                   )}
-                  {muted ? "取消静音" : "静音"}
+                </button>
+                <button
+                  type="button"
+                  disabled
+                  aria-label="转接暂未接入"
+                  title="转接暂未接入"
+                  className="inline-flex h-11 w-11 cursor-not-allowed items-center justify-center rounded-full border border-border bg-background/50 text-muted-foreground opacity-45"
+                >
+                  <PhoneIncoming className="h-3.5 w-3.5" />
                 </button>
                 <button
                   type="button"
                   onClick={() => void hangup()}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-red-600 px-3 text-xs font-medium text-white transition hover:bg-red-700"
+                  aria-label="挂断"
+                  title="挂断"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[hsl(var(--destructive))] text-[hsl(var(--destructive-foreground))] shadow-lg transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
                 >
                   <PhoneOff className="h-3.5 w-3.5" />
-                  挂断
                 </button>
               </>
             ) : null}
@@ -706,7 +762,9 @@ export function WebRtcSoftphone({
               <button
                 type="button"
                 onClick={() => void disconnect()}
-                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-3 text-xs font-medium text-neutral-700 transition hover:bg-neutral-50"
+                aria-label="坐席下线"
+                title="坐席下线"
+                className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-background/70 px-3 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
               >
                 <WifiOff className="h-3.5 w-3.5" />
                 下线

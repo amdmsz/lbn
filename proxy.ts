@@ -75,7 +75,6 @@ export const config = {
     "/payment-records/:path*",
     "/collection-tasks/:path*",
     "/finance/:path*",
-    "/gifts/:path*",
     "/shipping/:path*",
     "/reports/:path*",
     "/settings/:path*",

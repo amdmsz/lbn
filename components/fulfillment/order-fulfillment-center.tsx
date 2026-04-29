@@ -109,11 +109,11 @@ function getBatchLegacyCount(batchData: BatchData) {
 
 function ContextStrip({ items }: Readonly<{ items: string[] }>) {
   return (
-    <div className="crm-subtle-panel flex flex-wrap items-center gap-2 px-3 py-2 text-[11px] font-medium tracking-[0.04em] text-[var(--color-sidebar-muted)]">
+    <div className="flex flex-wrap items-center gap-2 rounded-full border border-border/50 bg-transparent px-3 py-1.5 text-[11px] font-medium tracking-[0.04em] text-muted-foreground">
       {items.map((item, index) => (
         <span key={`${item}-${index}`} className="contents">
           {index > 0 ? (
-            <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+            <span className="h-1 w-1 rounded-full bg-border" />
           ) : null}
           <span>{item}</span>
         </span>
@@ -198,24 +198,28 @@ export function OrderFulfillmentCenter({
         value={String(tradeOrdersData.summary.totalCount)}
         note="当前筛选范围内的成交主单"
         density="strip"
+        className="rounded-2xl border-border/60 bg-card shadow-sm"
       />
       <MetricCard
         label="待审核"
         value={String(tradeOrdersData.summary.pendingReviewCount)}
         note="等待主管或管理员处理"
         density="strip"
+        className="rounded-2xl border-border/60 bg-card shadow-sm"
       />
       <MetricCard
         label="履约异常"
         value={String(tradeOrdersData.summary.focusCounts.exception)}
         note="优先排查报单、物流或状态冲突"
         density="strip"
+        className="rounded-2xl border-border/60 bg-card shadow-sm"
       />
       <MetricCard
         label="成交金额"
         value={formatCurrency(tradeOrdersData.summary.totalFinalAmount)}
         note="父单成交金额，子单按 supplier 执行"
         density="strip"
+        className="rounded-2xl border-border/60 bg-card shadow-sm"
       />
     </div>
   ) : isShippingView ? (
@@ -320,7 +324,7 @@ export function OrderFulfillmentCenter({
               {canCreateTradeOrder ? (
                 <Link
                   href="/customers"
-                  className="crm-button crm-button-primary min-h-0 px-3 py-1.5 text-[13px]"
+                  className="inline-flex min-h-0 items-center justify-center rounded-lg bg-primary px-3 py-1.5 text-[13px] font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90"
                 >
                   去客户中心建单
                 </Link>
@@ -328,7 +332,7 @@ export function OrderFulfillmentCenter({
               {canAccessShippingModule(role) ? (
                 <Link
                   href={buildOrderFulfillmentHref("shipping")}
-                  className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-[13px]"
+                  className="inline-flex min-h-0 items-center justify-center rounded-lg border border-border/60 bg-card px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
                 >
                   切到发货执行
                 </Link>

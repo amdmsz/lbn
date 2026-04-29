@@ -1,16 +1,15 @@
 import Link from "next/link";
 import type { RoleCode } from "@prisma/client";
-import { ChevronRight } from "lucide-react";
-import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
-import { EntityTable } from "@/components/shared/entity-table";
-import { EmptyState } from "@/components/shared/empty-state";
-import { MetricCard } from "@/components/shared/metric-card";
-import { PageHeader } from "@/components/shared/page-header";
+import { ArrowUpRight, ChevronRight } from "lucide-react";
 import {
-  PageSummaryStrip,
-  type PageSummaryStripItem,
-} from "@/components/shared/page-summary-strip";
-import { SectionCard } from "@/components/shared/section-card";
+  BentoCard,
+  BentoGrid,
+  BentoMetricCard,
+  BentoMiniStat,
+} from "@/components/dashboard/dashboard-bento";
+import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
+import { EmptyState } from "@/components/shared/empty-state";
+import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import {
   canAccessLiveSessionModule,
@@ -48,13 +47,14 @@ type DashboardDataShape = {
   financeSummary?: PaymentSummaryData | null;
 };
 
+const workspaceShellClassName = "crm-workspace-shell";
+
 function getRoleMeta(role: RoleCode) {
   switch (role) {
     case "ADMIN":
       return {
         eyebrow: "组织驾驶舱",
         title: "组织工作台",
-        description: "先看组织级客户、交易、履约与财务预览，再进入各业务域处理具体事项。",
         roleNote: "组织级视角",
         boundary: "可查看全量组织数据与系统设置。",
       };
@@ -62,7 +62,6 @@ function getRoleMeta(role: RoleCode) {
       return {
         eyebrow: "团队经营台",
         title: "团队工作台",
-        description: "先看团队客户经营、订单审核与履约风险，再向下进入销售和具体业务页面。",
         roleNote: "团队级视角",
         boundary: "仅查看本人团队范围，保留审核与协同权限。",
       };
@@ -70,7 +69,6 @@ function getRoleMeta(role: RoleCode) {
       return {
         eyebrow: "个人客户工作台",
         title: "个人销售工作台",
-        description: "首屏只保留你当前最需要推进的客户、订单和收款事项，客户中心仍是主入口。",
         roleNote: "个人视角",
         boundary: "只看本人客户，不进入团队级经营或履约执行台。",
       };
@@ -78,7 +76,6 @@ function getRoleMeta(role: RoleCode) {
       return {
         eyebrow: "运营协同台",
         title: "运营工作台",
-        description: "聚焦直播场次、商品协同和礼品相关事项，不把交易、收款和履约强塞给运营岗位。",
         roleNote: "运营协同",
         boundary: "不扩展销售客户和收款权限。",
       };
@@ -86,7 +83,6 @@ function getRoleMeta(role: RoleCode) {
       return {
         eyebrow: "履约执行台",
         title: "履约工作台",
-        description: "先看发货执行和履约结果；需要协同时，再进入直播场次或商品主数据模块处理履约配合任务。",
         roleNote: "履约执行",
         boundary: "不进入客户经营和收款确认主链。",
       };
@@ -214,11 +210,6 @@ function getQuickEntries(
           description: "配合查看商品信息与直播关联。",
           href: "/products",
         },
-        {
-          title: "礼品管理",
-          description: "回看礼品资格与结果。",
-          href: "/gifts",
-        },
       ]);
     case "SHIPPER":
       return appendGrantedQuickEntries(role, permissionCodes, [
@@ -236,17 +227,6 @@ function getQuickEntries(
   }
 }
 
-function buildSummaryItems(cards: SummaryCard[]): PageSummaryStripItem[] {
-  return cards.map((card, index) => ({
-    key: `${card.label}-${index}`,
-    label: card.label,
-    value: card.value,
-    note: card.note,
-    href: card.href,
-    emphasis: index === 0 ? "info" : index === 1 ? "success" : "default",
-  }));
-}
-
 function MetricGroupSection({
   title,
   description,
@@ -261,19 +241,52 @@ function MetricGroupSection({
   }
 
   return (
-    <SectionCard eyebrow="经营摘要" title={title} description={description}>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <BentoCard
+      eyebrow="经营摘要"
+      title={title}
+      description={description}
+      className="md:col-span-3 lg:col-span-4"
+    >
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {summary.cards.map((card) => (
-          <MetricCard
+          <BentoMiniStat
             key={card.label}
             label={card.label}
             value={card.value}
             note={card.note}
-            href={card.href}
           />
         ))}
       </div>
-    </SectionCard>
+    </BentoCard>
+  );
+}
+
+function RankingList({
+  ranking,
+}: Readonly<{
+  ranking: NonNullable<DashboardDataShape["ranking"]>;
+}>) {
+  return (
+    <div className="space-y-2">
+      {ranking.items.map((row) => (
+        <div
+          key={row.userId}
+          className="grid grid-cols-12 gap-3 rounded-2xl border border-border bg-muted/25 p-3"
+        >
+          <div className="col-span-2 font-mono text-sm font-semibold text-foreground">
+            #{row.rank}
+          </div>
+          <div className="col-span-5 min-w-0">
+            <p className="truncate text-sm font-semibold text-foreground">{row.name}</p>
+            <p className="text-xs text-muted-foreground">@{row.username}</p>
+          </div>
+          <div className="col-span-5 text-right text-xs leading-5 text-muted-foreground">
+            <div>跟进 {row.followUpCount} · 邀约 {row.invitationCount}</div>
+            <div>成交 {row.dealCount} · 加微 {row.wechatAddedCount}</div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -297,184 +310,171 @@ export function DashboardWorkbench({
   return (
     <WorkbenchLayout
       header={
-        <PageHeader
-          eyebrow={meta.eyebrow}
-          title={meta.title}
-          description={undefined}
-          meta={
-            <>
-              <StatusBadge label={meta.roleNote} variant="info" />
-              <StatusBadge label={meta.boundary} variant="neutral" />
-            </>
-          }
-          className="px-4 py-2 md:px-5 md:py-2.5"
-        />
+        <div className={workspaceShellClassName}>
+          <PageHeader
+            eyebrow={meta.eyebrow}
+            title={meta.title}
+            description={undefined}
+            meta={
+              <>
+                <StatusBadge label={meta.roleNote} variant="info" />
+                <StatusBadge label={meta.boundary} variant="neutral" />
+              </>
+            }
+            className="border-border bg-card px-4 py-3 shadow-sm md:px-5"
+          />
+        </div>
       }
-      summary={<PageSummaryStrip items={buildSummaryItems(cards)} className="gap-1.5" />}
     >
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
-        <SectionCard
-          title="关键入口"
-        >
-          <div className="grid gap-3 md:grid-cols-2">
-            {quickEntries.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="rounded-[0.96rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-3.5 py-3 transition-colors hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)]"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1.5">
-                    <p className="text-sm font-semibold text-[var(--foreground)]">{item.title}</p>
-                    <p className="text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">{item.description}</p>
-                  </div>
-                  <ChevronRight className="mt-0.5 h-4 w-4 text-[var(--color-sidebar-muted)]" />
-                </div>
-              </Link>
-            ))}
-          </div>
-        </SectionCard>
+      <div className={workspaceShellClassName}>
+        <BentoGrid>
+          {cards.map((card, index) => (
+            <BentoMetricCard
+              key={`${card.label}-${index}`}
+              label={card.label}
+              value={card.value}
+              note={card.note}
+              href={card.href}
+              tone={index === 0 ? "primary" : index === 1 ? "success" : "muted"}
+            />
+          ))}
 
-        <SectionCard
-          title="业务域"
-        >
-          <div className="space-y-3">
-            {navigationGroups
-              .filter((group) => group.key !== "workspace")
-              .map((group) => (
-                <div
-                  key={group.key}
-                  className="rounded-[0.96rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3"
+          <BentoCard
+            title="关键入口"
+            className="md:col-span-2 lg:col-span-2 lg:row-span-2"
+          >
+            <div className="grid gap-3 md:grid-cols-2">
+              {quickEntries.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="group rounded-2xl border border-border bg-muted/25 px-4 py-3 transition hover:border-primary/30 hover:bg-muted/40"
                 >
-                  <p className="text-sm font-semibold text-[var(--foreground)]">{group.title}</p>
-                  <p className="mt-1 text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">{group.description}</p>
-                  <div className="mt-2.5 flex flex-wrap gap-1.5">
-                    {group.sections
-                      .flatMap((section) => section.items)
-                      .slice(0, 4)
-                      .map((item) => (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          className="rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2.5 py-1 text-[11px] text-[var(--crm-badge-neutral-text)] transition-colors hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--color-accent)]"
-                        >
-                          {item.title}
-                        </Link>
-                      ))}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1.5">
+                      <p className="text-sm font-semibold text-foreground">{item.title}</p>
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        {item.description}
+                      </p>
+                    </div>
+                    <ChevronRight className="mt-0.5 h-4 w-4 text-muted-foreground transition group-hover:text-primary" />
                   </div>
-                </div>
-              ))}
-          </div>
-        </SectionCard>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-        <SectionCard
-          eyebrow="经营转化"
-          title="核心转化指标"
-          description={
-            data.conversions
-              ? `${data.conversions.windowLabel} · ${data.conversions.scopeLabel}`
-              : "当前角色不展示完整销售转化口径。"
-          }
-        >
-          {data.conversions ? (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {data.conversions.metrics.map((metric) => (
-                <MetricCard
-                  key={metric.label}
-                  label={metric.label}
-                  value={metric.value}
-                  note={`${metric.note}（${metric.numerator} / ${metric.denominator}）`}
-                />
+                </Link>
               ))}
             </div>
-          ) : (
-            <EmptyState
-              title="当前角色不展示完整转化漏斗"
-              description="该角色只保留岗位相关摘要，不开放完整的销售团队转化分析。"
-            />
-          )}
-        </SectionCard>
+          </BentoCard>
 
-        <SectionCard
-          eyebrow="组织排行"
-          title="员工排行"
-          description={
-            data.ranking
-              ? `${data.ranking.windowLabel} · ${data.ranking.description}`
-              : "当前角色不展示团队排行。"
-          }
-        >
-          {data.ranking ? (
-            <EntityTable
-              dense
-              columns={[
-                {
-                  key: "rank",
-                  title: "排名",
-                  render: (row) => <span className="font-semibold text-[var(--foreground)]">#{row.rank}</span>,
-                },
-                {
-                  key: "member",
-                  title: "成员",
-                  render: (row) => (
-                    <div>
-                      <p className="font-medium text-[var(--foreground)]">{row.name}</p>
-                      <p className="text-xs text-[var(--color-sidebar-muted)]">@{row.username}</p>
+          <BentoCard title="业务域" className="md:col-span-1 lg:col-span-2">
+            <div className="space-y-3">
+              {navigationGroups
+                .filter((group) => group.key !== "workspace")
+                .map((group) => (
+                  <div
+                    key={group.key}
+                    className="rounded-2xl border border-border bg-muted/25 px-4 py-3"
+                  >
+                    <p className="text-sm font-semibold text-foreground">{group.title}</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      {group.description}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {group.sections
+                        .flatMap((section) => section.items)
+                        .slice(0, 4)
+                        .map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            className="inline-flex h-7 items-center rounded-full border border-border bg-card px-2.5 text-xs text-muted-foreground transition hover:border-primary/30 hover:bg-muted hover:text-primary"
+                          >
+                            {item.title}
+                          </Link>
+                        ))}
                     </div>
-                  ),
-                },
-                {
-                  key: "activity",
-                  title: "活跃度",
-                  render: (row) => (
-                    <div className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
-                      <div>跟进 {row.followUpCount}</div>
-                      <div>邀约 {row.invitationCount}</div>
-                    </div>
-                  ),
-                },
-                {
-                  key: "result",
-                  title: "结果",
-                  render: (row) => (
-                    <div className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
-                      <div>成交 {row.dealCount}</div>
-                      <div>加微 {row.wechatAddedCount}</div>
-                    </div>
-                  ),
-                },
-              ]}
-              rows={data.ranking.items}
-              getRowKey={(row) => row.userId}
-            />
-          ) : (
-            <EmptyState
-              title="当前角色不展示排行"
-              description="该角色只保留岗位摘要，不开放团队排行信息。"
-            />
-          )}
-        </SectionCard>
+                  </div>
+                ))}
+            </div>
+          </BentoCard>
+
+          <BentoCard
+            eyebrow="经营转化"
+            title="核心转化指标"
+            description={
+              data.conversions
+                ? `${data.conversions.windowLabel} · ${data.conversions.scopeLabel}`
+                : "当前角色不展示完整销售转化口径。"
+            }
+            className="md:col-span-3 lg:col-span-2"
+          >
+            {data.conversions ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {data.conversions.metrics.map((metric) => (
+                  <BentoMiniStat
+                    key={metric.label}
+                    label={metric.label}
+                    value={metric.value}
+                    note={`${metric.note} (${metric.numerator} / ${metric.denominator})`}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                title="当前角色不展示完整转化漏斗"
+                description="该角色只保留岗位相关摘要，不开放完整的销售团队转化分析。"
+              />
+            )}
+          </BentoCard>
+
+          <BentoCard
+            eyebrow="组织排行"
+            title="员工排行"
+            description={
+              data.ranking
+                ? `${data.ranking.windowLabel} · ${data.ranking.description}`
+                : "当前角色不展示团队排行。"
+            }
+            actions={
+              data.ranking ? (
+                <Link
+                  href="/reports"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                >
+                  报表
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </Link>
+              ) : null
+            }
+            className="md:col-span-3 lg:col-span-2"
+          >
+            {data.ranking ? (
+              <RankingList ranking={data.ranking} />
+            ) : (
+              <EmptyState
+                title="当前角色不展示排行"
+                description="该角色只保留岗位摘要，不开放团队排行信息。"
+              />
+            )}
+          </BentoCard>
+
+          <MetricGroupSection
+            title="支付层摘要"
+            description="保持支付层与订单、履约分层，首屏之后再看细分口径。"
+            summary={data.paymentSummary}
+          />
+
+          <MetricGroupSection
+            title="履约摘要"
+            description="履约指标独立于交易和收款，不把发货状态混回订单单字段。"
+            summary={data.fulfillmentSummary}
+          />
+
+          <MetricGroupSection
+            title="财务预览"
+            description="财务视角保持预览层，不替代 payment layer 与 fulfillment layer。"
+            summary={data.financeSummary}
+          />
+        </BentoGrid>
       </div>
-
-      <MetricGroupSection
-        title="支付层摘要"
-        description="保持支付层与订单、履约分层，首屏之后再看细分口径。"
-        summary={data.paymentSummary}
-      />
-
-      <MetricGroupSection
-        title="履约摘要"
-        description="履约指标独立于交易和收款，不把发货状态混回订单单字段。"
-        summary={data.fulfillmentSummary}
-      />
-
-      <MetricGroupSection
-        title="财务预览"
-        description="财务视角保持预览层，不替代 payment layer 与 fulfillment layer。"
-        summary={data.financeSummary}
-      />
     </WorkbenchLayout>
   );
 }

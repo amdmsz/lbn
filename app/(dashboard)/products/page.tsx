@@ -344,8 +344,8 @@ export default async function ProductsPage({
       className={cn(
         "inline-flex min-h-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[12.5px] font-medium transition-[border-color,background-color,color]",
         item.value === activeTab
-          ? "border border-[rgba(111,141,255,0.16)] bg-[rgba(111,141,255,0.08)] text-[var(--foreground)]"
-          : "border border-transparent text-[var(--color-sidebar-muted)] hover:border-[var(--color-border-soft)] hover:bg-[var(--color-panel)] hover:text-[var(--foreground)]",
+          ? "border border-primary/20 bg-primary/10 text-primary"
+          : "border border-transparent text-muted-foreground hover:border-border/60 hover:bg-card hover:text-foreground",
       )}
     >
       <span>{item.label}</span>
@@ -354,8 +354,8 @@ export default async function ProductsPage({
           className={cn(
             "rounded-full px-1.5 py-0.5 text-[10.5px]",
             item.value === activeTab
-              ? "bg-[rgba(111,141,255,0.12)] text-[var(--color-accent-strong)]"
-              : "bg-[var(--color-shell-surface)] text-[var(--color-sidebar-muted)]",
+              ? "bg-primary/10 text-primary"
+              : "bg-background text-muted-foreground",
           )}
         >
           {item.count}
@@ -372,7 +372,7 @@ export default async function ProductsPage({
           title={headerTitle}
           description={activeTab === "suppliers" ? headerDescription : undefined}
           meta={headerMeta}
-          className="px-4 py-2 md:px-5 md:py-2 [&_.crm-eyebrow]:hidden"
+          className="border-border/60 bg-card px-4 py-2 shadow-sm md:px-5 md:py-2 [&_.crm-eyebrow]:hidden"
           actions={
             <div className="crm-toolbar-cluster">
               {activeTab !== "suppliers" && canCreate ? (
@@ -380,7 +380,7 @@ export default async function ProductsPage({
                   href={buildProductCenterHref(productFilters, {
                     createProduct: "1",
                   })}
-                  className="crm-button crm-button-primary min-h-0 gap-1.5 px-3 py-1.5 text-[13px]"
+                  className="inline-flex min-h-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[13px] font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90"
                 >
                   <Plus className="h-4 w-4" />
                   添加商品
@@ -389,7 +389,7 @@ export default async function ProductsPage({
               {activeTab !== "suppliers" && canAccessSupplierTab ? (
                 <Link
                   href={supplierWorkspaceHref}
-                  className="crm-button crm-button-secondary min-h-0 px-2.5 py-1.5 text-[13px]"
+                  className="inline-flex min-h-0 items-center rounded-lg border border-border/60 bg-card px-2.5 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
                 >
                   供应商目录
                 </Link>
@@ -399,7 +399,7 @@ export default async function ProductsPage({
                   href={buildSupplierCenterHref(supplierFilters, {
                     createSupplier: "1",
                   })}
-                  className="crm-button crm-button-primary min-h-0 gap-1.5 px-3 py-1.5 text-[13px]"
+                  className="inline-flex min-h-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[13px] font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90"
                 >
                   <Plus className="h-4 w-4" />
                   新建供应商
@@ -416,7 +416,7 @@ export default async function ProductsPage({
       }
       toolbar={
         <div className="overflow-x-auto">
-          <div className="inline-flex min-w-max items-center gap-1 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-1 shadow-[var(--color-shell-shadow-xs)]">
+          <div className="inline-flex min-w-max items-center gap-1 rounded-[0.9rem] border border-border/60 bg-card p-1 shadow-sm">
             {viewTabLinks}
           </div>
         </div>

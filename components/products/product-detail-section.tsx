@@ -326,7 +326,7 @@ export function ProductDetailSection({
             <button
               type="button"
               onClick={() => openQuickSkuCreate()}
-              className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium px-4 py-2 rounded-md transition-colors"
             >
               添加规格
             </button>
@@ -433,7 +433,7 @@ export function ProductDetailSection({
             <button
               type="button"
               onClick={() => openQuickSkuCreate()}
-              className="crm-button crm-button-primary"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium px-4 py-2 rounded-md transition-colors"
             >
               {quickCreateButtonLabel}
             </button>

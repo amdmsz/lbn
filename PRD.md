@@ -174,8 +174,9 @@
 
 ### 5.1 与 GiftRecord 的边界
 
-- `GiftRecord` 继续服务营销 / 资格 / 运费语义
-- 不把 `GiftRecord` 与订单赠品混成一条链
+- `GiftRecord` 已下线为主动业务工作流，不再提供礼品管理入口或新建 / 审核 / 履约写路径
+- 现有 `GiftRecord` 表和关联字段仅作为历史兼容与审计保留，避免破坏 payment / collection / shipping 旧引用
+- 不把 `GiftRecord` 与订单赠品混成一条链；订单赠品继续走 `TradeOrderItem(type=GIFT)`
 
 ---
 

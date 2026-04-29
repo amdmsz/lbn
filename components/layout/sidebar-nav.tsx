@@ -9,7 +9,6 @@ import {
   ChevronDown,
   ClipboardList,
   FileSpreadsheet,
-  Gift,
   LayoutDashboard,
   Menu,
   Package,
@@ -26,6 +25,8 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AccountMenu } from "@/components/layout/account-menu";
+import { CommandPalette } from "@/components/layout/command-palette";
+import { ThemeSwitcher } from "@/components/layout/theme-switcher";
 import type {
   NavigationGroup,
   NavigationIconName,
@@ -48,7 +49,6 @@ const iconMap: Record<NavigationIconName, typeof LayoutDashboard> = {
   fulfillmentCenter: ShipWheel,
   paymentRecords: WalletCards,
   collectionTasks: ClipboardList,
-  gifts: Gift,
   shipping: ShipWheel,
   shippingExportBatches: ScrollText,
   reports: BarChart3,
@@ -296,25 +296,28 @@ function OverflowMenu({
       </button>
 
       {open ? (
-        <div className="crm-animate-pop absolute right-0 top-[calc(100%+0.75rem)] z-50 w-[19rem] overflow-hidden rounded-[1.25rem] border border-[var(--color-shell-topbar-border)] bg-[var(--color-shell-surface-strong)] p-2 shadow-[var(--color-shell-shadow-lg)] backdrop-blur-[18px]">
-          <div className="space-y-2">
-            {groups.map((group) => (
-              <section
-                key={group.key}
-                className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-1.5"
-              >
-                <p className="px-2 pb-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
+        <div className="crm-animate-pop absolute right-0 top-[calc(100%+0.75rem)] z-50 w-[19rem] overflow-hidden rounded-xl border border-border/60 bg-background p-2 shadow-xl backdrop-blur-xl">
+          <div className="max-h-[min(70vh,32rem)] overflow-y-auto scrollbar-hide [&::-webkit-scrollbar]:hidden">
+            {groups.map((group, groupIndex) => (
+              <section key={group.key}>
+                {groupIndex > 0 ? <div className="mx-2 my-1 h-px bg-border/40" /> : null}
+                <p className="mt-1 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                   {group.title}
                 </p>
-                <div className="space-y-1">
+                <div>
                   {group.sections.map((section, sectionIndex) => (
                     <div
                       key={`${group.key}-${section.title ?? sectionIndex}`}
-                      className={cn(
-                        "space-y-1",
-                        sectionIndex > 0 ? "border-t border-[var(--color-border-soft)] pt-1" : "",
-                      )}
+                      className="space-y-0.5"
                     >
+                      {sectionIndex > 0 ? (
+                        <div className="mx-2 my-1 h-px bg-border/40" />
+                      ) : null}
+                      {section.title ? (
+                        <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
+                          {section.title}
+                        </p>
+                      ) : null}
                       {section.items.map((item) => {
                         const Icon = iconMap[item.iconName];
                         const active = isItemActive(pathname, item);
@@ -327,18 +330,18 @@ function OverflowMenu({
                             aria-current={active ? "page" : undefined}
                             onClick={onClose}
                             className={cn(
-                              "crm-motion-pill flex items-center gap-3 rounded-[0.95rem] px-2 py-2 text-[13px] transition-[background-color,color,box-shadow] duration-200",
+                              "group flex w-full cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm font-medium transition-colors",
                               active
-                                ? "bg-[rgba(79,125,247,0.1)] text-[var(--foreground)] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
-                                : "text-[var(--color-sidebar-muted)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]",
+                                ? "bg-primary/10 text-primary"
+                                : "text-foreground hover:bg-primary/10 hover:text-primary",
                             )}
                           >
                             <span
                               className={cn(
-                                "flex h-8 w-8 items-center justify-center rounded-full",
+                                "flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors",
                                 active
-                                  ? "bg-[rgba(79,125,247,0.1)] text-[var(--color-accent-strong)]"
-                                  : "bg-[var(--color-shell-icon-surface)] text-[var(--color-sidebar-muted)]",
+                                  ? "text-primary"
+                                  : "text-muted-foreground group-hover:text-primary",
                               )}
                             >
                               <Icon className="h-4 w-4" />
@@ -645,6 +648,10 @@ function SidebarNavInner({
             ))}
           </nav>
 
+          <div className="hidden min-w-[16rem] max-w-[22rem] flex-1 lg:block xl:max-w-[24rem]">
+            <CommandPalette groups={groups} />
+          </div>
+
           <div className="ml-auto flex items-center gap-2">
             <div className="hidden md:block">
               <OverflowMenu
@@ -655,6 +662,8 @@ function SidebarNavInner({
                 onClose={() => setOverflowOpen(false)}
               />
             </div>
+
+            <ThemeSwitcher />
 
             <AccountMenu
               currentUser={currentUser}

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronRight, X } from "lucide-react";
 import { CustomerPhoneSpotlight } from "@/components/customers/customer-phone-spotlight";
 import type { StatusBadgeVariant } from "@/components/shared/status-badge";
@@ -19,24 +20,26 @@ import { CustomerCallRecordHistory } from "@/components/customers/customer-call-
 import type { CallResultOption } from "@/lib/calls/metadata";
 import { cn } from "@/lib/utils";
 
-const executionClassQuickResultMap: Partial<Record<CustomerExecutionClass, string>> = {
+const executionClassQuickResultMap: Partial<
+  Record<CustomerExecutionClass, string>
+> = {
   B: "WECHAT_ADDED",
   D: "NOT_CONNECTED",
   E: "REFUSED_WECHAT",
 };
 
-const quietExecutionClassVariantClassNames: Record<StatusBadgeVariant, string> = {
-  neutral:
-    "border-[var(--crm-badge-neutral-border)] bg-[var(--crm-badge-neutral-bg)] text-[var(--crm-badge-neutral-text)]",
-  info:
-    "border-[rgba(111,141,255,0.18)] bg-[rgba(111,141,255,0.12)] text-[var(--color-accent-strong)]",
-  success:
-    "border-[rgba(87,212,176,0.16)] bg-[rgba(87,212,176,0.12)] text-[var(--color-success)]",
-  warning:
-    "border-[rgba(240,195,106,0.18)] bg-[rgba(240,195,106,0.12)] text-[var(--color-warning)]",
-  danger:
-    "border-[rgba(255,148,175,0.16)] bg-[rgba(255,148,175,0.12)] text-[var(--color-danger)]",
-};
+const quietExecutionClassVariantClassNames: Record<StatusBadgeVariant, string> =
+  {
+    neutral:
+      "border-[var(--crm-badge-neutral-border)] bg-[var(--crm-badge-neutral-bg)] text-[var(--crm-badge-neutral-text)]",
+    info: "border-[rgba(111,141,255,0.18)] bg-[rgba(111,141,255,0.12)] text-[var(--color-accent-strong)]",
+    success:
+      "border-[rgba(87,212,176,0.16)] bg-[rgba(87,212,176,0.12)] text-[var(--color-success)]",
+    warning:
+      "border-[rgba(240,195,106,0.18)] bg-[rgba(240,195,106,0.12)] text-[var(--color-warning)]",
+    danger:
+      "border-[rgba(255,148,175,0.16)] bg-[rgba(255,148,175,0.12)] text-[var(--color-danger)]",
+  };
 
 const quickClassActions = [
   { value: "D" as const, label: "D 未接通", result: "NOT_CONNECTED" },
@@ -45,10 +48,10 @@ const quickClassActions = [
 ];
 
 const dialogSurfaceClassName =
-  "rounded-[1.18rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]";
+  "rounded-[1.18rem] border border-border bg-card shadow-sm";
 
 const quietActionLinkClassName =
-  "inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 text-[12px] font-medium text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color,transform,box-shadow] duration-150 motion-safe:hover:-translate-y-[1px] hover:border-[rgba(122,154,255,0.18)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)] hover:shadow-[var(--color-shell-shadow-sm)]";
+  "inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-[12px] font-medium text-muted-foreground transition-[border-color,background-color,color,transform,box-shadow] duration-150 motion-safe:hover:-translate-y-[1px] hover:border-primary/20 hover:bg-muted hover:text-foreground hover:shadow-sm";
 
 function buildCustomerTradeOrderHref(customerId: string) {
   return `/customers/${customerId}?tab=orders&createTradeOrder=1`;
@@ -81,14 +84,18 @@ function DialogMetaBlock({
   value: string;
 }>) {
   return (
-    <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3.5 py-2.5">
-      <p className="crm-detail-label">{label}</p>
-      <p className="mt-1 text-[13px] font-medium leading-5 text-[var(--foreground)]">{value}</p>
+    <div className="rounded-xl border border-border/60 bg-background p-3 shadow-sm">
+      <p className="crm-detail-label text-[10px]">{label}</p>
+      <p className="mt-1 text-sm font-medium leading-5 text-foreground">
+        {value}
+      </p>
     </div>
   );
 }
 
-export function getCustomerExecutionClassQuickResult(value: CustomerExecutionClass) {
+export function getCustomerExecutionClassQuickResult(
+  value: CustomerExecutionClass,
+) {
   return executionClassQuickResultMap[value] ?? "";
 }
 
@@ -98,6 +105,7 @@ export function CustomerFollowUpDialog({
   resultOptions,
   canCreateCallRecord,
   canCreateSalesOrder = false,
+  outboundCallEnabled = false,
   initialResult = "",
   remarkAutoFocus = false,
   triggerSource = "table",
@@ -108,6 +116,7 @@ export function CustomerFollowUpDialog({
   resultOptions: CallResultOption[];
   canCreateCallRecord: boolean;
   canCreateSalesOrder?: boolean;
+  outboundCallEnabled?: boolean;
   initialResult?: string;
   remarkAutoFocus?: boolean;
   triggerSource?: MobileCallTriggerSource;
@@ -117,19 +126,26 @@ export function CustomerFollowUpDialog({
     return null;
   }
 
-  return (
+  const dialog = (
     <CustomerFollowUpDialogBody
       key={`${item.id}:${initialResult}`}
       item={item}
       resultOptions={resultOptions}
       canCreateCallRecord={canCreateCallRecord}
       canCreateSalesOrder={canCreateSalesOrder}
+      outboundCallEnabled={outboundCallEnabled}
       initialResult={initialResult}
       remarkAutoFocus={remarkAutoFocus}
       triggerSource={triggerSource}
       onClose={onClose}
     />
   );
+
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(dialog, document.body);
 }
 
 function CustomerFollowUpDialogBody({
@@ -137,6 +153,7 @@ function CustomerFollowUpDialogBody({
   resultOptions,
   canCreateCallRecord,
   canCreateSalesOrder,
+  outboundCallEnabled,
   initialResult,
   remarkAutoFocus,
   triggerSource,
@@ -146,15 +163,21 @@ function CustomerFollowUpDialogBody({
   resultOptions: CallResultOption[];
   canCreateCallRecord: boolean;
   canCreateSalesOrder: boolean;
+  outboundCallEnabled: boolean;
   initialResult: string;
   remarkAutoFocus: boolean;
   triggerSource: MobileCallTriggerSource;
   onClose: () => void;
 }>) {
   const [presetResult, setPresetResult] = useState(initialResult);
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
 
   const phoneText = item.phone?.trim() || "暂无电话";
   const latestCallRecord = item.callRecords[0] ?? null;
+  const visibleCallRecords = isHistoryExpanded
+    ? item.callRecords
+    : item.callRecords.slice(0, 3);
+  const collapsedHistoryCount = Math.max(item.callRecords.length - 3, 0);
   const detailHref = `/customers/${item.id}`;
   const liveHref = `${detailHref}?tab=live`;
   const orderHref = buildCustomerTradeOrderHref(item.id);
@@ -163,31 +186,37 @@ function CustomerFollowUpDialogBody({
     newImported: item.newImported,
     pendingFirstCall: item.pendingFirstCall,
   };
-  const executionClassVariant = getCustomerExecutionDisplayVariant(executionDisplayInput);
-  const executionClassLabel = getCustomerExecutionDisplayLongLabel(executionDisplayInput);
-  const isTemporaryExecutionDisplay = isCustomerExecutionDisplayTemporary(executionDisplayInput);
+  const executionClassVariant = getCustomerExecutionDisplayVariant(
+    executionDisplayInput,
+  );
+  const executionClassLabel = getCustomerExecutionDisplayLongLabel(
+    executionDisplayInput,
+  );
+  const isTemporaryExecutionDisplay = isCustomerExecutionDisplayTemporary(
+    executionDisplayInput,
+  );
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(8,11,18,0.44)] px-4 py-6 backdrop-blur-[12px] lg:pl-[var(--dashboard-sidebar-width,0px)]"
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={`跟进 ${item.name}`}
-        className="relative flex max-h-[calc(100vh-3rem)] w-full max-w-[72rem] flex-col overflow-hidden rounded-[1.55rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-lg)]"
+        className="fixed left-[50%] top-[50%] z-50 flex h-[85vh] max-h-[85vh] w-full max-w-[1000px] translate-x-[-50%] translate-y-[-50%] flex-col overflow-hidden rounded-[1.35rem] border border-border bg-background text-foreground shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="relative border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-5 py-4 md:px-6">
+        <div className="relative shrink-0 border-b border-border bg-card px-4 py-3 md:px-5">
           <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1 space-y-3.5">
+            <div className="min-w-0 flex-1 space-y-2.5">
               <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-sidebar-muted)]">
                 跟进
               </p>
 
               <div className="flex flex-wrap items-center gap-2.5">
-                <h3 className="text-[1.48rem] font-semibold tracking-[-0.045em] text-[var(--foreground)]">
+                <h3 className="text-[1.48rem] font-semibold tracking-tight text-foreground">
                   {item.name}
                 </h3>
                 <QuietExecutionClassBadge
@@ -202,14 +231,23 @@ function CustomerFollowUpDialogBody({
                 phone={phoneText}
                 triggerSource={triggerSource}
                 variant="dialog"
+                outboundCallEnabled={outboundCallEnabled && canCreateCallRecord}
+                outboundCallPlacement="icon"
               />
 
               <div className="grid gap-2 sm:grid-cols-2">
                 <DialogMetaBlock
                   label="最近跟进"
-                  value={item.latestFollowUpAt ? formatDateTime(item.latestFollowUpAt) : "暂无"}
+                  value={
+                    item.latestFollowUpAt
+                      ? formatDateTime(item.latestFollowUpAt)
+                      : "暂无"
+                  }
                 />
-                <DialogMetaBlock label="累计通话" value={`${item._count.callRecords} 次`} />
+                <DialogMetaBlock
+                  label="累计通话"
+                  value={`${item._count.callRecords} 次`}
+                />
               </div>
             </div>
 
@@ -221,7 +259,7 @@ function CustomerFollowUpDialogBody({
               <button
                 type="button"
                 onClick={onClose}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color,box-shadow,transform] duration-150 motion-safe:hover:-translate-y-[1px] hover:border-[rgba(122,154,255,0.18)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)] hover:shadow-[var(--color-shell-shadow-sm)]"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-[border-color,background-color,color,box-shadow,transform] duration-150 motion-safe:hover:-translate-y-[1px] hover:border-primary/20 hover:bg-muted hover:text-foreground hover:shadow-sm"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -229,14 +267,14 @@ function CustomerFollowUpDialogBody({
           </div>
         </div>
 
-        <div className="relative grid min-w-0 gap-4 overflow-y-auto px-5 py-4 md:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.82fr)] xl:grid-cols-[minmax(0,1.05fr)_minmax(23rem,0.85fr)]">
-          <div className="min-w-0 space-y-3.5">
+        <div className="relative grid min-h-0 min-w-0 flex-1 gap-4 overflow-y-auto overflow-x-hidden px-4 py-3 [scrollbar-width:none] [-ms-overflow-style:none] md:px-5 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.82fr)] lg:overflow-hidden xl:grid-cols-[minmax(0,1.05fr)_minmax(23rem,0.85fr)] [&::-webkit-scrollbar]:hidden">
+          <div className="min-h-0 min-w-0 space-y-3 overflow-y-auto overflow-x-hidden pr-0.5 [scrollbar-width:none] [-ms-overflow-style:none] lg:h-full [&::-webkit-scrollbar]:hidden">
             <div className={cn(dialogSurfaceClassName, "px-4 py-3.5")}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex min-w-0 flex-wrap items-center gap-2.5">
                   <p className="crm-detail-label text-[11px]">分类推进</p>
                   {isTemporaryExecutionDisplay ? (
-                    <span className="inline-flex items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-2.5 py-1 text-[10px] font-medium tracking-[0.04em] text-[var(--color-sidebar-muted)]">
+                    <span className="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-medium tracking-[0.04em] text-muted-foreground">
                       首呼后进入 A-E
                     </span>
                   ) : null}
@@ -266,8 +304,8 @@ function CustomerFollowUpDialogBody({
                       className={cn(
                         "inline-flex h-8 items-center rounded-full border px-3.5 text-[12px] font-medium transition-[border-color,background-color,color,transform,box-shadow] duration-150 motion-safe:hover:-translate-y-[1px]",
                         presetResult === action.result
-                          ? "border-[rgba(122,154,255,0.24)] bg-[rgba(111,141,255,0.12)] text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)]"
-                          : "border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] text-[var(--color-sidebar-muted)] hover:border-[rgba(122,154,255,0.18)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]",
+                          ? "border-primary/20 bg-primary/10 text-foreground shadow-sm"
+                          : "border-border bg-background text-muted-foreground hover:border-primary/20 hover:bg-muted hover:text-foreground",
                       )}
                     >
                       {action.label}
@@ -278,7 +316,9 @@ function CustomerFollowUpDialogBody({
             </div>
 
             {canCreateCallRecord ? (
-              <div className={cn(dialogSurfaceClassName, "px-4 py-3.5 md:px-5")}>
+              <div
+                className={cn(dialogSurfaceClassName, "px-4 py-3.5 md:px-5")}
+              >
                 <div className="mb-3">
                   <p className="crm-detail-label text-[11px]">本次跟进</p>
                 </div>
@@ -288,31 +328,46 @@ function CustomerFollowUpDialogBody({
                   resultOptions={resultOptions}
                   variant="quick-note"
                   defaultResult={presetResult}
-                  remarkAutoFocus={remarkAutoFocus}
+                  remarkAutoFocus={canCreateCallRecord || remarkAutoFocus}
                   submitLabel="保存本次跟进"
                   pendingLabel="保存中..."
                   className={cn(
                     "[&_label]:space-y-1.5",
-                    "[&_.crm-label]:text-[10px] [&_.crm-label]:font-semibold [&_.crm-label]:uppercase [&_.crm-label]:tracking-[0.16em] [&_.crm-label]:text-[var(--color-sidebar-muted)]",
-                    "[&_.crm-input]:min-h-[2.75rem] [&_.crm-select]:min-h-[2.75rem] [&_.crm-textarea]:min-h-[8.75rem]",
-                    "[&_.crm-input]:rounded-[1.05rem] [&_.crm-select]:rounded-[1.05rem] [&_.crm-textarea]:rounded-[1.1rem]",
-                    "[&_.crm-input]:border-[var(--color-border-soft)] [&_.crm-select]:border-[var(--color-border-soft)] [&_.crm-textarea]:border-[var(--color-border-soft)]",
-                    "[&_.crm-input]:bg-[var(--color-shell-surface)] [&_.crm-select]:bg-[var(--color-shell-surface)] [&_.crm-textarea]:bg-[var(--color-shell-surface)]",
-                    "[&_.crm-input]:shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] [&_.crm-select]:shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] [&_.crm-textarea]:shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]",
-                    "[&_.crm-banner]:rounded-[1rem] [&_.crm-banner]:border-[var(--color-border-soft)] [&_.crm-banner]:bg-[var(--color-shell-surface)] [&_.crm-banner]:shadow-none",
-                    "[&_.crm-button-primary]:min-h-[2.6rem] [&_.crm-button-primary]:rounded-full [&_.crm-button-primary]:px-4 [&_.crm-button-primary]:text-[12px] [&_.crm-button-primary]:shadow-[0_12px_24px_rgba(79,125,247,0.16)]",
+                    "[&_.crm-label]:text-[10px] [&_.crm-label]:font-semibold [&_.crm-label]:uppercase [&_.crm-label]:tracking-[0.16em] [&_.crm-label]:text-muted-foreground",
+                    "[&_.crm-input]:min-h-[2.55rem] [&_.crm-select]:min-h-[2.55rem] [&_.crm-textarea]:min-h-[7.25rem]",
+                    "[&_.crm-input]:rounded-lg [&_.crm-select]:rounded-lg [&_.crm-textarea]:rounded-lg",
+                    "[&_.crm-input]:border [&_.crm-select]:border [&_.crm-textarea]:border",
+                    "[&_.crm-input]:border-border/60 [&_.crm-select]:border-border/60 [&_.crm-textarea]:border-border/60",
+                    "[&_.crm-input]:bg-background [&_.crm-select]:bg-background [&_.crm-textarea]:bg-background",
+                    "[&_.crm-input]:shadow-sm [&_.crm-select]:shadow-sm [&_.crm-textarea]:shadow-sm",
+                    "[&_.crm-input:hover]:bg-background [&_.crm-select:hover]:bg-background [&_.crm-textarea:hover]:bg-background",
+                    "[&_.crm-input:focus]:border-primary [&_.crm-select:focus]:border-primary [&_.crm-textarea:focus]:border-primary",
+                    "[&_.crm-input:focus]:ring-1 [&_.crm-select:focus]:ring-1 [&_.crm-textarea:focus]:ring-1",
+                    "[&_.crm-input:focus]:ring-primary [&_.crm-select:focus]:ring-primary [&_.crm-textarea:focus]:ring-primary",
+                    "[&_.crm-banner]:rounded-lg [&_.crm-banner]:border-border/60 [&_.crm-banner]:bg-background [&_.crm-banner]:shadow-none",
                   )}
+                  submitButtonClassName="inline-flex w-full items-center justify-center rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                   onSuccess={onClose}
                 />
               </div>
             ) : (
-              <div className={cn(dialogSurfaceClassName, "px-4 py-3.5 text-[13px] leading-6 text-[var(--color-sidebar-muted)]")}>
+              <div
+                className={cn(
+                  dialogSurfaceClassName,
+                  "px-4 py-3.5 text-[13px] leading-6 text-[var(--color-sidebar-muted)]",
+                )}
+              >
                 当前角色仅查看最近记录。补记请进入客户详情。
               </div>
             )}
           </div>
 
-          <div className={cn(dialogSurfaceClassName, "flex min-h-0 min-w-0 flex-col px-4 py-3.5 md:px-5")}>
+          <div
+            className={cn(
+              dialogSurfaceClassName,
+              "flex min-h-[18rem] min-w-0 flex-col px-4 py-3.5 md:px-5 lg:h-full lg:min-h-0",
+            )}
+          >
             <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-1">
                 <p className="crm-detail-label text-[11px]">最近记录</p>
@@ -327,14 +382,25 @@ function CustomerFollowUpDialogBody({
               </p>
             </div>
 
-            <CustomerCallRecordHistory
-              records={item.callRecords}
-              className="space-y-2.5"
-              cardClassName="rounded-[1.05rem] border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-4 py-3 shadow-none hover:border-[rgba(122,154,255,0.18)] hover:bg-[var(--color-shell-hover)] hover:shadow-none"
-              emptyTitle="暂无跟进记录"
-              emptyDescription="补记通话后会显示在这里。"
-              emptyClassName="min-h-[12rem] border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] shadow-none"
-            />
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              <CustomerCallRecordHistory
+                records={visibleCallRecords}
+                variant="timeline"
+                cardClassName="px-0"
+                emptyTitle="暂无跟进记录"
+                emptyDescription="补记通话后会显示在这里。"
+                emptyClassName="min-h-[12rem] border-border/40 bg-background shadow-none"
+              />
+              {!isHistoryExpanded && collapsedHistoryCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setIsHistoryExpanded(true)}
+                  className="mt-2 w-full rounded-lg border border-dashed border-border py-3 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+                >
+                  展开查看其余 {collapsedHistoryCount} 条记录
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>

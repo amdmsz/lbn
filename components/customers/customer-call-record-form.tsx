@@ -8,6 +8,7 @@ import {
   type CreateCallRecordActionState,
 } from "@/components/customers/customer-call-action-state";
 import { ActionBanner } from "@/components/shared/action-banner";
+import { notifyToast } from "@/components/shared/toast-provider";
 import type { CallResultOption } from "@/lib/calls/metadata";
 import {
   filterMobileCallResultOptions,
@@ -114,6 +115,7 @@ export function CustomerCallRecordForm({
   submitLabel = "保存通话记录",
   pendingLabel = "保存中...",
   className,
+  submitButtonClassName,
   onSuccess,
   variant = "full",
   defaultDurationSeconds = 0,
@@ -129,6 +131,7 @@ export function CustomerCallRecordForm({
   submitLabel?: string;
   pendingLabel?: string;
   className?: string;
+  submitButtonClassName?: string;
   onSuccess?: () => void;
   variant?: "full" | "quick-note" | "mobile-followup";
   defaultDurationSeconds?: number;
@@ -141,6 +144,7 @@ export function CustomerCallRecordForm({
 }>) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
+  const remarkRef = useRef<HTMLTextAreaElement>(null);
   const [state, setState] = useState<CreateCallRecordActionState>(
     initialCreateCallRecordActionState,
   );
@@ -168,6 +172,18 @@ export function CustomerCallRecordForm({
     setConnectedState(inferConnectedStateFromResultCode(resolvedDefaultResult));
     setWechatState(inferWechatStateFromResultCode(resolvedDefaultResult));
   }, [resolvedDefaultResult]);
+
+  useEffect(() => {
+    if (!remarkAutoFocus) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      remarkRef.current?.focus({ preventScroll: true });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [remarkAutoFocus]);
 
   function syncMobileResult(
     nextConnectedState: MobileCallConnectedState,
@@ -205,6 +221,11 @@ export function CustomerCallRecordForm({
         setConnectedState(inferConnectedStateFromResultCode(resolvedDefaultResult));
         setWechatState(inferWechatStateFromResultCode(resolvedDefaultResult));
         setSelectedResult(resolvedDefaultResult);
+        notifyToast({
+          title: "跟进已保存",
+          description: nextState.message,
+          tone: "success",
+        });
         onSuccess?.();
         router.refresh();
       }
@@ -401,6 +422,7 @@ export function CustomerCallRecordForm({
       <label className="block space-y-2">
         <span className="crm-label">备注</span>
         <textarea
+          ref={remarkRef}
           name="remark"
           rows={4}
           maxLength={1000}
@@ -410,8 +432,8 @@ export function CustomerCallRecordForm({
         />
       </label>
 
-      {state.message ? (
-        <ActionBanner tone={state.status === "success" ? "success" : "danger"}>
+      {state.message && state.status !== "success" ? (
+        <ActionBanner tone="danger">
           {state.message}
         </ActionBanner>
       ) : null}
@@ -447,7 +469,13 @@ export function CustomerCallRecordForm({
           </div>
         ) : null}
 
-        <button type="submit" disabled={pending} className="crm-button crm-button-primary">
+        <button
+          type="submit"
+          disabled={pending}
+          className={
+            submitButtonClassName ?? "crm-button crm-button-primary"
+          }
+        >
           {pending ? pendingLabel : submitLabel}
         </button>
       </div>

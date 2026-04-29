@@ -1085,6 +1085,9 @@ export async function updateSalesOrderShipping(
   const salesOrder = existing.salesOrder;
   const normalizedTrackingNumber =
     input.trackingNumber.trim() || existing.trackingNumber?.trim() || "";
+  const trackingNumberChanged =
+    Boolean(input.trackingNumber.trim()) &&
+    input.trackingNumber.trim() !== existing.trackingNumber?.trim();
   const isCodTask = Number(existing.codAmount) > 0;
   const normalizedCodStatus = input.codCollectionStatus || "";
   const normalizedCodRemark = input.codRemark.trim();
@@ -1128,6 +1131,17 @@ export async function updateSalesOrderShipping(
           input.shippingStatus === ShippingFulfillmentStatus.CANCELED
             ? existing.completedAt ?? new Date()
             : existing.completedAt,
+        ...(trackingNumberChanged
+          ? {
+              logisticsLastCheckedAt: null,
+              logisticsLastStatusCode: null,
+              logisticsLastStatusLabel: null,
+              logisticsLastEventAt: null,
+              logisticsExceptionType: null,
+              logisticsExceptionDetectedAt: null,
+              logisticsExceptionMessage: null,
+            }
+          : {}),
       },
     });
 
@@ -1151,7 +1165,7 @@ export async function updateSalesOrderShipping(
 
       if (!openTask) {
         const nextTriggerAt = new Date();
-        nextTriggerAt.setDate(nextTriggerAt.getDate() + 2);
+        nextTriggerAt.setDate(nextTriggerAt.getDate() + 3);
 
         const followUpTask = await tx.logisticsFollowUpTask.create({
           data: {
@@ -1161,7 +1175,7 @@ export async function updateSalesOrderShipping(
             ownerId: logisticsOwnerId,
             intervalDays: 2,
             nextTriggerAt,
-            remark: "首次回填物流单号后自动创建的物流跟进任务。",
+            remark: "首次回填物流单号后自动创建的智能物流检查任务。",
           },
           select: {
             id: true,

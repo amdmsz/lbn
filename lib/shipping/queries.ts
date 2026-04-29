@@ -352,6 +352,18 @@ export type ShippingOperationsItem = {
   reportedAt: Date | null;
   shippedAt: Date | null;
   createdAt: Date;
+  logisticsLastCheckedAt: Date | null;
+  logisticsLastStatusCode: string | null;
+  logisticsLastStatusLabel: string | null;
+  logisticsLastEventAt: Date | null;
+  logisticsExceptionType:
+    | "ADDRESS_MISMATCH"
+    | "RETURN_OR_REJECTED"
+    | "TRACE_QUERY_FAILED"
+    | "OVERDUE_NOT_SIGNED"
+    | null;
+  logisticsExceptionDetectedAt: Date | null;
+  logisticsExceptionMessage: string | null;
   exportBatch: {
     id: string;
     exportNo: string;
@@ -794,6 +806,7 @@ function buildShippingExceptionWhere(): Prisma.ShippingTaskWhereInput {
           { exportBatch: { is: { fileUrl: null } } },
         ],
       },
+      { logisticsExceptionType: { not: null } },
     ],
   };
 }
@@ -1363,6 +1376,13 @@ export async function getShippingOperationsPageData(
           reportedAt: true,
           shippedAt: true,
           createdAt: true,
+          logisticsLastCheckedAt: true,
+          logisticsLastStatusCode: true,
+          logisticsLastStatusLabel: true,
+          logisticsLastEventAt: true,
+          logisticsExceptionType: true,
+          logisticsExceptionDetectedAt: true,
+          logisticsExceptionMessage: true,
           exportBatch: {
             select: {
               id: true,
@@ -1470,6 +1490,13 @@ export async function getShippingOperationsPageData(
             reportedAt: true,
             shippedAt: true,
             createdAt: true,
+            logisticsLastCheckedAt: true,
+            logisticsLastStatusCode: true,
+            logisticsLastStatusLabel: true,
+            logisticsLastEventAt: true,
+            logisticsExceptionType: true,
+            logisticsExceptionDetectedAt: true,
+            logisticsExceptionMessage: true,
             exportBatch: {
               select: {
                 id: true,

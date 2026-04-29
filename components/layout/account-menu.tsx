@@ -2,9 +2,8 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronUp, LogOut, Palette, Settings2 } from "lucide-react";
+import { ChevronUp, LogOut, Settings2 } from "lucide-react";
 import { signOut } from "next-auth/react";
-import { AppearanceSwitcher } from "@/components/layout/appearance-switcher";
 import { AvatarSettingsPanel } from "@/components/layout/avatar-settings-panel";
 import { resolveAvatarSrc } from "@/lib/account/avatar";
 import { cn } from "@/lib/utils";
@@ -76,14 +75,14 @@ function AccountRow({
 }>) {
   const content = (
     <>
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.95rem] bg-[var(--color-accent-soft)] text-[var(--color-accent-strong)]">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center text-muted-foreground transition-colors group-hover:text-primary">
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-medium text-[var(--foreground)]">
+        <span className="block truncate text-sm font-medium text-inherit">
           {title}
         </span>
-        <span className="mt-0.5 block truncate text-[11px] text-[var(--color-sidebar-muted)]">
+        <span className="mt-0.5 block truncate text-[11px] font-normal text-muted-foreground">
           {description}
         </span>
       </span>
@@ -93,7 +92,7 @@ function AccountRow({
 
   if (!onClick) {
     return (
-      <div className="flex items-center gap-3 rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
+      <div className="group flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted hover:text-primary">
         {content}
       </div>
     );
@@ -103,7 +102,7 @@ function AccountRow({
     <button
       type="button"
       onClick={onClick}
-      className="crm-motion-pill flex w-full items-center gap-3 rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3 text-left transition-[border-color,background-color,box-shadow] hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-md)]"
+      className="group flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted hover:text-primary"
     >
       {content}
     </button>
@@ -229,32 +228,30 @@ export function AccountMenu({
       {open ? (
         <div
           className={cn(
-            "crm-animate-pop absolute z-50 w-[18.75rem] overflow-hidden rounded-[1.2rem] border border-[var(--color-shell-topbar-border)] bg-[var(--color-shell-surface-strong)] shadow-[var(--color-shell-shadow-lg)] backdrop-blur-[20px]",
+            "crm-animate-pop absolute z-50 w-64 rounded-xl border border-border/60 bg-background p-2 shadow-xl",
             resolvedDropdownPlacement === "right-start"
               ? "bottom-0 left-[calc(100%+0.6rem)]"
               : resolvedDropdownPlacement === "down-end"
                 ? "right-0 top-[calc(100%+0.6rem)]"
-                : "bottom-[calc(100%+0.6rem)] left-0",
+            : "bottom-[calc(100%+0.6rem)] left-0",
           )}
         >
-          <div className="border-b border-[var(--color-shell-topbar-border)] px-4 py-4">
-            <div className="flex items-center gap-3">
-              <AvatarBadge avatarPath={avatarPath} name={currentUser.name} size="large" />
-              <div className="min-w-0">
-                <p className="truncate text-[14px] font-semibold text-[var(--foreground)]">
-                  {currentUser.name}
-                </p>
-                <p className="mt-1 truncate text-[11px] text-[var(--color-sidebar-muted)]">
-                  {identityMeta}
-                </p>
-                <p className="mt-1 truncate text-[11px] text-[var(--color-sidebar-muted)]">
-                  @{currentUser.username}
-                </p>
-              </div>
+          <div className="mb-2 flex items-center gap-3 border-b border-border/50 pb-3">
+            <AvatarBadge avatarPath={avatarPath} name={currentUser.name} size="large" />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-foreground">
+                {currentUser.name}
+              </p>
+              <p className="mt-1 truncate text-xs text-muted-foreground">
+                {identityMeta}
+              </p>
+              <p className="mt-1 truncate text-xs text-muted-foreground">
+                @{currentUser.username}
+              </p>
             </div>
           </div>
 
-          <div className="space-y-3 px-4 py-4">
+          <div className="space-y-1">
             <AccountRow
               icon={<Settings2 className="h-4 w-4" />}
               title="个人资料与头像"
@@ -271,7 +268,7 @@ export function AccountMenu({
             />
 
             {avatarPanelOpen ? (
-              <div className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-2">
+              <div className="mt-2">
                 <AvatarSettingsPanel
                   user={currentUser}
                   avatarPath={avatarPath}
@@ -279,42 +276,22 @@ export function AccountMenu({
                 />
               </div>
             ) : null}
-
-            <div className="rounded-[1.15rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] p-3 shadow-[var(--color-shell-shadow-xs)]">
-              <div className="mb-3 flex items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.95rem] bg-[var(--color-accent-soft)] text-[var(--color-accent-strong)]">
-                  <Palette className="h-4 w-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-semibold text-[var(--foreground)]">
-                    {"\u5168\u7ad9\u914d\u8272"}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-[var(--color-sidebar-muted)]">
-                    {"\u57fa\u4e8e animated-login \u7684\u84dd\u767d\u4f53\u7cfb\u6269\u5c55"}
-                  </p>
-                </div>
-              </div>
-              <AppearanceSwitcher />
-            </div>
           </div>
 
-          <div className="border-t border-[var(--color-shell-topbar-border)] px-4 py-3">
+          <div className="my-1 h-px bg-border/40" />
+
+          <div>
             <button
               type="button"
               onClick={() => signOut({ callbackUrl: "/login" })}
-              className="crm-motion-pill flex w-full items-center justify-between rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2.5 text-left transition-[border-color,background-color,box-shadow] hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-md)]"
+              className="group flex w-full cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
             >
-              <span className="flex items-center gap-2.5">
-                <span className="flex h-8 w-8 items-center justify-center rounded-[0.9rem] bg-[rgba(209,91,118,0.12)] text-[var(--color-danger)]">
-                  <LogOut className="h-4 w-4" />
-                </span>
-                <span>
-                  <span className="block text-[13px] font-medium text-[var(--foreground)]">
-                    退出登录
-                  </span>
-                  <span className="block text-[11px] text-[var(--color-sidebar-muted)]">
-                    结束当前会话并返回登录页
-                  </span>
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center text-destructive/70 transition-colors group-hover:text-destructive">
+                <LogOut className="h-4 w-4" />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-medium">
+                  退出登录
                 </span>
               </span>
             </button>

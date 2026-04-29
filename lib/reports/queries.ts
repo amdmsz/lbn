@@ -1,7 +1,6 @@
 import {
   AttendanceStatus,
   CallResult,
-  GiftReviewStatus,
   InvitationStatus,
   LiveSessionStatus,
   PaymentCollectionChannel,
@@ -16,14 +15,12 @@ import {
 } from "@prisma/client";
 import {
   canAccessCustomerModule,
-  canAccessGiftModule,
   canAccessLeadModule,
   canAccessLiveSessionModule,
   canAccessPaymentRecordModule,
   canAccessReportModule,
   canAccessShippingModule,
   getCustomerScope,
-  getGiftScope,
   getLeadScope,
   getShippingTaskScope,
 } from "@/lib/auth/access";
@@ -215,14 +212,6 @@ function getScopedCustomerWhere(viewer: ReportViewer): Prisma.CustomerWhereInput
   return getCustomerScope(viewer.role, viewer.id, viewer.teamId);
 }
 
-function getScopedGiftWhere(viewer: ReportViewer): Prisma.GiftRecordWhereInput | null {
-  if (!canAccessGiftModule(viewer.role)) {
-    return null;
-  }
-
-  return getGiftScope(viewer.role, viewer.id, viewer.teamId);
-}
-
 function getScopedShippingWhere(viewer: ReportViewer): Prisma.ShippingTaskWhereInput | null {
   if (!canAccessShippingModule(viewer.role)) {
     return null;
@@ -277,14 +266,12 @@ async function getTodayCards(viewer: ReportViewer) {
   const today = getTodayRange(now);
   const leadWhere = getScopedLeadWhere(viewer);
   const customerWhere = getScopedCustomerWhere(viewer);
-  const giftWhere = getScopedGiftWhere(viewer);
   const shippingWhere = getScopedShippingWhere(viewer);
 
   const [
     todayLeadCount,
     pendingFollowUpCustomers,
     todayLiveSessions,
-    pendingGiftReviews,
     pendingShippingTasks,
   ] = await Promise.all([
     leadWhere
@@ -369,18 +356,6 @@ async function getTodayCards(viewer: ReportViewer) {
           },
         })
       : Promise.resolve(null),
-    giftWhere
-      ? prisma.giftRecord.count({
-          where: {
-            AND: [
-              giftWhere,
-              {
-                reviewStatus: GiftReviewStatus.PENDING_REVIEW,
-              },
-            ],
-          },
-        })
-      : Promise.resolve(null),
     shippingWhere
       ? prisma.shippingTask.count({
           where: {
@@ -424,14 +399,6 @@ async function getTodayCards(viewer: ReportViewer) {
         todayLiveSessions === null
           ? "当前角色无权查看直播场次"
           : `口径：${formatDate(today.start)} 开播的直播场次`,
-    },
-    {
-      label: "待审核礼品单",
-      value: toCountValue(pendingGiftReviews),
-      note:
-        pendingGiftReviews === null
-          ? "当前角色无权查看礼品审核数据"
-          : "口径：审核状态为待审核的可见礼品记录",
     },
     {
       label: "待发货任务数",
@@ -729,25 +696,6 @@ async function getFulfillmentSummary(viewer: ReportViewer) {
     prisma.shippingTask.count({
       where: codPendingWhere,
     }),
-    canAccessReportModule(viewer.role)
-      ? prisma.paymentPlan.count({
-          where: {
-            AND: [
-              buildPaymentPlanScope(viewer, teamId),
-              {
-                sourceType: "GIFT_RECORD",
-                subjectType: "FREIGHT",
-                status: {
-                  not: PaymentPlanStatus.CANCELED,
-                },
-                remainingAmount: {
-                  gt: 0,
-                },
-              },
-            ],
-          },
-        })
-      : Promise.resolve(null),
   ];
 
   const [
@@ -755,7 +703,6 @@ async function getFulfillmentSummary(viewer: ReportViewer) {
     reportedWithoutTrackingCount,
     logisticsDueCount,
     codPendingCount,
-    giftFreightPendingCount,
   ] = await Promise.all(promises);
 
   const cards: SummaryCard[] = [
@@ -788,18 +735,9 @@ async function getFulfillmentSummary(viewer: ReportViewer) {
     },
   ];
 
-  if (giftFreightPendingCount !== null) {
-    cards.push({
-      label: "待礼品运费",
-      value: String(giftFreightPendingCount),
-      note: "礼品运费 PaymentPlan 尚未完成收款的记录。",
-      href: "/gifts",
-    });
-  }
-
   return {
     description:
-      "履约摘要聚焦发货执行、物流跟进、COD 回款与礼品运费，不扩展为财务中心。",
+      "履约摘要聚焦发货执行、物流跟进与 COD 回款，不扩展为财务中心。",
     cards,
   } satisfies PaymentSummaryData;
 }
@@ -1352,10 +1290,6 @@ export async function getReportsPageData(viewer: ReportViewer) {
         description: "当天开播的直播场次数量。",
       },
       {
-        label: "待审核礼品单",
-        description: "审核状态为 PENDING_REVIEW 的礼品记录数量。",
-      },
-      {
         label: "待发货任务数",
         description: "仅统计已关联 SalesOrder 的 V2 发货任务，且发货状态为未进发货池或待发货。",
       },
@@ -1374,10 +1308,6 @@ export async function getReportsPageData(viewer: ReportViewer) {
       {
         label: "待 COD 回款",
         description: "已发货 COD 订单中，履约侧仍未完成回款登记的任务数。",
-      },
-      {
-        label: "待礼品运费",
-        description: "GiftRecord 运费对应的 PaymentPlan 仍有 remainingAmount 的记录数。",
       },
       {
         label: "已录入收款金额",

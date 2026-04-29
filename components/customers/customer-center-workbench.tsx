@@ -16,7 +16,7 @@ import { CustomersTable } from "@/components/customers/customers-table";
 import type { CustomerCenterData } from "@/lib/customers/queries";
 import { cn } from "@/lib/utils";
 
-const workspaceShellClassName = "crm-workspace-shell";
+const workspaceShellClassName = "mx-auto w-full max-w-7xl min-w-0";
 
 function getInlineTableAction(role: RoleCode): ReactNode {
   if (!canCreateCustomer(role)) {
@@ -29,10 +29,12 @@ function getInlineTableAction(role: RoleCode): ReactNode {
 export function CustomerCenterWorkbench({
   role,
   data,
+  outboundCallEnabled,
   moveCustomerToRecycleBinAction,
 }: Readonly<{
   role: RoleCode;
   data: CustomerCenterData;
+  outboundCallEnabled: boolean;
   moveCustomerToRecycleBinAction?: MoveCustomerToRecycleBinAction;
 }>) {
   return (
@@ -57,6 +59,7 @@ export function CustomerCenterWorkbench({
           callResultOptions={data.callResultOptions}
           canCreateCallRecord={canCreateCallRecord(role)}
           canCreateSalesOrder={canCreateSalesOrder(role)}
+          outboundCallEnabled={outboundCallEnabled}
           moveToRecycleBinAction={moveCustomerToRecycleBinAction}
           canBatchAddTags={canBatchManageCustomerTags(role)}
           canBatchMoveToRecycleBin={canBatchMoveCustomersToRecycleBin(role)}

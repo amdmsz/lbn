@@ -4,10 +4,7 @@ import { LeadsFilters } from "@/components/leads/leads-filters";
 import { LeadsTable } from "@/components/leads/leads-table";
 import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { PageHeader } from "@/components/shared/page-header";
-import {
-  PageSummaryStrip,
-  type PageSummaryStripItem,
-} from "@/components/shared/page-summary-strip";
+import type { PageSummaryStripItem } from "@/components/shared/page-summary-strip";
 import {
   canAccessLeadModule,
   canManageLeadAssignments,
@@ -75,6 +72,35 @@ function buildSummaryItems(input: {
   ];
 }
 
+function LeadSummaryGrid({
+  items,
+}: Readonly<{
+  items: PageSummaryStripItem[];
+}>) {
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {items.map((item, index) => (
+        <div
+          key={item.key ?? `${item.label}-${index}`}
+          className="rounded-xl border border-border/60 bg-card p-5 shadow-sm"
+        >
+          <p className="text-xs font-semibold uppercase text-muted-foreground">
+            {item.label}
+          </p>
+          <div className="mt-2 text-2xl font-semibold text-foreground">
+            {item.value}
+          </div>
+          {item.note ? (
+            <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
+              {item.note}
+            </p>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default async function LeadsPage({
   searchParams,
 }: Readonly<{
@@ -104,19 +130,20 @@ export default async function LeadsPage({
 
   return (
     <WorkbenchLayout
+      className="!gap-4 md:!gap-5"
       header={
         <PageHeader
           eyebrow="线索中心"
           title="线索分配中心"
           description={undefined}
           meta={
-            <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-[0.06em] text-[var(--color-sidebar-muted)]">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-muted-foreground">
               <span>{contextLabel}</span>
-              <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+              <span className="h-1 w-1 rounded-full bg-border" />
               <span>{canAssign ? "支持批量分配" : "只读回看"}</span>
               {data.importBatch ? (
                 <>
-                  <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
+                  <span className="h-1 w-1 rounded-full bg-border" />
                   <span>{data.importBatch.fileName}</span>
                 </>
               ) : null}
@@ -127,7 +154,7 @@ export default async function LeadsPage({
               <Link
                 href="/lead-imports"
                 scroll={false}
-                className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-[13px]"
+                className="inline-flex min-h-0 items-center rounded-lg border border-border/60 bg-card px-3 py-1.5 text-[13px] font-medium text-muted-foreground shadow-sm transition-all hover:border-primary/40 hover:text-primary"
               >
                 返回导入中心
               </Link>
@@ -135,7 +162,7 @@ export default async function LeadsPage({
                 <Link
                   href={`/lead-imports/${data.importBatch.id}`}
                   scroll={false}
-                  className="crm-button crm-button-primary min-h-0 px-3 py-1.5 text-[13px]"
+                  className="inline-flex min-h-0 items-center rounded-lg bg-primary px-3 py-1.5 text-[13px] font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90"
                 >
                   查看当前批次
                 </Link>
@@ -146,7 +173,7 @@ export default async function LeadsPage({
         />
       }
       summary={
-        <PageSummaryStrip
+        <LeadSummaryGrid
           items={buildSummaryItems({
             contextLabel,
             importBatchFileName: data.importBatch?.fileName ?? null,
@@ -154,7 +181,6 @@ export default async function LeadsPage({
             assignedCount: data.assigned.totalCount,
             totalVisibleCount: data.summary.totalVisibleCount,
           })}
-          className="gap-1.5"
         />
       }
       toolbar={

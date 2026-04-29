@@ -2,9 +2,19 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { FormEvent, ReactNode } from "react";
+import type { FormEvent, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { useEffect, useState, useTransition } from "react";
-import { ExternalLink, LayoutGrid, Rows3 } from "lucide-react";
+import {
+  CheckSquare2,
+  ExternalLink,
+  Eye,
+  LayoutGrid,
+  Rows3,
+  SquarePen,
+  Tags,
+  Trash2,
+  X,
+} from "lucide-react";
 import {
   batchAddCustomerTagAction,
   batchMoveCustomersToRecycleBinAction,
@@ -13,17 +23,18 @@ import {
   CustomerFollowUpDialog,
   getCustomerExecutionClassQuickResult,
 } from "@/components/customers/customer-follow-up-dialog";
+import { CustomerDetailSheet } from "@/components/customers/customer-detail-sheet";
 import { CustomerPhoneSpotlight } from "@/components/customers/customer-phone-spotlight";
 import { InlineCustomerRemarkField } from "@/components/customers/inline-customer-remark-field";
 import { CustomerListCard } from "@/components/customers/customer-list-card";
 import { CustomerRecycleBlockedReasonSummary } from "@/components/customers/customer-recycle-blocked-reason-summary";
 import { type MoveCustomerToRecycleBinAction } from "@/components/customers/customer-recycle-entry";
 import { MobileCallFollowUpSheet } from "@/components/customers/mobile-call-followup-sheet";
-import { BatchActionNoticeBanner } from "@/components/shared/batch-action-notice-banner";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
 import { EntityTable } from "@/components/shared/entity-table";
 import { PaginationControls } from "@/components/shared/pagination-controls";
+import { notifyToast } from "@/components/shared/toast-provider";
 import type { CallResultOption } from "@/lib/calls/metadata";
 import {
   createInitialCustomerBatchActionNoticeState,
@@ -72,6 +83,7 @@ type PageSelectionState = {
 type FollowUpDialogState = {
   item: CustomerListItem | null;
   initialResult: string;
+  remarkAutoFocus: boolean;
 };
 
 type FocusedCustomerState = {
@@ -92,10 +104,26 @@ const customerFocusStorageKey = "customer-center-last-focused-customer";
 const customerScrollStoragePrefix = "customer-center-scroll:";
 const customerFocusMaxAgeMs = 24 * 60 * 60 * 1000;
 const customerScrollMaxAgeMs = 30 * 60 * 1000;
-const initialBatchTagNoticeState =
-  createInitialCustomerBatchActionNoticeState("已有标签");
 const initialBatchRecycleNoticeState =
   createInitialCustomerBatchActionNoticeState("已在回收站");
+const MOTIVATIONAL_QUOTES = [
+  { text: "我们在想象中受的苦多于现实。", author: "塞内加 (Seneca)" },
+  {
+    text: "阻碍我们前进的，最终会成为我们前进的道路。",
+    author: "马可·奥勒留 (Marcus Aurelius)",
+  },
+  {
+    text: "伟大的事业不是靠冲动做成的，而是由一系列小事汇聚而成的。",
+    author: "梵高 (Vincent van Gogh)",
+  },
+  {
+    text: "我们最害怕做的事情，往往是我们最需要做的事情。",
+    author: "蒂姆·费里斯 (Tim Ferriss)",
+  },
+  { text: "不要预测未来，去创造它。", author: "彼得·德鲁克 (Peter Drucker)" },
+  { text: "耐心是一切聪敏才智的基础。", author: "柏拉图 (Plato)" },
+  { text: "流水不争先，争的是滔滔不绝。", author: "老子 (Laozi)" },
+] as const;
 const quietExecutionButtonVariantClassNames = {
   neutral:
     "border-[var(--crm-badge-neutral-border)] bg-[var(--crm-badge-neutral-bg)] text-[var(--crm-badge-neutral-text)]",
@@ -107,6 +135,44 @@ const quietExecutionButtonVariantClassNames = {
     "border-[rgba(240,195,106,0.18)] bg-[rgba(240,195,106,0.1)] text-[var(--color-warning)]",
   danger:
     "border-[rgba(255,148,175,0.16)] bg-[rgba(255,148,175,0.1)] text-[var(--color-danger)]",
+} as const;
+
+function DailyQuote() {
+  const [quote, setQuote] = useState<(typeof MOTIVATIONAL_QUOTES)[number]>(
+    MOTIVATIONAL_QUOTES[0],
+  );
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      const nextIndex = Math.floor(Math.random() * MOTIVATIONAL_QUOTES.length);
+
+      setQuote(MOTIVATIONAL_QUOTES[nextIndex]);
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, []);
+
+  return (
+    <figure className="mt-12 mb-8 text-center">
+      <blockquote className="text-sm italic tracking-wide text-muted-foreground/60">
+        {quote.text}
+      </blockquote>
+      <figcaption className="mt-2 block text-xs font-medium uppercase tracking-widest text-muted-foreground/40">
+        {quote.author}
+      </figcaption>
+    </figure>
+  );
+}
+
+const spaciousExecutionPillClassNames = {
+  neutral: "border-border bg-muted/55 text-muted-foreground",
+  info: "border-primary/20 bg-primary/10 text-primary",
+  success:
+    "border-[rgba(87,212,176,0.22)] bg-[rgba(87,212,176,0.1)] text-[var(--color-success)]",
+  warning:
+    "border-[rgba(240,195,106,0.26)] bg-[rgba(240,195,106,0.12)] text-[var(--color-warning)]",
+  danger:
+    "border-[rgba(255,148,175,0.22)] bg-[rgba(255,148,175,0.1)] text-[var(--color-danger)]",
 } as const;
 
 function getCustomerAddress(item: CustomerListItem) {
@@ -122,6 +188,12 @@ function getCustomerAddress(item: CustomerListItem) {
 
 function getOwnerLabel(item: CustomerListItem) {
   return item.owner ? `${item.owner.name} (@${item.owner.username})` : "未分配负责人";
+}
+
+function getCustomerInitial(item: CustomerListItem) {
+  const name = item.name.trim();
+  if (!name) return "?";
+  return Array.from(name)[0]?.toUpperCase() ?? "?";
 }
 
 function getPrimarySignal(item: CustomerListItem) {
@@ -190,6 +262,51 @@ function readJsonStorageValue<T>(storage: Storage, key: string): T | null {
     storage.removeItem(key);
     return null;
   }
+}
+
+function notifyCustomerBatchActionResult(
+  state: CustomerBatchActionNoticeState,
+  input: Readonly<{
+    defaultTitle: string;
+    successLabel: string;
+    countUnitLabel: string;
+  }>,
+) {
+  if (state.status === "idle") {
+    return;
+  }
+
+  const summary = state.summary;
+  const summaryText =
+    summary.totalCount > 0
+      ? `${input.successLabel} ${summary.successCount}${input.countUnitLabel}，${state.skippedLabel} ${summary.skippedCount}${input.countUnitLabel}，阻断 ${summary.blockedCount}${input.countUnitLabel}`
+      : "";
+  const scopeText = state.selection
+    ? `范围：${state.selection.label} ${state.selection.count}${input.countUnitLabel}`
+    : "";
+  const limitText = state.limitExceeded
+    ? `超过单次 ${state.limitExceeded.maxCount}${input.countUnitLabel} 上限`
+    : "";
+  const blockedText =
+    state.blockedReasonSummary.length > 0
+      ? `阻断原因：${state.blockedReasonSummary
+          .map((item) => `${item.label} ${item.count}${input.countUnitLabel}`)
+          .join("；")}`
+      : "";
+  const description = [summaryText, scopeText, limitText, blockedText]
+    .filter(Boolean)
+    .join(" · ");
+
+  notifyToast({
+    title: state.message || input.defaultTitle,
+    description,
+    tone:
+      state.status === "error"
+        ? "danger"
+        : summary.successCount > 0
+          ? "success"
+          : "info",
+  });
 }
 
 function FilterHiddenInputs({
@@ -485,6 +602,7 @@ export function CustomersTable({
   callResultOptions,
   canCreateCallRecord,
   canCreateSalesOrder = false,
+  outboundCallEnabled = false,
   moveToRecycleBinAction,
   canBatchAddTags = false,
   canBatchMoveToRecycleBin = false,
@@ -501,6 +619,7 @@ export function CustomersTable({
   callResultOptions: CallResultOption[];
   canCreateCallRecord: boolean;
   canCreateSalesOrder?: boolean;
+  outboundCallEnabled?: boolean;
   moveToRecycleBinAction?: MoveCustomerToRecycleBinAction;
   canBatchAddTags?: boolean;
   canBatchMoveToRecycleBin?: boolean;
@@ -522,16 +641,15 @@ export function CustomersTable({
   const [batchTagDialogOpen, setBatchTagDialogOpen] = useState(false);
   const [batchRecycleDialogOpen, setBatchRecycleDialogOpen] = useState(false);
   const [selectedTagId, setSelectedTagId] = useState("");
-  const [batchTagNotice, setBatchTagNotice] = useState<CustomerBatchActionNoticeState>(
-    initialBatchTagNoticeState,
-  );
   const [batchRecycleNotice, setBatchRecycleNotice] = useState<CustomerBatchActionNoticeState>(
     initialBatchRecycleNoticeState,
   );
   const [followUpDialogState, setFollowUpDialogState] = useState<FollowUpDialogState>({
     item: null,
     initialResult: "",
+    remarkAutoFocus: false,
   });
+  const [sheetCustomer, setSheetCustomer] = useState<CustomerListItem | null>(null);
   const [focusedCustomer, setFocusedCustomer] = useState<FocusedCustomerState | null>(null);
   const [batchTagPending, startBatchTagTransition] = useTransition();
   const [batchRecyclePending, startBatchRecycleTransition] = useTransition();
@@ -556,11 +674,8 @@ export function CustomersTable({
     !filteredSelectionExceedsLimit;
   const batchExecutionBlockedByLimit =
     selectionMode === "filtered" && filteredSelectionExceedsLimit;
-  const showBatchIdleBar = canBatchSelect && selectedCount === 0;
+  const showBatchQuickSelect = canBatchSelect && selectedCount === 0;
   const showBatchActiveBar = canBatchSelect && selectedCount > 0;
-  const focusedCustomerVisible = focusedCustomer
-    ? items.some((item) => item.id === focusedCustomer.id)
-    : false;
 
   useEffect(() => {
     const stored = window.localStorage.getItem(customerViewStorageKey);
@@ -677,11 +792,6 @@ export function CustomersTable({
     );
   }
 
-  function clearFocusedCustomer() {
-    setFocusedCustomer(null);
-    window.localStorage.removeItem(customerFocusStorageKey);
-  }
-
   function handleChangeView(nextValue: CustomerViewMode) {
     setViewMode(nextValue);
     window.localStorage.setItem(customerViewStorageKey, nextValue);
@@ -740,7 +850,6 @@ export function CustomersTable({
 
   function openBatchTagDialog() {
     setBatchRecycleNotice(initialBatchRecycleNoticeState);
-    setBatchTagNotice(initialBatchTagNoticeState);
     setSelectedTagId("");
     setBatchTagDialogOpen(true);
   }
@@ -751,7 +860,6 @@ export function CustomersTable({
   }
 
   function openBatchRecycleDialog() {
-    setBatchTagNotice(initialBatchTagNoticeState);
     setBatchRecycleNotice(initialBatchRecycleNoticeState);
     setBatchRecycleDialogOpen(true);
   }
@@ -768,6 +876,7 @@ export function CustomersTable({
     setFollowUpDialogState({
       item,
       initialResult: options.initialResult ?? getSuggestedFollowUpResult(item),
+      remarkAutoFocus: options.remarkAutoFocus ?? false,
     });
   }
 
@@ -775,7 +884,34 @@ export function CustomersTable({
     setFollowUpDialogState({
       item: null,
       initialResult: "",
+      remarkAutoFocus: false,
     });
+  }
+
+  function openCustomerSheet(item: CustomerListItem) {
+    rememberFocusedCustomer(item);
+    setSheetCustomer(item);
+  }
+
+  function closeCustomerSheet() {
+    setSheetCustomer(null);
+  }
+
+  function handleSpaciousRowClick(
+    event: ReactMouseEvent<HTMLElement>,
+    item: CustomerListItem,
+  ) {
+    const target = event.target as HTMLElement;
+
+    if (
+      target.closest(
+        "a,button,input,textarea,select,label,[data-row-interactive='true']",
+      )
+    ) {
+      return;
+    }
+
+    openCustomerSheet(item);
   }
 
   function handleBatchTagSubmit(event: FormEvent<HTMLFormElement>) {
@@ -785,8 +921,12 @@ export function CustomersTable({
 
     startBatchTagTransition(async () => {
       const nextState = await batchAddCustomerTagAction(formData);
-      setBatchTagNotice(nextState);
       closeBatchTagDialog();
+      notifyCustomerBatchActionResult(nextState, {
+        defaultTitle: "批量标签已处理",
+        successLabel: "成功添加",
+        countUnitLabel: "位",
+      });
 
       if (nextState.summary.successCount > 0) {
         resetSelection();
@@ -804,6 +944,11 @@ export function CustomersTable({
       const nextState = await batchMoveCustomersToRecycleBinAction(formData);
       setBatchRecycleNotice(nextState);
       closeBatchRecycleDialog();
+      notifyCustomerBatchActionResult(nextState, {
+        defaultTitle: "批量回收已处理",
+        successLabel: "成功移入回收站",
+        countUnitLabel: "位",
+      });
 
       if (nextState.summary.successCount > 0 || nextState.summary.skippedCount > 0) {
         resetSelection();
@@ -820,13 +965,13 @@ export function CustomersTable({
       render: (row: CustomerListItem) => (
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href={`/customers/${row.id}`}
-              onClick={() => rememberFocusedCustomer(row)}
-              className="text-sm font-semibold text-[var(--foreground)] transition-colors hover:text-[var(--color-accent-strong)]"
+            <button
+              type="button"
+              onClick={() => openCustomerSheet(row)}
+              className="text-left text-sm font-semibold text-[var(--foreground)] transition-colors hover:text-[var(--color-accent-strong)]"
             >
               {row.name}
-            </Link>
+            </button>
             <button
               type="button"
               onClick={() =>
@@ -862,7 +1007,6 @@ export function CustomersTable({
             phone={row.phone}
             triggerSource="table"
             onFocusCustomer={() => rememberFocusedCustomer(row)}
-            className="shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow] duration-150 hover:border-[rgba(122,154,255,0.16)] hover:bg-[var(--color-shell-hover)]"
           />
           <div className="text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
             <span className="block max-w-[18rem] truncate" title={getCustomerAddress(row)}>
@@ -899,7 +1043,7 @@ export function CustomersTable({
       render: (row: CustomerListItem) => (
         <div className="space-y-1.5">
           <div
-            className="max-w-[18rem] truncate text-[13px] font-medium text-[var(--foreground)]"
+            className="max-w-[18rem] truncate text-[13px] font-normal text-[var(--color-sidebar-muted)]"
             title={getPrimarySignal(row)}
           >
             {getPrimarySignal(row)}
@@ -961,14 +1105,25 @@ export function CustomersTable({
         verticalAlign: "middle",
       },
       render: (row: CustomerListItem) => (
-        <div className="flex w-full items-center justify-center gap-1.5">
-          <Link
-            href={`/customers/${row.id}`}
-            onClick={() => rememberFocusedCustomer(row)}
-            className="crm-button crm-button-secondary inline-flex h-7 items-center rounded-[9px] px-2.5 text-[11px] font-medium motion-safe:hover:-translate-y-[1px] xl:h-8 xl:rounded-[10px] xl:px-3 xl:text-[12px]"
+        <div className="flex w-full items-center justify-center gap-1.5 opacity-100 transition-[opacity,transform] duration-150 md:pointer-events-none md:translate-y-1 md:opacity-0 md:group-hover/customer-row:pointer-events-auto md:group-hover/customer-row:translate-y-0 md:group-hover/customer-row:opacity-100 md:group-focus-within/customer-row:pointer-events-auto md:group-focus-within/customer-row:translate-y-0 md:group-focus-within/customer-row:opacity-100">
+          <button
+            type="button"
+            onClick={() => openCustomerSheet(row)}
+            aria-label={`查看 ${row.name} 详情`}
+            title="查看详情"
+            className="crm-button crm-button-secondary inline-flex h-8 w-8 items-center rounded-[10px] px-0 text-[var(--color-sidebar-muted)] motion-safe:hover:-translate-y-[1px] hover:text-[var(--foreground)]"
           >
-            详情
-          </Link>
+            <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => openFollowUpDialog(row)}
+            aria-label={`编辑 ${row.name} 跟进`}
+            title="编辑跟进"
+            className="crm-button crm-button-secondary inline-flex h-8 w-8 items-center rounded-[10px] px-0 text-[var(--color-sidebar-muted)] motion-safe:hover:-translate-y-[1px] hover:text-[var(--foreground)]"
+          >
+            <SquarePen className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
           <Link
             href={`/customers/${row.id}`}
             target="_blank"
@@ -976,7 +1131,7 @@ export function CustomersTable({
             onClick={() => rememberFocusedCustomer(row)}
             aria-label={`新窗口打开 ${row.name} 详情`}
             title="新窗口打开详情"
-            className="crm-button crm-button-secondary inline-flex h-7 w-7 items-center justify-center rounded-[9px] px-0 text-[var(--color-sidebar-muted)] motion-safe:hover:-translate-y-[1px] hover:text-[var(--foreground)] xl:h-8 xl:w-8 xl:rounded-[10px]"
+            className="crm-button crm-button-secondary inline-flex h-8 w-8 items-center justify-center rounded-[10px] px-0 text-[var(--color-sidebar-muted)] motion-safe:hover:-translate-y-[1px] hover:text-[var(--foreground)]"
           >
             <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
           </Link>
@@ -1007,13 +1162,185 @@ export function CustomersTable({
       ]
     : baseColumns;
 
+  const spaciousRows = (
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="divide-y divide-border">
+        {items.map((row) => {
+          const progressSummary = getProgressSummary(row);
+          const latestCallRecord = getLatestCallRecord(row);
+          const remarkText = row.remark?.trim() || "暂无备注";
+          const executionVariant = getCustomerExecutionDisplayVariant({
+            executionClass: row.executionClass,
+            newImported: row.newImported,
+            pendingFirstCall: row.pendingFirstCall,
+          });
+
+          return (
+            <article
+              key={row.id}
+              id={`customer-row-${row.id}`}
+              onClick={(event) => handleSpaciousRowClick(event, row)}
+              className={cn(
+                  "group/customer-row grid cursor-pointer grid-cols-12 items-center gap-4 bg-card px-5 py-6 transition-[background-color,box-shadow] duration-200 xl:px-6",
+                  "hover:bg-muted/45",
+                  focusedCustomer?.id === row.id &&
+                    "scroll-mt-28 bg-primary/10 shadow-[inset_3px_0_0_hsl(var(--primary))]",
+                )}
+              >
+              <div className="col-span-12 flex min-w-0 items-center gap-3 lg:col-span-4">
+                {canBatchSelect ? (
+                  <label
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-card shadow-sm transition hover:border-primary/20 hover:bg-muted"
+                    data-row-interactive="true"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={
+                        selectionMode === "filtered" || manualSelectedIds.includes(row.id)
+                      }
+                      onChange={() => toggleSelected(row.id)}
+                      aria-label={`选择客户 ${row.name}`}
+                      className="h-4 w-4 rounded border-border bg-card text-primary focus:ring-primary/15"
+                    />
+                  </label>
+                ) : null}
+
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-primary/15 bg-primary/10 text-sm font-bold text-primary shadow-sm">
+                  {getCustomerInitial(row)}
+                </div>
+
+                <div className="min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => openCustomerSheet(row)}
+                    className="block max-w-full truncate text-left text-base font-semibold text-foreground transition-colors hover:text-primary"
+                  >
+                    {row.name}
+                  </button>
+                  <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="truncate font-mono text-lg font-bold leading-none tracking-tight text-foreground tabular-nums">
+                      {row.phone?.trim() || "暂无电话"}
+                    </span>
+                    <span
+                      className="max-w-[18rem] truncate text-sm text-muted-foreground/80"
+                      title={getCustomerAddress(row)}
+                    >
+                      {getCustomerAddress(row)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="col-span-12 min-w-0 lg:col-span-4">
+                <p
+                  className="truncate text-sm font-normal text-muted-foreground"
+                  title={getPrimarySignal(row)}
+                >
+                  {getPrimarySignal(row)}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {getSignalMeta(row)}
+                  {row.approvedTradeOrderCount > 0 || Number(row.lifetimeTradeAmount) > 0.009
+                    ? ` · 成交 ${row.approvedTradeOrderCount} 单`
+                    : ""}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openFollowUpDialog(row, {
+                        initialResult:
+                          (row.newImported && row.pendingFirstCall
+                            ? ""
+                            : getCustomerExecutionClassQuickResult(row.executionClass)) ||
+                          getSuggestedFollowUpResult(row),
+                      })
+                    }
+                    className={cn(
+                      "inline-flex h-6 items-center rounded-full border px-2.5 text-xs font-medium transition hover:-translate-y-px",
+                      spaciousExecutionPillClassNames[executionVariant],
+                    )}
+                  >
+                    {getCustomerExecutionDisplayLongLabel({
+                      executionClass: row.executionClass,
+                      newImported: row.newImported,
+                      pendingFirstCall: row.pendingFirstCall,
+                    })}
+                  </button>
+                  <span className="inline-flex h-6 items-center rounded-full border border-border bg-muted/55 px-2.5 text-xs font-medium text-muted-foreground">
+                    {progressSummary.primary}
+                  </span>
+                  <span className="inline-flex h-6 max-w-[14rem] items-center rounded-full border border-border bg-card px-2.5 text-xs font-medium text-muted-foreground">
+                    <span className="truncate">{getOwnerLabel(row)}</span>
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => openFollowUpDialog(row, { remarkAutoFocus: true })}
+                className="col-span-12 min-w-0 rounded-xl px-0 text-left outline-none transition focus-visible:ring-4 focus-visible:ring-primary/15 lg:col-span-3"
+              >
+                <p className="line-clamp-2 text-sm leading-5 text-foreground/78">
+                  {remarkText}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                  <span>{latestCallRecord ? latestCallRecord.resultLabel : "暂无通话结果"}</span>
+                  <span>{`通话 ${row._count.callRecords} 次`}</span>
+                  <span title={row.latestFollowUpAt ? formatDateTime(row.latestFollowUpAt) : "暂无跟进记录"}>
+                    {row.latestFollowUpAt
+                      ? `最近 ${formatRelativeDateTime(row.latestFollowUpAt)}`
+                      : "最近 暂无"}
+                  </span>
+                </div>
+              </button>
+
+              <div className="col-span-12 flex items-center justify-end gap-1.5 lg:pointer-events-none lg:col-span-1 lg:translate-y-1 lg:opacity-0 lg:transition-[opacity,transform] lg:duration-150 lg:group-hover/customer-row:pointer-events-auto lg:group-hover/customer-row:translate-y-0 lg:group-hover/customer-row:opacity-100 lg:group-focus-within/customer-row:pointer-events-auto lg:group-focus-within/customer-row:translate-y-0 lg:group-focus-within/customer-row:opacity-100">
+                <button
+                  type="button"
+                  onClick={() => openCustomerSheet(row)}
+                  aria-label={`查看 ${row.name} 详情`}
+                  title="查看详情"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-primary"
+                >
+                  <Eye className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openFollowUpDialog(row)}
+                  aria-label={`编辑 ${row.name} 跟进`}
+                  title="编辑跟进"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-primary"
+                >
+                  <SquarePen className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <Link
+                  href={`/customers/${row.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => rememberFocusedCustomer(row)}
+                  aria-label={`新窗口打开 ${row.name} 详情`}
+                  title="新窗口打开详情"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-primary"
+                >
+                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
     <>
       <div id={scrollTargetId} className="space-y-4">
         <DataTableWrapper
           title="客户列表"
           headerMode="hidden"
-          className="rounded-[1.1rem] border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-md)]"
+          className="rounded-2xl border-border bg-card shadow-sm"
+          contentClassName="p-3 md:p-4"
         >
           {items.length === 0 ? (
             <div className="space-y-4">
@@ -1048,6 +1375,16 @@ export function CustomersTable({
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex flex-wrap items-center gap-2">
                   {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
+                  {showBatchQuickSelect ? (
+                    <button
+                      type="button"
+                      onClick={toggleSelectAllCurrentPage}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 text-xs font-medium text-muted-foreground shadow-sm transition hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                    >
+                      <CheckSquare2 className="h-3.5 w-3.5" />
+                      <span>选择当前页</span>
+                    </button>
+                  ) : null}
                   <div className="md:hidden">
                     <CustomerViewToggle value={viewMode} onChange={handleChangeView} />
                   </div>
@@ -1057,174 +1394,121 @@ export function CustomersTable({
                 </p>
               </div>
 
-              <BatchActionNoticeBanner
-                state={batchTagNotice}
-                successLabel="成功添加"
-                entityCountLabel="位客户"
-                countUnitLabel="位"
-              />
-              <BatchActionNoticeBanner
-                state={batchRecycleNotice}
-                successLabel="成功移入回收站"
-                entityCountLabel="位客户"
-                countUnitLabel="位"
-              />
-
               {batchRecycleNotice.blockedReasonSummary.length > 0 ? (
                 <CustomerRecycleBlockedReasonSummary
                   items={batchRecycleNotice.blockedReasonSummary}
                 />
               ) : null}
 
-              {showBatchIdleBar ? (
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-[0.95rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface)]/55 px-3.5 py-2.5">
-                  <div className="space-y-0.5">
-                    <p className="text-[13px] font-medium text-[var(--foreground)]">批量处理</p>
-                    <p className="text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
-                      先勾选客户，批量动作再展开。
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={toggleSelectAllCurrentPage}
-                    className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm motion-safe:hover:-translate-y-[1px]"
-                  >
-                    全选当前页
-                  </button>
-                </div>
-              ) : null}
-
               {showBatchActiveBar ? (
                 <div
                   className={cn(
-                    "space-y-3 rounded-[0.98rem] border px-3.5 py-3",
+                    "flex flex-col gap-2 rounded-2xl border px-3 py-2.5 text-sm shadow-sm sm:flex-row sm:items-center sm:justify-between",
                     batchExecutionBlockedByLimit
-                      ? "border-[rgba(141,59,51,0.16)] bg-[rgba(255,247,246,0.92)]"
+                      ? "border-rose-200 bg-rose-50 text-rose-700"
                       : selectionMode === "filtered"
-                        ? "border-[var(--color-accent-soft)] bg-[var(--color-accent)]/8"
-                        : "border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)]",
+                        ? "border-primary/30 bg-primary/10 text-primary"
+                        : "border-border/60 bg-muted/40 text-muted-foreground",
                   )}
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-0.5">
-                      <p className="text-[13px] font-medium text-[var(--foreground)]">
-                        {selectionMode === "filtered"
-                          ? `当前筛选结果 ${pagination.totalCount} 位已选`
-                          : `已选择 ${selectedCount} 位客户`}
-                      </p>
-                      <p
-                        className={cn(
-                          "text-[12px] leading-5",
-                          batchExecutionBlockedByLimit
-                            ? "text-[var(--color-danger)]"
-                            : "text-[var(--color-sidebar-muted)]",
-                        )}
-                      >
-                        {batchExecutionBlockedByLimit
-                          ? `当前筛选结果超过单次 ${MAX_BATCH_CUSTOMER_ACTION_SIZE} 位上限，请先缩小范围。`
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <span
+                      className={cn(
+                        "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-semibold",
+                        batchExecutionBlockedByLimit
+                          ? "border-rose-200 bg-card text-rose-700"
                           : selectionMode === "filtered"
-                            ? "批量动作将应用到整个筛选结果。"
-                            : allCurrentPageSelected && canSelectFiltered
-                              ? `当前页已全选，可继续扩展到 ${pagination.totalCount} 位筛选结果。`
-                              : "现在可以继续执行批量添加标签或移入回收站。"}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      {selectionMode === "manual" && allCurrentPageSelected && pagination.totalCount > items.length ? (
-                        canSelectFiltered ? (
-                          <button
-                            type="button"
-                            onClick={selectFilteredResults}
-                            className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm motion-safe:hover:-translate-y-[1px]"
-                          >
-                            选择全部 {pagination.totalCount} 位
-                          </button>
-                        ) : (
-                          <span className="text-[12px] text-[var(--color-sidebar-muted)]">
-                            当前筛选结果超过 {MAX_BATCH_CUSTOMER_ACTION_SIZE} 位上限
-                          </span>
-                        )
-                      ) : null}
-
-                      <button
-                        type="button"
-                        onClick={toggleSelectAllCurrentPage}
-                        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm motion-safe:hover:-translate-y-[1px]"
-                      >
-                        {selectionMode === "filtered"
-                          ? "取消跨页选择"
-                          : allCurrentPageSelected
-                            ? "取消当前页全选"
-                            : "全选当前页"}
-                      </button>
-
-                      {selectionMode === "manual" ? (
-                        <button
-                          type="button"
-                          onClick={resetSelection}
-                          className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm motion-safe:hover:-translate-y-[1px]"
-                        >
-                          清空选择
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-border-soft)] pt-3">
-                    <div className="text-[12px] text-[var(--color-sidebar-muted)]">
-                      {canBatchAddTags && batchTagOptions.length === 0 ? "当前暂无可用标签" : null}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {canBatchAddTags ? (
-                        <button
-                          type="button"
-                          onClick={openBatchTagDialog}
-                          disabled={batchTagOptions.length === 0 || batchExecutionBlockedByLimit}
-                          className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-55"
-                        >
-                          批量添加标签
-                        </button>
-                      ) : null}
-                      {canBatchMoveToRecycleBin ? (
-                        <button
-                          type="button"
-                          onClick={openBatchRecycleDialog}
-                          disabled={batchExecutionBlockedByLimit}
-                          className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm text-[var(--color-danger)] motion-safe:hover:-translate-y-[1px] hover:border-[rgba(141,59,51,0.16)] hover:bg-[rgba(255,247,246,0.88)] disabled:cursor-not-allowed disabled:text-[var(--color-sidebar-muted)] disabled:opacity-55"
-                        >
-                          批量移入回收站
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              {focusedCustomer && focusedCustomerVisible ? (
-                <div className="flex flex-col gap-2 rounded-[0.95rem] border border-[rgba(79,125,247,0.16)] bg-[linear-gradient(180deg,rgba(248,250,255,0.98),rgba(255,255,255,0.96))] px-4 py-3 text-sm shadow-[var(--color-shell-shadow-sm)] sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--color-accent-strong)]">
-                      刚才操作的客户
-                    </p>
-                    <p className="mt-1 truncate font-semibold text-[var(--foreground)]">
-                      {focusedCustomer.name} · {focusedCustomer.phone}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    <a
-                      href={`#customer-row-${focusedCustomer.id}`}
-                      className="crm-button crm-button-primary min-h-0 px-3 py-2 text-xs"
+                            ? "border-primary/30 bg-card text-primary"
+                            : "border-border/60 bg-card text-muted-foreground",
+                      )}
                     >
-                      定位到该客户
-                    </a>
+                      <CheckSquare2 className="h-3.5 w-3.5" />
+                      <span>
+                        {selectionMode === "filtered"
+                          ? `筛选结果 ${pagination.totalCount}`
+                          : `已选 ${selectedCount}`}
+                      </span>
+                    </span>
+                    <span
+                      className={cn(
+                        "min-w-0 text-xs leading-5",
+                        batchExecutionBlockedByLimit ? "text-rose-700" : "text-slate-500",
+                      )}
+                    >
+                      {batchExecutionBlockedByLimit
+                        ? `超过单次 ${MAX_BATCH_CUSTOMER_ACTION_SIZE} 位上限，请缩小范围。`
+                        : selectionMode === "filtered"
+                          ? "动作将应用到整个筛选结果。"
+                          : allCurrentPageSelected && canSelectFiltered
+                            ? `可扩展到 ${pagination.totalCount} 位筛选结果。`
+                            : "可添加标签或移入回收站。"}
+                    </span>
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                    {selectionMode === "manual" && allCurrentPageSelected && pagination.totalCount > items.length ? (
+                      canSelectFiltered ? (
+                        <button
+                          type="button"
+                          onClick={selectFilteredResults}
+                          className="inline-flex h-8 items-center rounded-full border border-border/60 bg-card px-3 text-xs font-medium text-muted-foreground transition hover:border-primary/30 hover:text-primary"
+                        >
+                          选择全部 {pagination.totalCount}
+                        </button>
+                      ) : (
+                        <span className="px-2 text-xs text-slate-400">
+                          超过 {MAX_BATCH_CUSTOMER_ACTION_SIZE} 位上限
+                        </span>
+                      )
+                    ) : null}
+
                     <button
                       type="button"
-                      onClick={clearFocusedCustomer}
-                      className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-xs"
+                      onClick={toggleSelectAllCurrentPage}
+                      className="inline-flex h-8 items-center rounded-full border border-border/60 bg-card px-3 text-xs font-medium text-muted-foreground transition hover:border-primary/30 hover:text-primary"
                     >
-                      清除标记
+                      {selectionMode === "filtered"
+                        ? "取消跨页"
+                        : allCurrentPageSelected
+                          ? "取消当前页"
+                          : "全选当前页"}
                     </button>
+
+                    {selectionMode === "manual" ? (
+                      <button
+                        type="button"
+                        onClick={resetSelection}
+                        aria-label="清空选择"
+                        title="清空选择"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 transition hover:border-slate-300 hover:text-slate-900"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    ) : null}
+
+                    {canBatchAddTags ? (
+                      <button
+                        type="button"
+                        onClick={openBatchTagDialog}
+                        disabled={batchTagOptions.length === 0 || batchExecutionBlockedByLimit}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+                      >
+                        <Tags className="h-3.5 w-3.5" />
+                        标签
+                      </button>
+                    ) : null}
+
+                    {canBatchMoveToRecycleBin ? (
+                      <button
+                        type="button"
+                        onClick={openBatchRecycleDialog}
+                        disabled={batchExecutionBlockedByLimit}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        回收
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
@@ -1239,6 +1523,7 @@ export function CustomersTable({
                         callResultOptions={callResultOptions}
                         canCreateCallRecord={canCreateCallRecord}
                         canCreateSalesOrder={canCreateSalesOrder}
+                        outboundCallEnabled={outboundCallEnabled}
                         moveToRecycleBinAction={moveToRecycleBinAction}
                         selectable={canBatchSelect}
                         selected={
@@ -1253,33 +1538,23 @@ export function CustomersTable({
                 ) : (
                   <EntityTable
                     density="compact"
+                    variant="list"
                     rows={items}
                     getRowKey={(row) => row.id}
                     getRowId={(row) => `customer-row-${row.id}`}
                     getRowClassName={(row) =>
-                      focusedCustomer?.id === row.id
-                        ? "scroll-mt-28 bg-[rgba(79,125,247,0.07)] shadow-[inset_3px_0_0_var(--color-accent)]"
-                        : undefined
+                      cn(
+                        "group/customer-row cursor-pointer",
+                        focusedCustomer?.id === row.id &&
+                          "scroll-mt-28 bg-[rgba(79,125,247,0.07)] shadow-[inset_3px_0_0_var(--color-accent)]",
+                      )
                     }
                     columns={columns}
                   />
                 )}
               </div>
 
-              <div className="hidden md:block">
-                <EntityTable
-                  density="compact"
-                  rows={items}
-                  getRowKey={(row) => row.id}
-                  getRowId={(row) => `customer-row-${row.id}`}
-                  getRowClassName={(row) =>
-                    focusedCustomer?.id === row.id
-                      ? "scroll-mt-28 bg-[rgba(79,125,247,0.07)] shadow-[inset_3px_0_0_var(--color-accent)]"
-                      : undefined
-                  }
-                  columns={columns}
-                />
-              </div>
+              <div className="hidden md:block">{spaciousRows}</div>
             </div>
           )}
         </DataTableWrapper>
@@ -1295,18 +1570,27 @@ export function CustomersTable({
         ) : null}
 
         {items.length > 0 ? (
-          <div className="[&>div]:rounded-[18px] [&>div]:border-[var(--color-border-soft)] [&>div]:bg-[var(--color-panel-soft)] [&>div]:px-4 [&>div]:py-3 [&>div]:shadow-[var(--color-shell-shadow-sm)] [&_.crm-toolbar-cluster]:gap-2 [&_a]:h-8 [&_a]:rounded-[10px] [&_a]:px-3 [&_a]:py-0 [&_a]:text-[13px] [&_a]:shadow-none [&_a]:hover:translate-y-0 [&_p]:text-[13px] [&_p]:leading-5">
-            <PaginationControls
-              page={pagination.page}
-              totalPages={pagination.totalPages}
-              summary={`当前第 ${pagination.page} / ${pagination.totalPages} 页，共 ${pagination.totalCount} 位客户`}
-              buildHref={(page) => buildCustomersHref(filters, { page })}
-              rightSlot={pageSizeControl}
-              scrollTargetId={scrollTargetId}
-            />
-          </div>
+          <>
+            <div className="[&>div]:rounded-[18px] [&>div]:border-[var(--color-border-soft)] [&>div]:bg-[var(--color-panel-soft)] [&>div]:px-4 [&>div]:py-3 [&>div]:shadow-[var(--color-shell-shadow-sm)] [&_.crm-toolbar-cluster]:gap-2 [&_a]:h-8 [&_a]:rounded-[10px] [&_a]:px-3 [&_a]:py-0 [&_a]:text-[13px] [&_a]:shadow-none [&_a]:hover:translate-y-0 [&_p]:text-[13px] [&_p]:leading-5">
+              <PaginationControls
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                summary={`当前第 ${pagination.page} / ${pagination.totalPages} 页，共 ${pagination.totalCount} 位客户`}
+                buildHref={(page) => buildCustomersHref(filters, { page })}
+                rightSlot={pageSizeControl}
+                scrollTargetId={scrollTargetId}
+              />
+            </div>
+            <DailyQuote />
+          </>
         ) : null}
       </div>
+
+      <CustomerDetailSheet
+        open={Boolean(sheetCustomer)}
+        customer={sheetCustomer}
+        onClose={closeCustomerSheet}
+      />
 
       <CustomerFollowUpDialog
         open={Boolean(followUpDialogState.item)}
@@ -1314,7 +1598,9 @@ export function CustomersTable({
         resultOptions={callResultOptions}
         canCreateCallRecord={canCreateCallRecord}
         canCreateSalesOrder={canCreateSalesOrder}
+        outboundCallEnabled={outboundCallEnabled}
         initialResult={followUpDialogState.initialResult}
+        remarkAutoFocus={followUpDialogState.remarkAutoFocus}
         triggerSource="table"
         onClose={closeFollowUpDialog}
       />

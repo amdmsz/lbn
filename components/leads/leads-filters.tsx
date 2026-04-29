@@ -110,7 +110,7 @@ function getScopeLabel(filters: LeadListFilters) {
 }
 
 const inlineFieldClassName =
-  "group flex h-9 min-w-0 items-center gap-2 rounded-[12px] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 transition-[border-color,background-color,box-shadow,transform] duration-150 motion-safe:hover:-translate-y-[1px] hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-sm)] focus-within:border-[var(--color-accent-soft)] focus-within:bg-[var(--color-shell-hover)] focus-within:shadow-[var(--color-shell-shadow-sm)]";
+  "group flex h-10 min-w-0 items-center gap-2 rounded-xl border border-border/60 bg-background px-3 shadow-sm transition-all duration-150 hover:border-primary/40 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20";
 
 function ScopeLink({
   label,
@@ -145,8 +145,8 @@ function ScopeLink({
       className={cn(
         "inline-flex h-8 items-center rounded-full border px-3 text-[12px] font-medium transition-[border-color,background-color,color,box-shadow,transform] duration-150 motion-safe:hover:-translate-y-[1px]",
         active
-          ? "border-[var(--color-accent-soft)] bg-[var(--color-accent)]/8 text-[var(--color-accent-strong)] shadow-[var(--color-shell-shadow-sm)]"
-          : "border-transparent bg-transparent text-[var(--color-sidebar-muted)] hover:border-[var(--color-border-soft)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]",
+          ? "border-primary/30 bg-primary/10 text-primary shadow-sm"
+          : "border-transparent bg-transparent text-muted-foreground hover:border-primary/30 hover:bg-muted/40 hover:text-foreground",
       )}
     >
       {label}
@@ -167,13 +167,13 @@ function InlineSelectControl({
 }>) {
   return (
     <label className={inlineFieldClassName}>
-      <span className="shrink-0 text-[12px] font-medium text-[var(--color-sidebar-muted)]">
+      <span className="shrink-0 text-[12px] font-medium text-muted-foreground">
         {label}
       </span>
       <select
         name={name}
         defaultValue={defaultValue}
-        className="crm-select h-full min-w-0 flex-1 border-0 bg-transparent px-0 py-0 pr-5 text-[13px] text-[var(--foreground)] shadow-none outline-none focus:ring-0"
+        className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 py-0 pr-5 text-[13px] text-foreground outline-none focus:ring-0"
       >
         {children}
       </select>
@@ -192,14 +192,14 @@ function InlineDateControl({
 }>) {
   return (
     <label className={inlineFieldClassName}>
-      <span className="shrink-0 text-[12px] font-medium text-[var(--color-sidebar-muted)]">
+      <span className="shrink-0 text-[12px] font-medium text-muted-foreground">
         {label}
       </span>
       <input
         type="date"
         name={name}
         defaultValue={defaultValue}
-        className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-[13px] text-[var(--foreground)] outline-none focus:ring-0"
+        className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-[13px] text-foreground outline-none focus:ring-0"
       />
     </label>
   );
@@ -299,9 +299,9 @@ export function LeadsFilters({
     <FiltersPanel
       title="线索筛选"
       headerMode="hidden"
-      className="rounded-[0.95rem] border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]"
+      className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm"
     >
-      <form onSubmit={handleSubmit} className="space-y-2.5">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <input type="hidden" name="view" value={filters.view} />
         <input type="hidden" name="quick" value={filters.quick} />
         <input
@@ -314,30 +314,30 @@ export function LeadsFilters({
         <div className={cn("grid gap-2 md:grid-cols-2", gridClassName)}>
           <label
             className={cn(
-              "flex min-h-9 items-center gap-2 rounded-[13px] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2.5 shadow-[var(--color-shell-shadow-sm)] transition-[border-color,box-shadow,transform] duration-150 motion-safe:hover:-translate-y-[1px] hover:border-[var(--color-accent-soft)] hover:shadow-[var(--color-shell-shadow-md)]",
+              "flex min-h-10 items-center gap-2 rounded-xl border border-border/60 bg-background px-2.5 shadow-sm transition-all duration-150 hover:border-primary/40 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20",
               "xl:col-span-1",
             )}
           >
             <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute left-1 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-sidebar-muted)]" />
+              <Search className="pointer-events-none absolute left-1 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 name="name"
                 defaultValue={filters.name}
                 placeholder="搜索姓名"
-                className="h-9 w-full border-0 bg-transparent pl-8 pr-1 text-[13px] text-[var(--foreground)] outline-none placeholder:text-[var(--color-sidebar-muted)] focus:ring-0"
+                className="h-9 w-full border-0 bg-transparent pl-8 pr-1 text-[13px] text-foreground outline-none placeholder:text-muted-foreground focus:ring-0"
               />
             </div>
-            <div className="h-4 w-px bg-[var(--color-border-soft)]" />
+            <div className="h-4 w-px bg-border/60" />
             <input
               name="phone"
               defaultValue={filters.phone}
               placeholder="手机号"
-              className="h-9 min-w-[7rem] border-0 bg-transparent px-0 text-[13px] text-[var(--foreground)] outline-none placeholder:text-[var(--color-sidebar-muted)] focus:ring-0"
+              className="h-9 min-w-[7rem] border-0 bg-transparent px-0 text-[13px] text-foreground outline-none placeholder:text-muted-foreground focus:ring-0"
             />
           </label>
 
-          <div className="flex min-h-9 flex-wrap items-center gap-1.5 rounded-[13px] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2.5 py-1.5 shadow-[var(--color-shell-shadow-sm)]">
-            <span className="shrink-0 text-[12px] font-medium text-[var(--color-sidebar-muted)]">
+          <div className="flex min-h-10 flex-wrap items-center gap-1.5 rounded-xl border border-border/60 bg-background px-2.5 py-1.5 shadow-sm">
+            <span className="shrink-0 text-[12px] font-medium text-muted-foreground">
               范围
             </span>
             <ScopeLink
@@ -429,8 +429,8 @@ export function LeadsFilters({
           />
         </div>
 
-        <div className="flex flex-col gap-2 border-t border-[var(--color-border-soft)] pt-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[12px] text-[var(--color-sidebar-muted)]">
+        <div className="flex flex-col gap-2 border-t border-border/50 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[12px] text-muted-foreground">
             当前范围 {getScopeLabel(filters)}
             {activeFilterCount > 0
               ? ` · 已启用 ${activeFilterCount} 项条件`
@@ -446,13 +446,13 @@ export function LeadsFilters({
                   scheduleSmartScroll(scrollTargetId);
                 }
               }}
-              className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+              className="inline-flex h-9 items-center rounded-full border border-border/60 bg-background px-4 text-sm font-medium text-muted-foreground shadow-sm transition-all hover:border-primary/40 hover:text-primary"
             >
               重置
             </Link>
             <button
               type="submit"
-              className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
+              className="inline-flex h-9 items-center rounded-full bg-primary px-6 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90"
             >
               应用
             </button>

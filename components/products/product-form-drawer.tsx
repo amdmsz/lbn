@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { X } from "lucide-react";
 import { ProductMainImage } from "@/components/products/product-main-image";
 import {
@@ -8,6 +8,7 @@ import {
   type SupplierOption,
 } from "@/components/products/product-supplier-field";
 import { ActionBanner } from "@/components/shared/action-banner";
+import { ClientPortal } from "@/components/shared/client-portal";
 import type { ProductCenterDictionaryOption } from "@/lib/products/metadata";
 import { cn } from "@/lib/utils";
 
@@ -48,10 +49,10 @@ type ProductDraft = {
 };
 
 const drawerOverlayClassName =
-  "absolute inset-0 bg-[rgba(15,23,42,0.14)] backdrop-blur-[6px]";
+  "fixed inset-0 z-[10020] bg-black/70 backdrop-blur-sm";
 
 const drawerPanelClassName =
-  "absolute inset-y-0 right-0 flex w-full flex-col border-l border-[var(--color-border-soft)] bg-[rgba(255,255,255,0.96)] shadow-[-18px_0_48px_rgba(15,23,42,0.12)] backdrop-blur-xl";
+  "fixed inset-y-0 right-0 z-[10021] flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden border-l border-[var(--color-border-soft)] bg-background shadow-2xl";
 
 const drawerSectionClassName =
   "rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4 shadow-[var(--color-shell-shadow-sm)]";
@@ -178,12 +179,26 @@ export function ProductFormDrawer({
       ? "先建立商品骨架，图片、归类和更多规格可在详情继续完善。"
       : "当前只维护商品主档。";
 
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
   if (!open) {
     return null;
   }
 
   return (
-    <div className="fixed inset-0 z-50">
+    <ClientPortal>
+    <div className="fixed inset-0 z-[10020]">
       <button
         type="button"
         aria-label={isCreateMode ? "关闭新建商品抽屉" : "关闭编辑商品抽屉"}
@@ -856,5 +871,6 @@ export function ProductFormDrawer({
         </form>
       </div>
     </div>
+    </ClientPortal>
   );
 }

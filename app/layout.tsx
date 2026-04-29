@@ -37,12 +37,12 @@ export default function RootLayout({
       suppressHydrationWarning
       data-appearance="system"
       data-theme="white"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} theme-light h-full antialiased`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className="min-h-full bg-[var(--color-app-bg)] text-[var(--color-foreground)]">
+      <body className="min-h-full bg-background text-foreground">
         {children}
       </body>
     </html>

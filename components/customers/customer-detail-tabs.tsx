@@ -12,7 +12,6 @@ type CustomerTabCounts = {
   wechat: number;
   live: number;
   orders: number;
-  gifts: number;
   logs: number;
 };
 
@@ -26,8 +25,6 @@ function getTabCount(tab: CustomerDetailTab, counts: CustomerTabCounts) {
       return counts.live;
     case "orders":
       return counts.orders;
-    case "gifts":
-      return counts.gifts;
     case "logs":
       return counts.logs;
     default:
@@ -52,8 +49,8 @@ export function CustomerDetailTabs({
 
   return (
     <div className="space-y-2">
-      <div className="overflow-x-auto pb-1">
-        <div className="inline-flex min-w-max items-center gap-1 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)]/92 p-1 shadow-[var(--color-shell-shadow-sm)] backdrop-blur-sm">
+      <div className="overflow-x-auto pb-1 scrollbar-hide [&::-webkit-scrollbar]:hidden">
+        <div className="inline-flex min-w-max items-center gap-1 rounded-full border border-border/60 bg-muted/40 p-1 shadow-sm backdrop-blur-md">
           {customerDetailTabGroups.map((group) => {
             const isActive = group.tabs.some((tab) => tab === activeTab);
             const href = buildHref
@@ -72,10 +69,10 @@ export function CustomerDetailTabs({
                 href={href}
                 scrollTargetId={scrollTargetId}
                 className={cn(
-                  "inline-flex min-h-8 min-w-0 items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] font-medium tracking-[-0.01em] text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color,box-shadow,transform] duration-150",
+                  "inline-flex min-h-8 min-w-0 items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] font-medium text-muted-foreground transition-[border-color,background-color,color,box-shadow,transform] duration-150",
                   isActive
-                    ? "border-[rgba(122,154,255,0.18)] bg-[var(--color-panel)] text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)]"
-                    : "border-transparent hover:border-[rgba(122,154,255,0.12)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]",
+                    ? "border-primary/20 bg-card text-foreground shadow-sm"
+                    : "border-transparent hover:border-primary/20 hover:bg-background hover:text-foreground",
                 )}
               >
                 <span className="truncate">{group.label}</span>
@@ -84,8 +81,8 @@ export function CustomerDetailTabs({
                     className={cn(
                       "tabular-nums text-[11px] leading-none",
                       isActive
-                        ? "text-[var(--foreground)]/68"
-                        : "text-[var(--color-sidebar-muted)]",
+                        ? "text-foreground/70"
+                        : "text-muted-foreground",
                     )}
                   >
                     {count}
@@ -98,7 +95,7 @@ export function CustomerDetailTabs({
       </div>
 
       {activeGroup.tabs.length > 1 ? (
-        <div className="overflow-x-auto pb-1">
+        <div className="overflow-x-auto pb-1 scrollbar-hide [&::-webkit-scrollbar]:hidden">
           <div className="inline-flex min-w-max items-center gap-1">
             {customerDetailTabs
               .filter((tab) => activeGroup.tabs.some((item) => item === tab.value))
@@ -116,10 +113,10 @@ export function CustomerDetailTabs({
                     }
                     scrollTargetId={scrollTargetId}
                     className={cn(
-                      "inline-flex min-h-8 min-w-0 items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] font-medium tracking-[-0.01em] text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color] duration-150",
+                      "inline-flex min-h-8 min-w-0 items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] font-medium text-muted-foreground transition-[border-color,background-color,color,box-shadow] duration-150",
                       isActive
-                        ? "border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)]"
-                        : "border-transparent hover:border-[rgba(122,154,255,0.1)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]",
+                        ? "border-primary/20 bg-primary/10 text-primary shadow-sm"
+                        : "border-transparent hover:border-primary/20 hover:bg-muted/50 hover:text-foreground",
                     )}
                   >
                     <span className="truncate">{tab.label}</span>
@@ -128,8 +125,8 @@ export function CustomerDetailTabs({
                         className={cn(
                           "tabular-nums text-[11px] leading-none",
                           isActive
-                            ? "text-[var(--foreground)]/66"
-                            : "text-[var(--color-sidebar-muted)]",
+                            ? "text-primary/75"
+                            : "text-muted-foreground",
                         )}
                       >
                         {count}

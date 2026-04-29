@@ -95,12 +95,14 @@ export function CustomerOutboundCallButton({
   label = "CTI 外呼",
   className,
   disabled = false,
+  showLabel = true,
 }: Readonly<{
   customerId: string;
   customerName: string;
   label?: string;
   className?: string;
   disabled?: boolean;
+  showLabel?: boolean;
 }>) {
   const router = useRouter();
   const [state, setState] = useState<CallState>("idle");
@@ -351,6 +353,7 @@ export function CustomerOutboundCallButton({
       <button
         type="button"
         aria-label={`${stateLabel}：${customerName}`}
+        title={!showLabel ? `${stateLabel}：${customerName}` : undefined}
         disabled={disabled || state === "calling" || isTracking}
         onClick={handleClick}
         className={cn(
@@ -358,7 +361,12 @@ export function CustomerOutboundCallButton({
           className,
         )}
       >
-        <span className="inline-flex items-center gap-1.5">
+        <span
+          className={cn(
+            "inline-flex items-center",
+            showLabel && "gap-1.5",
+          )}
+        >
           <Icon
             className={cn(
               "h-3.5 w-3.5",
@@ -366,7 +374,7 @@ export function CustomerOutboundCallButton({
             )}
             aria-hidden="true"
           />
-          <span>{stateLabel}</span>
+          {showLabel ? <span>{stateLabel}</span> : null}
         </span>
       </button>
 
@@ -391,7 +399,7 @@ export function CustomerOutboundCallButton({
             </>
           ) : null}
           {statusMessage ? (
-            <span className="mt-1 block leading-5 text-red-600">
+            <span className="mt-1 block leading-5 text-destructive">
               {statusMessage}
             </span>
           ) : null}

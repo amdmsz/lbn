@@ -2,7 +2,7 @@
 
 ## 文档状态
 
-- 更新时间：2026-04-28
+- 更新时间：2026-04-29
 - 用途：记录真实里程碑状态，区分已完成、正在推进、待开始
 - 维护原则：只记录当前真实基线，不把已废弃的旧交易主模型继续当未来计划，不把 UI 愿景写成已落地事实
 
@@ -57,6 +57,7 @@
 - 录音 AI 质检已接入 ASR + LLM 双阶段架构，生产推荐 `gpt-4o-transcribe-diarize` 做 ASR、`deepseek-v4-pro` 做分析
 - `jiuzhuang-crm-call-ai-worker.timer` 已作为 one-shot 定时 worker 基线提供
 - 客户详情已支持 `ADMIN / SUPERVISOR` 移交负责人，并沿用 ownership audit 链
+- `GiftRecord` 礼品管理模块已从主动工作流下线；`/gifts` 不再作为可发现入口，历史 schema / 关联仅保留兼容
 
 ---
 

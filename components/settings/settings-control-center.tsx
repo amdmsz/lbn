@@ -5,9 +5,10 @@ import { SettingsWorkspaceNav } from "@/components/settings/settings-workspace-n
 import { ActionBanner } from "@/components/shared/action-banner";
 import { DetailSidebar } from "@/components/shared/detail-sidebar";
 import { SectionCard } from "@/components/shared/section-card";
-import { StatusBadge } from "@/components/shared/status-badge";
+import { StatusBadge, type StatusBadgeVariant } from "@/components/shared/status-badge";
 import { SummaryHeader } from "@/components/shared/summary-header";
 import { roleLabels } from "@/lib/auth/access";
+import { cn } from "@/lib/utils";
 import { getMasterDataOverviewData } from "@/lib/master-data/queries";
 import {
   getVisibleSettingsWorkspaceSections,
@@ -106,15 +107,38 @@ function buildEntryMeta(data: SettingsData): Partial<Record<SettingsWorkspaceVal
   };
 }
 
-function getStateVariant(state: EntryMeta["state"]) {
+function getStateVariant(state: EntryMeta["state"]): StatusBadgeVariant {
   switch (state) {
     case "已接入":
       return "success";
     case "配置预览":
-      return "info";
+      return "warning";
     default:
       return "warning";
   }
+}
+
+function SettingsBadge({
+  label,
+  variant,
+}: Readonly<{
+  label: string;
+  variant: StatusBadgeVariant;
+}>) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full border px-2 py-[0.18rem] text-[10px] font-medium uppercase tracking-wider",
+        variant === "success"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300"
+          : variant === "warning"
+            ? "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300"
+            : "border-slate-200 bg-slate-100 text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400",
+      )}
+    >
+      {label}
+    </span>
+  );
 }
 
 function EntryList({
@@ -123,31 +147,31 @@ function EntryList({
   items: EntryItem[];
 }>) {
   return (
-    <div className="grid gap-2.5">
+    <div className="divide-y divide-border/40">
       {items.map((item) => (
         <Link
           key={item.href}
           href={item.href}
-          className="group rounded-[0.95rem] border border-black/7 bg-white/78 px-3.5 py-3 transition-colors hover:border-black/12 hover:bg-white"
+          className="group block rounded-md px-3 py-3 transition-colors hover:bg-muted/30"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
               <div className="flex flex-wrap items-center gap-1.5">
-                <div className="text-sm font-medium text-black/82">{item.label}</div>
-                <StatusBadge label={item.state} variant={getStateVariant(item.state)} />
+                <div className="text-sm font-semibold text-foreground">{item.label}</div>
+                <SettingsBadge label={item.state} variant={getStateVariant(item.state)} />
                 {item.access === "admin" ? (
-                  <StatusBadge label="ADMIN" variant="neutral" />
+                  <SettingsBadge label="ADMIN" variant="neutral" />
                 ) : null}
               </div>
-              <div className="text-[12px] leading-5 text-black/54">
+              <div className="mt-1 text-xs leading-5 text-muted-foreground">
                 {item.description}
               </div>
             </div>
             <div className="shrink-0 text-right">
-              <div className="text-sm font-semibold tracking-tight text-black/84">
+              <div className="font-mono text-sm font-semibold tracking-tight text-foreground">
                 {item.stat}
               </div>
-              <div className="mt-1 text-[11px] text-black/46">{item.note}</div>
+              <div className="mt-1 text-[11px] text-muted-foreground">{item.note}</div>
             </div>
           </div>
         </Link>
@@ -228,7 +252,7 @@ export function SettingsControlCenter({
               {isAdmin ? (
                 <Link
                   href="/settings/call-ai"
-                  className="crm-button crm-button-primary min-h-0 px-3 py-2 text-sm"
+                  className="inline-flex min-h-0 items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90"
                 >
                   AI 配置
                 </Link>
