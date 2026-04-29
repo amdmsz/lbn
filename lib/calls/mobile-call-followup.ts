@@ -5,6 +5,15 @@ import {
   canUseNativeCallRecorder,
   startNativeRecordedSimCall,
 } from "@/lib/calls/native-mobile-call";
+import type {
+  MobileCallTriggerSource,
+  PendingMobileCallFollowUp,
+} from "@/lib/calls/mobile-call-followup-contract";
+export {
+  mergePendingMobileCallWithNativeSnapshot,
+  type MobileCallTriggerSource,
+  type PendingMobileCallFollowUp,
+} from "@/lib/calls/mobile-call-followup-contract";
 
 export const MOBILE_CALL_FOLLOWUP_STORAGE_KEY =
   "lbncrm.mobile-call-followup.pending";
@@ -26,29 +35,8 @@ export const MOBILE_CALL_NOT_CONNECTED_RESULT_CODES = [
   "INVALID_NUMBER",
 ] as const;
 
-export type MobileCallTriggerSource = "card" | "detail" | "table";
 export type MobileCallConnectedState = "UNKNOWN" | "CONNECTED" | "NOT_CONNECTED";
 export type MobileCallWechatState = "NONE" | "PENDING" | "ADDED" | "REFUSED";
-
-export type PendingMobileCallFollowUp = {
-  id: string;
-  customerId: string;
-  customerName: string;
-  phone: string;
-  triggerSource: MobileCallTriggerSource;
-  callRecordId: string | null;
-  deviceId: string | null;
-  durationSeconds: number | null;
-  recordingStatus: string | null;
-  uploadStatus: string | null;
-  recordingId: string | null;
-  nativeFailureMessage: string | null;
-  createdAt: string;
-  returnPath: string;
-  backgroundedAt: string | null;
-  promptedAt: string | null;
-  snoozedAt: string | null;
-};
 
 const connectedResultCodeSet = new Set<string>(MOBILE_CALL_CONNECTED_RESULT_CODES);
 const notConnectedResultCodeSet = new Set<string>(

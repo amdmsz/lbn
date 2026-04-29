@@ -457,6 +457,47 @@ export async function readNativeCallSessionSnapshot(callRecordId?: string | null
   }
 }
 
+export function subscribeNativeCallSessionUpdates(
+  listener: (snapshot: NativeCallSessionSnapshot) => void,
+) {
+  const plugin = getNativeCallRecorderPlugin();
+
+  if (!plugin?.addListener || !canUseNativeCallRecorder()) {
+    return () => undefined;
+  }
+
+  let removed = false;
+  let subscription:
+    | Awaited<ReturnType<NonNullable<NativeCallRecorderPlugin["addListener"]>>>
+    | null = null;
+
+  void plugin
+    .addListener("callRecordingSessionUpdated", (snapshot) => {
+      if (!snapshot?.callRecordId) {
+        return;
+      }
+
+      listener(snapshot);
+    })
+    .then((nextSubscription) => {
+      if (removed) {
+        void nextSubscription.remove();
+        return;
+      }
+
+      subscription = nextSubscription;
+    })
+    .catch(() => {
+      subscription = null;
+    });
+
+  return () => {
+    removed = true;
+    void subscription?.remove();
+    subscription = null;
+  };
+}
+
 export async function readNativeConnectionProfile() {
   const plugin = getNativeCallRecorderPlugin();
 

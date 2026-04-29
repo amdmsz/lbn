@@ -5,13 +5,18 @@ import {
   clearPendingMobileCallFollowUp,
   markPendingMobileCallBackgrounded,
   markPendingMobileCallPrompted,
+  mergePendingMobileCallWithNativeSnapshot,
   readPendingMobileCallFollowUp,
   shouldEnableMobileCallFollowUp,
   snoozePendingMobileCallFollowUp,
   writePendingMobileCallFollowUp,
   type PendingMobileCallFollowUp,
 } from "@/lib/calls/mobile-call-followup";
-import { readNativeCallSessionSnapshot } from "@/lib/calls/native-mobile-call";
+import {
+  readNativeCallSessionSnapshot,
+  subscribeNativeCallSessionUpdates,
+  type NativeCallSessionSnapshot,
+} from "@/lib/calls/native-mobile-call";
 
 export type MobileCallFollowUpScope =
   | {
@@ -91,6 +96,29 @@ export function useMobileCallFollowUp(scope: MobileCallFollowUpScope) {
       setSheetOpen(true);
     }
 
+    function applyNativeSnapshot(snapshot: NativeCallSessionSnapshot) {
+      const latestPendingCall = readPendingMobileCallFollowUp();
+
+      if (
+        !latestPendingCall ||
+        !latestPendingCall.callRecordId ||
+        latestPendingCall.callRecordId !== snapshot.callRecordId ||
+        !matchesCurrentScope(latestPendingCall)
+      ) {
+        return null;
+      }
+
+      const nextPendingCall = mergePendingMobileCallWithNativeSnapshot(
+        latestPendingCall,
+        snapshot,
+      );
+
+      writePendingMobileCallFollowUp(nextPendingCall);
+      setPendingCall(nextPendingCall);
+
+      return nextPendingCall;
+    }
+
     function syncNativeSnapshot(storedPendingCall: PendingMobileCallFollowUp) {
       if (!storedPendingCall.callRecordId) {
         return;
@@ -102,28 +130,11 @@ export function useMobileCallFollowUp(scope: MobileCallFollowUpScope) {
             return;
           }
 
-          const latestPendingCall = readPendingMobileCallFollowUp();
+          const syncedPendingCall = applyNativeSnapshot(snapshot);
 
-          if (!latestPendingCall || latestPendingCall.id !== storedPendingCall.id) {
+          if (!syncedPendingCall || syncedPendingCall.id !== storedPendingCall.id) {
             return;
           }
-
-          const nextPendingCall = {
-            ...latestPendingCall,
-            durationSeconds:
-              typeof snapshot.durationSeconds === "number"
-                ? snapshot.durationSeconds
-                : latestPendingCall.durationSeconds,
-            recordingStatus:
-              snapshot.recordingStatus ?? latestPendingCall.recordingStatus,
-            uploadStatus: snapshot.uploadStatus ?? latestPendingCall.uploadStatus,
-            recordingId: snapshot.recordingId ?? latestPendingCall.recordingId,
-            nativeFailureMessage:
-              snapshot.failureMessage ?? latestPendingCall.nativeFailureMessage,
-          } satisfies PendingMobileCallFollowUp;
-
-          writePendingMobileCallFollowUp(nextPendingCall);
-          setPendingCall(nextPendingCall);
         },
       );
     }
@@ -147,6 +158,8 @@ export function useMobileCallFollowUp(scope: MobileCallFollowUpScope) {
     }
 
     syncPendingCall();
+    const unsubscribeNativeSessionUpdates =
+      subscribeNativeCallSessionUpdates(applyNativeSnapshot);
 
     window.addEventListener("focus", handlePageRestore);
     window.addEventListener("pageshow", handlePageRestore);
@@ -154,6 +167,7 @@ export function useMobileCallFollowUp(scope: MobileCallFollowUpScope) {
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      unsubscribeNativeSessionUpdates();
       window.removeEventListener("focus", handlePageRestore);
       window.removeEventListener("pageshow", handlePageRestore);
       window.removeEventListener("storage", handlePageRestore);
