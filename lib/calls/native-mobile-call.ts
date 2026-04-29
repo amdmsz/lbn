@@ -1,18 +1,44 @@
 "use client";
 
-type NativePermissionState = "granted" | "denied" | "prompt" | "prompt-with-rationale";
+export type NativePermissionState =
+  | "granted"
+  | "denied"
+  | "prompt"
+  | "prompt-with-rationale";
+export type NativeRecordingCapability =
+  | "UNKNOWN"
+  | "SUPPORTED"
+  | "UNSUPPORTED"
+  | "BLOCKED";
+export type NativeDeviceProfile = {
+  deviceFingerprint?: string;
+  deviceModel?: string;
+  androidVersion?: string;
+  appVersion?: string;
+  recordingCapability?: NativeRecordingCapability;
+};
+export type NativeRecorderPermissionMap = Record<string, NativePermissionState>;
+export type NativeRecorderReadinessStatus =
+  | "browser-fallback"
+  | "ready"
+  | "needs-permission"
+  | "blocked"
+  | "unknown";
+export type NativeRecorderReadiness = {
+  nativeAvailable: boolean;
+  status: NativeRecorderReadinessStatus;
+  title: string;
+  description: string;
+  detail: string | null;
+  profile: NativeDeviceProfile | null;
+  permissions: NativeRecorderPermissionMap | null;
+};
 
 type NativeCallRecorderPlugin = {
-  getDeviceProfile: () => Promise<{
-    deviceFingerprint?: string;
-    deviceModel?: string;
-    androidVersion?: string;
-    appVersion?: string;
-    recordingCapability?: "UNKNOWN" | "SUPPORTED" | "UNSUPPORTED" | "BLOCKED";
-  }>;
+  getDeviceProfile: () => Promise<NativeDeviceProfile>;
   requestPermissions?: (input?: {
     permissions?: string[];
-  }) => Promise<Record<string, NativePermissionState>>;
+  }) => Promise<NativeRecorderPermissionMap>;
   startRecordedSimCall: (input: {
     phone: string;
     callRecordId: string;
@@ -39,6 +65,8 @@ type NativeCallRecorderPlugin = {
     listener: (snapshot: NativeCallSessionSnapshot) => void,
   ) => Promise<{ remove: () => Promise<void> | void }>;
 };
+
+const CALL_RECORDING_PERMISSION_ALIAS = "callRecording";
 
 type CapacitorGlobal = {
   getPlatform?: () => string;
@@ -106,6 +134,170 @@ export function canUseNativeCallRecorder() {
   const platform = capacitor?.getPlatform?.();
 
   return Boolean(plugin && (platform === "android" || capacitor?.isNativePlatform?.()));
+}
+
+function hasPermissionState(
+  permissions: NativeRecorderPermissionMap | null | undefined,
+  states: NativePermissionState[],
+) {
+  return Object.values(permissions ?? {}).some((state) => states.includes(state));
+}
+
+function allKnownPermissionsGranted(
+  permissions: NativeRecorderPermissionMap | null | undefined,
+) {
+  const values = Object.values(permissions ?? {});
+
+  return values.length > 0 && values.every((state) => state === "granted");
+}
+
+function formatNativeDeviceDetail(profile: NativeDeviceProfile | null) {
+  if (!profile) {
+    return null;
+  }
+
+  const parts = [
+    profile.deviceModel,
+    profile.androidVersion,
+    profile.appVersion ? `App ${profile.appVersion}` : null,
+  ].filter((value): value is string => Boolean(value?.trim()));
+
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+export function summarizeNativeRecorderReadiness(input: {
+  nativeAvailable: boolean;
+  profile?: NativeDeviceProfile | null;
+  permissions?: NativeRecorderPermissionMap | null;
+}): NativeRecorderReadiness {
+  const profile = input.profile ?? null;
+  const permissions = input.permissions ?? null;
+  const capability = profile?.recordingCapability ?? "UNKNOWN";
+  const detail = formatNativeDeviceDetail(profile);
+
+  if (!input.nativeAvailable) {
+    return {
+      nativeAvailable: false,
+      status: "browser-fallback",
+      title: "浏览器拨号模式",
+      description: "当前不是 Android 原生壳，本机通话会回退到系统拨号和手动补记。",
+      detail,
+      profile,
+      permissions,
+    };
+  }
+
+  if (
+    capability === "BLOCKED" ||
+    capability === "UNSUPPORTED" ||
+    hasPermissionState(permissions, ["denied"])
+  ) {
+    return {
+      nativeAvailable: true,
+      status: "blocked",
+      title: "原生录音未就绪",
+      description: "电话、通话状态或麦克风权限未放开，请到系统权限中处理。",
+      detail,
+      profile,
+      permissions,
+    };
+  }
+
+  if (capability === "SUPPORTED" || allKnownPermissionsGranted(permissions)) {
+    return {
+      nativeAvailable: true,
+      status: "ready",
+      title: "原生录音已就绪",
+      description: "Android 原生拨号、前台录音服务和上传链路可用。",
+      detail,
+      profile,
+      permissions,
+    };
+  }
+
+  if (hasPermissionState(permissions, ["prompt", "prompt-with-rationale"])) {
+    return {
+      nativeAvailable: true,
+      status: "needs-permission",
+      title: "等待授权",
+      description: "需要授权电话、通话状态、麦克风和通知权限后才能本机拨号录音。",
+      detail,
+      profile,
+      permissions,
+    };
+  }
+
+  return {
+    nativeAvailable: true,
+    status: "needs-permission",
+    title: "原生录音待初始化",
+    description: "插件已加载，尚未确认完整权限；初始化后会重新检测设备能力。",
+    detail,
+    profile,
+    permissions,
+  };
+}
+
+export async function readNativeRecorderReadiness() {
+  const plugin = getNativeCallRecorderPlugin();
+  const nativeAvailable = Boolean(plugin && canUseNativeCallRecorder());
+
+  if (!plugin || !nativeAvailable) {
+    return summarizeNativeRecorderReadiness({ nativeAvailable: false });
+  }
+
+  try {
+    const profile = await plugin.getDeviceProfile();
+
+    return summarizeNativeRecorderReadiness({
+      nativeAvailable: true,
+      profile,
+      permissions: null,
+    });
+  } catch (error) {
+    return {
+      ...summarizeNativeRecorderReadiness({ nativeAvailable: true }),
+      status: "unknown" as const,
+      title: "原生检测失败",
+      description: getErrorMessage(error),
+    };
+  }
+}
+
+export async function requestNativeRecorderPermissions() {
+  const plugin = getNativeCallRecorderPlugin();
+  const nativeAvailable = Boolean(plugin && canUseNativeCallRecorder());
+
+  if (!plugin || !nativeAvailable) {
+    return summarizeNativeRecorderReadiness({ nativeAvailable: false });
+  }
+
+  let permissions: NativeRecorderPermissionMap | null = null;
+
+  try {
+    permissions =
+      (await plugin.requestPermissions?.({
+        permissions: [CALL_RECORDING_PERMISSION_ALIAS],
+      })) ?? null;
+
+    const profile = await plugin.getDeviceProfile();
+
+    return summarizeNativeRecorderReadiness({
+      nativeAvailable: true,
+      profile,
+      permissions,
+    });
+  } catch (error) {
+    return {
+      ...summarizeNativeRecorderReadiness({
+        nativeAvailable: true,
+        permissions,
+      }),
+      status: "blocked" as const,
+      title: "权限初始化失败",
+      description: getErrorMessage(error),
+    };
+  }
 }
 
 async function readErrorMessage(response: Response, fallback: string) {

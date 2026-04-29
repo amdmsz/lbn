@@ -39,12 +39,15 @@ import type { RoleCode } from "@prisma/client";
 import { MobileCallFollowUpSheet } from "@/components/customers/mobile-call-followup-sheet";
 import { StatusBadge } from "@/components/shared/status-badge";
 import {
-  canUseNativeCallRecorder,
   readNativeConnectionProfile,
+  readNativeRecorderReadiness,
   reloadNativeApp,
+  requestNativeRecorderPermissions,
   saveNativeConnectionProfile,
+  summarizeNativeRecorderReadiness,
   testNativeConnection,
   type NativeConnectionProfile,
+  type NativeRecorderReadiness,
 } from "@/lib/calls/native-mobile-call";
 import {
   startMobileCallFollowUpDial,
@@ -2119,23 +2122,144 @@ function ConnectionSettingsDrawer({
   );
 }
 
+function NativeRecorderCard({
+  readiness,
+  checking,
+  initializing,
+  onRefresh,
+  onRequestPermissions,
+  onOpenDialpad,
+}: Readonly<{
+  readiness: NativeRecorderReadiness;
+  checking: boolean;
+  initializing: boolean;
+  onRefresh: () => void;
+  onRequestPermissions: () => void;
+  onOpenDialpad: () => void;
+}>) {
+  const ready = readiness.status === "ready";
+  const blocked = readiness.status === "blocked";
+  const needsSetup = readiness.nativeAvailable && !ready;
+  const statusLabel = checking
+    ? "检测中"
+    : ready
+      ? "就绪"
+      : blocked
+        ? "受限"
+        : needsSetup
+          ? "待授权"
+          : "回退";
+
+  return (
+    <section className="mt-5 rounded-[22px] bg-white px-4 py-4 shadow-[0_12px_28px_rgba(16,24,40,0.045)]">
+      <div className="flex items-start gap-3">
+        <span
+          className={cn(
+            "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px]",
+            ready
+              ? "bg-[#e9f9ef] text-[#12b76a]"
+              : blocked
+                ? "bg-[#fff0f2] text-[#ff4d67]"
+                : "bg-[#eaf3ff] text-[#1677ff]",
+          )}
+        >
+          <Mic className="h-6 w-6" aria-hidden />
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="truncate text-[17px] font-semibold text-[#20242c]">
+              原生外呼检测
+            </h2>
+            <span
+              className={cn(
+                "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                ready
+                  ? "bg-[#e9f9ef] text-[#12b76a]"
+                  : blocked
+                    ? "bg-[#fff0f2] text-[#ff4d67]"
+                    : "bg-[#f2f8ff] text-[#1677ff]",
+              )}
+            >
+              {statusLabel}
+            </span>
+          </div>
+          <p className="mt-1.5 text-[13px] leading-5 text-[#667085]">
+            {checking ? "正在读取 Android 原生插件与权限状态。" : readiness.description}
+          </p>
+        </div>
+      </div>
+
+      {readiness.detail ? (
+        <div className="mt-3 flex items-center gap-2 rounded-[16px] bg-[#f7f8fb] px-3 py-2 text-[12px] text-[#667085]">
+          <ShieldCheck className="h-4 w-4 shrink-0 text-[#98a1af]" aria-hidden />
+          <span className="min-w-0 truncate">{readiness.detail}</span>
+        </div>
+      ) : null}
+
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        {needsSetup ? (
+          <button
+            type="button"
+            disabled={checking || initializing}
+            onClick={onRequestPermissions}
+            className="inline-flex h-11 items-center justify-center rounded-[15px] bg-[#1677ff] px-3 text-[14px] font-semibold text-white shadow-[0_12px_24px_rgba(22,119,255,0.22)] disabled:bg-[#d0d5dd] disabled:shadow-none"
+          >
+            {initializing ? "授权中..." : "授权并检测"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onOpenDialpad}
+            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-[15px] bg-[#1677ff] px-3 text-[14px] font-semibold text-white shadow-[0_12px_24px_rgba(22,119,255,0.22)]"
+          >
+            <CheckCircle2 className="h-4 w-4" aria-hidden />
+            去拨号
+          </button>
+        )}
+
+        <button
+          type="button"
+          disabled={checking || initializing}
+          onClick={onRefresh}
+          className="inline-flex h-11 items-center justify-center gap-1.5 rounded-[15px] bg-[#f2f4f7] px-3 text-[14px] font-semibold text-[#475467] disabled:opacity-60"
+        >
+          <RefreshCw
+            className={cn("h-4 w-4", checking ? "animate-spin" : "")}
+            aria-hidden
+          />
+          {checking ? "检测中" : "重新检测"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function MeTab({
   user,
   data,
-  nativeRecorderState,
+  nativeRecorderReadiness,
+  nativeRecorderChecking,
+  nativeRecorderInitializing,
   navigationGroups,
   openMessages,
   openCustomers,
   openDialpad,
+  onRefreshNativeRecorder,
+  onRequestNativeRecorderPermissions,
   onOpenModule,
 }: Readonly<{
   user: MobileCurrentUser;
   data: CustomerCenterData;
-  nativeRecorderState: string;
+  nativeRecorderReadiness: NativeRecorderReadiness;
+  nativeRecorderChecking: boolean;
+  nativeRecorderInitializing: boolean;
   navigationGroups: NavigationGroup[];
   openMessages: () => void;
   openCustomers: (queue?: string) => void;
   openDialpad: () => void;
+  onRefreshNativeRecorder: () => void;
+  onRequestNativeRecorderPermissions: () => void;
   onOpenModule: (module: MobileModuleView) => void;
 }>) {
   const [connectionProfile, setConnectionProfile] =
@@ -2189,7 +2313,7 @@ function MeTab({
       icon: PhoneCall,
       tone: "amber" as const,
       title: "外呼助手",
-      value: nativeRecorderState,
+      value: nativeRecorderChecking ? "检测中" : nativeRecorderReadiness.title,
       onClick: openDialpad,
     },
     {
@@ -2268,6 +2392,15 @@ function MeTab({
             />
           ))}
         </div>
+
+        <NativeRecorderCard
+          readiness={nativeRecorderReadiness}
+          checking={nativeRecorderChecking}
+          initializing={nativeRecorderInitializing}
+          onRefresh={onRefreshNativeRecorder}
+          onRequestPermissions={onRequestNativeRecorderPermissions}
+          onOpenDialpad={openDialpad}
+        />
 
         <div className="mt-5 grid gap-4">
           {navigationGroups.map((group) => (
@@ -3058,7 +3191,12 @@ export function MobileAppShell({
   const [recentDialCustomer, setRecentDialCustomer] = useState<RecentDialCustomer | null>(
     () => getRecentDialFromRecords(data.queueItems),
   );
-  const [nativeRecorderState, setNativeRecorderState] = useState("浏览器模式");
+  const [nativeRecorderReadiness, setNativeRecorderReadiness] =
+    useState<NativeRecorderReadiness>(() =>
+      summarizeNativeRecorderReadiness({ nativeAvailable: false }),
+    );
+  const [nativeRecorderChecking, setNativeRecorderChecking] = useState(true);
+  const [nativeRecorderInitializing, setNativeRecorderInitializing] = useState(false);
   const mobileLevelFilters = useMemo(
     () => normalizeExecutionClasses(data.filters.executionClasses),
     [data.filters.executionClasses],
@@ -3070,15 +3208,31 @@ export function MobileAppShell({
     !data.filters.productKeyword &&
     data.filters.tagIds.length === 0;
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setNativeRecorderState(
-        canUseNativeCallRecorder() ? "原生录音已就绪" : "浏览器拨号模式",
-      );
-    }, 0);
+  const refreshNativeRecorderReadiness = useCallback(async () => {
+    setNativeRecorderChecking(true);
 
-    return () => window.clearTimeout(timer);
+    try {
+      setNativeRecorderReadiness(await readNativeRecorderReadiness());
+    } finally {
+      setNativeRecorderChecking(false);
+    }
   }, []);
+
+  const initializeNativeRecorderPermissions = useCallback(async () => {
+    setNativeRecorderInitializing(true);
+    setNativeRecorderChecking(true);
+
+    try {
+      setNativeRecorderReadiness(await requestNativeRecorderPermissions());
+    } finally {
+      setNativeRecorderChecking(false);
+      setNativeRecorderInitializing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshNativeRecorderReadiness();
+  }, [refreshNativeRecorderReadiness]);
 
   useEffect(() => {
     let canceled = false;
@@ -3541,11 +3695,17 @@ export function MobileAppShell({
           <MeTab
             user={currentUser}
             data={data}
-            nativeRecorderState={nativeRecorderState}
+            nativeRecorderReadiness={nativeRecorderReadiness}
+            nativeRecorderChecking={nativeRecorderChecking}
+            nativeRecorderInitializing={nativeRecorderInitializing}
             navigationGroups={navigationGroups}
             openMessages={openMessages}
             openCustomers={openCustomers}
             openDialpad={openDialpad}
+            onRefreshNativeRecorder={() => void refreshNativeRecorderReadiness()}
+            onRequestNativeRecorderPermissions={() =>
+              void initializeNativeRecorderPermissions()
+            }
             onOpenModule={openModule}
           />
         ) : null}
