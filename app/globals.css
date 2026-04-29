@@ -262,6 +262,62 @@ button {
   background: hsl(var(--primary) / 0.18);
 }
 
+.desktop-drag-region {
+  -webkit-app-region: drag;
+}
+
+.desktop-no-drag,
+.desktop-no-drag * {
+  -webkit-app-region: no-drag;
+}
+
+html[data-lbn-desktop="true"] body {
+  cursor: default;
+  user-select: none;
+}
+
+html[data-lbn-desktop="true"] input,
+html[data-lbn-desktop="true"] textarea,
+html[data-lbn-desktop="true"] [contenteditable="true"],
+html[data-lbn-desktop="true"] .crm-input,
+html[data-lbn-desktop="true"] .crm-textarea,
+html[data-lbn-desktop="true"] .crm-detail-value,
+html[data-lbn-desktop="true"] .crm-copyable-text,
+html[data-lbn-desktop="true"] .crm-selectable-text,
+html[data-lbn-desktop="true"] .desktop-selectable-text {
+  user-select: text;
+}
+
+* {
+  scrollbar-color: color-mix(in srgb, var(--foreground) 18%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 16%, transparent);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--foreground) 26%, transparent);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 .theme-parchment [class~="bg-white"],
 html[data-theme="parchment"] [class~="bg-white"],
 html[data-theme="paper"] [class~="bg-white"],

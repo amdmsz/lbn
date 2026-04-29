@@ -80,6 +80,33 @@ export function CommandPalette({
   }, []);
 
   useEffect(() => {
+    let focusTimer: number | null = null;
+    const removeDesktopCommandListener = window.lbnDesktop?.softphone.onCommand((event) => {
+      if (event.command !== "focusGlobalSearch") {
+        return;
+      }
+
+      setOpen(true);
+
+      if (focusTimer) {
+        window.clearTimeout(focusTimer);
+      }
+
+      focusTimer = window.setTimeout(() => {
+        inputRef.current?.focus();
+      }, 40);
+    });
+
+    return () => {
+      removeDesktopCommandListener?.();
+
+      if (focusTimer) {
+        window.clearTimeout(focusTimer);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     if (!open) {
       return undefined;
     }

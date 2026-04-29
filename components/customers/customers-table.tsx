@@ -239,6 +239,10 @@ function getSuggestedFollowUpResult(item: CustomerListItem) {
   return item.callRecords[0]?.resultCode ?? getCustomerExecutionClassQuickResult(item.executionClass);
 }
 
+function buildCustomerPopupHref(customerId: string) {
+  return `/customers/${customerId}?mode=popup`;
+}
+
 function isRecentIsoDate(value: string | undefined, maxAgeMs: number) {
   if (!value) {
     return false;
@@ -1125,7 +1129,7 @@ export function CustomersTable({
             <SquarePen className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
           <Link
-            href={`/customers/${row.id}`}
+            href={buildCustomerPopupHref(row.id)}
             target="_blank"
             rel="noreferrer"
             onClick={() => rememberFocusedCustomer(row)}
@@ -1315,7 +1319,7 @@ export function CustomersTable({
                   <SquarePen className="h-4 w-4" aria-hidden="true" />
                 </button>
                 <Link
-                  href={`/customers/${row.id}`}
+                  href={buildCustomerPopupHref(row.id)}
                   target="_blank"
                   rel="noreferrer"
                   onClick={() => rememberFocusedCustomer(row)}

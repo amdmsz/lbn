@@ -215,6 +215,7 @@ export function CustomerListCard({
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
 
   const detailHref = `/customers/${item.id}`;
+  const popupDetailHref = `${detailHref}?mode=popup`;
   const latestFollowUpAt = normalizeDate(item.latestFollowUpAt);
   const latestTradeAt = normalizeDate(item.latestTradeAt);
   const address = getCardAddress(item);
@@ -272,7 +273,7 @@ export function CustomerListCard({
   function openDetailInNewWindow() {
     onFocusCustomer?.();
     setMobileActionsOpen(false);
-    window.open(detailHref, "_blank", "noopener,noreferrer");
+    window.open(popupDetailHref, "_blank", "noopener,noreferrer");
   }
 
   function openCallDialog() {

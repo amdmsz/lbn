@@ -1,8 +1,8 @@
 {
-  "version": "0.1.1",
-  "notes": "新增移动端 CRM 外呼/本机通话双模式、安卓录音上传和公网代理入口设置。",
+  "version": "0.1.2",
+  "notes": "新增 Windows 桌面端无边框窗口、托盘、快捷键、弹窗详情模式与 WebRTC 防休眠/重连增强。",
   "windows": {
-    "downloadUrl": "https://github.com/amdmsz/lbn/releases/latest/download/Lbn-CRM-portable.zip"
+    "downloadUrl": "https://github.com/amdmsz/lbn/releases/latest/download/Lbn-CRM-0.1.2-x64.zip"
   },
   "android": {
     "downloadUrl": "https://github.com/amdmsz/lbn/releases/latest/download/Lbn-CRM-Android-debug.apk"

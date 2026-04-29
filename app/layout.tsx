@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { DesktopWindowFrame } from "@/components/layout/desktop-window-frame";
 import { SITE_TITLE } from "@/lib/branding";
 import { themeInitScript } from "@/lib/theme";
 import "./globals.css";
@@ -43,6 +44,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="min-h-full bg-background text-foreground">
+        <DesktopWindowFrame />
         {children}
       </body>
     </html>

@@ -79,6 +79,8 @@ const pillStatusCopy: Record<SoftphoneStatus, string> = {
   failed: "Agent Error",
 };
 
+const preferredAudioInputStorageKey = "lbncrm.webrtc.preferredAudioInputId";
+
 function formatElapsed(seconds: number) {
   const safeSeconds = Math.max(0, seconds);
   const minutes = Math.floor(safeSeconds / 60);
@@ -146,6 +148,51 @@ function canUseSoftphone(role: RoleCode) {
   return role === "ADMIN" || role === "SALES";
 }
 
+function getPreferredAudioInputId() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage.getItem(preferredAudioInputStorageKey);
+  } catch {
+    return null;
+  }
+}
+
+function savePreferredAudioInputId(deviceId: string | null | undefined) {
+  if (typeof window === "undefined" || !deviceId) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(preferredAudioInputStorageKey, deviceId);
+  } catch {
+    // Browser privacy settings may block storage; WebRTC still works with default input.
+  }
+}
+
+function clearPreferredAudioInputId() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.removeItem(preferredAudioInputStorageKey);
+  } catch {
+    // Ignore storage failures; the next permission flow can rediscover devices.
+  }
+}
+
+function buildAudioConstraints(deviceId?: string | null): MediaTrackConstraints {
+  return {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+    ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+  };
+}
+
 function isLocalSecureEnough() {
   if (typeof window === "undefined") {
     return true;
@@ -191,6 +238,10 @@ export function WebRtcSoftphone({
   const userRef = useRef<SimpleUser | null>(null);
   const mountedRef = useRef(true);
   const callStartedAtRef = useRef<number | null>(null);
+  const statusRef = useRef<SoftphoneStatus>("loading");
+  const configRef = useRef<WebRtcConfig | null>(null);
+  const preferredAudioInputIdRef = useRef<string | null>(null);
+  const lastAudioInputIdsRef = useRef<Set<string>>(new Set());
 
   const safeSetStatus = useCallback(
     (nextStatus: SoftphoneStatus, nextMessage?: string) => {
@@ -216,6 +267,35 @@ export function WebRtcSoftphone({
   const activeSeconds = activeStartedAt
     ? Math.floor((now - activeStartedAt) / 1000)
     : null;
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
+
+  useEffect(() => {
+    const activeCall = status === "incoming" || status === "in_call";
+
+    void window.lbnDesktop?.setCallActive(activeCall).catch(() => undefined);
+
+    if (status === "incoming") {
+      void window.lbnDesktop
+        ?.notify({
+          title: "CRM 外呼来电",
+          body: "请在桌面坐席接听。",
+        })
+        .catch(() => undefined);
+    }
+  }, [status]);
+
+  useEffect(() => {
+    return () => {
+      void window.lbnDesktop?.setCallActive(false).catch(() => undefined);
+    };
+  }, []);
 
   useEffect(() => {
     if (status !== "incoming" && status !== "in_call") {
@@ -308,6 +388,64 @@ export function WebRtcSoftphone({
     });
   }, []);
 
+  const refreshAudioInputDevices = useCallback(async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) {
+      return;
+    }
+
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioInputs = devices.filter((device) => device.kind === "audioinput");
+      const nextIds = new Set(
+        audioInputs
+          .map((device) => device.deviceId)
+          .filter((deviceId) => deviceId && deviceId !== "default"),
+      );
+      const storedDeviceId = getPreferredAudioInputId();
+
+      if (storedDeviceId && nextIds.size > 0 && !nextIds.has(storedDeviceId)) {
+        clearPreferredAudioInputId();
+        preferredAudioInputIdRef.current = null;
+
+        if (statusRef.current !== "loading" && statusRef.current !== "disabled") {
+          setMessage("麦克风设备已变更，请确认当前耳麦后重新启用坐席");
+        }
+      } else if (!storedDeviceId) {
+        const preferredDevice = audioInputs.find(
+          (device) => device.deviceId && device.deviceId !== "default",
+        );
+
+        if (preferredDevice?.deviceId) {
+          savePreferredAudioInputId(preferredDevice.deviceId);
+          preferredAudioInputIdRef.current = preferredDevice.deviceId;
+        }
+      }
+
+      lastAudioInputIdsRef.current = nextIds;
+    } catch {
+      // enumerateDevices can fail before permission is granted; getUserMedia will surface the real error.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!navigator.mediaDevices?.addEventListener) {
+      return;
+    }
+
+    const handleDeviceChange = () => {
+      void refreshAudioInputDevices();
+    };
+
+    navigator.mediaDevices.addEventListener("devicechange", handleDeviceChange);
+
+    return () => {
+      navigator.mediaDevices.removeEventListener(
+        "devicechange",
+        handleDeviceChange,
+      );
+    };
+  }, [refreshAudioInputDevices]);
+
   const connect = useCallback(async () => {
     if (!config?.enabled) {
       return;
@@ -339,15 +477,34 @@ export function WebRtcSoftphone({
     safeSetStatus("connecting", "正在授权麦克风并注册坐席");
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-        video: false,
-      });
+      let preferredAudioInputId = getPreferredAudioInputId();
+      let stream: MediaStream;
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: buildAudioConstraints(preferredAudioInputId),
+          video: false,
+        });
+      } catch (error) {
+        if (!preferredAudioInputId) {
+          throw error;
+        }
+
+        clearPreferredAudioInputId();
+        preferredAudioInputId = null;
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: buildAudioConstraints(),
+          video: false,
+        });
+      }
+
+      const selectedAudioInputId =
+        stream.getAudioTracks()[0]?.getSettings().deviceId ?? preferredAudioInputId;
+
+      preferredAudioInputIdRef.current = selectedAudioInputId ?? null;
+      savePreferredAudioInputId(selectedAudioInputId);
       stream.getTracks().forEach((track) => track.stop());
+      void refreshAudioInputDevices();
 
       const sipModule = await import("sip.js");
       const delegate: SimpleUserDelegate = {
@@ -456,7 +613,72 @@ export function WebRtcSoftphone({
         error instanceof Error ? error.message : "网页坐席注册失败",
       );
     }
-  }, [attachRemoteAudio, config, safeSetStatus]);
+  }, [attachRemoteAudio, config, refreshAudioInputDevices, safeSetStatus]);
+
+  const reconnectIfReady = useCallback(
+    (reason: "network" | "desktop") => {
+      const currentConfig = configRef.current;
+      const currentStatus = statusRef.current;
+
+      if (!currentConfig?.enabled) {
+        return;
+      }
+
+      if (
+        currentStatus === "loading" ||
+        currentStatus === "disabled" ||
+        currentStatus === "connecting" ||
+        currentStatus === "incoming" ||
+        currentStatus === "in_call"
+      ) {
+        return;
+      }
+
+      if (currentStatus === "online" && userRef.current?.isConnected()) {
+        return;
+      }
+
+      setMessage(
+        reason === "desktop"
+          ? "桌面端已恢复，正在重新注册坐席"
+          : "网络已恢复，正在重新注册坐席",
+      );
+      void connect();
+    },
+    [connect],
+  );
+
+  useEffect(() => {
+    const handleOnline = () => reconnectIfReady("network");
+    const handleOffline = () => {
+      if (statusRef.current !== "loading" && statusRef.current !== "disabled") {
+        setMessage("网络已断开，恢复后会尝试重新注册坐席");
+      }
+    };
+    const removeDesktopListener = window.lbnDesktop?.onNetworkStatus((event) => {
+      if (
+        event.state === "resume" ||
+        event.state === "unlock-screen" ||
+        event.state === "loaded"
+      ) {
+        reconnectIfReady("desktop");
+        return;
+      }
+
+      if (event.state === "load-failed") {
+        setMessage("桌面端网络加载异常，请检查 CRM 连接后重试");
+      }
+    });
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      removeDesktopListener?.();
+    };
+  }, [reconnectIfReady]);
 
   useEffect(() => {
     if (!config?.enabled || status !== "idle") {
@@ -576,6 +798,32 @@ export function WebRtcSoftphone({
       );
     }
   }, [safeSetStatus]);
+
+  useEffect(() => {
+    const removeCommandListener = window.lbnDesktop?.softphone.onCommand((event) => {
+      if (event.command === "focusDialpad") {
+        setExpanded(true);
+        return;
+      }
+
+      if (event.command === "hangupActiveCall") {
+        setExpanded(true);
+
+        if (statusRef.current === "incoming") {
+          void decline();
+          return;
+        }
+
+        if (statusRef.current === "in_call") {
+          void hangup();
+        }
+      }
+    });
+
+    return () => {
+      removeCommandListener?.();
+    };
+  }, [decline, hangup]);
 
   const toggleMute = useCallback(() => {
     const currentUser = userRef.current;

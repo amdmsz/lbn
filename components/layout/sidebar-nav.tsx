@@ -23,9 +23,10 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { CommandPalette } from "@/components/layout/command-palette";
+import { DesktopWindowControls } from "@/components/layout/desktop-window-frame";
 import { ThemeSwitcher } from "@/components/layout/theme-switcher";
 import type {
   NavigationGroup,
@@ -181,7 +182,7 @@ function TopNavHomeButton({
       aria-label="返回首页"
       onClick={onNavigate}
       className={cn(
-        "crm-motion-pill group inline-flex items-center gap-2 rounded-full border border-[var(--color-shell-topbar-border)] bg-[var(--color-shell-surface)] px-2.5 py-1.5 text-[var(--foreground)] transition-[border-color,background-color,box-shadow,transform] duration-200",
+        "crm-motion-pill desktop-no-drag group inline-flex items-center gap-2 rounded-full border border-[var(--color-shell-topbar-border)] bg-[var(--color-shell-surface)] px-2.5 py-1.5 text-[var(--foreground)] transition-[border-color,background-color,box-shadow,transform] duration-200",
         "hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-md)]",
         iconOnly ? "h-10 w-10 justify-center px-0 py-0" : "",
       )}
@@ -217,7 +218,7 @@ function DesktopNavItem({
       scroll={false}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "crm-motion-pill relative rounded-full px-3 py-2 text-[12px] font-medium tracking-[-0.01em] transition-[background-color,color,box-shadow] duration-200",
+        "crm-motion-pill desktop-no-drag relative rounded-full px-3 py-2 text-[12px] font-medium tracking-[-0.01em] transition-[background-color,color,box-shadow] duration-200",
         active
           ? "bg-[var(--color-shell-active)] text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)] after:absolute after:bottom-[-0.72rem] after:left-1/2 after:h-[2px] after:w-7 after:-translate-x-1/2 after:rounded-full after:bg-[var(--color-accent)]"
           : "text-[var(--color-sidebar-muted)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]",
@@ -277,7 +278,7 @@ function OverflowMenu({
   }
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="desktop-no-drag relative">
       <button
         type="button"
         aria-expanded={open}
@@ -539,6 +540,11 @@ export function SidebarNav({
   currentUser: CurrentUser;
 }>) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  if (searchParams.get("mode") === "popup") {
+    return null;
+  }
 
   return (
     <SidebarNavInner
@@ -618,13 +624,13 @@ function SidebarNavInner({
 
   return (
     <>
-      <header className="crm-animate-enter sticky top-0 z-40 border-b border-[var(--color-shell-topbar-border)] bg-[var(--color-shell-topbar)] backdrop-blur-[18px]">
+      <header className="crm-animate-enter desktop-drag-region sticky top-0 z-40 border-b border-[var(--color-shell-topbar-border)] bg-[var(--color-shell-topbar)] backdrop-blur-[18px]">
         <div className="mx-auto flex h-14 w-full max-w-[calc(var(--crm-shell-max-width)+3rem)] items-center gap-3 px-4 md:px-5 xl:px-6">
-          <div className="hidden shrink-0 md:block">
+          <div className="desktop-no-drag hidden shrink-0 md:block">
             <TopNavHomeButton spinning={homeIconSpinning} onNavigate={handleNavigateHome} />
           </div>
 
-          <div className="shrink-0 md:hidden">
+          <div className="desktop-no-drag shrink-0 md:hidden">
             <TopNavHomeButton
               spinning={homeIconSpinning}
               onNavigate={handleNavigateHome}
@@ -638,7 +644,7 @@ function SidebarNavInner({
             </p>
           </div>
 
-          <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 md:flex">
+          <nav className="desktop-no-drag hidden min-w-0 flex-1 items-center justify-center gap-1 md:flex">
             {primaryItems.map((item) => (
               <DesktopNavItem
                 key={item.href}
@@ -648,11 +654,11 @@ function SidebarNavInner({
             ))}
           </nav>
 
-          <div className="hidden min-w-[16rem] max-w-[22rem] flex-1 lg:block xl:max-w-[24rem]">
+          <div className="desktop-no-drag hidden min-w-[16rem] max-w-[22rem] flex-1 lg:block xl:max-w-[24rem]">
             <CommandPalette groups={groups} />
           </div>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="desktop-no-drag ml-auto flex items-center gap-2">
             <div className="hidden md:block">
               <OverflowMenu
                 groups={overflowGroups}
@@ -663,13 +669,19 @@ function SidebarNavInner({
               />
             </div>
 
-            <ThemeSwitcher />
+            <div className="desktop-no-drag">
+              <ThemeSwitcher />
+            </div>
 
-            <AccountMenu
-              currentUser={currentUser}
-              compact
-              dropdownPlacement="down-end"
-            />
+            <div className="desktop-no-drag">
+              <AccountMenu
+                currentUser={currentUser}
+                compact
+                dropdownPlacement="down-end"
+              />
+            </div>
+
+            <DesktopWindowControls className="hidden self-stretch overflow-hidden rounded-none border-l border-[var(--color-shell-topbar-border)] md:flex" />
 
             <button
               type="button"
