@@ -24,8 +24,42 @@ export type MobileApiCustomerListItem = {
   status: string;
   ownershipMode: string;
   ownerId: string | null;
+  owner: {
+    id: string;
+    name: string;
+    username: string;
+  } | null;
   region: string;
   lastFollowUpAt: string | null;
+  latestFollowUpTask: {
+    id: string;
+    type: string;
+    status: string;
+    dueAt: string;
+    completedAt: string | null;
+  } | null;
+  latestCall: {
+    id: string;
+    callTime: string;
+    durationSeconds: number;
+    result: string | null;
+    resultCode: string | null;
+    nextFollowUpAt: string | null;
+  } | null;
+  latestWechatRecord: {
+    id: string;
+    addedStatus: string;
+    addedAt: string | null;
+    nextFollowUpAt: string | null;
+    createdAt: string;
+  } | null;
+  latestLiveInvitation: {
+    id: string;
+    invitationStatus: string;
+    attendanceStatus: string;
+    invitedAt: string | null;
+    createdAt: string;
+  } | null;
   latestOrder: {
     id: string;
     tradeNo: string;

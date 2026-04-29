@@ -64,7 +64,12 @@ import type {
   CustomerOperatingDashboardEmployeeRow,
 } from "@/lib/customers/queries";
 import {
+  fetchMobileCustomers,
+  fetchMobileDashboard,
   fetchMobileCustomerDetail,
+  type MobileApiCustomerListItem,
+  type MobileApiDashboard,
+  type MobileApiPagination,
   type MobileCustomerDetail,
 } from "@/lib/mobile/client-api";
 import type {
@@ -118,6 +123,17 @@ type MobileOutboundNotice = {
   tone: "pending" | "success" | "failed";
   title: string;
   description: string;
+};
+type MobileDashboardApiState = {
+  dashboard: MobileApiDashboard | null;
+  loading: boolean;
+  error: string | null;
+};
+type MobileCustomersApiState = {
+  items: MobileApiCustomerListItem[] | null;
+  pagination: MobileApiPagination | null;
+  loading: boolean;
+  error: string | null;
 };
 
 const tabs: Array<{
@@ -202,6 +218,11 @@ function toDate(value: DateLike) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function parseMobileApiDate(value: string | null | undefined) {
+  const parsed = toDate(value);
+  return parsed ?? null;
+}
+
 function formatNullableRelativeDate(value: DateLike) {
   const date = toDate(value);
   return date ? formatRelativeDateTime(date) : "暂无跟进";
@@ -225,6 +246,10 @@ function formatMoney(value: string) {
   return new Intl.NumberFormat("zh-CN", {
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+function isMaskedPhone(value: string) {
+  return value.includes("*");
 }
 
 function formatCurrencyAmount(value: number) {
@@ -253,6 +278,81 @@ function formatMobileDetailCallLabel(record: {
   resultCode: string | null;
 }) {
   return record.resultCode || record.result || "通话记录";
+}
+
+function createMobileApiCustomerListItem(
+  item: MobileApiCustomerListItem,
+  fallback?: CustomerListItem,
+) {
+  const latestCall = item.latestCall
+    ? [
+        {
+          id: item.latestCall.id,
+          callTime: new Date(item.latestCall.callTime),
+          durationSeconds: item.latestCall.durationSeconds,
+          result: item.latestCall.result as CustomerListItem["callRecords"][number]["result"],
+          resultCode: item.latestCall.resultCode,
+          resultLabel: formatMobileDetailCallLabel(item.latestCall),
+          remark: fallback?.callRecords.find((record) => record.id === item.latestCall?.id)
+            ?.remark ?? null,
+          nextFollowUpAt: parseMobileApiDate(item.latestCall.nextFollowUpAt),
+          sales: fallback?.owner
+            ? {
+                name: fallback.owner.name,
+                username: fallback.owner.username,
+              }
+            : {
+                name: item.owner?.name ?? "",
+                username: item.owner?.username ?? "",
+              },
+        },
+      ]
+    : (fallback?.callRecords ?? []);
+
+  return {
+    id: item.id,
+    name: item.name,
+    phone: item.phoneMasked,
+    province: item.region || fallback?.province || null,
+    city: fallback?.city ?? null,
+    district: fallback?.district ?? null,
+    address: fallback?.address ?? null,
+    status: item.status as CustomerListItem["status"],
+    ownershipMode: item.ownershipMode as CustomerListItem["ownershipMode"],
+    createdAt: new Date(item.createdAt),
+    latestImportAt: fallback?.latestImportAt ?? null,
+    latestFollowUpAt: parseMobileApiDate(item.lastFollowUpAt),
+    lastEffectiveFollowUpAt: parseMobileApiDate(item.lastFollowUpAt),
+    latestTradeAt: parseMobileApiDate(item.latestOrder?.createdAt),
+    lifetimeTradeAmount:
+      fallback?.lifetimeTradeAmount ?? item.latestOrder?.finalAmount ?? "0",
+    approvedTradeOrderCount:
+      fallback?.approvedTradeOrderCount ??
+      (item.latestOrder?.tradeStatus === "APPROVED" ? 1 : 0),
+    executionClass: item.level,
+    newImported: fallback?.newImported ?? false,
+    pendingFirstCall: fallback?.pendingFirstCall ?? !item.latestCall,
+    latestInterestedProduct: fallback?.latestInterestedProduct ?? null,
+    latestPurchasedProduct:
+      fallback?.latestPurchasedProduct ?? item.latestOrder?.tradeNo ?? null,
+    remark: fallback?.remark ?? null,
+    workingStatuses:
+      fallback?.workingStatuses ??
+      (item.latestFollowUpTask ? (["pending_follow_up"] as CustomerListItem["workingStatuses"]) : []),
+    recycleGuard: fallback?.recycleGuard ?? (null as unknown as CustomerListItem["recycleGuard"]),
+    recycleFinalizePreview: fallback?.recycleFinalizePreview ?? null,
+    owner:
+      item.owner ??
+      fallback?.owner ??
+      null,
+    leads: fallback?.leads ?? [],
+    callRecords: latestCall,
+    _count: fallback?._count ?? {
+      leads: 0,
+      callRecords: latestCall.length,
+    },
+    customerTags: fallback?.customerTags ?? [],
+  } satisfies CustomerListItem;
 }
 
 function getCustomerPrimaryProduct(item: CustomerListItem) {
@@ -569,14 +669,17 @@ function MessageRow({
 function MessagesTab({
   data,
   dashboardData,
+  mobileDashboardState,
   onOpenCustomers,
   onOpenDialpad,
 }: Readonly<{
   data: CustomerCenterData;
   dashboardData: CustomerOperatingDashboardData | null;
+  mobileDashboardState: MobileDashboardApiState;
   onOpenCustomers: (queue?: string) => void;
   onOpenDialpad: () => void;
 }>) {
+  const mobileDashboard = mobileDashboardState.dashboard;
   const dashboardRows = dashboardData?.employees ?? [];
   const totals =
     dashboardRows.length > 0
@@ -593,9 +696,25 @@ function MessagesTab({
   const connectRate =
     totals.assigned > 0 ? `${Math.round((totals.connected / totals.assigned) * 100)}%` : "0%";
   const dashboardStats = [
-    { label: "今日分配", value: String(totals.assigned), note: dashboardData?.scopeLabel ?? "当前范围" },
-    { label: "今日通话", value: String(totals.calls), note: `接通率 ${connectRate}` },
-    { label: "今日加微", value: String(totals.wechat), note: "新增微信" },
+    {
+      label: "待跟进",
+      value: mobileDashboard
+        ? String(mobileDashboard.todayFollowUps)
+        : String(totals.assigned),
+      note: mobileDashboard ? "今日" : dashboardData?.scopeLabel ?? "当前范围",
+    },
+    {
+      label: "本月外呼",
+      value: mobileDashboard ? String(mobileDashboard.monthlyCalls) : String(totals.calls),
+      note: mobileDashboard ? "本月" : `接通率 ${connectRate}`,
+    },
+    {
+      label: "本月成交",
+      value: mobileDashboard
+        ? formatCurrencyAmount(Number(mobileDashboard.monthlySalesVolume))
+        : String(totals.wechat),
+      note: mobileDashboard ? "已审核订单" : "新增微信",
+    },
     { label: "今日邀约", value: String(totals.invitation), note: "直播/活动" },
     { label: "今日成交", value: String(totals.deal), note: "通过订单" },
     { label: "销售额", value: formatCurrencyAmount(totals.revenue), note: dashboardData?.periodLabel ?? "今日" },
@@ -669,6 +788,11 @@ function MessagesTab({
               </button>
             ))}
           </div>
+          {mobileDashboardState.loading || mobileDashboardState.error ? (
+            <div className="mt-3 rounded-[14px] bg-[#f7f8fb] px-3 py-2 text-[12px] text-[#667085]">
+              {mobileDashboardState.error ?? "同步中..."}
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-3 grid grid-cols-3 gap-2.5">
@@ -1171,6 +1295,7 @@ function CustomerRow({
 
 function CustomersTab({
   data,
+  mobileCustomersState,
   searchText,
   setSearchText,
   canCreateCallRecord,
@@ -1181,6 +1306,7 @@ function CustomersTab({
   onStartCall,
 }: Readonly<{
   data: CustomerCenterData;
+  mobileCustomersState: MobileCustomersApiState;
   searchText: string;
   setSearchText: (value: string) => void;
   canCreateCallRecord: boolean;
@@ -1200,20 +1326,35 @@ function CustomersTab({
   ) => void;
 }>) {
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+  const fallbackItemMap = useMemo(
+    () => new Map(data.queueItems.map((item) => [item.id, item])),
+    [data.queueItems],
+  );
+  const apiItems = useMemo(
+    () =>
+      mobileCustomersState.items?.map((item) =>
+        createMobileApiCustomerListItem(item, fallbackItemMap.get(item.id)),
+      ) ?? null,
+    [fallbackItemMap, mobileCustomersState.items],
+  );
+  const sourceItems = apiItems ?? data.queueItems;
   const localQuery = normalizeSearchValue(searchText);
   const filteredItems = useMemo(() => {
     if (!localQuery) {
-      return data.queueItems;
+      return sourceItems;
     }
 
-    return data.queueItems.filter((item) => {
+    return sourceItems.filter((item) => {
       return (
         normalizeSearchValue(item.name).includes(localQuery) ||
         normalizeDialValue(item.phone).includes(normalizeDialValue(searchText)) ||
         normalizeSearchValue(item.owner?.name ?? "").includes(localQuery)
       );
     });
-  }, [data.queueItems, localQuery, searchText]);
+  }, [sourceItems, localQuery, searchText]);
+  const totalCount =
+    mobileCustomersState.pagination?.total ??
+    (apiItems ? filteredItems.length : data.pagination.totalCount);
 
   return (
     <section>
@@ -1248,9 +1389,15 @@ function CustomersTab({
         <div className="mt-4 flex items-center justify-between">
           <h2 className="text-[18px] font-semibold text-[#20242c]">客户列表</h2>
           <span className="text-[12px] text-[#98a1af]">
-            {data.pagination.totalCount} 位
+            {mobileCustomersState.loading ? "同步中" : `${totalCount} 位`}
           </span>
         </div>
+
+        {mobileCustomersState.error ? (
+          <div className="mt-2.5 rounded-[16px] bg-[#fff4f4] px-4 py-3 text-[13px] text-[#b42318]">
+            {mobileCustomersState.error}
+          </div>
+        ) : null}
 
         <div className="mt-2.5 grid gap-2.5">
           {filteredItems.length > 0 ? (
@@ -2812,10 +2959,24 @@ export function MobileAppShell({
   const [orderCustomer, setOrderCustomer] = useState<CustomerListItem | null>(null);
   const [activeModule, setActiveModule] = useState<MobileModuleView | null>(null);
   const [outboundNotice, setOutboundNotice] = useState<MobileOutboundNotice | null>(null);
+  const [mobileDashboardState, setMobileDashboardState] =
+    useState<MobileDashboardApiState>({
+      dashboard: null,
+      loading: true,
+      error: null,
+    });
+  const [mobileCustomersState, setMobileCustomersState] =
+    useState<MobileCustomersApiState>({
+      items: null,
+      pagination: null,
+      loading: true,
+      error: null,
+    });
   const [recentDialCustomer, setRecentDialCustomer] = useState<RecentDialCustomer | null>(
     () => getRecentDialFromRecords(data.queueItems),
   );
   const [nativeRecorderState, setNativeRecorderState] = useState("浏览器模式");
+  const mobileLevelFilter = data.filters.executionClasses[0] ?? null;
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -2826,6 +2987,87 @@ export function MobileAppShell({
 
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    let canceled = false;
+
+    setMobileDashboardState((current) => ({
+      ...current,
+      loading: true,
+      error: null,
+    }));
+
+    void fetchMobileDashboard()
+      .then((payload) => {
+        if (canceled) {
+          return;
+        }
+
+        setMobileDashboardState({
+          dashboard: payload.dashboard,
+          loading: false,
+          error: null,
+        });
+      })
+      .catch((error) => {
+        if (canceled) {
+          return;
+        }
+
+        setMobileDashboardState((current) => ({
+          ...current,
+          loading: false,
+          error: error instanceof Error ? error.message : "移动端工作台同步失败。",
+        }));
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let canceled = false;
+
+    setMobileCustomersState((current) => ({
+      ...current,
+      loading: true,
+      error: null,
+    }));
+
+    void fetchMobileCustomers({
+      page: data.pagination.page,
+      limit: data.pagination.pageSize,
+      level: mobileLevelFilter,
+    })
+      .then((payload) => {
+        if (canceled) {
+          return;
+        }
+
+        setMobileCustomersState({
+          items: payload.customers,
+          pagination: payload.pagination,
+          loading: false,
+          error: null,
+        });
+      })
+      .catch((error) => {
+        if (canceled) {
+          return;
+        }
+
+        setMobileCustomersState((current) => ({
+          ...current,
+          loading: false,
+          error: error instanceof Error ? error.message : "移动端客户列表同步失败。",
+        }));
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [data.pagination.page, data.pagination.pageSize, mobileLevelFilter]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -2919,29 +3161,58 @@ export function MobileAppShell({
     });
   }
 
+  async function resolveCustomerPhoneForCall(customer: CustomerListItem) {
+    if (!isMaskedPhone(customer.phone)) {
+      return customer;
+    }
+
+    const payload = await fetchMobileCustomerDetail(customer.id);
+
+    return {
+      ...customer,
+      name: payload.customer.name,
+      phone: payload.customer.phone,
+    } satisfies CustomerListItem;
+  }
+
   function startCustomerCall(
     customer: CustomerListItem,
     triggerSource: MobileCallTriggerSource,
     mode: MobileCallMode = callMode,
   ) {
-    const recent = createRecentDialCustomer(
-      customer,
-      mode === "crm-outbound" ? "CRM 外呼" : "本机通话",
-    );
-    setRecentDialCustomer(recent);
-    writeRecentDialCustomer(recent);
+    void (async () => {
+      let callableCustomer: CustomerListItem;
 
-    if (mode === "crm-outbound") {
-      void startCrmOutboundCall(customer);
-      return;
-    }
+      try {
+        callableCustomer = await resolveCustomerPhoneForCall(customer);
+      } catch (error) {
+        setOutboundNotice({
+          tone: "failed",
+          title: "客户号码读取失败",
+          description: error instanceof Error ? error.message : "无法读取完整手机号。",
+        });
+        return;
+      }
 
-    startMobileCallFollowUpDial({
-      customerId: customer.id,
-      customerName: customer.name,
-      phone: customer.phone,
-      triggerSource,
-    });
+      const recent = createRecentDialCustomer(
+        callableCustomer,
+        mode === "crm-outbound" ? "CRM 外呼" : "本机通话",
+      );
+      setRecentDialCustomer(recent);
+      writeRecentDialCustomer(recent);
+
+      if (mode === "crm-outbound") {
+        void startCrmOutboundCall(callableCustomer);
+        return;
+      }
+
+      startMobileCallFollowUpDial({
+        customerId: callableCustomer.id,
+        customerName: callableCustomer.name,
+        phone: callableCustomer.phone,
+        triggerSource,
+      });
+    })();
   }
 
   async function startCrmOutboundCall(customer: CustomerListItem) {
@@ -3076,6 +3347,7 @@ export function MobileAppShell({
           <MessagesTab
             data={data}
             dashboardData={dashboardData}
+            mobileDashboardState={mobileDashboardState}
             onOpenCustomers={openCustomers}
             onOpenDialpad={openDialpad}
           />
@@ -3083,6 +3355,7 @@ export function MobileAppShell({
         {activeTab === "customers" ? (
           <CustomersTab
             data={data}
+            mobileCustomersState={mobileCustomersState}
             searchText={searchText}
             setSearchText={setSearchText}
             canCreateCallRecord={canCreateCallRecord}
