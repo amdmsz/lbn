@@ -78,6 +78,7 @@ sudo systemctl status frps --no-pager
 ```
 
 不要对公网开放 `18080/tcp`。它只给公网服务器本机 Nginx 访问。
+模板里的 `proxyBindAddr = "127.0.0.1"` 会让 frp 暴露端口只监听本机，避免 `18080` 直接暴露到公网。
 
 ## 5. 公网 Nginx + HTTPS
 
@@ -138,6 +139,7 @@ sudo systemctl restart jiuzhuang-crm
 ```bash
 curl -I http://127.0.0.1:18080/login
 curl -I https://crm.cclbn.com/login
+sudo ss -lntp | grep -E ':(7000|18080|80|443)\b'
 sudo journalctl -u frps -n 80 --no-pager
 sudo journalctl -u nginx -n 80 --no-pager
 ```

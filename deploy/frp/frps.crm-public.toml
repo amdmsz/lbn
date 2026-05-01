@@ -3,6 +3,7 @@
 
 bindAddr = "0.0.0.0"
 bindPort = 7000
+proxyBindAddr = "127.0.0.1"
 
 auth.tokenSource.type = "file"
 auth.tokenSource.file.path = "/etc/frp/frp-token"
