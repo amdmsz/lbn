@@ -503,7 +503,11 @@ function createWindow() {
     minWidth: 1180,
     minHeight: 760,
     title: "Lbn CRM",
+    backgroundColor: "#00000000",
     frame: false,
+    hasShadow: true,
+    roundedCorners: true,
+    transparent: true,
     autoHideMenuBar: true,
     titleBarStyle: "hidden",
     webPreferences: {
@@ -538,7 +542,11 @@ function createWindow() {
         action: "allow",
         overrideBrowserWindowOptions: {
           ...getPopupWindowOptions(),
+          backgroundColor: "#00000000",
           frame: false,
+          hasShadow: true,
+          roundedCorners: true,
+          transparent: true,
           autoHideMenuBar: true,
           titleBarStyle: "hidden",
           webPreferences: {

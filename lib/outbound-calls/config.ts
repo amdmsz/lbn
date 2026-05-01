@@ -15,6 +15,8 @@ export type OutboundCallRuntimeProvider =
 
 export type ResolvedOutboundCallRuntimeConfig =
   OutboundCallProviderSettingValue & {
+    startRetryAttempts: number;
+    startRetryDelayMs: number;
     source: "database" | "fallback" | "default";
     secret: string;
     secretSource: "database" | "fallback" | "default";
@@ -55,6 +57,14 @@ function normalizeRecordingImportMode(
 function parsePositiveInt(value: string | undefined, fallback: number) {
   const parsed = Number.parseInt(value ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseBoundedPositiveInt(
+  value: string | undefined,
+  fallback: number,
+  max: number,
+) {
+  return Math.min(parsePositiveInt(value, fallback), max);
 }
 
 function normalizeOptional(value: string | undefined) {
@@ -121,6 +131,16 @@ export async function resolveOutboundCallRuntimeConfig(): Promise<ResolvedOutbou
 
   return {
     ...setting.value,
+    startRetryAttempts: parseBoundedPositiveInt(
+      process.env.OUTBOUND_CALL_START_RETRY_ATTEMPTS,
+      2,
+      3,
+    ),
+    startRetryDelayMs: parseBoundedPositiveInt(
+      process.env.OUTBOUND_CALL_START_RETRY_DELAY_MS,
+      350,
+      3000,
+    ),
     source: setting.source,
     secret,
     secretSource: databaseSecret

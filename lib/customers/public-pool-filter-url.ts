@@ -12,7 +12,8 @@ export type CustomerPublicPoolFilterShape = {
 };
 
 export type CustomerDetailNavigationContext = {
-  from?: "public-pool";
+  from?: "public-pool" | "mobile";
+  mode?: "mobile" | "popup";
   returnTo?: string | null;
 };
 
@@ -66,14 +67,21 @@ export function appendCustomerDetailNavigationContext(
   href: string,
   context?: CustomerDetailNavigationContext | null,
 ) {
-  if (!context?.from || !context.returnTo) {
+  if (!context) {
     return href;
   }
 
   const [pathname, rawQuery = ""] = href.split("?");
   const params = new URLSearchParams(rawQuery);
-  params.set("from", context.from);
-  params.set("returnTo", context.returnTo);
+
+  if (context.mode) {
+    params.set("mode", context.mode);
+  }
+
+  if (context.from && context.returnTo) {
+    params.set("from", context.from);
+    params.set("returnTo", context.returnTo);
+  }
 
   const query = params.toString();
   return query ? `${pathname}?${query}` : pathname;

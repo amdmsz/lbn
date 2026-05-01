@@ -82,6 +82,87 @@ function parseGatewayStartResult(
   };
 }
 
+class GatewayStartError extends Error {
+  constructor(
+    message: string,
+    readonly retryable: boolean,
+  ) {
+    super(message);
+    this.name = "GatewayStartError";
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseGatewayPayload(text: string, responseOk: boolean) {
+  if (!text.trim()) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    if (responseOk) {
+      throw new GatewayStartError(
+        "CTI Gateway 返回了无法解析的 JSON，外呼状态不可确认。",
+        false,
+      );
+    }
+
+    return {
+      message: text.slice(0, 500),
+    };
+  }
+}
+
+function getGatewayFailureMessage(payload: unknown, status: number) {
+  if (payload && typeof payload === "object") {
+    const body = payload as Record<string, unknown>;
+    const nestedError =
+      body.error && typeof body.error === "object"
+        ? (body.error as Record<string, unknown>)
+        : null;
+
+    return (
+      asNonEmptyString(body.message) ??
+      asNonEmptyString(nestedError?.message) ??
+      asNonEmptyString(body.error) ??
+      `CTI Gateway 返回 HTTP ${status}。`
+    );
+  }
+
+  return `CTI Gateway 返回 HTTP ${status}。`;
+}
+
+function isRetryableHttpStatus(status: number) {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+function normalizeGatewayStartError(error: unknown, timeoutSeconds: number) {
+  if (error instanceof GatewayStartError) {
+    return error;
+  }
+
+  if (
+    error &&
+    typeof error === "object" &&
+    "name" in error &&
+    error.name === "AbortError"
+  ) {
+    return new GatewayStartError(
+      `CTI Gateway 请求超时（${timeoutSeconds}s）。`,
+      true,
+    );
+  }
+
+  const message =
+    error instanceof Error ? error.message : "CTI Gateway 网络请求失败。";
+
+  return new GatewayStartError(`CTI Gateway 网络请求失败：${message}`, true);
+}
+
 function createMockProviderAdapter(): OutboundCallProviderAdapter {
   return {
     async startOutboundCall(input) {
@@ -107,56 +188,78 @@ function createHttpProviderAdapter(
 ): OutboundCallProviderAdapter {
   return {
     async startOutboundCall(input) {
-      const controller = new AbortController();
-      const timer = setTimeout(
-        () => controller.abort(),
-        config.timeoutSeconds * 1000,
-      );
+      const gatewayUrl = buildGatewayUrl(config);
+      const attempts = Math.max(1, config.startRetryAttempts);
+      let lastError: GatewayStartError | null = null;
 
-      try {
-        const response = await fetch(buildGatewayUrl(config), {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(config.secret
-              ? { Authorization: `Bearer ${config.secret}` }
-              : {}),
-          },
-          body: JSON.stringify({
-            correlationId: input.sessionId,
-            sessionId: input.sessionId,
-            callRecordId: input.callRecordId,
-            customerId: input.customerId,
-            customerName: input.customerName,
-            customerPhone: input.customerPhone,
-            dialedNumber: input.dialedNumber,
-            salesId: input.salesId,
-            seatNo: input.seatNo,
-            extensionNo: input.extensionNo,
-            displayNumber: input.displayNumber,
-            routingGroup: input.routingGroup,
-            codec: input.codec,
-            recordOnServer: input.recordOnServer,
-            webhookBaseUrl: input.webhookBaseUrl,
-          }),
-          signal: controller.signal,
-        });
+      for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        const controller = new AbortController();
+        const timer = setTimeout(
+          () => controller.abort(),
+          config.timeoutSeconds * 1000,
+        );
 
-        const text = await response.text();
-        const payload = text ? JSON.parse(text) : {};
+        try {
+          const response = await fetch(gatewayUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(config.secret
+                ? { Authorization: `Bearer ${config.secret}` }
+                : {}),
+            },
+            body: JSON.stringify({
+              correlationId: input.sessionId,
+              sessionId: input.sessionId,
+              callRecordId: input.callRecordId,
+              customerId: input.customerId,
+              customerName: input.customerName,
+              customerPhone: input.customerPhone,
+              dialedNumber: input.dialedNumber,
+              salesId: input.salesId,
+              seatNo: input.seatNo,
+              extensionNo: input.extensionNo,
+              displayNumber: input.displayNumber,
+              routingGroup: input.routingGroup,
+              codec: input.codec,
+              recordOnServer: input.recordOnServer,
+              webhookBaseUrl: input.webhookBaseUrl,
+            }),
+            signal: controller.signal,
+          });
+          const text = await response.text();
+          const payload = parseGatewayPayload(text, response.ok);
 
-        if (!response.ok) {
-          const message =
-            payload && typeof payload === "object"
-              ? asNonEmptyString((payload as Record<string, unknown>).message)
-              : null;
-          throw new Error(message ?? `CTI Gateway 返回 ${response.status}。`);
+          if (!response.ok) {
+            throw new GatewayStartError(
+              getGatewayFailureMessage(payload, response.status),
+              isRetryableHttpStatus(response.status),
+            );
+          }
+
+          return parseGatewayStartResult(payload, input.sessionId);
+        } catch (error) {
+          const normalized = normalizeGatewayStartError(
+            error,
+            config.timeoutSeconds,
+          );
+          lastError = normalized;
+
+          if (!normalized.retryable || attempt === attempts) {
+            break;
+          }
+
+          await sleep(config.startRetryDelayMs * attempt);
+        } finally {
+          clearTimeout(timer);
         }
-
-        return parseGatewayStartResult(payload, input.sessionId);
-      } finally {
-        clearTimeout(timer);
       }
+
+      throw new Error(
+        attempts > 1 && lastError
+          ? `${lastError.message}（已重试 ${attempts} 次）`
+          : lastError?.message ?? "CTI Gateway 调用失败。",
+      );
     },
   };
 }

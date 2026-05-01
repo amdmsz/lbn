@@ -3,6 +3,7 @@
 import type { CallResultOption } from "@/lib/calls/metadata";
 import {
   canUseNativeCallRecorder,
+  recordNativeCallEvent,
   startNativeRecordedSimCall,
 } from "@/lib/calls/native-mobile-call";
 import type {
@@ -79,6 +80,7 @@ function parsePendingMobileCallFollowUp(rawValue: string | null) {
     if (
       !parsed ||
       !isNonEmptyString(parsed.id) ||
+      !isNonEmptyString(parsed.correlationId) ||
       !isNonEmptyString(parsed.customerId) ||
       !isNonEmptyString(parsed.customerName) ||
       !isNonEmptyString(parsed.phone) ||
@@ -109,6 +111,7 @@ function parsePendingMobileCallFollowUp(rawValue: string | null) {
 
     return {
       id: parsed.id,
+      correlationId: parsed.correlationId,
       customerId: parsed.customerId,
       customerName: parsed.customerName,
       phone: parsed.phone,
@@ -155,12 +158,15 @@ async function createBrowserFallbackMobileCallRecord(
       },
       body: JSON.stringify({
         customerId: pendingCall.customerId,
+        correlationId: pendingCall.correlationId,
         callTime: pendingCall.createdAt,
+        clientEventAt: pendingCall.createdAt,
+        triggerSource: pendingCall.triggerSource,
       }),
     });
 
     if (!response.ok) {
-      return;
+      return null;
     }
 
     const body = (await response.json()) as {
@@ -173,13 +179,13 @@ async function createBrowserFallbackMobileCallRecord(
     const callRecordId = body.call?.callRecordId;
 
     if (!callRecordId) {
-      return;
+      return null;
     }
 
     const currentPendingCall = readPendingMobileCallFollowUp();
 
     if (!currentPendingCall || currentPendingCall.id !== pendingCall.id) {
-      return;
+      return null;
     }
 
     writePendingMobileCallFollowUp({
@@ -187,10 +193,45 @@ async function createBrowserFallbackMobileCallRecord(
       phone: body.call?.phone?.trim() || currentPendingCall.phone,
       callRecordId,
       deviceId: body.call?.deviceId ?? currentPendingCall.deviceId,
+      recordingStatus: "UNSUPPORTED",
+      uploadStatus: "UNSUPPORTED",
+      nativeFailureMessage: "当前不是 Android 原生录音环境。",
     });
+
+    await recordNativeCallEvent({
+      callRecordId,
+      action: "call.native_dispatched",
+      eventId: `browser-tel-dispatched:${callRecordId}`,
+      recordingCapability: "UNSUPPORTED",
+      metadata: {
+        dispatchSource: "browser-tel-fallback",
+        launchCallSupported: true,
+        observeCallStateSupported: false,
+        recordingSupported: false,
+      },
+    });
+
+    await recordNativeCallEvent({
+      callRecordId,
+      action: "call.recording_unsupported",
+      eventId: `browser-recording-unsupported:${callRecordId}`,
+      recordingCapability: "UNSUPPORTED",
+      failureCode: "NATIVE_RECORDER_UNAVAILABLE",
+      failureMessage: "当前不是 Android 原生壳，本机录音不可用。",
+      metadata: {
+        dispatchSource: "browser-tel-fallback",
+      },
+    });
+
+    return {
+      callRecordId,
+      phone: body.call?.phone?.trim() || currentPendingCall.phone,
+      deviceId: body.call?.deviceId ?? currentPendingCall.deviceId,
+    };
   } catch {
     // The manual follow-up form can still create a record if this best-effort
     // pre-create request is interrupted while the phone app opens.
+    return null;
   }
 }
 
@@ -310,6 +351,7 @@ export function startMobileCallFollowUpDial(input: {
 
   const basePendingCall = {
     id: generatePendingMobileCallId(),
+    correlationId: generatePendingMobileCallId(),
     customerId: input.customerId,
     customerName: input.customerName.trim() || input.phone,
     phone,
@@ -329,13 +371,19 @@ export function startMobileCallFollowUpDial(input: {
   } satisfies PendingMobileCallFollowUp;
 
   if (!canUseNativeCallRecorder()) {
-    if (shouldEnableMobileCallFollowUp()) {
-      writePendingMobileCallFollowUp(basePendingCall);
-      void createBrowserFallbackMobileCallRecord(basePendingCall);
-    }
+    void (async () => {
+      if (shouldEnableMobileCallFollowUp()) {
+        writePendingMobileCallFollowUp(basePendingCall);
+        await createBrowserFallbackMobileCallRecord(basePendingCall);
+      }
 
-    window.location.href = `tel:${phone}`;
+      window.location.href = `tel:${phone}`;
+    })();
     return;
+  }
+
+  if (shouldEnableMobileCallFollowUp()) {
+    writePendingMobileCallFollowUp(basePendingCall);
   }
 
   void (async () => {
@@ -343,14 +391,36 @@ export function startMobileCallFollowUpDial(input: {
       customerId: input.customerId,
       customerName: input.customerName,
       phone,
+      correlationId: basePendingCall.correlationId,
+      triggerSource: input.triggerSource,
+      onSessionReady: (session) => {
+        const currentPendingCall = readPendingMobileCallFollowUp();
+
+        if (!currentPendingCall || currentPendingCall.id !== basePendingCall.id) {
+          return;
+        }
+
+        writePendingMobileCallFollowUp({
+          ...currentPendingCall,
+          phone: session.phone?.trim() || currentPendingCall.phone,
+          callRecordId: session.callRecordId,
+          deviceId: session.deviceId ?? currentPendingCall.deviceId,
+        });
+      },
     });
 
     if (shouldEnableMobileCallFollowUp()) {
+      const currentPendingCall = readPendingMobileCallFollowUp();
+      const pendingCall =
+        currentPendingCall && currentPendingCall.id === basePendingCall.id
+          ? currentPendingCall
+          : basePendingCall;
+
       writePendingMobileCallFollowUp({
-        ...basePendingCall,
-        phone: nativeCall.phone ?? phone,
-        callRecordId: nativeCall.callRecordId ?? null,
-        deviceId: nativeCall.deviceId ?? null,
+        ...pendingCall,
+        phone: nativeCall.phone ?? pendingCall.phone,
+        callRecordId: nativeCall.callRecordId ?? pendingCall.callRecordId,
+        deviceId: nativeCall.deviceId ?? pendingCall.deviceId,
         recordingStatus: nativeCall.nativeStarted ? "STARTED" : "FAILED",
         uploadStatus: nativeCall.nativeStarted ? "PENDING" : null,
         nativeFailureMessage: nativeCall.errorMessage ?? null,
@@ -358,6 +428,35 @@ export function startMobileCallFollowUpDial(input: {
     }
 
     if (!nativeCall.nativeStarted) {
+      if (nativeCall.callRecordId) {
+        void recordNativeCallEvent({
+          callRecordId: nativeCall.callRecordId,
+          action: "call.native_dispatched",
+          eventId: `native-fallback-tel-dispatched:${nativeCall.callRecordId}`,
+          deviceId: nativeCall.deviceId ?? null,
+          recordingCapability: "UNSUPPORTED",
+          metadata: {
+            dispatchSource: "native-fallback-tel",
+            launchCallSupported: true,
+            observeCallStateSupported: false,
+            recordingSupported: false,
+          },
+        }).catch(() => undefined);
+
+        void recordNativeCallEvent({
+          callRecordId: nativeCall.callRecordId,
+          action: "call.recording_unsupported",
+          eventId: `native-fallback-recording-unsupported:${nativeCall.callRecordId}`,
+          deviceId: nativeCall.deviceId ?? null,
+          recordingCapability: "UNSUPPORTED",
+          failureCode: "NATIVE_RECORDER_FALLBACK",
+          failureMessage: nativeCall.errorMessage ?? "本机录音不可用，已回退系统拨号。",
+          metadata: {
+            dispatchSource: "native-fallback-tel",
+          },
+        }).catch(() => undefined);
+      }
+
       window.location.href = `tel:${phone}`;
     }
   })();

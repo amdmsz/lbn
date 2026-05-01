@@ -24,7 +24,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#f7f8fb",
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({
@@ -44,8 +44,10 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="min-h-full bg-background text-foreground">
-        <DesktopWindowFrame />
-        {children}
+        <div className="desktop-window-shell">
+          <DesktopWindowFrame />
+          {children}
+        </div>
       </body>
     </html>
   );

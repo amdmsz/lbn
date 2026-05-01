@@ -89,6 +89,13 @@ function getRecordingStatusLabel(input: {
     return input.nativeFailureMessage ? `录音失败：${input.nativeFailureMessage}` : "录音失败";
   }
 
+  if (
+    input.recordingStatus === "UNSUPPORTED" ||
+    input.uploadStatus === "UNSUPPORTED"
+  ) {
+    return input.nativeFailureMessage ?? "本机录音不支持";
+  }
+
   if (input.recordingStatus === "STARTED") {
     return "录音待上传";
   }

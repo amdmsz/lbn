@@ -39,6 +39,16 @@ import {
 } from "@/lib/calls/recording-storage";
 import { resolveCallAiWorkerRuntimeConfig } from "@/lib/calls/call-runtime-config";
 import { getEnabledCallResultDefinitionByCode } from "@/lib/calls/settings";
+import {
+  createCallActionEvent,
+  createServerCallCorrelationId,
+  findStartedMobileCallByCorrelationId,
+  isCallActionEventUniqueConflict,
+  normalizeCallCorrelationId,
+  parseCallClientEventAt,
+  recordCallActionEventBestEffort,
+  type CallActionName,
+} from "@/lib/calls/call-action-audit";
 import { assertCustomerNotInActiveRecycleBin } from "@/lib/customers/recycle";
 import { prisma } from "@/lib/db/prisma";
 
@@ -59,6 +69,40 @@ const mobileDeviceSchema = z.object({
 const mobileCallStartSchema = z.object({
   customerId: z.string().trim().min(1, "缺少客户信息"),
   callTime: z.string().trim().optional(),
+  correlationId: z.string().trim().max(191).optional(),
+  clientEventAt: z.string().trim().optional(),
+  triggerSource: z.string().trim().max(80).optional(),
+  deviceId: z.string().trim().max(191).optional(),
+  deviceModel: z.string().trim().max(120).optional(),
+  androidVersion: z.string().trim().max(60).optional(),
+  appVersion: z.string().trim().max(60).optional(),
+});
+
+const mobileCallClientActionNames = [
+  "call.native_dispatched",
+  "call.native_permission_denied",
+  "call.offhook_detected",
+  "call.idle_detected",
+  "call.recording_started",
+  "call.recording_file_ready",
+  "call.recording_unsupported",
+  "call.recording_failed",
+  "call.upload_failed",
+] as const satisfies readonly CallActionName[];
+
+const mobileCallEventSchema = z.object({
+  action: z.enum(mobileCallClientActionNames),
+  eventId: z.string().trim().max(191).optional(),
+  clientEventAt: z.string().trim().optional(),
+  deviceId: z.string().trim().max(191).optional(),
+  deviceModel: z.string().trim().max(120).optional(),
+  androidVersion: z.string().trim().max(60).optional(),
+  appVersion: z.string().trim().max(60).optional(),
+  recordingCapability: z.enum(MOBILE_RECORDING_CAPABILITIES).optional(),
+  durationSeconds: z.coerce.number().int().min(0).max(24 * 60 * 60).optional(),
+  failureCode: z.string().trim().max(120).optional(),
+  failureMessage: z.string().trim().max(1000).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 const mobileCallEndSchema = z.object({
@@ -243,6 +287,15 @@ export async function startMobileCallSession(
   }
 
   const parsed = mobileCallStartSchema.parse(rawInput);
+  const correlationId =
+    normalizeCallCorrelationId(parsed.correlationId) ??
+    createServerCallCorrelationId("local-phone");
+  const clientEventAt = parseCallClientEventAt(parsed.clientEventAt);
+  const triggerSource = parsed.triggerSource?.trim() || null;
+  const deviceId = parsed.deviceId?.trim() || null;
+  const deviceModel = parsed.deviceModel?.trim() || null;
+  const androidVersion = parsed.androidVersion?.trim() || null;
+  const appVersion = parsed.appVersion?.trim() || null;
   const actorTeamId = await getActorTeamId(actor);
   const customerScope = getCustomerScope(actor.role, actor.id, actorTeamId);
 
@@ -275,6 +328,24 @@ export async function startMobileCallSession(
   await assertCustomerNotInActiveRecycleBin(prisma, customer.id);
 
   if (actor.role === "SALES" && customer.ownerId !== actor.id) {
+    await recordCallActionEventBestEffort({
+      action: "call.intent_rejected",
+      actorId: actor.id,
+      correlationId,
+      callMode: "local-phone",
+      customerId: customer.id,
+      salesId: actor.id,
+      deviceId,
+      appVersion,
+      deviceModel,
+      androidVersion,
+      clientEventAt,
+      failureCode: "OWNER_FORBIDDEN",
+      failureMessage: "销售只能拨打自己负责的客户。",
+      description: `本机通话请求被拒绝：${customer.name}`,
+      metadata: { triggerSource },
+    });
+
     throw new Error("销售只能拨打自己负责的客户。");
   }
 
@@ -283,7 +354,44 @@ export async function startMobileCallSession(
     ? parseDateTimeInput(parsed.callTime, "通话时间")
     : new Date();
 
-  const callRecord = await prisma.$transaction(async (tx) => {
+  await recordCallActionEventBestEffort({
+    action: "call.intent_requested",
+    actorId: actor.id,
+    correlationId,
+    callMode: "local-phone",
+    customerId: customer.id,
+    salesId,
+    deviceId,
+    appVersion,
+    deviceModel,
+    androidVersion,
+    clientEventAt,
+    description: `本机通话请求：${customer.name}`,
+    metadata: { triggerSource },
+  });
+
+  const existingStartedCall = await findStartedMobileCallByCorrelationId({
+    correlationId,
+    customerId: customer.id,
+    salesId,
+  });
+
+  if (existingStartedCall) {
+    return {
+      callRecordId: existingStartedCall.id,
+      customerId: customer.id,
+      customerName: customer.name,
+      phone: customer.phone,
+      deviceId,
+      correlationId,
+      idempotent: true,
+    };
+  }
+
+  let callRecord: { id: string };
+
+  try {
+    callRecord = await prisma.$transaction(async (tx) => {
     const created = await tx.callRecord.create({
       data: {
         customerId: customer.id,
@@ -314,14 +422,246 @@ export async function startMobileCallSession(
       },
     });
 
+    await createCallActionEvent(tx, {
+      action: "call.intent_authorized",
+      dedupeKey: `start:local-phone:${correlationId}`,
+      actorId: actor.id,
+      correlationId,
+      callMode: "local-phone",
+      customerId: customer.id,
+      salesId,
+      callRecordId: created.id,
+      deviceId,
+      appVersion,
+      deviceModel,
+      androidVersion,
+      clientEventAt,
+      description: `本机通话请求已授权：${customer.name}`,
+      metadata: {
+        triggerSource,
+        teamId: customer.owner?.teamId ?? actorTeamId,
+        callTime: callTime.toISOString(),
+      },
+    });
+
     return created;
-  });
+    });
+  } catch (error) {
+    if (isCallActionEventUniqueConflict(error)) {
+      const existing = await findStartedMobileCallByCorrelationId({
+        correlationId,
+        customerId: customer.id,
+        salesId,
+      });
+
+      if (existing) {
+        return {
+          callRecordId: existing.id,
+          customerId: customer.id,
+          customerName: customer.name,
+          phone: customer.phone,
+          deviceId,
+          correlationId,
+          idempotent: true,
+        };
+      }
+    }
+
+    throw error;
+  }
 
   return {
     callRecordId: callRecord.id,
     customerId: customer.id,
     customerName: customer.name,
     phone: customer.phone,
+    deviceId,
+    correlationId,
+    idempotent: false,
+  };
+}
+
+function getEventFailureCode(input: z.infer<typeof mobileCallEventSchema>) {
+  const explicit = input.failureCode?.trim();
+
+  if (explicit) {
+    return explicit;
+  }
+
+  switch (input.action) {
+    case "call.native_permission_denied":
+      return "NATIVE_PERMISSION_DENIED";
+    case "call.recording_unsupported":
+      return "RECORDING_UNSUPPORTED";
+    case "call.recording_failed":
+      return "RECORDING_FAILED";
+    case "call.upload_failed":
+      return "UPLOAD_FAILED";
+    default:
+      return null;
+  }
+}
+
+function shouldMaterializeRecordingFailure(action: CallActionName) {
+  return action === "call.recording_failed" || action === "call.recording_unsupported";
+}
+
+export async function recordMobileCallSessionEvent(
+  actor: CallRecordingActor,
+  callRecordId: string,
+  rawInput: z.input<typeof mobileCallEventSchema>,
+) {
+  if (!canUploadCallRecording(actor.role)) {
+    throw new Error("当前角色不能记录移动端通话事件。");
+  }
+
+  const parsed = mobileCallEventSchema.parse(rawInput);
+  const callRecord = await prisma.callRecord.findUnique({
+    where: { id: callRecordId },
+    select: {
+      id: true,
+      customerId: true,
+      salesId: true,
+      durationSeconds: true,
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+        },
+      },
+      sales: {
+        select: {
+          teamId: true,
+        },
+      },
+    },
+  });
+
+  if (!callRecord?.customerId || !callRecord.customer) {
+    throw new Error("通话记录不存在，或未关联客户。");
+  }
+
+  const customerId = callRecord.customerId;
+  const customer = callRecord.customer;
+  assertUploadAccess(actor, callRecord.salesId);
+
+  const deviceId = parsed.deviceId?.trim() || null;
+  const deviceModel = parsed.deviceModel?.trim() || null;
+  const androidVersion = parsed.androidVersion?.trim() || null;
+  const appVersion = parsed.appVersion?.trim() || null;
+  const clientEventAt = parseCallClientEventAt(parsed.clientEventAt);
+  const startEvent = await prisma.callActionEvent.findFirst({
+    where: { callRecordId: callRecord.id },
+    orderBy: [{ serverReceivedAt: "desc" }, { id: "desc" }],
+    select: {
+      correlationId: true,
+      deviceId: true,
+      appVersion: true,
+      deviceModel: true,
+      androidVersion: true,
+    },
+  });
+  const resolvedDeviceId = deviceId ?? startEvent?.deviceId ?? null;
+  const resolvedAppVersion = appVersion ?? startEvent?.appVersion ?? null;
+  const resolvedDeviceModel = deviceModel ?? startEvent?.deviceModel ?? null;
+  const resolvedAndroidVersion = androidVersion ?? startEvent?.androidVersion ?? null;
+  const failureCode = getEventFailureCode(parsed);
+  const failureMessage = parsed.failureMessage?.trim() || null;
+  const teamId = callRecord.sales.teamId ?? (await getActorTeamId(actor));
+
+  if (resolvedDeviceId) {
+    const updated = await prisma.mobileDevice.updateMany({
+      where: {
+        id: resolvedDeviceId,
+        userId: callRecord.salesId,
+        disabledAt: null,
+      },
+      data: {
+        lastSeenAt: new Date(),
+        ...(parsed.recordingCapability
+          ? { recordingCapability: parsed.recordingCapability }
+          : {}),
+        ...(resolvedDeviceModel ? { deviceModel: resolvedDeviceModel } : {}),
+        ...(resolvedAndroidVersion ? { androidVersion: resolvedAndroidVersion } : {}),
+        ...(resolvedAppVersion ? { appVersion: resolvedAppVersion } : {}),
+      },
+    });
+
+    if (updated.count === 0) {
+      throw new Error("移动设备不存在，或不属于该销售。");
+    }
+  }
+
+  const event = await prisma.$transaction(async (tx) => {
+    if (parsed.durationSeconds !== undefined) {
+      await tx.callRecord.update({
+        where: { id: callRecord.id },
+        data: {
+          durationSeconds: Math.max(callRecord.durationSeconds, parsed.durationSeconds),
+        },
+        select: { id: true },
+      });
+    }
+
+    if (shouldMaterializeRecordingFailure(parsed.action)) {
+      await tx.callRecording.upsert({
+        where: { callRecordId: callRecord.id },
+        create: {
+          callRecordId: callRecord.id,
+          customerId,
+          salesId: callRecord.salesId,
+          teamId,
+          deviceId: resolvedDeviceId,
+          status: CallRecordingStatus.FAILED,
+          mimeType: "audio/unknown",
+          durationSeconds: parsed.durationSeconds ?? callRecord.durationSeconds,
+          failureCode,
+          failureMessage,
+        },
+        update: {
+          deviceId: resolvedDeviceId ?? undefined,
+          status: CallRecordingStatus.FAILED,
+          durationSeconds: parsed.durationSeconds ?? undefined,
+          failureCode,
+          failureMessage,
+        },
+        select: { id: true },
+      });
+    }
+
+    return createCallActionEvent(tx, {
+      action: parsed.action,
+      dedupeKey: parsed.eventId
+        ? `client-event:local-phone:${callRecord.id}:${parsed.eventId}`
+        : null,
+      actorId: actor.id,
+      correlationId: startEvent?.correlationId ?? null,
+      callMode: "local-phone",
+      customerId,
+      salesId: callRecord.salesId,
+      callRecordId: callRecord.id,
+      deviceId: resolvedDeviceId,
+      appVersion: resolvedAppVersion,
+      deviceModel: resolvedDeviceModel,
+      androidVersion: resolvedAndroidVersion,
+      clientEventAt,
+      failureCode,
+      failureMessage,
+      description: `移动端通话事件：${customer.name}`,
+      metadata: {
+        ...(parsed.metadata ?? {}),
+        action: parsed.action,
+        eventId: parsed.eventId ?? null,
+        durationSeconds: parsed.durationSeconds ?? null,
+        recordingCapability: parsed.recordingCapability ?? null,
+      },
+    });
+  });
+
+  return {
+    eventId: event.id,
+    callRecordId: callRecord.id,
   };
 }
 
@@ -390,6 +730,17 @@ export async function finishMobileCallSession(
     ? mapWechatSyncActionToStatus(resultDefinition.wechatSyncAction)
     : null;
   const durationSeconds = Math.max(callRecord.durationSeconds, parsed.durationSeconds);
+  const startEvent = await prisma.callActionEvent.findFirst({
+    where: { callRecordId: callRecord.id },
+    orderBy: [{ serverReceivedAt: "desc" }, { id: "desc" }],
+    select: {
+      correlationId: true,
+      deviceId: true,
+      appVersion: true,
+      deviceModel: true,
+      androidVersion: true,
+    },
+  });
 
   await prisma.$transaction(async (tx) => {
     await tx.callRecord.update({
@@ -426,6 +777,28 @@ export async function finishMobileCallSession(
           resultLabel: resultDefinition?.label ?? null,
           nextFollowUpAt,
         },
+      },
+    });
+
+    await createCallActionEvent(tx, {
+      action: "call.followup_saved",
+      actorId: actor.id,
+      correlationId: startEvent?.correlationId ?? null,
+      callMode: "local-phone",
+      customerId: customer.id,
+      salesId: callRecord.salesId,
+      callRecordId: callRecord.id,
+      deviceId: startEvent?.deviceId ?? null,
+      appVersion: startEvent?.appVersion ?? null,
+      deviceModel: startEvent?.deviceModel ?? null,
+      androidVersion: startEvent?.androidVersion ?? null,
+      description: `移动端通话跟进已保存：${customer.name} (${customer.phone})`,
+      metadata: {
+        durationSeconds,
+        reportedDurationSeconds: parsed.durationSeconds,
+        resultCode: resultDefinition?.code ?? null,
+        resultLabel: resultDefinition?.label ?? null,
+        nextFollowUpAt,
       },
     });
 
@@ -547,6 +920,16 @@ export async function createRecordingUploadSession(
 
   const now = new Date();
   const teamId = callRecord.sales.teamId ?? (await getActorTeamId(actor));
+  const startEvent = await prisma.callActionEvent.findFirst({
+    where: { callRecordId: callRecord.id },
+    orderBy: [{ serverReceivedAt: "desc" }, { id: "desc" }],
+    select: {
+      correlationId: true,
+      appVersion: true,
+      deviceModel: true,
+      androidVersion: true,
+    },
+  });
   const storageKey = buildRecordingObjectKey({
     callRecordId: callRecord.id,
     salesId: callRecord.salesId,
@@ -677,6 +1060,32 @@ export async function createRecordingUploadSession(
       },
     });
 
+    await createCallActionEvent(tx, {
+      action: "call.upload_started",
+      actorId: actor.id,
+      correlationId: startEvent?.correlationId ?? null,
+      callMode: "local-phone",
+      customerId,
+      salesId: callRecord.salesId,
+      callRecordId: callRecord.id,
+      deviceId,
+      appVersion: startEvent?.appVersion ?? null,
+      deviceModel: startEvent?.deviceModel ?? null,
+      androidVersion: startEvent?.androidVersion ?? null,
+      description: `开始上传通话录音：${customer.name} (${customer.phone})`,
+      metadata: {
+        recordingId: recording.id,
+        uploadId: upload.id,
+        teamId,
+        storageProvider: config.provider,
+        storageBucket: config.bucket,
+        storageKey,
+        mimeType: parsed.mimeType,
+        fileSizeBytes: parsed.fileSizeBytes,
+        totalChunks: parsed.totalChunks,
+      },
+    });
+
     return upload;
   });
 
@@ -795,6 +1204,7 @@ export async function completeRecordingUpload(
           customerId: true,
           salesId: true,
           teamId: true,
+          deviceId: true,
           storageKey: true,
           status: true,
           customer: {
@@ -837,6 +1247,17 @@ export async function completeRecordingUpload(
   if (!upload.recording.storageKey) {
     throw new Error("录音存储路径缺失。");
   }
+
+  const startEvent = await prisma.callActionEvent.findFirst({
+    where: { callRecordId: upload.recording.callRecordId },
+    orderBy: [{ serverReceivedAt: "desc" }, { id: "desc" }],
+    select: {
+      correlationId: true,
+      appVersion: true,
+      deviceModel: true,
+      androidVersion: true,
+    },
+  });
 
   try {
     const assembled = await assembleUploadChunks({
@@ -915,6 +1336,31 @@ export async function completeRecordingUpload(
           },
         },
       });
+
+      await createCallActionEvent(tx, {
+        action: "call.upload_completed",
+        actorId: actor.id,
+        correlationId: startEvent?.correlationId ?? null,
+        callMode: "local-phone",
+        customerId: upload.recording.customerId,
+        salesId: upload.recording.salesId,
+        callRecordId: upload.recording.callRecordId,
+        deviceId: upload.recording.deviceId,
+        appVersion: startEvent?.appVersion ?? null,
+        deviceModel: startEvent?.deviceModel ?? null,
+        androidVersion: startEvent?.androidVersion ?? null,
+        description: `完成通话录音上传：${upload.recording.customer.name} (${upload.recording.customer.phone})`,
+        metadata: {
+          recordingId: upload.recording.id,
+          uploadId: upload.id,
+          teamId: upload.recording.teamId,
+          status: recordingStatus,
+          fileSizeBytes: assembled.fileSizeBytes,
+          sha256: assembled.sha256,
+          aiEnabled,
+          workerConfigSource: workerConfig.source,
+        },
+      });
     });
 
     await removeUploadChunks(upload.id, config);
@@ -960,6 +1406,28 @@ export async function completeRecordingUpload(
             uploadId: upload.id,
             failureMessage: message,
           },
+        },
+      });
+
+      await createCallActionEvent(tx, {
+        action: "call.upload_failed",
+        actorId: actor.id,
+        correlationId: startEvent?.correlationId ?? null,
+        callMode: "local-phone",
+        customerId: upload.recording.customerId,
+        salesId: upload.recording.salesId,
+        callRecordId: upload.recording.callRecordId,
+        deviceId: upload.recording.deviceId,
+        appVersion: startEvent?.appVersion ?? null,
+        deviceModel: startEvent?.deviceModel ?? null,
+        androidVersion: startEvent?.androidVersion ?? null,
+        failureCode: "COMPLETE_FAILED",
+        failureMessage: message,
+        description: `通话录音上传失败：${upload.recording.customer.name} (${upload.recording.customer.phone})`,
+        metadata: {
+          recordingId: upload.recording.id,
+          uploadId: upload.id,
+          failureMessage: message,
         },
       });
     });

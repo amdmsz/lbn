@@ -14,6 +14,7 @@ import {
 } from "@/lib/calls/mobile-call-followup";
 import {
   readNativeCallSessionSnapshot,
+  retryNativePendingUploads,
   subscribeNativeCallSessionUpdates,
   type NativeCallSessionSnapshot,
 } from "@/lib/calls/native-mobile-call";
@@ -154,15 +155,23 @@ export function useMobileCallFollowUp(scope: MobileCallFollowUpScope) {
     }
 
     function handlePageRestore() {
+      void retryNativePendingUploads();
       syncPendingCall();
     }
 
+    function handleOnline() {
+      void retryNativePendingUploads();
+      syncPendingCall();
+    }
+
+    void retryNativePendingUploads();
     syncPendingCall();
     const unsubscribeNativeSessionUpdates =
       subscribeNativeCallSessionUpdates(applyNativeSnapshot);
 
     window.addEventListener("focus", handlePageRestore);
     window.addEventListener("pageshow", handlePageRestore);
+    window.addEventListener("online", handleOnline);
     window.addEventListener("storage", handlePageRestore);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
@@ -170,6 +179,7 @@ export function useMobileCallFollowUp(scope: MobileCallFollowUpScope) {
       unsubscribeNativeSessionUpdates();
       window.removeEventListener("focus", handlePageRestore);
       window.removeEventListener("pageshow", handlePageRestore);
+      window.removeEventListener("online", handleOnline);
       window.removeEventListener("storage", handlePageRestore);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };

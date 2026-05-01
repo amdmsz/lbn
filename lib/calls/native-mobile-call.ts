@@ -42,6 +42,10 @@ type NativeCallRecorderPlugin = {
   requestPermissions?: (input?: {
     permissions?: string[];
   }) => Promise<NativeRecorderPermissionMap>;
+  retryPendingUploads?: (input: {
+    apiBaseUrl: string;
+    chunkSizeBytes: number;
+  }) => Promise<{ queued?: number }>;
   startRecordedSimCall: (input: {
     phone: string;
     callRecordId: string;
@@ -102,6 +106,12 @@ export type NativeRecordedCallStartResult = {
   deviceId?: string;
   phone?: string;
   errorMessage?: string;
+};
+
+export type NativeRecordedCallSessionReady = {
+  callRecordId: string;
+  deviceId?: string | null;
+  phone?: string | null;
 };
 
 export type NativeConnectionProfile = {
@@ -344,18 +354,34 @@ async function registerNativeMobileDevice(plugin: NativeCallRecorderPlugin) {
     throw new Error("移动设备未启用录音。");
   }
 
-  return deviceId;
+  return {
+    deviceId,
+    profile,
+  };
 }
 
-async function createMobileCallRecord(customerId: string) {
+async function createMobileCallRecord(input: {
+  customerId: string;
+  correlationId: string;
+  triggerSource?: string | null;
+  deviceId?: string | null;
+  profile?: NativeDeviceProfile | null;
+}) {
   const response = await fetch("/api/mobile/calls/start", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      customerId,
+      customerId: input.customerId,
+      correlationId: input.correlationId,
       callTime: new Date().toISOString(),
+      clientEventAt: new Date().toISOString(),
+      triggerSource: input.triggerSource ?? undefined,
+      deviceId: input.deviceId ?? undefined,
+      deviceModel: input.profile?.deviceModel ?? undefined,
+      androidVersion: input.profile?.androidVersion ?? undefined,
+      appVersion: input.profile?.appVersion ?? undefined,
     }),
   });
 
@@ -382,6 +408,67 @@ async function createMobileCallRecord(customerId: string) {
   };
 }
 
+export async function recordNativeCallEvent(input: {
+  callRecordId: string;
+  action:
+    | "call.native_dispatched"
+    | "call.native_permission_denied"
+    | "call.offhook_detected"
+    | "call.idle_detected"
+    | "call.recording_started"
+    | "call.recording_file_ready"
+    | "call.recording_unsupported"
+    | "call.recording_failed"
+    | "call.upload_failed";
+  eventId?: string | null;
+  deviceId?: string | null;
+  profile?: NativeDeviceProfile | null;
+  recordingCapability?: NativeRecordingCapability | null;
+  durationSeconds?: number | null;
+  failureCode?: string | null;
+  failureMessage?: string | null;
+  metadata?: Record<string, unknown> | null;
+}) {
+  const response = await fetch(
+    `/api/mobile/calls/${encodeURIComponent(input.callRecordId)}/events`,
+    {
+      method: "POST",
+      keepalive: true,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: input.action,
+        eventId: input.eventId ?? undefined,
+        clientEventAt: new Date().toISOString(),
+        deviceId: input.deviceId ?? undefined,
+        deviceModel: input.profile?.deviceModel ?? undefined,
+        androidVersion: input.profile?.androidVersion ?? undefined,
+        appVersion: input.profile?.appVersion ?? undefined,
+        recordingCapability: input.recordingCapability ?? undefined,
+        durationSeconds: input.durationSeconds ?? undefined,
+        failureCode: input.failureCode ?? undefined,
+        failureMessage: input.failureMessage ?? undefined,
+        metadata: input.metadata ?? undefined,
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, "移动端通话事件记录失败。"));
+  }
+}
+
+async function recordNativeCallEventBestEffort(
+  input: Parameters<typeof recordNativeCallEvent>[0],
+) {
+  try {
+    await recordNativeCallEvent(input);
+  } catch {
+    // Native telemetry should not block launching the user's phone call.
+  }
+}
+
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "原生拨号失败。";
 }
@@ -390,6 +477,9 @@ export async function startNativeRecordedSimCall(input: {
   customerId: string;
   customerName: string;
   phone: string;
+  correlationId: string;
+  triggerSource?: string | null;
+  onSessionReady?: (session: NativeRecordedCallSessionReady) => void;
 }): Promise<NativeRecordedCallStartResult> {
   const plugin = getNativeCallRecorderPlugin();
 
@@ -403,24 +493,86 @@ export async function startNativeRecordedSimCall(input: {
   let callRecordId: string | undefined;
   let deviceId: string | undefined;
   let phone = input.phone;
+  let profile: NativeDeviceProfile | null = null;
 
   try {
-    await plugin.requestPermissions?.({ permissions: ["callRecording"] });
-    deviceId = await registerNativeMobileDevice(plugin);
-    const call = await createMobileCallRecord(input.customerId);
+    profile = await plugin.getDeviceProfile().catch(() => null);
+    const call = await createMobileCallRecord({
+      customerId: input.customerId,
+      correlationId: input.correlationId,
+      triggerSource: input.triggerSource,
+      profile,
+    });
     const nextCallRecordId = call.callRecordId;
     callRecordId = nextCallRecordId;
     phone = call.phone?.trim() || input.phone;
+    input.onSessionReady?.({
+      callRecordId,
+      phone,
+    });
+
+    const permissions =
+      (await plugin.requestPermissions?.({ permissions: ["callRecording"] })) ?? null;
+
+    if (hasPermissionState(permissions, ["denied"])) {
+      await recordNativeCallEventBestEffort({
+        callRecordId,
+        action: "call.native_permission_denied",
+        eventId: `permission-denied:${callRecordId}`,
+        profile,
+        recordingCapability: "BLOCKED",
+        failureCode: "NATIVE_PERMISSION_DENIED",
+        failureMessage: "缺少电话、通话状态或麦克风权限。",
+        metadata: {
+          permissions,
+          launchCallSupported: false,
+          observeCallStateSupported: false,
+          recordingSupported: false,
+        },
+      });
+
+      return {
+        nativeAvailable: true,
+        nativeStarted: false,
+        callRecordId,
+        phone,
+        errorMessage: "缺少电话、通话状态或麦克风权限。",
+      };
+    }
+
+    const registeredDevice = await registerNativeMobileDevice(plugin);
+    deviceId = registeredDevice.deviceId;
+    profile = registeredDevice.profile;
+    input.onSessionReady?.({
+      callRecordId,
+      deviceId,
+      phone,
+    });
 
     await plugin.startRecordedSimCall({
       phone,
-      callRecordId: nextCallRecordId,
+      callRecordId,
       customerId: input.customerId,
       customerName: call.customerName?.trim() || input.customerName,
       deviceId,
       apiBaseUrl: window.location.origin,
       chunkSizeBytes: 1024 * 1024,
       forceSpeakerphone: false,
+    });
+
+    await recordNativeCallEventBestEffort({
+      callRecordId,
+      action: "call.native_dispatched",
+      eventId: `native-dispatched:${callRecordId}`,
+      deviceId,
+      profile,
+      recordingCapability: profile.recordingCapability ?? "UNKNOWN",
+      metadata: {
+        dispatchSource: "native-recorder",
+        launchCallSupported: true,
+        observeCallStateSupported: true,
+        recordingSupported: true,
+      },
     });
 
     return {
@@ -431,15 +583,52 @@ export async function startNativeRecordedSimCall(input: {
       phone,
     };
   } catch (error) {
+    const message = getErrorMessage(error);
+
+    if (callRecordId) {
+      await recordNativeCallEventBestEffort({
+        callRecordId,
+        action: message.includes("权限")
+          ? "call.native_permission_denied"
+          : "call.recording_failed",
+        eventId: `native-start-failed:${callRecordId}`,
+        deviceId,
+        profile,
+        recordingCapability: message.includes("权限") ? "BLOCKED" : "UNKNOWN",
+        failureCode: message.includes("权限")
+          ? "NATIVE_PERMISSION_DENIED"
+          : "NATIVE_DISPATCH_FAILED",
+        failureMessage: message,
+        metadata: {
+          launchCallSupported: false,
+          observeCallStateSupported: Boolean(deviceId),
+          recordingSupported: false,
+        },
+      });
+    }
+
     return {
       nativeAvailable: true,
       nativeStarted: false,
       callRecordId,
       deviceId,
       phone,
-      errorMessage: getErrorMessage(error),
+      errorMessage: message,
     };
   }
+}
+
+export async function retryNativePendingUploads() {
+  const plugin = getNativeCallRecorderPlugin();
+
+  if (!plugin?.retryPendingUploads || !canUseNativeCallRecorder()) {
+    return { queued: 0 };
+  }
+
+  return plugin.retryPendingUploads({
+    apiBaseUrl: window.location.origin,
+    chunkSizeBytes: 1024 * 1024,
+  });
 }
 
 export async function readNativeCallSessionSnapshot(callRecordId?: string | null) {

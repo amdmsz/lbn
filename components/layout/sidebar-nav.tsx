@@ -624,13 +624,13 @@ function SidebarNavInner({
 
   return (
     <>
-      <header className="crm-animate-enter desktop-drag-region sticky top-0 z-40 border-b border-[var(--color-shell-topbar-border)] bg-[var(--color-shell-topbar)] backdrop-blur-[18px]">
+      <header className="crm-animate-enter desktop-window-topbar desktop-drag-region sticky top-0 z-40 border-b border-[var(--color-shell-topbar-border)]">
         <div className="mx-auto flex h-14 w-full max-w-[calc(var(--crm-shell-max-width)+3rem)] items-center gap-3 px-4 md:px-5 xl:px-6">
-          <div className="desktop-no-drag hidden shrink-0 md:block">
+          <div className="hidden shrink-0 md:block">
             <TopNavHomeButton spinning={homeIconSpinning} onNavigate={handleNavigateHome} />
           </div>
 
-          <div className="desktop-no-drag shrink-0 md:hidden">
+          <div className="shrink-0 md:hidden">
             <TopNavHomeButton
               spinning={homeIconSpinning}
               onNavigate={handleNavigateHome}
@@ -644,7 +644,7 @@ function SidebarNavInner({
             </p>
           </div>
 
-          <nav className="desktop-no-drag hidden min-w-0 flex-1 items-center justify-center gap-1 md:flex">
+          <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 md:flex">
             {primaryItems.map((item) => (
               <DesktopNavItem
                 key={item.href}
@@ -654,11 +654,11 @@ function SidebarNavInner({
             ))}
           </nav>
 
-          <div className="desktop-no-drag hidden min-w-[16rem] max-w-[22rem] flex-1 lg:block xl:max-w-[24rem]">
+          <div className="hidden min-w-[16rem] max-w-[22rem] flex-1 lg:block xl:max-w-[24rem]">
             <CommandPalette groups={groups} />
           </div>
 
-          <div className="desktop-no-drag ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2">
             <div className="hidden md:block">
               <OverflowMenu
                 groups={overflowGroups}
@@ -669,26 +669,22 @@ function SidebarNavInner({
               />
             </div>
 
-            <div className="desktop-no-drag">
-              <ThemeSwitcher />
-            </div>
+            <ThemeSwitcher />
 
-            <div className="desktop-no-drag">
-              <AccountMenu
-                currentUser={currentUser}
-                compact
-                dropdownPlacement="down-end"
-              />
-            </div>
+            <AccountMenu
+              currentUser={currentUser}
+              compact
+              dropdownPlacement="down-end"
+            />
 
-            <DesktopWindowControls className="hidden self-stretch overflow-hidden rounded-none border-l border-[var(--color-shell-topbar-border)] md:flex" />
+            <DesktopWindowControls className="hidden self-stretch border-l border-[var(--color-shell-topbar-border)] md:flex" />
 
             <button
               type="button"
               aria-expanded={mobileOpen}
               aria-controls="mobile-top-navigation"
               onClick={() => setMobileOpen(true)}
-              className="crm-motion-pill inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-shell-topbar-border)] bg-[var(--color-shell-surface)] text-[var(--foreground)] transition-[border-color,background-color,box-shadow] duration-200 hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-md)] md:hidden"
+              className="crm-motion-pill desktop-no-drag inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-shell-topbar-border)] bg-[var(--color-shell-surface)] text-[var(--foreground)] transition-[border-color,background-color,box-shadow] duration-200 hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-md)] md:hidden"
             >
               <Menu className="h-4 w-4" />
             </button>

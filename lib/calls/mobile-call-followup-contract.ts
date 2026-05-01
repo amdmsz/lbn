@@ -2,6 +2,7 @@ export type MobileCallTriggerSource = "card" | "detail" | "table";
 
 export type PendingMobileCallFollowUp = {
   id: string;
+  correlationId: string;
   customerId: string;
   customerName: string;
   phone: string;

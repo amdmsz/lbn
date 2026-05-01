@@ -78,6 +78,8 @@ function buildConfig(provider: OutboundCallProvider): ResolvedOutboundCallRuntim
     recordOnServer: getArg("record-on-server") !== "0",
     recordingImportMode: "WEBHOOK_URL",
     timeoutSeconds: parsePositiveInt(getArg("timeout-seconds"), 30),
+    startRetryAttempts: parsePositiveInt(getArg("retry-attempts"), 2),
+    startRetryDelayMs: parsePositiveInt(getArg("retry-delay-ms"), 350),
     requireWebhookSecret: false,
     webhookTimestampToleranceSeconds: 300,
     source: "fallback",

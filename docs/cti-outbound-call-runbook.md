@@ -90,6 +90,8 @@ OUTBOUND_CALL_CODEC=PCMA
 OUTBOUND_CALL_RECORD_ON_SERVER=1
 OUTBOUND_CALL_RECORDING_IMPORT_MODE=WEBHOOK_URL
 OUTBOUND_CALL_TIMEOUT_SECONDS=30
+OUTBOUND_CALL_START_RETRY_ATTEMPTS=2
+OUTBOUND_CALL_START_RETRY_DELAY_MS=350
 OUTBOUND_CALL_REQUIRE_WEBHOOK_SECRET=1
 OUTBOUND_CALL_WEBHOOK_TOLERANCE_SECONDS=300
 ```
@@ -327,6 +329,12 @@ npm run dev:local-cti-smoke
 
 ```bash
 npm run check:outbound-provider -- --endpoint=http://127.0.0.1:8790/calls/start
+```
+
+巡检最近外呼是否存在“已结束但录音未归档”：
+
+```bash
+npm run check:outbound-recording-gaps -- --hours=24 --limit=50
 ```
 
 验证真实 `cti-gateway` mock 模式：

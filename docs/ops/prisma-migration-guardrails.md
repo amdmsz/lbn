@@ -94,6 +94,8 @@ npm run prisma:deploy:safe
 
 `prisma:deploy:safe` 内部也会执行 name-drift 检查。只要生产库仍有 `User` / `OperationLog` / `Lead_xxx_idx` 这类 legacy 大小写命名，它会在真正执行 migration 前失败，避免 migration 半路失败。
 
+如果目标 MySQL 是 `lower_case_table_names=1`，`prisma:diff:schema` 和 `prisma:diff:migrations` 会保守容忍 Prisma 输出中的大小写物理命名噪声：仅限 case-only index rename，以及同一张表内同字段外键 remove/add 成对出现。出现新增表、删除表、字段变化、非大小写 rename 或不成对外键变化时仍然失败。
+
 ## 4. 手工 SQL 热修后的回填流程
 
 手工 SQL 热修不是禁区，但不能成为长期真相。

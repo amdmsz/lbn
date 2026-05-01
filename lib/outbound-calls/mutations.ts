@@ -18,11 +18,22 @@ import { prisma } from "@/lib/db/prisma";
 import {
   isRuntimeProviderEnabled,
   resolveOutboundCallRuntimeConfig,
+  type ResolvedOutboundCallRuntimeConfig,
 } from "@/lib/outbound-calls/config";
 import {
   maskPhoneForAudit,
   normalizeDialedPhone,
 } from "@/lib/outbound-calls/metadata";
+import {
+  createCallActionEvent,
+  createServerCallCorrelationId,
+  findStartedOutboundCallByCorrelationId,
+  isCallActionEventUniqueConflict,
+  normalizeCallCorrelationId,
+  parseCallClientEventAt,
+  recordCallActionEventBestEffort,
+  type CallActionName,
+} from "@/lib/calls/call-action-audit";
 import { createOutboundCallProviderAdapter } from "@/lib/outbound-calls/providers";
 import {
   resolveOutboundRecordingImportRuntime,
@@ -39,6 +50,9 @@ type HeaderBag = Headers | Record<string, string | string[] | undefined>;
 
 const startOutboundCallSchema = z.object({
   customerId: z.string().trim().min(1, "缺少客户信息。"),
+  correlationId: z.string().trim().max(191).optional(),
+  clientEventAt: z.string().trim().optional(),
+  triggerSource: z.string().trim().max(80).optional(),
 });
 
 const terminalStatuses = new Set<OutboundCallSessionStatus>([
@@ -105,6 +119,33 @@ function safeJsonParse(rawBody: string) {
   }
 }
 
+function stableJsonStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableJsonStringify(item)).join(",")}]`;
+  }
+
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableJsonStringify(record[key])}`)
+    .join(",")}}`;
+}
+
+function createWebhookEventId(
+  provider: OutboundCallProvider,
+  payload: Record<string, unknown>,
+) {
+  return `webhook_${provider.toLowerCase()}_${crypto
+    .createHash("sha256")
+    .update(stableJsonStringify(payload))
+    .digest("hex")
+    .slice(0, 32)}`;
+}
+
 function normalizeProvider(value: string): OutboundCallProvider | null {
   const provider = value.trim().toUpperCase();
   return provider === "MOCK" || provider === "FREESWITCH" || provider === "CUSTOM_HTTP"
@@ -128,7 +169,11 @@ function normalizeWebhookStatus(value: unknown): OutboundCallSessionStatus | nul
     text.includes("ERROR") ||
     text.includes("BUSY") ||
     text.includes("REJECT") ||
-    text.includes("NO_ANSWER")
+    text.includes("NO_ANSWER") ||
+    text.includes("NO ANSWER") ||
+    text.includes("NOANSWER") ||
+    text.includes("CHANUNAVAIL") ||
+    text.includes("CONGESTION")
   ) {
     return "FAILED";
   }
@@ -200,10 +245,11 @@ function verifyWebhookSecret(input: {
   rawBody: string;
   secret: string;
   toleranceSeconds: number;
+  requireSignedTimestamp: boolean;
 }) {
   const authorization = getHeader(input.headers, "authorization");
 
-  if (authorization?.startsWith("Bearer ")) {
+  if (!input.requireSignedTimestamp && authorization?.startsWith("Bearer ")) {
     const token = authorization.slice("Bearer ".length).trim();
 
     if (verifySecretTimingSafe(token, input.secret)) {
@@ -235,6 +281,21 @@ function verifyWebhookSecret(input: {
   if (!verifySecretTimingSafe(signature, expected)) {
     throw new Error("Webhook 签名不正确。");
   }
+}
+
+function isProductionRuntime() {
+  return process.env.NODE_ENV === "production";
+}
+
+function isTruthyEnv(value: string | undefined) {
+  return ["1", "true", "yes", "on"].includes(value?.trim().toLowerCase() ?? "");
+}
+
+function requiresSignedWebhookSecret() {
+  return (
+    isProductionRuntime() &&
+    !isTruthyEnv(process.env.OUTBOUND_CALL_ALLOW_BEARER_WEBHOOK_SECRET)
+  );
 }
 
 async function resolveActorTeamId(actor: OutboundCallActor) {
@@ -303,6 +364,29 @@ async function resolveOutboundSeat(input: {
   } as const;
 }
 
+function assertOutboundStartRuntimeReady(
+  config: ResolvedOutboundCallRuntimeConfig,
+): asserts config is ResolvedOutboundCallRuntimeConfig & {
+  provider: OutboundCallProvider;
+} {
+  if (!config.enabled || !isRuntimeProviderEnabled(config.provider)) {
+    throw new Error("外呼 CTI 尚未启用。");
+  }
+
+  if (config.provider !== "MOCK" && !config.gatewayBaseUrl) {
+    throw new Error("CTI Gateway Base URL 未配置。");
+  }
+
+  if (
+    config.provider !== "MOCK" &&
+    config.recordOnServer &&
+    config.recordingImportMode === "WEBHOOK_URL" &&
+    !config.webhookBaseUrl
+  ) {
+    throw new Error("外呼录音回调地址未配置，无法保证服务端录音归档。");
+  }
+}
+
 function shouldAdvanceStatus(
   current: OutboundCallSessionStatus,
   next: OutboundCallSessionStatus | null,
@@ -331,6 +415,11 @@ export async function startOutboundCall(
   }
 
   const parsed = startOutboundCallSchema.parse(rawInput);
+  const correlationId =
+    normalizeCallCorrelationId(parsed.correlationId) ??
+    createServerCallCorrelationId("crm-outbound");
+  const clientEventAt = parseCallClientEventAt(parsed.clientEventAt);
+  const triggerSource = parsed.triggerSource?.trim() || null;
   const actorTeamId = await resolveActorTeamId(actor);
   const customerScope = getCustomerScope(actor.role, actor.id, actorTeamId);
 
@@ -339,10 +428,7 @@ export async function startOutboundCall(
   }
 
   const config = await resolveOutboundCallRuntimeConfig();
-
-  if (!config.enabled || !isRuntimeProviderEnabled(config.provider)) {
-    throw new Error("外呼 CTI 尚未启用。");
-  }
+  assertOutboundStartRuntimeReady(config);
 
   const customer = await prisma.customer.findFirst({
     where: {
@@ -370,10 +456,38 @@ export async function startOutboundCall(
   await assertCustomerNotInActiveRecycleBin(prisma, customer.id);
 
   if (actor.role === "SALES" && customer.ownerId !== actor.id) {
+    await recordCallActionEventBestEffort({
+      action: "call.intent_rejected",
+      actorId: actor.id,
+      correlationId,
+      callMode: "crm-outbound",
+      customerId: customer.id,
+      salesId: actor.id,
+      clientEventAt,
+      failureCode: "OWNER_FORBIDDEN",
+      failureMessage: "销售只能拨打自己负责的客户。",
+      description: `外呼请求被拒绝：${customer.name}`,
+      metadata: { triggerSource },
+    });
+
     throw new Error("销售只能拨打自己负责的客户。");
   }
 
   if (!customer.phone.trim()) {
+    await recordCallActionEventBestEffort({
+      action: "call.intent_rejected",
+      actorId: actor.id,
+      correlationId,
+      callMode: "crm-outbound",
+      customerId: customer.id,
+      salesId: customer.ownerId ?? actor.id,
+      clientEventAt,
+      failureCode: "MISSING_PHONE",
+      failureMessage: "客户没有可拨打号码。",
+      description: `外呼请求被拒绝：${customer.name}`,
+      metadata: { triggerSource },
+    });
+
     throw new Error("客户没有可拨打号码。");
   }
 
@@ -395,7 +509,40 @@ export async function startOutboundCall(
     seatBinding?.routingGroup ?? config.defaultRoutingGroup ?? null;
   const adapter = createOutboundCallProviderAdapter(provider, config);
 
-  const created = await prisma.$transaction(async (tx) => {
+  await recordCallActionEventBestEffort({
+    action: "call.intent_requested",
+    actorId: actor.id,
+    correlationId,
+    callMode: "crm-outbound",
+    customerId: customer.id,
+    salesId,
+    clientEventAt,
+    description: `外呼请求：${customer.name}`,
+    metadata: { triggerSource },
+  });
+
+  const existingStartedCall = await findStartedOutboundCallByCorrelationId({
+    correlationId,
+    customerId: customer.id,
+    salesId,
+  });
+
+  if (existingStartedCall) {
+    return {
+      sessionId: existingStartedCall.id,
+      callRecordId: existingStartedCall.callRecordId,
+      provider: existingStartedCall.provider,
+      providerCallId: existingStartedCall.providerCallId,
+      status: existingStartedCall.status,
+      correlationId,
+      idempotent: true,
+    };
+  }
+
+  let created: { id: string; callRecordId: string };
+
+  try {
+    created = await prisma.$transaction(async (tx) => {
     const callRecord = await tx.callRecord.create({
       data: {
         customerId: customer.id,
@@ -458,8 +605,75 @@ export async function startOutboundCall(
       },
     });
 
+    await createCallActionEvent(tx, {
+      action: "call.intent_authorized",
+      dedupeKey: `start:crm-outbound:${correlationId}`,
+      actorId: actor.id,
+      correlationId,
+      callMode: "crm-outbound",
+      customerId: customer.id,
+      salesId,
+      callRecordId: callRecord.id,
+      outboundSessionId: session.id,
+      clientEventAt,
+      description: `外呼请求已授权：${customer.name}`,
+      metadata: {
+        triggerSource,
+        teamId,
+        provider,
+        seatNo,
+        seatNoSource: outboundSeat.source,
+      },
+    });
+
+    await createCallActionEvent(tx, {
+      action: "call.provider_requested",
+      actorId: actor.id,
+      correlationId,
+      callMode: "crm-outbound",
+      customerId: customer.id,
+      salesId,
+      callRecordId: callRecord.id,
+      outboundSessionId: session.id,
+      clientEventAt,
+      description: `外呼已提交 CTI Gateway：${customer.name}`,
+      metadata: {
+        triggerSource,
+        teamId,
+        provider,
+        seatNo,
+        displayNumber,
+        dialedNumberMasked: maskPhoneForAudit(dialedNumber),
+        codec: config.codec,
+        recordOnServer: config.recordOnServer,
+      },
+    });
+
     return session;
-  });
+    });
+  } catch (error) {
+    if (isCallActionEventUniqueConflict(error)) {
+      const existing = await findStartedOutboundCallByCorrelationId({
+        correlationId,
+        customerId: customer.id,
+        salesId,
+      });
+
+      if (existing) {
+        return {
+          sessionId: existing.id,
+          callRecordId: existing.callRecordId,
+          provider: existing.provider,
+          providerCallId: existing.providerCallId,
+          status: existing.status,
+          correlationId,
+          idempotent: true,
+        };
+      }
+    }
+
+    throw error;
+  }
 
   try {
     const result = await adapter.startOutboundCall({
@@ -519,6 +733,34 @@ export async function startOutboundCall(
           }),
         },
       });
+
+      await createCallActionEvent(tx, {
+        action:
+          nextStatus === "FAILED"
+            ? "call.provider_failed"
+            : "call.provider_accepted",
+        actorId: actor.id,
+        correlationId,
+        callMode: "crm-outbound",
+        customerId: customer.id,
+        salesId,
+        callRecordId: created.callRecordId,
+        outboundSessionId: created.id,
+        clientEventAt,
+        failureCode: nextStatus === "FAILED" ? "PROVIDER_FAILED" : null,
+        failureMessage:
+          nextStatus === "FAILED" ? "CTI Gateway 已拒绝本次外呼。" : null,
+        description:
+          nextStatus === "FAILED"
+            ? "CTI Gateway 已拒绝本次外呼。"
+            : "CTI Gateway 已接收本次外呼。",
+        metadata: {
+          provider,
+          providerCallId: result.providerCallId,
+          providerTraceId: result.providerTraceId,
+          status: nextStatus,
+        },
+      });
     });
 
     return {
@@ -527,6 +769,8 @@ export async function startOutboundCall(
       provider,
       providerCallId: result.providerCallId,
       status: nextStatus,
+      correlationId,
+      idempotent: false,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "CTI Gateway 调用失败。";
@@ -559,6 +803,25 @@ export async function startOutboundCall(
           }),
         },
       });
+
+      await createCallActionEvent(tx, {
+        action: "call.provider_failed",
+        actorId: actor.id,
+        correlationId,
+        callMode: "crm-outbound",
+        customerId: customer.id,
+        salesId,
+        callRecordId: created.callRecordId,
+        outboundSessionId: created.id,
+        clientEventAt,
+        failureCode: "START_FAILED",
+        failureMessage: message,
+        description: "CRM 外呼发起失败。",
+        metadata: {
+          provider,
+          failureMessage: message,
+        },
+      });
     });
 
     throw new Error(`外呼发起失败：${message}`);
@@ -569,7 +832,8 @@ function parseWebhookEvent(provider: OutboundCallProvider, payload: Record<strin
   const eventId =
     asNonEmptyString(payload.eventId) ??
     asNonEmptyString(payload.id) ??
-    asNonEmptyString(payload.uuid);
+    asNonEmptyString(payload.eventUuid) ??
+    createWebhookEventId(provider, payload);
   const providerCallId =
     asNonEmptyString(payload.providerCallId) ??
     asNonEmptyString(payload.callId) ??
@@ -656,6 +920,40 @@ function shouldImportRecordingFromWebhook(
   return event.durationSeconds === null || event.durationSeconds > 0;
 }
 
+function shouldExpectServerRecordingFromWebhook(input: {
+  recordOnServer: boolean;
+  nextStatus: OutboundCallSessionStatus;
+  durationSeconds?: number | null;
+}) {
+  return (
+    input.recordOnServer &&
+    input.nextStatus === "ENDED" &&
+    (input.durationSeconds ?? 0) > 0
+  );
+}
+
+function getWebhookCallAction(
+  status: OutboundCallSessionStatus | null,
+): CallActionName | null {
+  switch (status) {
+    case "PROVIDER_ACCEPTED":
+      return "call.provider_accepted";
+    case "RINGING":
+      return "call.provider_ringing";
+    case "ANSWERED":
+      return "call.provider_answered";
+    case "ENDED":
+      return "call.provider_ended";
+    case "CANCELED":
+      return "call.provider_canceled";
+    case "FAILED":
+      return "call.provider_failed";
+    case "REQUESTED":
+    default:
+      return null;
+  }
+}
+
 function inferCallResultCodeFromOutboundFailure(input: {
   failureCode?: string | null;
 }) {
@@ -665,7 +963,7 @@ function inferCallResultCodeFromOutboundFailure(input: {
     return null;
   }
 
-  if (["CUSTOMER_NO_ANSWER", "NOANSWER", "NO_ANSWER"].includes(code)) {
+  if (["CUSTOMER_NO_ANSWER", "NOANSWER", "NO_ANSWER", "NO ANSWER"].includes(code)) {
     return "NOT_CONNECTED";
   }
 
@@ -675,7 +973,7 @@ function inferCallResultCodeFromOutboundFailure(input: {
     return "HUNG_UP";
   }
 
-  if (["INVALID_NUMBER", "UNALLOCATED_NUMBER"].includes(code)) {
+  if (["INVALID_NUMBER", "UNALLOCATED_NUMBER", "CHANUNAVAIL"].includes(code)) {
     return "INVALID_NUMBER";
   }
 
@@ -694,8 +992,10 @@ export async function handleOutboundCallWebhook(input: {
   }
 
   const config = await resolveOutboundCallRuntimeConfig();
+  const requireWebhookSecret =
+    config.requireWebhookSecret || isProductionRuntime();
 
-  if (config.requireWebhookSecret) {
+  if (requireWebhookSecret) {
     if (!config.secret) {
       throw new Error("外呼 Webhook 密钥未配置。");
     }
@@ -705,6 +1005,7 @@ export async function handleOutboundCallWebhook(input: {
       rawBody: input.rawBody,
       secret: config.secret,
       toleranceSeconds: config.webhookTimestampToleranceSeconds,
+      requireSignedTimestamp: requiresSignedWebhookSecret(),
     });
   }
 
@@ -789,6 +1090,14 @@ export async function handleOutboundCallWebhook(input: {
     event,
     nextStatus,
   );
+  const serverRecordingExpected = shouldExpectServerRecordingFromWebhook({
+    recordOnServer: config.recordOnServer,
+    nextStatus,
+    durationSeconds,
+  });
+  const recordingLocationMissing =
+    serverRecordingExpected && !hasRecordingLocation(event);
+  const webhookAction = getWebhookCallAction(event.status);
   const recordingImportRuntime = shouldImportRecording
     ? await resolveOutboundRecordingImportRuntime()
     : null;
@@ -869,11 +1178,49 @@ export async function handleOutboundCallWebhook(input: {
               event.recordingPath || event.recordingStorageKey,
             ),
             recordingImportEligible: shouldImportRecording,
+            recordingExpected: serverRecordingExpected,
+            recordingLocationMissing,
             failureCode: event.failureCode,
             inferredFailedResultCode,
           }),
         },
       });
+
+      if (webhookAction) {
+        await createCallActionEvent(tx, {
+          action: webhookAction,
+          dedupeKey: `webhook:crm-outbound:${session.id}:${event.eventId}`,
+          actorId: null,
+          correlationId: event.eventId,
+          callMode: "crm-outbound",
+          customerId: session.customerId,
+          salesId: session.salesId,
+          callRecordId: session.callRecordId,
+          outboundSessionId: session.id,
+          clientEventAt: event.eventAt,
+          failureCode:
+            nextStatus === "FAILED"
+              ? event.failureCode ?? "PROVIDER_FAILED"
+              : nextStatus === "CANCELED"
+                ? event.failureCode ?? "PROVIDER_CANCELED"
+                : null,
+          failureMessage:
+            nextStatus === "FAILED" || nextStatus === "CANCELED"
+              ? event.failureMessage ?? null
+              : null,
+          description: `外呼状态回调：${session.customer.name}`,
+          metadata: {
+            provider,
+            providerCallId: event.providerCallId,
+            incomingStatus: event.status,
+            status: nextStatus,
+            durationSeconds,
+            eventId: event.eventId,
+            recordingExpected: serverRecordingExpected,
+            recordingLocationMissing,
+          },
+        });
+      }
     }
 
     if (recordingImportRuntime && !appended.duplicate) {
@@ -900,6 +1247,73 @@ export async function handleOutboundCallWebhook(input: {
           select: { id: true },
         });
       }
+
+      if (recordingImportResult.imported) {
+        await createCallActionEvent(tx, {
+          action: "call.recording_imported",
+          dedupeKey: `recording-import:crm-outbound:${session.id}:${event.eventId}`,
+          actorId: null,
+          correlationId: event.eventId,
+          callMode: "crm-outbound",
+          customerId: session.customerId,
+          salesId: session.salesId,
+          callRecordId: session.callRecordId,
+          outboundSessionId: session.id,
+          clientEventAt: event.eventAt,
+          description: `外呼录音已归档：${session.customer.name}`,
+          metadata: {
+            provider,
+            providerCallId: event.providerCallId,
+            recordingId: recordingImportResult.recordingId,
+            storageKey: recordingImportResult.storageKey,
+            aiEnqueued: recordingImportResult.aiEnqueued,
+          },
+        });
+      } else if ("skipped" in recordingImportResult && recordingImportResult.skipped) {
+        await createCallActionEvent(tx, {
+          action: "call.recording_failed",
+          dedupeKey: `recording-skip:crm-outbound:${session.id}:${event.eventId}`,
+          actorId: null,
+          correlationId: event.eventId,
+          callMode: "crm-outbound",
+          customerId: session.customerId,
+          salesId: session.salesId,
+          callRecordId: session.callRecordId,
+          outboundSessionId: session.id,
+          clientEventAt: event.eventAt,
+          failureCode: recordingImportResult.skipCode,
+          failureMessage: "外呼录音未能导入 CRM。",
+          description: `外呼录音未导入：${session.customer.name}`,
+          metadata: {
+            provider,
+            providerCallId: event.providerCallId,
+            storageKey: recordingImportResult.storageKey,
+            skipCode: recordingImportResult.skipCode,
+          },
+        });
+      }
+    } else if (recordingLocationMissing && !appended.duplicate) {
+      await createCallActionEvent(tx, {
+        action: "call.recording_failed",
+        dedupeKey: `recording-missing:crm-outbound:${session.id}:${event.eventId}`,
+        actorId: null,
+        correlationId: event.eventId,
+        callMode: "crm-outbound",
+        customerId: session.customerId,
+        salesId: session.salesId,
+        callRecordId: session.callRecordId,
+        outboundSessionId: session.id,
+        clientEventAt: event.eventAt,
+        failureCode: "RECORDING_LOCATION_MISSING",
+        failureMessage: "外呼已结束且有有效通话时长，但回调未携带录音位置。",
+        description: `外呼录音缺失：${session.customer.name}`,
+        metadata: {
+          provider,
+          providerCallId: event.providerCallId,
+          durationSeconds,
+          recordOnServer: config.recordOnServer,
+        },
+      });
     }
   });
 

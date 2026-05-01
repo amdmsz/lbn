@@ -15,14 +15,11 @@ import {
   CreditCard,
   Delete,
   FileText,
-  Filter,
   Mic,
   Package,
   PackageCheck,
-  Phone,
   PhoneCall,
   RefreshCw,
-  Search,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
@@ -48,7 +45,6 @@ import type { RoleCode } from "@prisma/client";
 import type { CallResultOption } from "@/lib/calls/metadata";
 import { MobileCallFollowUpSheet } from "@/components/customers/mobile-call-followup-sheet";
 import { MobileOrderComposer } from "@/components/mobile/mobile-order-composer";
-import { StatusBadge } from "@/components/shared/status-badge";
 import {
   readNativeConnectionProfile,
   readNativeRecorderReadiness,
@@ -67,10 +63,6 @@ import {
 import {
   formatRegion,
   formatRelativeDateTime,
-  getCustomerExecutionDisplayLongLabel,
-  getCustomerExecutionDisplayVariant,
-  getCustomerWorkStatusLabel,
-  getCustomerWorkStatusVariant,
 } from "@/lib/customers/metadata";
 import type {
   CustomerCenterData,
@@ -319,6 +311,15 @@ function parseMobileCallMode(value: string | null | undefined): MobileCallMode |
   return value === "crm-outbound" || value === "local-phone" ? value : null;
 }
 
+function generateClientCallCorrelationId(callMode: MobileCallMode) {
+  const randomPart =
+    typeof window !== "undefined" && "crypto" in window && window.crypto.randomUUID
+      ? window.crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+  return `${callMode}:${randomPart}`;
+}
+
 function readStoredCallMode() {
   if (typeof window === "undefined") {
     return "crm-outbound";
@@ -399,8 +400,56 @@ function formatCallDuration(seconds: number) {
 function formatMobileDetailCallLabel(record: {
   result: string | null;
   resultCode: string | null;
+  latestActionEvent?: { action: string; failureCode?: string | null } | null;
 }) {
-  return record.resultCode || record.result || "未填写";
+  if (record.resultCode || record.result) {
+    return record.resultCode || record.result || "未填写";
+  }
+
+  switch (record.latestActionEvent?.action) {
+    case "call.provider_requested":
+      return "外呼提交中";
+    case "call.provider_accepted":
+      return "外呼已提交";
+    case "call.provider_ringing":
+      return "外呼振铃中";
+    case "call.provider_answered":
+      return "外呼已接通";
+    case "call.provider_ended":
+      return "外呼已结束";
+    case "call.provider_canceled":
+      return "外呼已取消";
+    case "call.provider_failed":
+      return "外呼失败";
+    case "call.recording_imported":
+      return "录音已归档";
+    case "call.recording_failed":
+      return "录音归档失败";
+    case "call.native_dispatched":
+      return "本机已拨出";
+    case "call.native_permission_denied":
+      return "本机权限不足";
+    case "call.offhook_detected":
+      return "本机已接通";
+    case "call.idle_detected":
+      return "本机已结束";
+    case "call.recording_started":
+      return "本机录音中";
+    case "call.recording_file_ready":
+      return "本机录音待上传";
+    case "call.recording_unsupported":
+      return "本机录音不支持";
+    case "call.upload_started":
+      return "录音上传中";
+    case "call.upload_completed":
+      return "录音已上传";
+    case "call.upload_failed":
+      return "录音上传失败";
+    case "call.followup_saved":
+      return "已保存跟进";
+    default:
+      return "未填写";
+  }
 }
 
 function createMobileApiCustomerListItem(
@@ -1455,36 +1504,6 @@ function PhoneTodayPanel({
   );
 }
 
-function SearchShell({
-  value,
-  placeholder,
-  onChange,
-  onSubmit,
-}: Readonly<{
-  value: string;
-  placeholder: string;
-  onChange: (value: string) => void;
-  onSubmit?: () => void;
-}>) {
-  return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSubmit?.();
-      }}
-      className="flex h-11 items-center gap-3 rounded-[18px] bg-white px-4 text-[#a6adb8] shadow-[0_8px_22px_rgba(16,24,40,0.04)]"
-    >
-      <Search className="h-5 w-5 shrink-0" aria-hidden />
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="min-w-0 flex-1 bg-transparent text-[15px] text-[#20242c] outline-none placeholder:text-[#b8c0cc]"
-      />
-    </form>
-  );
-}
-
 function PhoneAvatar({
   name,
   size = "md",
@@ -1572,369 +1591,6 @@ function isCustomerExecutionClassValue(value: string): value is CustomerExecutio
 
 function normalizeExecutionClasses(values: readonly string[]) {
   return values.filter(isCustomerExecutionClassValue);
-}
-
-function CustomerFilterRail({
-  data,
-  onQueueChange,
-  onOpenFilters,
-}: Readonly<{
-  data: CustomerCenterData;
-  onQueueChange: (queue: string) => void;
-  onOpenFilters: () => void;
-}>) {
-  const classCount = data.filters.executionClasses.length;
-  const hasDateFilter = Boolean(data.filters.assignedFrom || data.filters.assignedTo);
-
-  return (
-    <div className="mt-3 grid grid-cols-4 gap-2">
-      <button
-        type="button"
-        onClick={() => onQueueChange("all")}
-        className={cn(
-          "h-10 min-w-0 rounded-[14px] px-2 text-[14px] font-semibold leading-none whitespace-nowrap",
-          data.filters.queue === "all"
-            ? "bg-[#eaf3ff] text-[#1677ff]"
-            : "bg-white text-[#475467] shadow-[0_8px_20px_rgba(16,24,40,0.035)]",
-        )}
-      >
-        全部
-      </button>
-      <button
-        type="button"
-        onClick={() => onQueueChange("new_imported")}
-        className={cn(
-          "h-10 min-w-0 rounded-[14px] px-2 text-[14px] font-semibold leading-none whitespace-nowrap",
-          data.filters.queue === "new_imported"
-            ? "bg-[#eaf3ff] text-[#1677ff]"
-            : "bg-white text-[#667085] shadow-[0_8px_20px_rgba(16,24,40,0.035)]",
-        )}
-      >
-        新导入
-      </button>
-      <button
-        type="button"
-        onClick={onOpenFilters}
-        className={cn(
-          "inline-flex h-10 min-w-0 items-center justify-center gap-1 rounded-[14px] px-2 text-[14px] font-semibold leading-none whitespace-nowrap",
-          classCount > 0
-            ? "bg-[#eaf3ff] text-[#1677ff]"
-            : "bg-white text-[#667085] shadow-[0_8px_20px_rgba(16,24,40,0.035)]",
-        )}
-      >
-        <SlidersHorizontal className="h-4 w-4 shrink-0" aria-hidden />
-        <span className="truncate">分类{classCount > 0 ? ` ${classCount}` : ""}</span>
-      </button>
-      <button
-        type="button"
-        onClick={onOpenFilters}
-        className={cn(
-          "inline-flex h-10 min-w-0 items-center justify-center gap-1 rounded-[14px] px-2 text-[14px] font-semibold leading-none whitespace-nowrap",
-          hasDateFilter
-            ? "bg-[#eaf3ff] text-[#1677ff]"
-            : "bg-white text-[#667085] shadow-[0_8px_20px_rgba(16,24,40,0.035)]",
-        )}
-      >
-        <Filter className="h-4 w-4 shrink-0" aria-hidden />
-        <span className="truncate">时间</span>
-      </button>
-    </div>
-  );
-}
-
-function CustomerFilterDrawer({
-  data,
-  onClose,
-  onApply,
-}: Readonly<{
-  data: CustomerCenterData;
-  onClose: () => void;
-  onApply: (next: {
-    queue: string | null;
-    executionClasses: string | null;
-    assignedFrom: string | null;
-    assignedTo: string | null;
-  }) => void;
-}>) {
-  const [newImportedOnly, setNewImportedOnly] = useState(data.filters.queue === "new_imported");
-  const [selectedClasses, setSelectedClasses] = useState<CustomerExecutionClassValue[]>(
-    normalizeExecutionClasses(data.filters.executionClasses),
-  );
-  const [assignedFrom, setAssignedFrom] = useState(data.filters.assignedFrom);
-  const [assignedTo, setAssignedTo] = useState(data.filters.assignedTo);
-
-  function toggleClass(value: CustomerExecutionClassValue) {
-    setSelectedClasses((current) =>
-      current.includes(value)
-        ? current.filter((item) => item !== value)
-        : [...current, value],
-    );
-  }
-
-  function applyFilters() {
-    onApply({
-      queue: newImportedOnly ? "new_imported" : "all",
-      executionClasses: selectedClasses.length > 0 ? selectedClasses.join(",") : null,
-      assignedFrom: assignedFrom || null,
-      assignedTo: assignedTo || null,
-    });
-    onClose();
-  }
-
-  function resetFilters() {
-    setNewImportedOnly(false);
-    setSelectedClasses([]);
-    setAssignedFrom("");
-    setAssignedTo("");
-    onApply({
-      queue: "all",
-      executionClasses: null,
-      assignedFrom: null,
-      assignedTo: null,
-    });
-    onClose();
-  }
-
-  return (
-    <div className="fixed inset-0 z-[70]">
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="关闭客户筛选"
-        className="absolute inset-0 bg-black/25 backdrop-blur-[6px]"
-      />
-      <aside className="absolute inset-y-0 right-0 flex w-[88vw] max-w-[420px] flex-col bg-[#f7f8fb] shadow-[-18px_0_48px_rgba(16,24,40,0.18)]">
-        <div className="flex items-center justify-between border-b border-black/5 px-5 pb-4 pt-6">
-          <div>
-            <h2 className="text-[22px] font-semibold text-[#20242c]">筛选</h2>
-            <p className="mt-1 text-[12px] text-[#98a1af]">新导入 / 分类 / 时间</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#667085]"
-            aria-label="关闭"
-          >
-            <X className="h-5 w-5" aria-hidden />
-          </button>
-        </div>
-
-        <div className="lbn-mobile-scrollbar-none flex-1 overflow-y-auto px-5 py-5">
-          <section className="rounded-[20px] bg-white px-4 py-4">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h3 className="text-[16px] font-semibold text-[#20242c]">新导入</h3>
-                <p className="mt-1 text-[12px] text-[#98a1af]">只看最近导入/分配客户</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setNewImportedOnly((value) => !value)}
-                className={cn(
-                  "h-8 w-14 rounded-full p-1 transition-colors",
-                  newImportedOnly ? "bg-[#1677ff]" : "bg-[#d0d5dd]",
-                )}
-                aria-pressed={newImportedOnly}
-              >
-                <span
-                  className={cn(
-                    "block h-6 w-6 rounded-full bg-white transition-transform",
-                    newImportedOnly ? "translate-x-6" : "translate-x-0",
-                  )}
-                />
-              </button>
-            </div>
-          </section>
-
-          <section className="mt-4 rounded-[20px] bg-white px-4 py-4">
-            <h3 className="text-[16px] font-semibold text-[#20242c]">客户分类</h3>
-            <div className="mt-3 grid gap-2">
-              {customerExecutionClassOptions.map((item) => {
-                const active = selectedClasses.includes(item.value);
-
-                return (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() => toggleClass(item.value)}
-                    className={cn(
-                      "flex h-11 items-center justify-between rounded-[14px] border px-3 text-left text-[14px] font-semibold",
-                      active
-                        ? "border-[#1677ff] bg-[#f2f8ff] text-[#1677ff]"
-                        : "border-black/5 bg-[#fbfcfe] text-[#475467]",
-                    )}
-                  >
-                    <span>{item.label}</span>
-                    {active ? <CheckCircle2 className="h-5 w-5" aria-hidden /> : null}
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className="mt-4 rounded-[20px] bg-white px-4 py-4">
-            <h3 className="text-[16px] font-semibold text-[#20242c]">时间筛选</h3>
-            <div className="mt-3 grid gap-3">
-              <label className="grid gap-1.5 text-[12px] font-medium text-[#667085]">
-                开始时间
-                <input
-                  type="date"
-                  value={assignedFrom}
-                  onChange={(event) => setAssignedFrom(event.target.value)}
-                  className="h-11 rounded-[14px] border border-black/5 bg-[#fbfcfe] px-3 text-[15px] text-[#20242c] outline-none"
-                />
-              </label>
-              <label className="grid gap-1.5 text-[12px] font-medium text-[#667085]">
-                结束时间
-                <input
-                  type="date"
-                  value={assignedTo}
-                  onChange={(event) => setAssignedTo(event.target.value)}
-                  className="h-11 rounded-[14px] border border-black/5 bg-[#fbfcfe] px-3 text-[15px] text-[#20242c] outline-none"
-                />
-              </label>
-            </div>
-          </section>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 border-t border-black/5 bg-white px-5 py-4">
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="h-12 rounded-[16px] bg-[#f2f4f7] text-[15px] font-semibold text-[#475467]"
-          >
-            重置
-          </button>
-          <button
-            type="button"
-            onClick={applyFilters}
-            className="h-12 rounded-[16px] bg-[#1677ff] text-[15px] font-semibold text-white shadow-[0_12px_24px_rgba(22,119,255,0.22)]"
-          >
-            应用
-          </button>
-        </div>
-      </aside>
-    </div>
-  );
-}
-
-function CustomerRow({
-  item,
-  canCreateCallRecord,
-  onSelect,
-  onStartCall,
-}: Readonly<{
-  item: CustomerListItem;
-  canCreateCallRecord: boolean;
-  onSelect: () => void;
-  onStartCall: (
-    customer: CustomerListItem,
-    triggerSource: MobileCallTriggerSource,
-    mode: MobileCallMode,
-  ) => void;
-}>) {
-  const latestCall = item.callRecords[0] ?? null;
-  const executionVariant = getCustomerExecutionDisplayVariant({
-    executionClass: item.executionClass,
-    newImported: item.newImported,
-    pendingFirstCall: item.pendingFirstCall,
-  });
-  const workStatus = item.workingStatuses[0] ?? null;
-  const region = formatRegion(item.province, item.city, item.district);
-  const primaryProduct = getCustomerPrimaryProduct(item);
-  const assignmentLabel = getCustomerAssignmentLabel(item);
-
-  function startCall(mode: MobileCallMode) {
-    if (!canCreateCallRecord) {
-      return;
-    }
-
-    onStartCall(item, "card", mode);
-  }
-
-  return (
-    <div className="overflow-hidden rounded-[18px] border border-black/5 bg-white px-4 py-3 shadow-[0_8px_20px_rgba(16,24,40,0.04)]">
-      <button type="button" onClick={onSelect} className="block w-full min-w-0 text-left">
-        <div className="flex min-w-0 items-center gap-2">
-          <h3 className="min-w-0 flex-1 truncate text-[16px] font-semibold leading-5 text-[#20242c]">
-            {item.name}
-          </h3>
-          <span className="shrink-0">
-            <StatusBadge
-              label={getCustomerExecutionDisplayLongLabel({
-                executionClass: item.executionClass,
-                newImported: item.newImported,
-                pendingFirstCall: item.pendingFirstCall,
-              })}
-              variant={executionVariant}
-            />
-          </span>
-        </div>
-        <div className="mt-1 truncate text-[13px] text-[#667085]">
-          {item.phone} · {region}
-        </div>
-        <div className="mt-1.5 grid min-w-0 gap-0.5 text-[12px] leading-5 text-[#667085]">
-          {primaryProduct ? (
-            <div className="truncate">
-              <span className="font-medium text-[#344054]">意向</span> · {primaryProduct}
-            </div>
-          ) : null}
-          <div className="truncate text-[#98a1af]">分配 · {assignmentLabel}</div>
-        </div>
-        <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5 overflow-hidden">
-          {workStatus ? (
-            <StatusBadge
-              label={getCustomerWorkStatusLabel(workStatus)}
-              variant={getCustomerWorkStatusVariant(workStatus)}
-            />
-          ) : null}
-          {item.customerTags.slice(0, 2).map((tag) => (
-            <span
-              key={tag.id}
-              className="inline-flex max-w-[96px] items-center truncate rounded-full bg-[#f2f4f7] px-2 py-1 text-[11px] font-medium text-[#667085]"
-            >
-              {tag.tag.name}
-            </span>
-          ))}
-        </div>
-        <div className="mt-1.5 truncate text-[12px] text-[#98a1af]">
-          {latestCall
-            ? `${latestCall.resultLabel} · ${formatNullableRelativeDate(latestCall.callTime)}`
-            : formatNullableRelativeDate(item.latestFollowUpAt)}
-        </div>
-      </button>
-
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => startCall("crm-outbound")}
-          aria-label={`外呼 ${item.name}`}
-          disabled={!canCreateCallRecord}
-          className={cn(
-            "inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-[14px] px-3 text-[13px] font-semibold text-white shadow-[0_10px_22px_rgba(22,119,255,0.16)]",
-            canCreateCallRecord ? "bg-[#1677ff]" : "bg-[#d0d5dd]",
-          )}
-        >
-          <PhoneCall className="h-4 w-4 shrink-0" aria-hidden />
-          <span className="truncate">外呼</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => startCall("local-phone")}
-          aria-label={`本机 ${item.name}`}
-          disabled={!canCreateCallRecord}
-          className={cn(
-            "inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-[14px] px-3 text-[13px] font-semibold",
-            canCreateCallRecord
-              ? "bg-[#eaf3ff] text-[#1677ff]"
-              : "bg-[#f2f4f7] text-[#98a1af]",
-          )}
-        >
-          <Phone className="h-4 w-4 shrink-0" aria-hidden />
-          <span className="truncate">本机</span>
-        </button>
-      </div>
-    </div>
-  );
 }
 
 function CustomersTab({
@@ -4374,7 +4030,7 @@ export function MobileAppShell({
       writeRecentDialCustomer(recent);
 
       if (mode === "crm-outbound") {
-        void startCrmOutboundCall(callableCustomer);
+        void startCrmOutboundCall(callableCustomer, triggerSource);
         return;
       }
 
@@ -4387,7 +4043,13 @@ export function MobileAppShell({
     })();
   }
 
-  async function startCrmOutboundCall(customer: CustomerListItem) {
+  async function startCrmOutboundCall(
+    customer: CustomerListItem,
+    triggerSource: MobileCallTriggerSource,
+  ) {
+    const clientEventAt = new Date().toISOString();
+    const correlationId = generateClientCallCorrelationId("crm-outbound");
+
     setOutboundNotice({
       tone: "pending",
       title: "外呼发起中",
@@ -4398,7 +4060,12 @@ export function MobileAppShell({
       const response = await fetch("/api/outbound-calls/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerId: customer.id }),
+        body: JSON.stringify({
+          customerId: customer.id,
+          correlationId,
+          clientEventAt,
+          triggerSource,
+        }),
       });
       const payload = (await response.json().catch(() => null)) as {
         call?: {

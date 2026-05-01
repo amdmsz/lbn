@@ -4,8 +4,12 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.view.View;
+import android.view.Window;
 
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.CapConfig;
@@ -25,7 +29,11 @@ import java.util.concurrent.Executors;
 public class MainActivity extends BridgeActivity {
     public static final String PREFERENCES_NAME = "lbn_crm_connection";
     public static final String KEY_SERVER_URL = "serverUrl";
-    public static final String DEFAULT_SERVER_URL = "https://crm.cclbn.com/mobile";
+    public static final String PRODUCTION_SERVER_URL = "https://crm.cclbn.com/mobile";
+    public static final String LOCAL_TEST_SERVER_URL = "http://192.168.31.128:3000/mobile";
+    public static final String DEFAULT_SERVER_URL = BuildConfig.DEBUG
+            ? LOCAL_TEST_SERVER_URL
+            : PRODUCTION_SERVER_URL;
     private final ExecutorService updateExecutor = Executors.newSingleThreadExecutor();
 
     @Override
@@ -36,6 +44,7 @@ public class MainActivity extends BridgeActivity {
                 .create();
         registerPlugin(LbnCallRecorderPlugin.class);
         super.onCreate(savedInstanceState);
+        configureSystemBars();
         checkForUpdates();
     }
 
@@ -85,9 +94,34 @@ public class MainActivity extends BridgeActivity {
         });
     }
 
+    private void configureSystemBars() {
+        Window window = getWindow();
+        window.setStatusBarColor(Color.WHITE);
+        window.setNavigationBarColor(Color.WHITE);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            window.getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                            | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+            );
+        }
+    }
+
     public static String getServerUrl(Context context) {
         SharedPreferences preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
-        return normalizeServerUrl(preferences.getString(KEY_SERVER_URL, DEFAULT_SERVER_URL));
+        String storedServerUrl = preferences.getString(KEY_SERVER_URL, null);
+
+        if (storedServerUrl == null || storedServerUrl.trim().isEmpty()) {
+            return DEFAULT_SERVER_URL;
+        }
+
+        String normalizedServerUrl = normalizeServerUrl(storedServerUrl);
+
+        if (BuildConfig.DEBUG && PRODUCTION_SERVER_URL.equals(normalizedServerUrl)) {
+            return LOCAL_TEST_SERVER_URL;
+        }
+
+        return normalizedServerUrl;
     }
 
     public static void saveServerUrl(Context context, String serverUrl) {
@@ -133,7 +167,9 @@ public class MainActivity extends BridgeActivity {
             String port = url.getPort() > 0 ? ":" + url.getPort() : "";
             return url.getProtocol() + "://" + url.getHost() + port + "/client-update.json";
         } catch (Exception error) {
-            return "https://crm.cclbn.com/client-update.json";
+            return BuildConfig.DEBUG
+                    ? "http://192.168.31.128:3000/client-update.json"
+                    : "https://crm.cclbn.com/client-update.json";
         }
     }
 

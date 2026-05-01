@@ -30,6 +30,7 @@ import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedInputStream;
@@ -60,10 +61,12 @@ public class CallRecordingService extends Service {
     public static final String EXTRA_API_BASE_URL = "apiBaseUrl";
     public static final String EXTRA_CHUNK_SIZE_BYTES = "chunkSizeBytes";
     public static final String EXTRA_FORCE_SPEAKERPHONE = "forceSpeakerphone";
+    public static final String EXTRA_RETRY_UPLOAD_JSON = "retryUploadJson";
     public static final String EXTRA_SESSION_JSON = "sessionJson";
     public static final String ACTION_SESSION_UPDATED = "com.lbn.crm.CALL_RECORDING_SESSION_UPDATED";
     public static final String PREFERENCES_NAME = "lbn_call_recording_sessions";
     public static final String LAST_SESSION_KEY = "last_call_session";
+    public static final String PENDING_UPLOAD_PREFIX = "pending_upload_";
 
     private static final String CHANNEL_ID = "call_recording";
     private static final int NOTIFICATION_ID = 4101;
@@ -72,6 +75,8 @@ public class CallRecordingService extends Service {
     private static final long SYSTEM_RECORDING_LOOKUP_TIMEOUT_MS = 25 * 1000L;
     private static final long SYSTEM_RECORDING_LOOKUP_INTERVAL_MS = 2 * 1000L;
     private static final long MIN_RECORDING_FILE_BYTES = 1024L;
+    private static final Object RETRY_QUEUE_LOCK = new Object();
+    private static boolean retryQueueRunning = false;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ExecutorService networkExecutor = Executors.newSingleThreadExecutor();
@@ -105,6 +110,16 @@ public class CallRecordingService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent == null) {
             stopSelf();
+            return START_NOT_STICKY;
+        }
+
+        String retryUploadJson = intent.getStringExtra(EXTRA_RETRY_UPLOAD_JSON);
+        if (!isBlank(retryUploadJson)) {
+            startRetryUpload(
+                retryUploadJson,
+                intent.getStringExtra(EXTRA_API_BASE_URL),
+                intent.getIntExtra(EXTRA_CHUNK_SIZE_BYTES, DEFAULT_CHUNK_SIZE_BYTES)
+            );
             return START_NOT_STICKY;
         }
 
@@ -150,19 +165,199 @@ public class CallRecordingService extends Service {
         return "call_session_" + callRecordId;
     }
 
+    private static String pendingUploadKey(String callRecordId) {
+        return PENDING_UPLOAD_PREFIX + callRecordId;
+    }
+
+    private void startRetryUpload(
+        String retryUploadJson,
+        @Nullable String overrideApiBaseUrl,
+        int overrideChunkSizeBytes
+    ) {
+        try {
+            if (!isBlank(callRecordId)) {
+                return;
+            }
+
+            JSONArray payloads = parseRetryUploadPayloads(retryUploadJson);
+
+            if (payloads.length() == 0) {
+                stopSelf();
+                return;
+            }
+
+            synchronized (RETRY_QUEUE_LOCK) {
+                if (retryQueueRunning) {
+                    return;
+                }
+
+                retryQueueRunning = true;
+            }
+
+            startForegroundNotification();
+            networkExecutor.execute(() -> {
+                try {
+                    for (int index = 0; index < payloads.length(); index++) {
+                        JSONObject payload = payloads.optJSONObject(index);
+                        if (payload == null) {
+                            continue;
+                        }
+
+                        RetryUploadContext context = buildRetryUploadContext(
+                            payload,
+                            overrideApiBaseUrl,
+                            overrideChunkSizeBytes
+                        );
+
+                        if (context == null) {
+                            continue;
+                        }
+
+                        persistSession(context, "UPLOADING", "UPLOADING", null, null, context.durationSeconds);
+                        retryPendingUpload(context, payload);
+                    }
+                } finally {
+                    synchronized (RETRY_QUEUE_LOCK) {
+                        retryQueueRunning = false;
+                    }
+
+                    stopSelf();
+                }
+            });
+        } catch (Exception error) {
+            synchronized (RETRY_QUEUE_LOCK) {
+                retryQueueRunning = false;
+            }
+
+            stopSelf();
+        }
+    }
+
+    private JSONArray parseRetryUploadPayloads(String retryUploadJson) throws Exception {
+        String trimmed = retryUploadJson.trim();
+
+        if (trimmed.startsWith("[")) {
+            JSONArray rawArray = new JSONArray(trimmed);
+            JSONArray parsedArray = new JSONArray();
+
+            for (int index = 0; index < rawArray.length(); index++) {
+                Object item = rawArray.opt(index);
+
+                if (item instanceof JSONObject) {
+                    parsedArray.put(item);
+                } else if (item instanceof String && !isBlank((String) item)) {
+                    parsedArray.put(new JSONObject((String) item));
+                }
+            }
+
+            return parsedArray;
+        }
+
+        JSONArray single = new JSONArray();
+        single.put(new JSONObject(trimmed));
+        return single;
+    }
+
+    @Nullable
+    private RetryUploadContext buildRetryUploadContext(
+        JSONObject payload,
+        @Nullable String overrideApiBaseUrl,
+        int overrideChunkSizeBytes
+    ) {
+        String nextCallRecordId = payload.optString("callRecordId", "");
+        String nextCustomerId = payload.optString("customerId", "");
+        String nextApiBaseUrl = trimTrailingSlash(
+            isBlank(overrideApiBaseUrl)
+                ? payload.optString("apiBaseUrl", "")
+                : overrideApiBaseUrl
+        );
+
+        if (isBlank(nextCallRecordId) || isBlank(nextCustomerId) || isBlank(nextApiBaseUrl)) {
+            return null;
+        }
+
+        int nextChunkSizeBytes = overrideChunkSizeBytes > 0
+            ? overrideChunkSizeBytes
+            : payload.optInt("chunkSizeBytes", DEFAULT_CHUNK_SIZE_BYTES);
+
+        return new RetryUploadContext(
+            payload.optString("phone", ""),
+            nextCallRecordId,
+            nextCustomerId,
+            payload.optString("customerName", ""),
+            payload.optString("deviceId", ""),
+            nextApiBaseUrl,
+            nextChunkSizeBytes,
+            payload.optString("audioSource", ""),
+            payload.optBoolean("forceSpeakerphone", false),
+            payload.optInt("durationSeconds", 0)
+        );
+    }
+
+    private void retryPendingUpload(RetryUploadContext context, JSONObject payload) {
+        int durationSeconds = context.durationSeconds;
+
+        try {
+            File recordingFile = new File(payload.optString("filePath", ""));
+
+            if (!recordingFile.exists() || recordingFile.length() <= 0L) {
+                clearPendingUpload(context.callRecordId);
+                postCallEventQuietly(
+                    context,
+                    "call.recording_failed",
+                    "RETRY_RECORDING_FILE_MISSING",
+                    "待重试录音文件不存在。",
+                    durationSeconds,
+                    null
+                );
+                persistSession(context, "FAILED", "FAILED", null, "待重试录音文件不存在。", durationSeconds);
+                return;
+            }
+
+            RecordingPayload recordingPayload = new RecordingPayload(
+                recordingFile,
+                payload.optString("mimeType", "audio/mp4"),
+                payload.optString("codec", "aac"),
+                payload.optBoolean("deleteAfterUpload", true)
+            );
+            UploadResult uploadResult = uploadRecording(recordingPayload, durationSeconds, context);
+
+            clearPendingUpload(context.callRecordId);
+            persistSession(context, "READY", uploadResult.status, uploadResult.recordingId, null, durationSeconds);
+            if (recordingPayload.deleteAfterUpload) {
+                deleteQuietly(recordingPayload.file);
+            }
+        } catch (Exception error) {
+            persistSession(context, "FAILED", "FAILED", null, error.getMessage(), durationSeconds);
+            postCallEventQuietly(
+                context,
+                "call.upload_failed",
+                "RETRY_UPLOAD_FAILED",
+                error.getMessage(),
+                durationSeconds,
+                null
+            );
+        }
+    }
+
     private void handleCallStateChanged(int state) {
         if (state == TelephonyManager.CALL_STATE_OFFHOOK && !seenOffhook) {
             seenOffhook = true;
             callConnectedAtMs = System.currentTimeMillis();
             enableSpeakerphoneForCapture();
+            postCallEventQuietly("call.offhook_detected", null, null, 0, null);
 
             if (startRecorder()) {
                 persistSession("RECORDING", "PENDING", null, null, 0);
+                JSONObject metadata = new JSONObject();
+                putQuietly(metadata, "audioSource", activeAudioSourceName);
+                postCallEventQuietly("call.recording_started", null, null, 0, metadata);
             }
             return;
         }
 
         if (state == TelephonyManager.CALL_STATE_IDLE && seenOffhook) {
+            postCallEventQuietly("call.idle_detected", null, null, getDurationSeconds(), null);
             finishSession("CALL_ENDED");
         }
     }
@@ -173,6 +368,13 @@ public class CallRecordingService extends Service {
         }
 
         persistSession("FAILED", "CANCELED", null, "电话未进入通话状态。", 0);
+        postCallEventQuietly(
+            "call.recording_failed",
+            "CALL_NOT_OFFHOOK",
+            "电话未进入通话状态。",
+            0,
+            null
+        );
         stopSelf();
     }
 
@@ -198,17 +400,45 @@ public class CallRecordingService extends Service {
                     recordingPayload.file.length() <= 0L
                 ) {
                     persistSession("FAILED", "FAILED", null, "本机未生成有效录音文件。", durationSeconds);
+                    postCallEventQuietly(
+                        "call.recording_failed",
+                        "RECORDING_FILE_EMPTY",
+                        "本机未生成有效录音文件。",
+                        durationSeconds,
+                        null
+                    );
                     return;
                 }
 
+                JSONObject fileMetadata = new JSONObject();
+                putQuietly(fileMetadata, "fileSizeBytes", recordingPayload.file.length());
+                putQuietly(fileMetadata, "mimeType", recordingPayload.mimeType);
+                putQuietly(fileMetadata, "codec", recordingPayload.codec);
+                putQuietly(fileMetadata, "audioSource", activeAudioSourceName);
+                postCallEventQuietly(
+                    "call.recording_file_ready",
+                    null,
+                    null,
+                    durationSeconds,
+                    fileMetadata
+                );
+                savePendingUpload(recordingPayload, durationSeconds);
                 persistSession("UPLOADING", "UPLOADING", null, null, durationSeconds);
                 UploadResult uploadResult = uploadRecording(recordingPayload, durationSeconds);
+                clearPendingUpload(callRecordId);
                 persistSession("READY", uploadResult.status, uploadResult.recordingId, null, durationSeconds);
                 if (recordingPayload.deleteAfterUpload) {
                     deleteQuietly(recordingPayload.file);
                 }
             } catch (Exception error) {
                 persistSession("FAILED", "FAILED", null, error.getMessage(), durationSeconds);
+                postCallEventQuietly(
+                    "call.upload_failed",
+                    "LOCAL_UPLOAD_FAILED",
+                    error.getMessage(),
+                    durationSeconds,
+                    null
+                );
             } finally {
                 stopSelf();
             }
@@ -263,6 +493,13 @@ public class CallRecordingService extends Service {
     private boolean startRecorder() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             persistSession("FAILED", "PENDING", null, "缺少录音权限。", 0);
+            postCallEventQuietly(
+                "call.native_permission_denied",
+                "RECORD_AUDIO_DENIED",
+                "缺少录音权限。",
+                0,
+                null
+            );
             return false;
         }
 
@@ -279,6 +516,13 @@ public class CallRecordingService extends Service {
         } catch (Exception error) {
             stopRecorderQuietly();
             persistSession("FAILED", "PENDING", null, "本机启动录音失败：" + error.getMessage(), 0);
+            postCallEventQuietly(
+                "call.recording_failed",
+                "RECORDER_START_FAILED",
+                "本机启动录音失败：" + error.getMessage(),
+                0,
+                null
+            );
             return false;
         }
     }
@@ -620,12 +864,26 @@ public class CallRecordingService extends Service {
     private void registerPhoneStateListener() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
             persistSession("FAILED", "PENDING", null, "缺少通话状态权限。", 0);
+            postCallEventQuietly(
+                "call.native_permission_denied",
+                "READ_PHONE_STATE_DENIED",
+                "缺少通话状态权限。",
+                0,
+                null
+            );
             return;
         }
 
         telephonyManager = (TelephonyManager) getSystemService(Context.TELEPHONY_SERVICE);
         if (telephonyManager == null) {
             persistSession("FAILED", "PENDING", null, "无法监听系统电话状态。", 0);
+            postCallEventQuietly(
+                "call.recording_unsupported",
+                "TELEPHONY_MANAGER_UNAVAILABLE",
+                "无法监听系统电话状态。",
+                0,
+                null
+            );
             return;
         }
 
@@ -648,14 +906,25 @@ public class CallRecordingService extends Service {
     }
 
     private UploadResult uploadRecording(RecordingPayload recording, int durationSeconds) throws Exception {
+        return uploadRecording(recording, durationSeconds, null);
+    }
+
+    private UploadResult uploadRecording(
+        RecordingPayload recording,
+        int durationSeconds,
+        @Nullable RetryUploadContext retryContext
+    ) throws Exception {
         long fileSizeBytes = recording.file.length();
         String fileSha256 = sha256(recording.file);
-        int normalizedChunkSize = Math.max(256 * 1024, chunkSizeBytes);
+        String targetCallRecordId = retryContext == null ? callRecordId : retryContext.callRecordId;
+        String targetDeviceId = retryContext == null ? deviceId : retryContext.deviceId;
+        int targetChunkSizeBytes = retryContext == null ? chunkSizeBytes : retryContext.chunkSizeBytes;
+        int normalizedChunkSize = Math.max(256 * 1024, targetChunkSizeBytes);
         int totalChunks = (int) Math.ceil(fileSizeBytes / (double) normalizedChunkSize);
 
         JSONObject body = new JSONObject();
-        body.put("callRecordId", callRecordId);
-        body.put("deviceId", isBlank(deviceId) ? "" : deviceId);
+        body.put("callRecordId", targetCallRecordId);
+        body.put("deviceId", isBlank(targetDeviceId) ? "" : targetDeviceId);
         body.put("mimeType", recording.mimeType);
         body.put("codec", recording.codec);
         body.put("fileSizeBytes", fileSizeBytes);
@@ -664,13 +933,14 @@ public class CallRecordingService extends Service {
         body.put("chunkSizeBytes", normalizedChunkSize);
         body.put("totalChunks", totalChunks);
 
-        JSONObject uploadResponse = requestJson("POST", "/api/mobile/call-recordings/uploads", body);
+        JSONObject uploadResponse = requestJson(retryContext, "POST", "/api/mobile/call-recordings/uploads", body);
         JSONObject upload = uploadResponse.getJSONObject("upload");
         String uploadId = upload.getString("id");
 
-        uploadChunks(recording.file, uploadId, normalizedChunkSize);
+        uploadChunks(recording.file, uploadId, normalizedChunkSize, retryContext);
 
         JSONObject completed = requestJson(
+            retryContext,
             "POST",
             "/api/mobile/call-recordings/uploads/" + urlEncode(uploadId) + "/complete",
             null
@@ -682,7 +952,54 @@ public class CallRecordingService extends Service {
         );
     }
 
+    private void savePendingUpload(RecordingPayload recording, int durationSeconds) {
+        try {
+            JSONObject payload = new JSONObject();
+            payload.put("phone", phone == null ? "" : phone);
+            payload.put("callRecordId", callRecordId);
+            payload.put("customerId", customerId);
+            payload.put("customerName", customerName == null ? "" : customerName);
+            payload.put("deviceId", deviceId == null ? "" : deviceId);
+            payload.put("apiBaseUrl", apiBaseUrl);
+            payload.put("chunkSizeBytes", chunkSizeBytes);
+            payload.put("filePath", recording.file.getAbsolutePath());
+            payload.put("mimeType", recording.mimeType);
+            payload.put("codec", recording.codec);
+            payload.put("durationSeconds", durationSeconds);
+            payload.put("audioSource", activeAudioSourceName);
+            payload.put("deleteAfterUpload", recording.deleteAfterUpload);
+            payload.put("forceSpeakerphone", forceSpeakerphone);
+            payload.put("updatedAt", System.currentTimeMillis());
+
+            getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putString(pendingUploadKey(callRecordId), payload.toString())
+                .apply();
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void clearPendingUpload(String targetCallRecordId) {
+        if (isBlank(targetCallRecordId)) {
+            return;
+        }
+
+        getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .remove(pendingUploadKey(targetCallRecordId))
+            .apply();
+    }
+
     private void uploadChunks(File recordingFile, String uploadId, int normalizedChunkSize) throws Exception {
+        uploadChunks(recordingFile, uploadId, normalizedChunkSize, null);
+    }
+
+    private void uploadChunks(
+        File recordingFile,
+        String uploadId,
+        int normalizedChunkSize,
+        @Nullable RetryUploadContext retryContext
+    ) throws Exception {
         byte[] buffer = new byte[normalizedChunkSize];
         int index = 0;
 
@@ -690,14 +1007,23 @@ public class CallRecordingService extends Service {
             int read;
             while ((read = inputStream.read(buffer)) != -1) {
                 byte[] chunk = read == buffer.length ? buffer : Arrays.copyOf(buffer, read);
-                putChunk(uploadId, index, chunk, sha256(chunk));
+                putChunk(uploadId, index, chunk, sha256(chunk), retryContext);
                 index++;
             }
         }
     }
 
     private JSONObject requestJson(String method, String path, @Nullable JSONObject body) throws Exception {
-        HttpURLConnection connection = openConnection(method, path);
+        return requestJson(null, method, path, body);
+    }
+
+    private JSONObject requestJson(
+        @Nullable RetryUploadContext retryContext,
+        String method,
+        String path,
+        @Nullable JSONObject body
+    ) throws Exception {
+        HttpURLConnection connection = openConnection(retryContext, method, path);
         connection.setRequestProperty("Accept", "application/json");
 
         if (body != null) {
@@ -721,14 +1047,86 @@ public class CallRecordingService extends Service {
         return response.isEmpty() ? new JSONObject() : new JSONObject(response);
     }
 
+    private void postCallEventQuietly(
+        String action,
+        @Nullable String failureCode,
+        @Nullable String failureMessage,
+        int durationSeconds,
+        @Nullable JSONObject metadata
+    ) {
+        postCallEventQuietly(null, action, failureCode, failureMessage, durationSeconds, metadata);
+    }
+
+    private void postCallEventQuietly(
+        @Nullable RetryUploadContext retryContext,
+        String action,
+        @Nullable String failureCode,
+        @Nullable String failureMessage,
+        int durationSeconds,
+        @Nullable JSONObject metadata
+    ) {
+        try {
+            String targetCallRecordId = retryContext == null ? callRecordId : retryContext.callRecordId;
+            String targetDeviceId = retryContext == null ? deviceId : retryContext.deviceId;
+            String targetAudioSourceName = retryContext == null
+                ? activeAudioSourceName
+                : retryContext.audioSourceName;
+            boolean targetForceSpeakerphone = retryContext == null
+                ? forceSpeakerphone
+                : retryContext.forceSpeakerphone;
+
+            if (isBlank(targetCallRecordId) || (retryContext == null && isBlank(apiBaseUrl))) {
+                return;
+            }
+
+            JSONObject body = new JSONObject();
+            body.put("action", action);
+            body.put("eventId", action + ":" + targetCallRecordId + ":" + System.currentTimeMillis());
+            body.put("deviceId", targetDeviceId == null ? "" : targetDeviceId);
+            body.put("durationSeconds", durationSeconds);
+
+            if (!isBlank(failureCode)) {
+                body.put("failureCode", failureCode);
+            }
+
+            if (!isBlank(failureMessage)) {
+                body.put("failureMessage", failureMessage);
+            }
+
+            JSONObject nextMetadata = metadata == null ? new JSONObject() : metadata;
+            nextMetadata.put("phoneStateObserved", true);
+            nextMetadata.put("audioSource", targetAudioSourceName);
+            nextMetadata.put("forceSpeakerphone", targetForceSpeakerphone);
+            body.put("metadata", nextMetadata);
+
+            requestJson(
+                retryContext,
+                "POST",
+                "/api/mobile/calls/" + urlEncode(targetCallRecordId) + "/events",
+                body
+            );
+        } catch (Exception ignored) {
+        }
+    }
+
     private void putChunk(String uploadId, int index, byte[] bytes, String chunkSha256) throws Exception {
+        putChunk(uploadId, index, bytes, chunkSha256, null);
+    }
+
+    private void putChunk(
+        String uploadId,
+        int index,
+        byte[] bytes,
+        String chunkSha256,
+        @Nullable RetryUploadContext retryContext
+    ) throws Exception {
         String path = String.format(
             Locale.US,
             "/api/mobile/call-recordings/uploads/%s/chunks/%d",
             urlEncode(uploadId),
             index
         );
-        HttpURLConnection connection = openConnection("PUT", path);
+        HttpURLConnection connection = openConnection(retryContext, "PUT", path);
         connection.setDoOutput(true);
         connection.setRequestProperty("Accept", "application/json");
         connection.setRequestProperty("Content-Type", "audio/mp4");
@@ -749,12 +1147,21 @@ public class CallRecordingService extends Service {
     }
 
     private HttpURLConnection openConnection(String method, String path) throws IOException {
-        URL url = new URL(apiBaseUrl + path);
+        return openConnection(null, method, path);
+    }
+
+    private HttpURLConnection openConnection(
+        @Nullable RetryUploadContext retryContext,
+        String method,
+        String path
+    ) throws IOException {
+        String targetApiBaseUrl = retryContext == null ? apiBaseUrl : retryContext.apiBaseUrl;
+        URL url = new URL(targetApiBaseUrl + path);
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod(method);
         connection.setConnectTimeout(15000);
         connection.setReadTimeout(60000);
-        String cookies = CookieManager.getInstance().getCookie(apiBaseUrl);
+        String cookies = CookieManager.getInstance().getCookie(targetApiBaseUrl);
         if (cookies != null && !cookies.trim().isEmpty()) {
             connection.setRequestProperty("Cookie", cookies);
         }
@@ -787,20 +1194,47 @@ public class CallRecordingService extends Service {
         @Nullable String failureMessage,
         int durationSeconds
     ) {
+        persistSession(null, status, uploadStatus, recordingId, failureMessage, durationSeconds);
+    }
+
+    private void persistSession(
+        @Nullable RetryUploadContext retryContext,
+        String status,
+        String uploadStatus,
+        @Nullable String recordingId,
+        @Nullable String failureMessage,
+        int durationSeconds
+    ) {
         try {
+            String targetCallRecordId = retryContext == null ? callRecordId : retryContext.callRecordId;
+            String targetCustomerId = retryContext == null ? customerId : retryContext.customerId;
+            String targetCustomerName = retryContext == null ? customerName : retryContext.customerName;
+            String targetPhone = retryContext == null ? phone : retryContext.phone;
+            String targetDeviceId = retryContext == null ? deviceId : retryContext.deviceId;
+            String targetAudioSourceName = retryContext == null
+                ? activeAudioSourceName
+                : retryContext.audioSourceName;
+            boolean targetForceSpeakerphone = retryContext == null
+                ? forceSpeakerphone
+                : retryContext.forceSpeakerphone;
+
+            if (isBlank(targetCallRecordId)) {
+                return;
+            }
+
             JSONObject session = new JSONObject();
-            session.put("callRecordId", callRecordId);
-            session.put("customerId", customerId);
-            session.put("customerName", customerName == null ? "" : customerName);
-            session.put("phone", phone);
-            session.put("deviceId", deviceId == null ? "" : deviceId);
+            session.put("callRecordId", targetCallRecordId);
+            session.put("customerId", targetCustomerId);
+            session.put("customerName", targetCustomerName == null ? "" : targetCustomerName);
+            session.put("phone", targetPhone);
+            session.put("deviceId", targetDeviceId == null ? "" : targetDeviceId);
             session.put("recordingStatus", status);
             session.put("uploadStatus", uploadStatus);
             session.put("recordingId", recordingId == null ? JSONObject.NULL : recordingId);
             session.put("failureMessage", failureMessage == null ? JSONObject.NULL : failureMessage);
             session.put("durationSeconds", durationSeconds);
-            session.put("audioSource", activeAudioSourceName);
-            session.put("forceSpeakerphone", forceSpeakerphone);
+            session.put("audioSource", targetAudioSourceName);
+            session.put("forceSpeakerphone", targetForceSpeakerphone);
             session.put("updatedAt", System.currentTimeMillis());
 
             String serialized = session.toString();
@@ -808,7 +1242,7 @@ public class CallRecordingService extends Service {
             preferences
                 .edit()
                 .putString(LAST_SESSION_KEY, serialized)
-                .putString(sessionKey(callRecordId), serialized)
+                .putString(sessionKey(targetCallRecordId), serialized)
                 .apply();
 
             Intent intent = new Intent(ACTION_SESSION_UPDATED);
@@ -864,6 +1298,13 @@ public class CallRecordingService extends Service {
 
     private boolean isBlank(@Nullable String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private void putQuietly(JSONObject object, String key, Object value) {
+        try {
+            object.put(key, value);
+        } catch (Exception ignored) {
+        }
     }
 
     private boolean hasAudioLibraryPermission() {
@@ -999,6 +1440,43 @@ public class CallRecordingService extends Service {
         }
 
         return String.valueOf(audioSource);
+    }
+
+    private static final class RetryUploadContext {
+        final String phone;
+        final String callRecordId;
+        final String customerId;
+        final String customerName;
+        final String deviceId;
+        final String apiBaseUrl;
+        final int chunkSizeBytes;
+        final String audioSourceName;
+        final boolean forceSpeakerphone;
+        final int durationSeconds;
+
+        RetryUploadContext(
+            String phone,
+            String callRecordId,
+            String customerId,
+            String customerName,
+            String deviceId,
+            String apiBaseUrl,
+            int chunkSizeBytes,
+            String audioSourceName,
+            boolean forceSpeakerphone,
+            int durationSeconds
+        ) {
+            this.phone = phone;
+            this.callRecordId = callRecordId;
+            this.customerId = customerId;
+            this.customerName = customerName;
+            this.deviceId = deviceId;
+            this.apiBaseUrl = apiBaseUrl;
+            this.chunkSizeBytes = chunkSizeBytes;
+            this.audioSourceName = audioSourceName;
+            this.forceSpeakerphone = forceSpeakerphone;
+            this.durationSeconds = durationSeconds;
+        }
     }
 
     private static final class UploadResult {

@@ -214,6 +214,20 @@ async function runPhysicalNameDriftCheck({ allowDrift = false } = {}) {
   }
 }
 
+async function readLowerCaseTableNames() {
+  const prisma = new PrismaClient({
+    adapter: new PrismaMariaDb(process.env.DATABASE_URL),
+    log: ["warn", "error"],
+  });
+
+  try {
+    const rows = await prisma.$queryRawUnsafe("SHOW VARIABLES LIKE 'lower_case_table_names'");
+    return String(rows[0]?.Value ?? rows[0]?.value ?? "");
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
 function collectStatusState() {
   const statusResult = runPrisma(["migrate", "status"], {
     allowedExitCodes: [0, 1],
@@ -230,7 +244,130 @@ function collectStatusState() {
   };
 }
 
-function runDiffSchema({ allowSchemaDiff = false, hasPendingMigrations = false } = {}) {
+function countMapIncrement(map, key) {
+  map.set(key, (map.get(key) ?? 0) + 1);
+}
+
+function mapsHaveSameCounts(left, right) {
+  if (left.size !== right.size) {
+    return false;
+  }
+
+  for (const [key, count] of left) {
+    if (right.get(key) !== count) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function canonicalizeColumns(columnsText) {
+  return columnsText
+    .split(",")
+    .map((column) => column.trim())
+    .filter(Boolean)
+    .sort()
+    .join(",");
+}
+
+function analyzeLowerCaseTableNamesDiffNoise(diffText) {
+  const ignoredLinePatterns = [
+    /^Loaded Prisma config from /,
+    /^Prisma schema loaded from /,
+  ];
+  const tables = new Map();
+  const unsupportedLines = [];
+  let currentTable = null;
+  let indexRenameCount = 0;
+  let foreignKeyPairCount = 0;
+
+  for (const rawLine of diffText.split(/\r?\n/)) {
+    const line = rawLine.trimEnd();
+    const trimmed = line.trim();
+
+    if (!trimmed || ignoredLinePatterns.some((pattern) => pattern.test(trimmed))) {
+      continue;
+    }
+
+    const tableMatch = trimmed.match(/^\[\*\] Changed the `([^`]+)` table$/);
+
+    if (tableMatch) {
+      currentTable = {
+        name: tableMatch[1],
+        addedForeignKeys: new Map(),
+        removedForeignKeys: new Map(),
+      };
+      tables.set(currentTable.name, currentTable);
+      continue;
+    }
+
+    if (!currentTable || !line.startsWith("  ")) {
+      unsupportedLines.push(trimmed);
+      continue;
+    }
+
+    const renamedIndexMatch = trimmed.match(/^\[\*\] Renamed index `([^`]+)` to `([^`]+)`$/);
+
+    if (renamedIndexMatch) {
+      const [, fromName, toName] = renamedIndexMatch;
+
+      if (fromName.toLowerCase() === toName.toLowerCase()) {
+        indexRenameCount += 1;
+        continue;
+      }
+
+      unsupportedLines.push(trimmed);
+      continue;
+    }
+
+    const removedForeignKeyMatch = trimmed.match(/^\[-\] Removed foreign key on columns \(([^)]+)\)$/);
+
+    if (removedForeignKeyMatch) {
+      countMapIncrement(
+        currentTable.removedForeignKeys,
+        canonicalizeColumns(removedForeignKeyMatch[1]),
+      );
+      continue;
+    }
+
+    const addedForeignKeyMatch = trimmed.match(/^\[\+\] Added foreign key on columns \(([^)]+)\)$/);
+
+    if (addedForeignKeyMatch) {
+      countMapIncrement(
+        currentTable.addedForeignKeys,
+        canonicalizeColumns(addedForeignKeyMatch[1]),
+      );
+      continue;
+    }
+
+    unsupportedLines.push(trimmed);
+  }
+
+  for (const table of tables.values()) {
+    if (!mapsHaveSameCounts(table.removedForeignKeys, table.addedForeignKeys)) {
+      unsupportedLines.push(
+        `Unpaired foreign-key churn in table ${table.name}`,
+      );
+      continue;
+    }
+
+    for (const count of table.removedForeignKeys.values()) {
+      foreignKeyPairCount += count;
+    }
+  }
+
+  return {
+    isOnlyLowerCaseTableNamesNoise:
+      tables.size > 0 && unsupportedLines.length === 0,
+    tableCount: tables.size,
+    indexRenameCount,
+    foreignKeyPairCount,
+    unsupportedLines,
+  };
+}
+
+async function runDiffSchema({ allowSchemaDiff = false, hasPendingMigrations = false } = {}) {
   const diffResult = runPrisma(
     ["migrate", "diff", "--from-config-datasource", "--to-schema", "prisma/schema.prisma", "--exit-code"],
     {
@@ -248,6 +385,19 @@ function runDiffSchema({ allowSchemaDiff = false, hasPendingMigrations = false }
     if (allowSchemaDiff && hasPendingMigrations) {
       log(
         "Detected schema diff, but it is tolerated because pending reviewed migrations are about to be deployed.",
+      );
+      return;
+    }
+
+    const lowerCaseTableNames = await readLowerCaseTableNames();
+    const noiseAnalysis = analyzeLowerCaseTableNamesDiffNoise(diffResult.combined);
+
+    if (lowerCaseTableNames !== "0" && noiseAnalysis.isOnlyLowerCaseTableNamesNoise) {
+      log(
+        [
+          `Datasource diff contains only lower_case_table_names=${lowerCaseTableNames} physical-name noise.`,
+          `${noiseAnalysis.tableCount} changed table blocks, ${noiseAnalysis.indexRenameCount} case-only index renames, ${noiseAnalysis.foreignKeyPairCount} paired foreign-key churn entries were tolerated.`,
+        ].join(" "),
       );
       return;
     }
@@ -324,7 +474,7 @@ async function runPredeployCheck(argv) {
     log("Pending migrations detected and explicitly allowed for this predeploy check.");
   }
 
-  runDiffSchema({
+  await runDiffSchema({
     allowSchemaDiff,
     hasPendingMigrations: statusState.hasPendingMigrations,
   });
@@ -338,7 +488,7 @@ function runStatus() {
   runPrisma(["migrate", "status"]);
 }
 
-function runDiffMigrations() {
+async function runDiffMigrations() {
   ensureMigrationInputs();
   ensureShadowDatabaseUrl();
 
@@ -356,6 +506,19 @@ function runDiffMigrations() {
   }
 
   if (diffResult.exitCode === 2) {
+    const lowerCaseTableNames = await readLowerCaseTableNames();
+    const noiseAnalysis = analyzeLowerCaseTableNamesDiffNoise(diffResult.combined);
+
+    if (lowerCaseTableNames !== "0" && noiseAnalysis.isOnlyLowerCaseTableNamesNoise) {
+      log(
+        [
+          `Migration history diff contains only lower_case_table_names=${lowerCaseTableNames} physical-name noise.`,
+          `${noiseAnalysis.tableCount} changed table blocks, ${noiseAnalysis.indexRenameCount} case-only index renames, ${noiseAnalysis.foreignKeyPairCount} paired foreign-key churn entries were tolerated.`,
+        ].join(" "),
+      );
+      return;
+    }
+
     fail(
       "prisma/migrations and target datasource differ.",
       [
@@ -423,10 +586,10 @@ async function main() {
       return;
     case "diff-schema":
       ensureMigrationInputs();
-      runDiffSchema();
+      await runDiffSchema();
       return;
     case "diff-migrations":
-      runDiffMigrations();
+      await runDiffMigrations();
       return;
     case "predeploy-check":
       await runPredeployCheck(argv);

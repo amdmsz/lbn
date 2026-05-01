@@ -1,6 +1,6 @@
 {
   "name": "lbn-crm-desktop",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Windows desktop CTI client shell for the Lbn liquor private-domain sales CRM.",
   "author": "Lbn CRM Team",

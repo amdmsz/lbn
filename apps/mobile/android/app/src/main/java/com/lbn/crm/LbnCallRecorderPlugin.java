@@ -21,6 +21,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 
 import java.io.BufferedReader;
@@ -29,6 +30,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -152,6 +154,50 @@ public class LbnCallRecorderPlugin extends Plugin {
         result.put("started", true);
         result.put("callRecordId", callRecordId);
         result.put("deviceId", deviceId);
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void retryPendingUploads(PluginCall call) {
+        String apiBaseUrl = requiredString(call, "apiBaseUrl");
+        Integer chunkSize = call.getInt("chunkSizeBytes", 1024 * 1024);
+
+        if (apiBaseUrl == null) {
+            call.reject("缺少 CRM API 地址。");
+            return;
+        }
+
+        SharedPreferences preferences = getContext().getSharedPreferences(
+            CallRecordingService.PREFERENCES_NAME,
+            Context.MODE_PRIVATE
+        );
+        int queued = 0;
+        JSONArray pendingUploads = new JSONArray();
+
+        for (Map.Entry<String, ?> entry : preferences.getAll().entrySet()) {
+            if (!entry.getKey().startsWith(CallRecordingService.PENDING_UPLOAD_PREFIX)) {
+                continue;
+            }
+
+            Object value = entry.getValue();
+            if (!(value instanceof String) || ((String) value).trim().isEmpty()) {
+                continue;
+            }
+
+            pendingUploads.put((String) value);
+            queued++;
+        }
+
+        if (queued > 0) {
+            Intent serviceIntent = new Intent(getContext(), CallRecordingService.class);
+            serviceIntent.putExtra(CallRecordingService.EXTRA_RETRY_UPLOAD_JSON, pendingUploads.toString());
+            serviceIntent.putExtra(CallRecordingService.EXTRA_API_BASE_URL, apiBaseUrl);
+            serviceIntent.putExtra(CallRecordingService.EXTRA_CHUNK_SIZE_BYTES, chunkSize);
+            ContextCompat.startForegroundService(getContext(), serviceIntent);
+        }
+
+        JSObject result = new JSObject();
+        result.put("queued", queued);
         call.resolve(result);
     }
 

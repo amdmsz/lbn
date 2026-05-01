@@ -7,6 +7,7 @@ import {
 import { NextResponse } from "next/server";
 import { canAccessMobileApp, getCustomerScope } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
+import { findLatestCallActionEventsByCallRecordIds } from "@/lib/calls/call-action-audit";
 import { resolveCustomerAvatarSrc } from "@/lib/customers/avatar";
 import { prisma } from "@/lib/db/prisma";
 import {
@@ -245,9 +246,13 @@ export async function GET(
       );
     }
 
+    const latestEvents = await findLatestCallActionEventsByCallRecordIds(
+      customer.callRecords.map((record) => record.id),
+    );
+
     return NextResponse.json(
       {
-        customer: mapCustomerDetail(customer),
+        customer: mapCustomerDetail(customer, latestEvents),
       },
       { headers: noStoreHeaders },
     );
@@ -261,7 +266,10 @@ export async function GET(
   }
 }
 
-function mapCustomerDetail(customer: MobileCustomerDetailRecord) {
+function mapCustomerDetail(
+  customer: MobileCustomerDetailRecord,
+  latestEvents: Awaited<ReturnType<typeof findLatestCallActionEventsByCallRecordIds>>,
+) {
   return {
     id: customer.id,
     name: customer.name,
@@ -320,6 +328,7 @@ function mapCustomerDetail(customer: MobileCustomerDetailRecord) {
         resultCode: record.resultCode,
         remark: record.remark,
         nextFollowUpAt: toIsoString(record.nextFollowUpAt),
+        latestActionEvent: latestEvents.get(record.id) ?? null,
       })),
       wechatRecords: customer.wechatRecords.map((record) => ({
         id: record.id,

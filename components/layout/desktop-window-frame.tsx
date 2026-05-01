@@ -52,13 +52,18 @@ export function DesktopWindowControls({
   }
 
   return (
-    <div className={cn("desktop-no-drag flex h-full shrink-0 items-stretch", className)}>
+    <div
+      className={cn(
+        "desktop-no-drag flex h-full shrink-0 items-center gap-1 px-1.5",
+        className,
+      )}
+    >
       <button
         type="button"
         aria-label="最小化到托盘"
         title="最小化到托盘"
         onClick={() => void window.lbnDesktop?.window.minimize()}
-        className="inline-flex w-10 items-center justify-center text-[var(--color-sidebar-muted)] transition hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]"
+        className="inline-flex h-7 w-8 items-center justify-center rounded-full text-[var(--color-sidebar-muted)] transition hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]"
       >
         <Minus className="h-3.5 w-3.5" />
       </button>
@@ -67,7 +72,7 @@ export function DesktopWindowControls({
         aria-label="最大化或还原"
         title="最大化或还原"
         onClick={() => void window.lbnDesktop?.window.maximize()}
-        className="inline-flex w-10 items-center justify-center text-[var(--color-sidebar-muted)] transition hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]"
+        className="inline-flex h-7 w-8 items-center justify-center rounded-full text-[var(--color-sidebar-muted)] transition hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]"
       >
         <Maximize2 className="h-3.5 w-3.5" />
       </button>
@@ -76,7 +81,7 @@ export function DesktopWindowControls({
         aria-label="关闭到托盘"
         title="关闭到托盘"
         onClick={() => void window.lbnDesktop?.window.close()}
-        className="inline-flex w-11 items-center justify-center text-[var(--color-sidebar-muted)] transition hover:bg-[var(--color-danger)] hover:text-white"
+        className="inline-flex h-7 w-8 items-center justify-center rounded-full text-[var(--color-sidebar-muted)] transition hover:bg-[var(--color-danger)] hover:text-white"
       >
         <X className="h-3.5 w-3.5" />
       </button>
@@ -102,7 +107,7 @@ export function DesktopWindowFrame() {
   }
 
   return (
-    <div className="desktop-drag-region flex h-9 select-none items-center justify-between border-b border-[var(--color-shell-topbar-border)] bg-[var(--color-shell-surface-strong)] pl-4 text-[12px] text-[var(--color-sidebar-muted)]">
+    <div className="desktop-window-topbar desktop-drag-region flex h-9 select-none items-center justify-between border-b border-[var(--color-shell-topbar-border)] pl-4 text-[12px] text-[var(--color-sidebar-muted)]">
       <div className="flex min-w-0 items-center gap-2">
         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[var(--color-accent)] text-[10px] font-semibold text-white">
           L

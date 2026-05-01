@@ -189,7 +189,7 @@ export function ThemeSwitcher({ className }: Readonly<{ className?: string }>) {
   }
 
   return (
-    <div ref={containerRef} className={cn("relative", className)}>
+    <div ref={containerRef} className={cn("desktop-no-drag relative", className)}>
       <button
         type="button"
         aria-expanded={open}

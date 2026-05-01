@@ -222,7 +222,7 @@ export function AccountMenu({
   ]);
 
   return (
-    <div ref={containerRef} className={cn("relative", compact ? "" : "w-full")}>
+    <div ref={containerRef} className={cn("desktop-no-drag relative", compact ? "" : "w-full")}>
       {trigger}
 
       {open ? (

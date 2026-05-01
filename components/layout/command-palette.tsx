@@ -147,7 +147,7 @@ export function CommandPalette({
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          "crm-motion-pill flex h-10 w-full min-w-0 items-center gap-2 rounded-full border border-[var(--color-shell-topbar-border)] bg-[var(--color-shell-surface)] px-3 text-left text-[12px] text-[var(--color-sidebar-muted)] shadow-[var(--color-shell-shadow-xs)] transition-[border-color,background-color,box-shadow]",
+          "crm-motion-pill desktop-no-drag flex h-10 w-full min-w-0 items-center gap-2 rounded-full border border-[var(--color-shell-topbar-border)] bg-[var(--color-shell-surface)] px-3 text-left text-[12px] text-[var(--color-sidebar-muted)] shadow-[var(--color-shell-shadow-xs)] transition-[border-color,background-color,box-shadow]",
           "hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)] hover:shadow-[var(--color-shell-shadow-sm)]",
           className,
         )}
@@ -162,7 +162,7 @@ export function CommandPalette({
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-[70] px-3 py-16 sm:px-6">
+        <div className="desktop-no-drag fixed inset-0 z-[70] px-3 py-16 sm:px-6">
           <button
             type="button"
             aria-label="关闭命令搜索"

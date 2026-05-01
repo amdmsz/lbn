@@ -18,6 +18,16 @@ export type MobileApiDashboard = {
 
 export type MobileCallSource = "crm-outbound" | "local-phone";
 
+export type MobileCallActionEvent = {
+  id: string;
+  action: string;
+  correlationId: string | null;
+  callMode: string | null;
+  serverReceivedAt: string;
+  failureCode: string | null;
+  failureMessage: string | null;
+};
+
 export type MobileApiCustomerListItem = {
   id: string;
   name: string;
@@ -50,6 +60,7 @@ export type MobileApiCustomerListItem = {
     result: string | null;
     resultCode: string | null;
     nextFollowUpAt: string | null;
+    latestActionEvent: MobileCallActionEvent | null;
   } | null;
   latestWechatRecord: {
     id: string;
@@ -134,6 +145,7 @@ export type MobileCustomerDetail = {
       resultCode: string | null;
       remark: string | null;
       nextFollowUpAt: string | null;
+      latestActionEvent: MobileCallActionEvent | null;
     }>;
     wechatRecords: Array<{
       id: string;

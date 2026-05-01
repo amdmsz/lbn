@@ -7,6 +7,7 @@ import {
 import { NextResponse } from "next/server";
 import { canAccessMobileApp, getCustomerScope } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
+import { findLatestCallActionEventsByCallRecordIds } from "@/lib/calls/call-action-audit";
 import { resolveCustomerAvatarSrc } from "@/lib/customers/avatar";
 import { prisma } from "@/lib/db/prisma";
 import {
@@ -209,7 +210,7 @@ export async function GET(request: Request) {
 
       return NextResponse.json(
         {
-          customers: filtered.customers.map(mapCustomerListItem),
+          customers: await mapCustomerListItems(filtered.customers),
           pagination: {
             page: pagination.page,
             limit: pagination.limit,
@@ -234,7 +235,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(
       {
-        customers: customers.map(mapCustomerListItem),
+        customers: await mapCustomerListItems(customers),
         pagination: {
           page: pagination.page,
           limit: pagination.limit,
@@ -434,7 +435,18 @@ async function findCustomersByComputedLevels(
   };
 }
 
-function mapCustomerListItem(customer: MobileCustomerListRecord) {
+async function mapCustomerListItems(customers: MobileCustomerListRecord[]) {
+  const latestEvents = await findLatestCallActionEventsByCallRecordIds(
+    customers.flatMap((customer) => customer.callRecords.map((record) => record.id)),
+  );
+
+  return customers.map((customer) => mapCustomerListItem(customer, latestEvents));
+}
+
+function mapCustomerListItem(
+  customer: MobileCustomerListRecord,
+  latestEvents: Awaited<ReturnType<typeof findLatestCallActionEventsByCallRecordIds>>,
+) {
   const latestCall = customer.callRecords[0] ?? null;
   const latestFollowUpTask = customer.followUpTasks[0] ?? null;
   const latestWechatRecord = customer.wechatRecords[0] ?? null;
@@ -480,6 +492,7 @@ function mapCustomerListItem(customer: MobileCustomerListRecord) {
           result: latestCall.result,
           resultCode: latestCall.resultCode,
           nextFollowUpAt: toIsoString(latestCall.nextFollowUpAt),
+          latestActionEvent: latestEvents.get(latestCall.id) ?? null,
         }
       : null,
     latestWechatRecord: latestWechatRecord

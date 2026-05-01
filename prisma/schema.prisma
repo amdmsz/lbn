@@ -787,6 +787,8 @@ model User {
   callRecordings          CallRecording[]  @relation("CallRecordingSales")
   outboundCallSeatBinding OutboundCallSeatBinding? @relation("OutboundCallSeatBindingUser")
   outboundCallSessions    OutboundCallSession[] @relation("OutboundCallSessionSales")
+  callActionEventsAsSales CallActionEvent[] @relation("CallActionEventSales")
+  callActionEventsAsActor CallActionEvent[] @relation("CallActionEventActor")
   mobileDevices           MobileDevice[]   @relation("MobileDeviceUser")
   callQualityReviews      CallQualityReview[] @relation("CallQualityReviewReviewer")
   wechatRecords           WechatRecord[]   @relation("WechatRecordSales")
@@ -971,6 +973,7 @@ model Customer {
   callRecords     CallRecord[]
   callRecordings  CallRecording[]
   outboundCallSessions OutboundCallSession[]
+  callActionEvents CallActionEvent[]
   wechatRecords   WechatRecord[]
   liveInvitations LiveInvitation[]
   liveAudienceRecords LiveAudienceRecord[]
@@ -1092,6 +1095,7 @@ model CallRecord {
   nextFollowUpAt  DateTime?
   recording       CallRecording?
   outboundSession OutboundCallSession?
+  callActionEvents CallActionEvent[]
   aiAnalysis      CallAiAnalysis?
   qualityReviews  CallQualityReview[]
   createdAt       DateTime   @default(now())
@@ -1158,6 +1162,7 @@ model OutboundCallSession {
   recordingImportedAt DateTime?
   rawCdrJson          Json?
   rawEventsJson       Json?
+  callActionEvents    CallActionEvent[]
   createdAt           DateTime                  @default(now())
   updatedAt           DateTime                  @updatedAt
 
@@ -1168,6 +1173,45 @@ model OutboundCallSession {
   @@index([seatBindingId, requestedAt], map: "outbound_call_sessions_seat_requestedAt_idx")
   @@index([status, requestedAt], map: "outbound_call_sessions_status_requestedAt_idx")
   @@map("outbound_call_sessions")
+}
+
+model CallActionEvent {
+  id                String               @id @default(cuid())
+  dedupeKey         String?
+  correlationId     String?
+  action            String
+  callMode          String?
+  customerId        String?
+  customer          Customer?            @relation(fields: [customerId], references: [id])
+  salesId           String?
+  sales             User?                @relation("CallActionEventSales", fields: [salesId], references: [id])
+  actorId           String?
+  actor             User?                @relation("CallActionEventActor", fields: [actorId], references: [id])
+  callRecordId      String?
+  callRecord        CallRecord?          @relation(fields: [callRecordId], references: [id])
+  outboundSessionId String?
+  outboundSession   OutboundCallSession? @relation(fields: [outboundSessionId], references: [id])
+  deviceId          String?
+  device            MobileDevice?        @relation(fields: [deviceId], references: [id])
+  appVersion        String?
+  deviceModel       String?
+  androidVersion    String?
+  clientEventAt     DateTime?
+  serverReceivedAt  DateTime             @default(now())
+  failureCode       String?
+  failureMessage    String?              @db.Text
+  metadataJson      Json?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@unique([dedupeKey], map: "call_action_events_dedupe_key")
+  @@index([correlationId], map: "call_action_events_correlation_idx")
+  @@index([callRecordId, serverReceivedAt], map: "call_action_events_call_record_received_idx")
+  @@index([outboundSessionId, serverReceivedAt], map: "call_action_events_outbound_session_received_idx")
+  @@index([customerId, serverReceivedAt], map: "call_action_events_customer_received_idx")
+  @@index([salesId, serverReceivedAt], map: "call_action_events_sales_received_idx")
+  @@index([action, serverReceivedAt], map: "call_action_events_action_received_idx")
+  @@map("call_action_events")
 }
 
 model CallRecording {
@@ -1242,6 +1286,7 @@ model MobileDevice {
   lastSeenAt          DateTime?
   disabledAt          DateTime?
   callRecordings      CallRecording[]
+  callActionEvents    CallActionEvent[]
   createdAt           DateTime                  @default(now())
   updatedAt           DateTime                  @updatedAt
 
