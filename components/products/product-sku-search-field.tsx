@@ -2,7 +2,15 @@
 
 import type { ReactNode } from "react";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import {
+  CheckCircle2,
+  LoaderCircle,
+  PackageSearch,
+  Search,
+  X,
+} from "lucide-react";
 import type { SerializedVisibleSkuOption } from "@/lib/sales-orders/queries";
+import { cn } from "@/lib/utils";
 
 type ProductSkuSearchFieldProps = {
   label: string;
@@ -22,6 +30,19 @@ type SearchResponse = {
 
 function buildSelectedLabel(option: SerializedVisibleSkuOption) {
   return `${option.product.name} / ${option.skuName}`;
+}
+
+function formatPrice(value: string | number) {
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount)) {
+    return String(value);
+  }
+
+  return new Intl.NumberFormat("zh-CN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
 }
 
 export function ProductSkuSearchField({
@@ -126,26 +147,45 @@ export function ProductSkuSearchField({
 
   return (
     <div className="space-y-2">
-      <label className="space-y-2">
+      <label className="block">
         <span className="crm-label">{label}</span>
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={selectedOption ? buildSelectedLabel(selectedOption) : placeholder}
-          className="crm-input"
-          disabled={disabled}
-        />
+        <div
+          className={cn(
+            "group flex min-h-10 items-center gap-2 rounded-[0.92rem] border border-[var(--color-border-soft)] bg-[var(--crm-subtle-bg)] px-3 transition-[border-color,background-color,box-shadow]",
+            "focus-within:border-primary/30 focus-within:bg-white/90 focus-within:shadow-[0_0_0_3px_rgba(37,99,235,0.08)]",
+            disabled && "cursor-not-allowed opacity-65",
+          )}
+        >
+          <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={selectedOption ? buildSelectedLabel(selectedOption) : placeholder}
+            className="min-h-10 min-w-0 flex-1 border-0 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/55 disabled:cursor-not-allowed"
+            disabled={disabled}
+          />
+          {loading ? (
+            <LoaderCircle
+              className="h-4 w-4 shrink-0 animate-spin text-muted-foreground"
+              aria-hidden="true"
+            />
+          ) : null}
+        </div>
       </label>
 
       {selectedOption ? (
-        <div className="rounded-2xl border border-black/8 bg-white/78 px-3 py-2.5 text-sm text-black/70">
+        <div className="rounded-2xl border border-primary/15 bg-primary/5 px-3 py-2.5 text-sm text-foreground">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="truncate font-medium text-black/84">
-                {selectedOption.product.name} / {selectedOption.skuName}
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                <div className="truncate font-semibold">
+                  {selectedOption.product.name} / {selectedOption.skuName}
+                </div>
               </div>
-              <div className="mt-1 text-xs text-black/50">
-                {selectedOption.product.supplier.name} / 默认售价 {selectedOption.defaultUnitPrice}
+              <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
+                <span>{selectedOption.product.supplier.name}</span>
+                <span>默认售价 ¥{formatPrice(selectedOption.defaultUnitPrice)}</span>
               </div>
             </div>
             <button
@@ -154,21 +194,19 @@ export function ProductSkuSearchField({
                 setQuery("");
                 onSelect(null);
               }}
-              className="shrink-0 text-xs font-medium text-black/52 transition hover:text-black/72"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-background hover:text-foreground"
+              aria-label="清空已选 SKU"
             >
-              清空
+              <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
         </div>
       ) : null}
 
       {!selectedOption && !deferredQuery ? (
-        <div className="text-xs leading-6 text-black/50">{noQueryHint}</div>
-      ) : null}
-
-      {loading ? (
-        <div className="rounded-2xl border border-dashed border-black/10 bg-white/55 px-3 py-3 text-sm text-black/55">
-          正在搜索 SKU...
+        <div className="flex items-center gap-2 text-[12px] leading-5 text-muted-foreground">
+          <PackageSearch className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span>{noQueryHint}</span>
         </div>
       ) : null}
 
@@ -179,48 +217,63 @@ export function ProductSkuSearchField({
       ) : null}
 
       {!loading && !error && deferredQuery && groupedResults.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-black/10 bg-white/55 px-3 py-3 text-sm text-black/55">
+        <div className="rounded-2xl border border-dashed border-border/70 bg-muted/20 px-3 py-3 text-sm text-muted-foreground">
           {emptyMessage}
         </div>
       ) : null}
 
-      {!loading && !error && deferredQuery && groupedResults.length > 0 ? (
-        <div className="space-y-2">
+      {!error && deferredQuery && groupedResults.length > 0 ? (
+        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
           {groupedResults.map((group) => (
-            <div
-              key={group.key}
-              className="rounded-2xl border border-black/8 bg-white/80 px-3 py-3"
-            >
-              <div className="text-xs font-medium text-black/54">
-                {group.supplierName} / {group.productName}
+            <div key={group.key} className="border-b border-border/45 last:border-b-0">
+              <div className="flex items-center justify-between gap-3 bg-muted/20 px-3 py-2">
+                <div className="min-w-0">
+                  <div className="truncate text-[12px] font-semibold text-foreground">
+                    {group.productName}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">
+                    {group.supplierName}
+                  </div>
+                </div>
+                <span className="shrink-0 rounded-full border border-border/60 bg-card px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  {group.items.length} SKU
+                </span>
               </div>
-              <div className="mt-2 space-y-1.5">
-                {group.items.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      setQuery("");
-                      setResults([]);
-                      onSelect(item);
-                    }}
-                    className="flex w-full items-start justify-between gap-3 rounded-xl border border-black/8 bg-[rgba(247,248,250,0.8)] px-3 py-2 text-left transition hover:border-black/14 hover:bg-white"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium text-black/84">
-                        {item.skuName}
+              <div className="divide-y divide-border/35">
+                {group.items.map((item) => {
+                  const active = value === item.id;
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        setQuery("");
+                        setResults([]);
+                        onSelect(item);
+                      }}
+                      className={cn(
+                        "flex w-full items-start justify-between gap-3 px-3 py-2.5 text-left transition hover:bg-muted/25",
+                        active && "bg-primary/5",
+                      )}
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium text-foreground">
+                          {item.skuName}
+                        </div>
+                        <div className="mt-1 text-[12px] text-muted-foreground">
+                          默认售价 ¥{formatPrice(item.defaultUnitPrice)}
+                        </div>
                       </div>
-                      <div className="mt-1 text-xs text-black/50">
-                        默认售价 {item.defaultUnitPrice}
-                      </div>
-                    </div>
-                    {value === item.id ? (
-                      <span className="shrink-0 text-xs font-medium text-[var(--color-accent)]">
-                        已选
-                      </span>
-                    ) : null}
-                  </button>
-                ))}
+                      {active ? (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-primary/15 bg-primary/8 px-2 py-0.5 text-[11px] font-medium text-primary">
+                          <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                          已选
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ))}

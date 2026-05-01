@@ -7,6 +7,7 @@ import {
 import { NextResponse } from "next/server";
 import { canAccessMobileApp, getCustomerScope } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
+import { resolveCustomerAvatarSrc } from "@/lib/customers/avatar";
 import { prisma } from "@/lib/db/prisma";
 import {
   deriveMobileCustomerLevelFromSignals,
@@ -53,6 +54,7 @@ const mobileCustomerListSelect = {
   province: true,
   city: true,
   district: true,
+  avatarPath: true,
   status: true,
   ownershipMode: true,
   ownerId: true,
@@ -64,6 +66,20 @@ const mobileCustomerListSelect = {
       id: true,
       name: true,
       username: true,
+    },
+  },
+  ownershipEvents: {
+    where: {
+      toOwnerId: {
+        not: null,
+      },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: 20,
+    select: {
+      id: true,
+      toOwnerId: true,
+      createdAt: true,
     },
   },
   followUpTasks: {
@@ -87,6 +103,11 @@ const mobileCustomerListSelect = {
       result: true,
       resultCode: true,
       nextFollowUpAt: true,
+      outboundSession: {
+        select: {
+          id: true,
+        },
+      },
     },
   },
   wechatRecords: {
@@ -428,6 +449,8 @@ function mapCustomerListItem(customer: MobileCustomerListRecord) {
     status: customer.status,
     ownershipMode: customer.ownershipMode,
     ownerId: customer.ownerId,
+    avatarUrl: resolveCustomerAvatarSrc(customer.avatarPath),
+    assignedAt: toIsoString(resolveCustomerAssignedAt(customer)),
     owner: customer.owner
       ? {
           id: customer.owner.id,
@@ -453,6 +476,7 @@ function mapCustomerListItem(customer: MobileCustomerListRecord) {
           id: latestCall.id,
           callTime: latestCall.callTime.toISOString(),
           durationSeconds: latestCall.durationSeconds,
+          callSource: latestCall.outboundSession ? "crm-outbound" : "local-phone",
           result: latestCall.result,
           resultCode: latestCall.resultCode,
           nextFollowUpAt: toIsoString(latestCall.nextFollowUpAt),
@@ -489,6 +513,19 @@ function mapCustomerListItem(customer: MobileCustomerListRecord) {
     createdAt: customer.createdAt.toISOString(),
     updatedAt: customer.updatedAt.toISOString(),
   };
+}
+
+function resolveCustomerAssignedAt(customer: MobileCustomerListRecord) {
+  if (!customer.ownerId) {
+    return null;
+  }
+
+  return (
+    customer.ownershipEvents.find((event) => event.toOwnerId === customer.ownerId)
+      ?.createdAt ??
+    customer.ownershipEvents[0]?.createdAt ??
+    customer.createdAt
+  );
 }
 
 function deriveCustomerLevel(customer: MobileCustomerListRecord) {

@@ -33,6 +33,9 @@ export type NativeRecorderReadiness = {
   profile: NativeDeviceProfile | null;
   permissions: NativeRecorderPermissionMap | null;
 };
+type NativePluginListenerHandle = {
+  remove: () => Promise<void> | void;
+};
 
 type NativeCallRecorderPlugin = {
   getDeviceProfile: () => Promise<NativeDeviceProfile>;
@@ -63,7 +66,7 @@ type NativeCallRecorderPlugin = {
   addListener?: (
     eventName: "callRecordingSessionUpdated",
     listener: (snapshot: NativeCallSessionSnapshot) => void,
-  ) => Promise<{ remove: () => Promise<void> | void }>;
+  ) => NativePluginListenerHandle | Promise<NativePluginListenerHandle>;
 };
 
 const CALL_RECORDING_PERMISSION_ALIAS = "callRecording";
@@ -467,29 +470,36 @@ export function subscribeNativeCallSessionUpdates(
   }
 
   let removed = false;
-  let subscription:
-    | Awaited<ReturnType<NonNullable<NativeCallRecorderPlugin["addListener"]>>>
-    | null = null;
+  let subscription: NativePluginListenerHandle | null = null;
 
-  void plugin
-    .addListener("callRecordingSessionUpdated", (snapshot) => {
+  try {
+    const nextSubscription = plugin.addListener("callRecordingSessionUpdated", (snapshot) => {
       if (!snapshot?.callRecordId) {
         return;
       }
 
       listener(snapshot);
-    })
-    .then((nextSubscription) => {
-      if (removed) {
-        void nextSubscription.remove();
-        return;
-      }
-
-      subscription = nextSubscription;
-    })
-    .catch(() => {
-      subscription = null;
     });
+
+    void Promise.resolve(nextSubscription)
+      .then((resolvedSubscription) => {
+        if (!resolvedSubscription?.remove) {
+          return;
+        }
+
+        if (removed) {
+          void resolvedSubscription.remove();
+          return;
+        }
+
+        subscription = resolvedSubscription;
+      })
+      .catch(() => {
+        subscription = null;
+      });
+  } catch {
+    subscription = null;
+  }
 
   return () => {
     removed = true;

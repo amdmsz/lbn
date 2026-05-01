@@ -9,6 +9,33 @@ function assignInternalRoute(url: URL, route: string) {
   url.search = destination.search;
 }
 
+function resolveSafeCallbackRoute(
+  request: NextRequest,
+  role: Parameters<typeof canAccessPath>[0],
+) {
+  const rawCallbackUrl = request.nextUrl.searchParams.get("callbackUrl");
+
+  if (!rawCallbackUrl) {
+    return null;
+  }
+
+  try {
+    const callbackUrl = new URL(rawCallbackUrl, request.nextUrl.origin);
+
+    if (callbackUrl.origin !== request.nextUrl.origin) {
+      return null;
+    }
+
+    if (!canAccessPath(role, callbackUrl.pathname)) {
+      return null;
+    }
+
+    return `${callbackUrl.pathname}${callbackUrl.search}${callbackUrl.hash}`;
+  } catch {
+    return null;
+  }
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const token = await getToken({
@@ -21,7 +48,9 @@ export async function proxy(request: NextRequest) {
       const redirectUrl = request.nextUrl.clone();
       assignInternalRoute(
         redirectUrl,
-        token.mustChangePassword ? "/change-password" : getDefaultRouteForRole(token.role),
+        token.mustChangePassword
+          ? "/change-password"
+          : resolveSafeCallbackRoute(request, token.role) ?? getDefaultRouteForRole(token.role),
       );
       return NextResponse.redirect(redirectUrl);
     }

@@ -7,6 +7,7 @@ import {
 import { NextResponse } from "next/server";
 import { canAccessMobileApp, getCustomerScope } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
+import { resolveCustomerAvatarSrc } from "@/lib/customers/avatar";
 import { prisma } from "@/lib/db/prisma";
 import {
   deriveMobileCustomerLevelFromSignals,
@@ -35,6 +36,7 @@ const mobileCustomerDetailSelect = {
   city: true,
   district: true,
   address: true,
+  avatarPath: true,
   status: true,
   ownershipMode: true,
   ownerId: true,
@@ -47,6 +49,20 @@ const mobileCustomerDetailSelect = {
       id: true,
       name: true,
       username: true,
+    },
+  },
+  ownershipEvents: {
+    where: {
+      toOwnerId: {
+        not: null,
+      },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: 20,
+    select: {
+      id: true,
+      toOwnerId: true,
+      createdAt: true,
     },
   },
   customerTags: {
@@ -88,6 +104,11 @@ const mobileCustomerDetailSelect = {
       resultCode: true,
       remark: true,
       nextFollowUpAt: true,
+      outboundSession: {
+        select: {
+          id: true,
+        },
+      },
     },
   },
   wechatRecords: {
@@ -256,6 +277,8 @@ function mapCustomerDetail(customer: MobileCustomerDetailRecord) {
     status: customer.status,
     ownershipMode: customer.ownershipMode,
     ownerId: customer.ownerId,
+    avatarUrl: resolveCustomerAvatarSrc(customer.avatarPath),
+    assignedAt: toIsoString(resolveCustomerAssignedAt(customer)),
     owner: customer.owner
       ? {
           id: customer.owner.id,
@@ -292,6 +315,7 @@ function mapCustomerDetail(customer: MobileCustomerDetailRecord) {
         id: record.id,
         callTime: record.callTime.toISOString(),
         durationSeconds: record.durationSeconds,
+        callSource: record.outboundSession ? "crm-outbound" : "local-phone",
         result: record.result,
         resultCode: record.resultCode,
         remark: record.remark,
@@ -347,4 +371,17 @@ function mapCustomerDetail(customer: MobileCustomerDetailRecord) {
     createdAt: customer.createdAt.toISOString(),
     updatedAt: customer.updatedAt.toISOString(),
   };
+}
+
+function resolveCustomerAssignedAt(customer: MobileCustomerDetailRecord) {
+  if (!customer.ownerId) {
+    return null;
+  }
+
+  return (
+    customer.ownershipEvents.find((event) => event.toOwnerId === customer.ownerId)
+      ?.createdAt ??
+    customer.ownershipEvents[0]?.createdAt ??
+    customer.createdAt
+  );
 }

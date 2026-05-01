@@ -39,6 +39,7 @@ import {
 } from "@/lib/customers/recycle";
 import { parseCustomerImportOperationLogData } from "@/lib/customers/customer-import-operation-log";
 import { resolveImportedCustomerDeletionGuard } from "@/lib/customers/imported-customer-deletion";
+import { resolveCustomerAvatarSrc } from "@/lib/customers/avatar";
 import { prisma } from "@/lib/db/prisma";
 import {
   customerContinuationImportOperationActions,
@@ -238,6 +239,8 @@ export type CustomerListItem = {
   status: CustomerStatus;
   ownershipMode: CustomerOwnershipMode;
   createdAt: Date;
+  avatarUrl: string | null;
+  assignedAt: Date | null;
   latestImportAt: Date | null;
   latestFollowUpAt: Date | null;
   lastEffectiveFollowUpAt: Date | null;
@@ -269,6 +272,7 @@ export type CustomerListItem = {
     id: string;
     callTime: Date;
     durationSeconds: number;
+    callSource: "crm-outbound" | "local-phone";
     result: CallResult | null;
     resultCode: string | null;
     resultLabel: string;
@@ -2006,6 +2010,7 @@ async function fetchCustomerListItems(
         city: true,
         district: true,
         address: true,
+        avatarPath: true,
         remark: true,
         status: true,
         ownershipMode: true,
@@ -2040,6 +2045,11 @@ async function fetchCustomerListItems(
             resultCode: true,
             remark: true,
             nextFollowUpAt: true,
+            outboundSession: {
+              select: {
+                id: true,
+              },
+            },
             sales: {
               select: {
                 name: true,
@@ -2140,6 +2150,8 @@ async function fetchCustomerListItems(
     if (item) {
       result.push({
         ...item,
+        avatarUrl: resolveCustomerAvatarSrc(item.avatarPath),
+        assignedAt: state?.assignedAt ?? null,
         callRecords: item.callRecords.map((record) => {
           const labeled = labeledCallRecordMap.get(record.id);
 
@@ -2147,6 +2159,7 @@ async function fetchCustomerListItems(
             id: record.id,
             callTime: record.callTime,
             durationSeconds: record.durationSeconds,
+            callSource: record.outboundSession ? "crm-outbound" : "local-phone",
             result: record.result,
             resultCode: labeled?.resultCode ?? record.resultCode ?? record.result ?? null,
             resultLabel:

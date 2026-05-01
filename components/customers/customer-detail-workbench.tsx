@@ -354,9 +354,15 @@ function appendHrefSearchParam(href: string, key: string, value: string) {
 function getCustomerDetailBackLabel(
   navigationContext: CustomerDetailNavigationContext,
 ) {
-  return navigationContext.from === "public-pool"
-    ? "返回公海池"
-    : "返回客户中心";
+  if (navigationContext.from === "public-pool") {
+    return "返回公海池";
+  }
+
+  if (navigationContext.from === "mobile") {
+    return "返回移动工作台";
+  }
+
+  return "返回客户中心";
 }
 
 function getCustomerIdentitySummary(shell: CustomerDetailShellData) {
@@ -1458,7 +1464,6 @@ function renderOrdersTab({
               customer={tradeOrderComposer.customer}
               paymentSchemeOptions={tradeOrderComposer.paymentSchemeOptions}
               skuOptions={tradeOrderComposer.skuOptions}
-              bundleOptions={tradeOrderComposer.bundleOptions}
               draft={tradeOrderComposer.draft}
               saveDraftAction={saveTradeOrderDraftAction}
               submitForReviewAction={submitTradeOrderForReviewAction}

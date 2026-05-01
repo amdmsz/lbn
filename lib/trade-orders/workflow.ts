@@ -767,7 +767,7 @@ export function buildTradeOrderDraftComputation(input: {
   if (resolvedItems.length === 0) {
     issues.push({
       code: "LINES_REQUIRED",
-      message: "At least one SKU, gift, or bundle line is required.",
+      message: "At least one SKU line is required.",
     });
   }
 

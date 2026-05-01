@@ -1,6 +1,5 @@
 import {
   Prisma,
-  ProductBundleStatus,
   SalesOrderPaymentScheme,
   ShippingFulfillmentStatus,
   ShippingReportStatus,
@@ -12,7 +11,6 @@ import { getParamValue, parseActionNotice } from "@/lib/action-notice";
 import { canAccessSalesOrderModule, canCreateSalesOrder } from "@/lib/auth/access";
 import { findActiveCustomerRecycleEntry } from "@/lib/customers/recycle";
 import { prisma } from "@/lib/db/prisma";
-import { findProductDomainCurrentlyHiddenTargetIds } from "@/lib/products/recycle";
 import {
   buildTradeOrderFinalizePreview,
   getTradeOrderRecycleTarget,
@@ -165,158 +163,6 @@ function buildActorTradeOrderWhere(
   };
 }
 
-async function getVisibleBundleOptions() {
-  const [hiddenProductSkuIds, hiddenProductIds, hiddenSupplierIds] = await Promise.all([
-    findProductDomainCurrentlyHiddenTargetIds(prisma, "PRODUCT_SKU"),
-    findProductDomainCurrentlyHiddenTargetIds(prisma, "PRODUCT"),
-    findProductDomainCurrentlyHiddenTargetIds(prisma, "SUPPLIER"),
-  ]);
-
-  const bundles = await prisma.productBundle.findMany({
-    where: {
-      enabled: true,
-      status: ProductBundleStatus.ACTIVE,
-      items: {
-        some: {
-          enabled: true,
-        },
-      },
-    },
-    orderBy: [{ name: "asc" }, { createdAt: "desc" }],
-    select: {
-      id: true,
-      code: true,
-      name: true,
-      description: true,
-      defaultBundlePrice: true,
-      version: true,
-      items: {
-        where: {
-          enabled: true,
-        },
-        orderBy: [{ sortOrder: "asc" }, { lineNo: "asc" }],
-        select: {
-          id: true,
-          lineNo: true,
-          supplierId: true,
-          productId: true,
-          skuId: true,
-          qty: true,
-          sortOrder: true,
-          enabled: true,
-        },
-      },
-    },
-  });
-
-  const skuIds = [...new Set(bundles.flatMap((bundle) => bundle.items.map((item) => item.skuId)))];
-  const skuRecords = await prisma.productSku.findMany({
-    where: {
-      id: {
-        in: skuIds,
-      },
-      enabled: true,
-      ...(hiddenProductSkuIds.length > 0
-        ? {
-            id: {
-              in: skuIds.filter((skuId) => !hiddenProductSkuIds.includes(skuId)),
-            },
-          }
-        : {}),
-      product: {
-        enabled: true,
-        ...(hiddenProductIds.length > 0
-          ? {
-              id: {
-                notIn: hiddenProductIds,
-              },
-            }
-          : {}),
-        supplier: {
-          enabled: true,
-          ...(hiddenSupplierIds.length > 0
-            ? {
-                id: {
-                  notIn: hiddenSupplierIds,
-                },
-              }
-            : {}),
-        },
-      },
-    },
-    select: {
-      id: true,
-      skuName: true,
-      defaultUnitPrice: true,
-      codSupported: true,
-      insuranceSupported: true,
-      defaultInsuranceAmount: true,
-      product: {
-        select: {
-          id: true,
-          name: true,
-          supplier: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  const skuMap = new Map(skuRecords.map((sku) => [sku.id, sku]));
-
-  return bundles
-    .map((bundle) => {
-      const items = bundle.items
-        .map((item) => {
-          const sku = skuMap.get(item.skuId);
-          if (!sku) {
-            return null;
-          }
-
-          if (
-            sku.product.id !== item.productId ||
-            sku.product.supplier.id !== item.supplierId
-          ) {
-            return null;
-          }
-
-          return {
-            id: item.id,
-            lineNo: item.lineNo,
-            supplierId: item.supplierId,
-            supplierName: sku.product.supplier.name,
-            productId: item.productId,
-            productName: sku.product.name,
-            skuId: item.skuId,
-            skuName: sku.skuName,
-            qty: item.qty,
-            sortOrder: item.sortOrder,
-            enabled: item.enabled,
-            defaultUnitPrice: sku.defaultUnitPrice.toString(),
-            codSupported: sku.codSupported,
-            insuranceSupported: sku.insuranceSupported,
-            defaultInsuranceAmount: sku.defaultInsuranceAmount.toString(),
-          };
-        })
-        .filter((item): item is NonNullable<typeof item> => Boolean(item));
-
-      return {
-        id: bundle.id,
-        code: bundle.code,
-        name: bundle.name,
-        description: bundle.description ?? "",
-        defaultBundlePrice: bundle.defaultBundlePrice?.toString() ?? "0",
-        version: bundle.version,
-        items,
-      };
-    })
-    .filter((bundle) => bundle.items.length > 0);
-}
-
 export async function getCustomerTradeOrderComposerData(
   viewer: TradeOrderViewer,
   customerId: string,
@@ -327,7 +173,7 @@ export async function getCustomerTradeOrderComposerData(
   }
 
   const teamId = await getViewerTeamId(viewer);
-  const [customer, formOptions, bundleOptions] = await Promise.all([
+  const [customer, formOptions] = await Promise.all([
     prisma.customer.findFirst({
       where: {
         id: customerId,
@@ -349,7 +195,6 @@ export async function getCustomerTradeOrderComposerData(
       },
     }),
     getSalesOrderCreateFormOptions(),
-    getVisibleBundleOptions(),
   ]);
 
   if (!customer) {
@@ -393,16 +238,12 @@ export async function getCustomerTradeOrderComposerData(
           rejectReason: true,
           items: {
             where: {
-              itemType: {
-                in: ["SKU", "GIFT", "BUNDLE"],
-              },
+              itemType: "SKU",
             },
             orderBy: { lineNo: "asc" },
             select: {
               id: true,
-              itemType: true,
               skuId: true,
-              bundleId: true,
               qty: true,
               dealUnitPriceSnapshot: true,
               remark: true,
@@ -416,38 +257,18 @@ export async function getCustomerTradeOrderComposerData(
     customer,
     paymentSchemeOptions: formOptions.paymentSchemeOptions,
     skuOptions: formOptions.skuOptions,
-    bundleOptions,
     draft: draft
       ? {
           ...draft,
           depositAmount: draft.depositAmount.toString(),
           insuranceAmount: draft.insuranceAmount.toString(),
-          items: draft.items
-            .filter((item) => item.itemType === "SKU")
-            .map((item) => ({
-              id: item.id,
-              skuId: item.skuId,
-              qty: item.qty,
-              dealUnitPriceSnapshot: item.dealUnitPriceSnapshot.toString(),
-              remark: item.remark,
-            })),
-          giftItems: draft.items
-            .filter((item) => item.itemType === "GIFT")
-            .map((item) => ({
-              id: item.id,
-              skuId: item.skuId,
-              qty: item.qty,
-              remark: item.remark,
-            })),
-          bundleItems: draft.items
-            .filter((item) => item.itemType === "BUNDLE")
-            .map((item) => ({
-              id: item.id,
-              bundleId: item.bundleId,
-              qty: item.qty,
-              dealUnitPriceSnapshot: item.dealUnitPriceSnapshot.toString(),
-              remark: item.remark,
-            })),
+          items: draft.items.map((item) => ({
+            id: item.id,
+            skuId: item.skuId,
+            qty: item.qty,
+            dealUnitPriceSnapshot: item.dealUnitPriceSnapshot.toString(),
+            remark: item.remark,
+          })),
         }
       : null,
   };

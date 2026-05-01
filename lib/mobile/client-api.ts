@@ -16,6 +16,8 @@ export type MobileApiDashboard = {
   monthlySalesVolume: string;
 };
 
+export type MobileCallSource = "crm-outbound" | "local-phone";
+
 export type MobileApiCustomerListItem = {
   id: string;
   name: string;
@@ -24,6 +26,8 @@ export type MobileApiCustomerListItem = {
   status: string;
   ownershipMode: string;
   ownerId: string | null;
+  avatarUrl: string | null;
+  assignedAt: string | null;
   owner: {
     id: string;
     name: string;
@@ -42,6 +46,7 @@ export type MobileApiCustomerListItem = {
     id: string;
     callTime: string;
     durationSeconds: number;
+    callSource: MobileCallSource;
     result: string | null;
     resultCode: string | null;
     nextFollowUpAt: string | null;
@@ -88,6 +93,8 @@ export type MobileCustomerDetail = {
   status: string;
   ownershipMode: string;
   ownerId: string | null;
+  avatarUrl: string | null;
+  assignedAt: string | null;
   owner: {
     id: string;
     name: string;
@@ -122,6 +129,7 @@ export type MobileCustomerDetail = {
       id: string;
       callTime: string;
       durationSeconds: number;
+      callSource: MobileCallSource;
       result: string | null;
       resultCode: string | null;
       remark: string | null;
@@ -176,6 +184,70 @@ export type MobileCustomerDetail = {
   }>;
   createdAt: string;
   updatedAt: string;
+};
+
+export type MobilePaymentScheme =
+  | "FULL_PREPAID"
+  | "DEPOSIT_PLUS_BALANCE"
+  | "FULL_COD"
+  | "DEPOSIT_PLUS_COD";
+
+export type MobilePaymentSchemeOption = {
+  value: MobilePaymentScheme;
+  label: string;
+  description: string;
+};
+
+export type MobileOrderCustomerContext = {
+  id: string;
+  name: string;
+  phone: string;
+  address: string | null;
+  owner: {
+    id: string;
+    name: string;
+    username: string;
+  } | null;
+};
+
+export type MobileOrderOptions = {
+  customer: MobileOrderCustomerContext;
+  paymentSchemeOptions: MobilePaymentSchemeOption[];
+};
+
+export type MobileSkuOption = {
+  id: string;
+  skuName: string;
+  defaultUnitPrice: string;
+  codSupported: boolean;
+  insuranceSupported: boolean;
+  defaultInsuranceAmount: string;
+  product: {
+    id: string;
+    name: string;
+  };
+};
+
+export type MobileTradeOrderLineInput = {
+  lineId?: string;
+  skuId: string;
+  qty: number;
+  dealPrice: number;
+  discountReason?: string;
+};
+
+export type MobileTradeOrderSubmitInput = {
+  action: "save_draft" | "submit_for_review";
+  customerId: string;
+  lines: MobileTradeOrderLineInput[];
+  paymentScheme: MobilePaymentScheme;
+  depositAmount: number;
+  receiverName: string;
+  receiverPhone: string;
+  receiverAddress: string;
+  insuranceRequired: boolean;
+  insuranceAmount: number;
+  remark?: string;
 };
 
 async function readMobileApiJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -252,4 +324,61 @@ export async function fetchMobileCustomerDetail(customerId: string) {
   return readMobileApiJson<{ customer: MobileCustomerDetail }>(
     `/api/mobile/customers/${encodeURIComponent(customerId)}`,
   );
+}
+
+export async function uploadMobileCustomerAvatar(customerId: string, file: File) {
+  const formData = new FormData();
+  formData.set("avatar", file);
+
+  return readMobileApiJson<{
+    customer: {
+      id: string;
+      avatarPath: string;
+      avatarUrl: string | null;
+    };
+  }>(`/api/mobile/customers/${encodeURIComponent(customerId)}/avatar`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function updateMobileCustomerRemark(customerId: string, remark: string) {
+  return readMobileApiJson<{
+    customer: {
+      id: string;
+      remark: string | null;
+    };
+    message: string;
+  }>(`/api/mobile/customers/${encodeURIComponent(customerId)}/remark`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ remark }),
+  });
+}
+
+export async function fetchMobileOrderOptions(customerId: string) {
+  const params = new URLSearchParams({ customerId });
+  return readMobileApiJson<MobileOrderOptions>(`/api/mobile/order-options?${params.toString()}`);
+}
+
+export async function searchMobileSkuOptions(query: string) {
+  const params = new URLSearchParams({ q: query });
+  return readMobileApiJson<{ items: MobileSkuOption[] }>(
+    `/api/mobile/order-options/sku-search?${params.toString()}`,
+  );
+}
+
+export async function submitMobileTradeOrder(input: MobileTradeOrderSubmitInput) {
+  return readMobileApiJson<{
+    order: {
+      id: string;
+      customerId: string;
+      tradeNo: string;
+    };
+    message: string;
+  }>("/api/mobile/trade-orders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
 }

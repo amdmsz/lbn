@@ -143,6 +143,57 @@ function getCurrentPathname() {
   return window.location.pathname;
 }
 
+async function createBrowserFallbackMobileCallRecord(
+  pendingCall: PendingMobileCallFollowUp,
+) {
+  try {
+    const response = await fetch("/api/mobile/calls/start", {
+      method: "POST",
+      keepalive: true,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        customerId: pendingCall.customerId,
+        callTime: pendingCall.createdAt,
+      }),
+    });
+
+    if (!response.ok) {
+      return;
+    }
+
+    const body = (await response.json()) as {
+      call?: {
+        callRecordId?: string;
+        phone?: string;
+        deviceId?: string | null;
+      };
+    };
+    const callRecordId = body.call?.callRecordId;
+
+    if (!callRecordId) {
+      return;
+    }
+
+    const currentPendingCall = readPendingMobileCallFollowUp();
+
+    if (!currentPendingCall || currentPendingCall.id !== pendingCall.id) {
+      return;
+    }
+
+    writePendingMobileCallFollowUp({
+      ...currentPendingCall,
+      phone: body.call?.phone?.trim() || currentPendingCall.phone,
+      callRecordId,
+      deviceId: body.call?.deviceId ?? currentPendingCall.deviceId,
+    });
+  } catch {
+    // The manual follow-up form can still create a record if this best-effort
+    // pre-create request is interrupted while the phone app opens.
+  }
+}
+
 export function shouldEnableMobileCallFollowUp() {
   if (typeof window === "undefined") {
     return false;
@@ -280,6 +331,7 @@ export function startMobileCallFollowUpDial(input: {
   if (!canUseNativeCallRecorder()) {
     if (shouldEnableMobileCallFollowUp()) {
       writePendingMobileCallFollowUp(basePendingCall);
+      void createBrowserFallbackMobileCallRecord(basePendingCall);
     }
 
     window.location.href = `tel:${phone}`;

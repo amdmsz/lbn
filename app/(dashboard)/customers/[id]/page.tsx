@@ -50,16 +50,29 @@ function getCustomerDetailNavigationContext(
 ) {
   const source = getParamValue(searchParams?.from);
   const returnTo = getParamValue(searchParams?.returnTo);
+  const modeParam = getParamValue(searchParams?.mode);
+  const mode: "mobile" | "popup" | undefined =
+    modeParam === "mobile" || modeParam === "popup" ? modeParam : undefined;
 
   if (source === "public-pool" && returnTo.startsWith("/customers/public-pool")) {
     return {
       from: "public-pool" as const,
       returnTo,
+      mode,
+    };
+  }
+
+  if (source === "mobile" && returnTo.startsWith("/mobile")) {
+    return {
+      from: "mobile" as const,
+      returnTo,
+      mode,
     };
   }
 
   return {
     returnTo: "/customers",
+    mode,
   };
 }
 

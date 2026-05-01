@@ -951,6 +951,7 @@ model Customer {
   city            String?
   district        String?
   address         String?
+  avatarPath      String?
   status          CustomerStatus   @default(ACTIVE)
   level           CustomerLevel    @default(NEW)
   ownerId         String?

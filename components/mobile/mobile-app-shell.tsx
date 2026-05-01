@@ -16,9 +16,6 @@ import {
   Delete,
   FileText,
   Filter,
-  Grid3X3,
-  LayoutGrid,
-  MessageCircle,
   Mic,
   Package,
   PackageCheck,
@@ -35,8 +32,22 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
+import {
+  IoBackspace,
+  IoCall,
+  IoCallSharp,
+  IoChatbubble,
+  IoChevronBack,
+  IoKeypad,
+  IoOptionsOutline,
+  IoPersonCircle,
+  IoSearch as IoSearchIcon,
+  IoTime,
+} from "react-icons/io5";
 import type { RoleCode } from "@prisma/client";
+import type { CallResultOption } from "@/lib/calls/metadata";
 import { MobileCallFollowUpSheet } from "@/components/customers/mobile-call-followup-sheet";
+import { MobileOrderComposer } from "@/components/mobile/mobile-order-composer";
 import { StatusBadge } from "@/components/shared/status-badge";
 import {
   readNativeConnectionProfile,
@@ -65,14 +76,13 @@ import type {
   CustomerCenterData,
   CustomerListItem,
   CustomerOperatingDashboardData,
-  CustomerOperatingDashboardEmployeeRow,
 } from "@/lib/customers/queries";
 import {
   fetchMobileCustomers,
-  fetchMobileDashboard,
   fetchMobileCustomerDetail,
+  uploadMobileCustomerAvatar,
+  updateMobileCustomerRemark,
   type MobileApiCustomerListItem,
-  type MobileApiDashboard,
   type MobileApiPagination,
   type MobileCustomerDetail,
 } from "@/lib/mobile/client-api";
@@ -83,7 +93,7 @@ import type {
 } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
-type MobileTab = "messages" | "customers" | "dialpad" | "apps" | "me";
+type MobileTab = "messages" | "customers" | "dialpad" | "search" | "apps" | "me";
 type MobileCallMode = "crm-outbound" | "local-phone";
 type DateLike = Date | string | null | undefined;
 type MobileIcon = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
@@ -120,6 +130,7 @@ type RecentDialCustomer = {
   customerName: string;
   phone: string;
   calledAt: string;
+  callMode: MobileCallMode;
   resultLabel: string | null;
 };
 
@@ -127,11 +138,6 @@ type MobileOutboundNotice = {
   tone: "pending" | "success" | "failed";
   title: string;
   description: string;
-};
-type MobileDashboardApiState = {
-  dashboard: MobileApiDashboard | null;
-  loading: boolean;
-  error: string | null;
 };
 type MobileCustomersApiState = {
   items: MobileApiCustomerListItem[] | null;
@@ -147,11 +153,10 @@ const tabs: Array<{
   label: string;
   icon: MobileIcon;
 }> = [
-  { key: "messages", label: "消息", icon: MessageCircle },
-  { key: "customers", label: "客户", icon: UserRound },
-  { key: "dialpad", label: "拨号盘", icon: Grid3X3 },
-  { key: "apps", label: "订单", icon: LayoutGrid },
-  { key: "me", label: "我的", icon: UserRound },
+  { key: "messages", label: "通话", icon: IoTime },
+  { key: "customers", label: "通讯录", icon: IoPersonCircle },
+  { key: "dialpad", label: "拨号盘", icon: IoKeypad },
+  { key: "search", label: "搜索", icon: IoSearchIcon },
 ];
 
 const customerExecutionClassOptions: Array<{
@@ -166,23 +171,8 @@ const customerExecutionClassOptions: Array<{
 ];
 
 const RECENT_DIAL_CUSTOMER_STORAGE_KEY = "lbncrm.mobile.recent-dial-customer";
-
-const mobileCallModeOptions: Array<{
-  value: MobileCallMode;
-  label: string;
-  description: string;
-}> = [
-  {
-    value: "crm-outbound",
-    label: "CRM 外呼",
-    description: "走 CTI 线路，录音由服务器归档。",
-  },
-  {
-    value: "local-phone",
-    label: "本机通话",
-    description: "调用手机拨号，App 负责录音上传。",
-  },
-];
+const MOBILE_CALL_MODE_STORAGE_KEY = "lbncrm.mobile.call-mode";
+const CUSTOMER_PHOTO_STORAGE_PREFIX = "lbncrm.mobile.customer-photo.";
 
 const keypadRows = [
   [
@@ -238,6 +228,73 @@ function normalizeDialValue(value: string) {
   return value.replace(/[^\d+]/g, "");
 }
 
+function formatDialDisplayNumber(value: string) {
+  const compactValue = value.replace(/\s+/g, "");
+
+  if (!compactValue || /[^\d+]/.test(compactValue.replace(/^\+/, ""))) {
+    return compactValue;
+  }
+
+  const plusPrefix = compactValue.startsWith("+") ? "+" : "";
+  let digits = plusPrefix ? compactValue.slice(1) : compactValue;
+  let countryPrefix = plusPrefix;
+
+  if (plusPrefix && digits.startsWith("86") && digits.length > 11) {
+    countryPrefix = "+86 ";
+    digits = digits.slice(2);
+  }
+
+  if (digits.length <= 3) {
+    return `${countryPrefix}${digits}`;
+  }
+
+  if (digits.length <= 7) {
+    return `${countryPrefix}${digits.slice(0, 3)} ${digits.slice(3)}`;
+  }
+
+  if (digits.length <= 11) {
+    return `${countryPrefix}${digits.slice(0, 3)} ${digits.slice(3, 7)} ${digits.slice(7)}`;
+  }
+
+  return `${countryPrefix}${digits.slice(0, 3)} ${digits.slice(3, 7)} ${digits.slice(
+    7,
+    11,
+  )} ${digits.slice(11)}`;
+}
+
+function splitDialMatchedDisplay(phone: string, dialNumber: string) {
+  const display = formatDialDisplayNumber(phone);
+  const normalizedDialNumber = normalizeDialValue(dialNumber)
+    .replace(/^\+86/, "")
+    .replace(/^\+/, "");
+
+  if (!normalizedDialNumber) {
+    return {
+      matched: "",
+      rest: display,
+    };
+  }
+
+  let digitCount = 0;
+  let splitIndex = 0;
+
+  for (let index = 0; index < display.length; index++) {
+    if (/\d/.test(display[index])) {
+      digitCount += 1;
+    }
+
+    if (digitCount >= normalizedDialNumber.length) {
+      splitIndex = index + 1;
+      break;
+    }
+  }
+
+  return {
+    matched: display.slice(0, splitIndex),
+    rest: display.slice(splitIndex),
+  };
+}
+
 function normalizeSearchValue(value: string) {
   return value.toLowerCase().replace(/\s+/g, "");
 }
@@ -256,6 +313,66 @@ function formatMoney(value: string) {
 
 function isMaskedPhone(value: string) {
   return value.includes("*");
+}
+
+function parseMobileCallMode(value: string | null | undefined): MobileCallMode | null {
+  return value === "crm-outbound" || value === "local-phone" ? value : null;
+}
+
+function readStoredCallMode() {
+  if (typeof window === "undefined") {
+    return "crm-outbound";
+  }
+
+  try {
+    return parseMobileCallMode(window.localStorage.getItem(MOBILE_CALL_MODE_STORAGE_KEY)) ?? "crm-outbound";
+  } catch {
+    return "crm-outbound";
+  }
+}
+
+function writeStoredCallMode(value: MobileCallMode) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(MOBILE_CALL_MODE_STORAGE_KEY, value);
+  } catch {
+    // Storage can be unavailable in restricted WebViews; the in-memory state still works.
+  }
+}
+
+function getCustomerPhotoStorageKey(customerId: string) {
+  return `${CUSTOMER_PHOTO_STORAGE_PREFIX}${customerId}`;
+}
+
+function readStoredCustomerPhoto(customerId: string) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage.getItem(getCustomerPhotoStorageKey(customerId));
+  } catch {
+    return null;
+  }
+}
+
+function readImageFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+        return;
+      }
+
+      reject(new Error("照片读取失败。"));
+    };
+    reader.onerror = () => reject(new Error("照片读取失败。"));
+    reader.readAsDataURL(file);
+  });
 }
 
 function formatCurrencyAmount(value: number) {
@@ -283,7 +400,7 @@ function formatMobileDetailCallLabel(record: {
   result: string | null;
   resultCode: string | null;
 }) {
-  return record.resultCode || record.result || "通话记录";
+  return record.resultCode || record.result || "未填写";
 }
 
 function createMobileApiCustomerListItem(
@@ -296,6 +413,7 @@ function createMobileApiCustomerListItem(
           id: item.latestCall.id,
           callTime: new Date(item.latestCall.callTime),
           durationSeconds: item.latestCall.durationSeconds,
+          callSource: item.latestCall.callSource,
           result: item.latestCall.result as CustomerListItem["callRecords"][number]["result"],
           resultCode: item.latestCall.resultCode,
           resultLabel: formatMobileDetailCallLabel(item.latestCall),
@@ -326,6 +444,8 @@ function createMobileApiCustomerListItem(
     status: item.status as CustomerListItem["status"],
     ownershipMode: item.ownershipMode as CustomerListItem["ownershipMode"],
     createdAt: new Date(item.createdAt),
+    avatarUrl: item.avatarUrl ?? fallback?.avatarUrl ?? null,
+    assignedAt: parseMobileApiDate(item.assignedAt) ?? fallback?.assignedAt ?? null,
     latestImportAt: fallback?.latestImportAt ?? null,
     latestFollowUpAt: parseMobileApiDate(item.lastFollowUpAt),
     lastEffectiveFollowUpAt: parseMobileApiDate(item.lastFollowUpAt),
@@ -387,36 +507,38 @@ function getCustomerPrimaryProduct(item: CustomerListItem) {
   );
 }
 
-function getCustomerImportSignal(item: CustomerListItem) {
-  const latestLead = item.leads[0] ?? null;
-  const importedAt = toDate(item.latestImportAt ?? latestLead?.createdAt);
-  const importDate = importedAt ? formatRelativeDateTime(importedAt) : "导入时间未知";
-  const source = latestLead?.source === "INFO_FLOW" ? "信息流" : "导入客户";
+function getCustomerDialProductSignal(item: CustomerListItem) {
+  const interestedProduct =
+    item.latestInterestedProduct?.trim() ||
+    item.leads.find((lead) => lead.interestedProduct?.trim())?.interestedProduct?.trim() ||
+    "";
 
-  return `${source} · ${importDate}`;
+  if (interestedProduct) {
+    return {
+      label: "意向商品",
+      value: interestedProduct,
+    };
+  }
+
+  const purchasedProduct = item.latestPurchasedProduct?.trim() || "";
+
+  if (purchasedProduct) {
+    return {
+      label: "已购商品",
+      value: purchasedProduct,
+    };
+  }
+
+  return null;
 }
 
-function getDashboardTotals(rows: CustomerOperatingDashboardEmployeeRow[]) {
-  return rows.reduce(
-    (result, row) => ({
-      assigned: result.assigned + row.todayAssignedCount,
-      calls: result.calls + row.todayCallCount,
-      connected: result.connected + row.connectedAssignedCount,
-      wechat: result.wechat + row.todayWechatAddedCount,
-      invitation: result.invitation + row.todayInvitationCount,
-      deal: result.deal + row.todayDealCount,
-      revenue: result.revenue + row.todayRevenueAmount,
-    }),
-    {
-      assigned: 0,
-      calls: 0,
-      connected: 0,
-      wechat: 0,
-      invitation: 0,
-      deal: 0,
-      revenue: 0,
-    },
-  );
+function getCustomerAssignmentLabel(
+  item: CustomerListItem,
+  detail?: MobileCustomerDetail | null,
+) {
+  const assignedAt = toDate(detail?.assignedAt ?? item.assignedAt);
+
+  return assignedAt ? formatRelativeDateTime(assignedAt) : "未分配";
 }
 
 function getRecentDialFromRecords(items: CustomerListItem[]) {
@@ -434,6 +556,7 @@ function getRecentDialFromRecords(items: CustomerListItem[]) {
           customerName: item.name,
           phone: item.phone,
           calledAt: new Date(callTime).toISOString(),
+          callMode: record.callSource,
           resultLabel: record.resultLabel,
         };
       }
@@ -441,6 +564,285 @@ function getRecentDialFromRecords(items: CustomerListItem[]) {
   }
 
   return latest;
+}
+
+type PhoneHistoryEntry = {
+  id: string;
+  customer: CustomerListItem;
+  title: string;
+  phone: string;
+  callMode: MobileCallMode;
+  modeLabel: "外呼" | "本机";
+  directionMark: "↗" | "↙";
+  locationLabel: string;
+  callTime: Date | null;
+  result: CustomerListItem["callRecords"][number]["result"];
+  resultCode: string | null;
+  resultLabel: string;
+  resultFilterKey: PhoneResultFilterKey;
+  timeLabel: string;
+};
+
+type PhoneTimeFilterKey = "all" | "today" | "week" | "month";
+type PhoneResultFilterKey =
+  | "all"
+  | "unfilled"
+  | "missed"
+  | "wechat-added"
+  | "wechat-refused"
+  | "wechat-pending"
+  | "connected";
+
+const phoneTimeFilterOptions: Array<{
+  value: PhoneTimeFilterKey;
+  label: string;
+}> = [
+  { value: "all", label: "全部时间" },
+  { value: "today", label: "今天" },
+  { value: "week", label: "近 7 天" },
+  { value: "month", label: "本月" },
+];
+
+const phoneResultFilterOptions: Array<{
+  value: PhoneResultFilterKey;
+  label: string;
+}> = [
+  { value: "all", label: "全部结果" },
+  { value: "unfilled", label: "未填写" },
+  { value: "missed", label: "未接通" },
+  { value: "wechat-added", label: "已加微" },
+  { value: "wechat-refused", label: "拒加" },
+  { value: "wechat-pending", label: "待加微" },
+  { value: "connected", label: "已接通" },
+];
+
+function getCallModeLabel(callMode: MobileCallMode | null | undefined): PhoneHistoryEntry["modeLabel"] {
+  return callMode === "local-phone" ? "本机" : "外呼";
+}
+
+function getPhoneResultLabel(record: {
+  result: string | null;
+  resultCode: string | null;
+  resultLabel?: string | null;
+}) {
+  if (!record.result && !record.resultCode) {
+    return "未填写";
+  }
+
+  const label = record.resultLabel?.trim();
+
+  if (!label || label === "未记录") {
+    return "未填写";
+  }
+
+  return label;
+}
+
+function getPhoneResultFilterKey(record: CustomerListItem["callRecords"][number]): PhoneResultFilterKey {
+  if (!record.result && !record.resultCode) {
+    return "unfilled";
+  }
+
+  switch (record.result) {
+    case "NOT_CONNECTED":
+    case "INVALID_NUMBER":
+    case "HUNG_UP":
+      return "missed";
+    case "WECHAT_ADDED":
+      return "wechat-added";
+    case "REFUSED_WECHAT":
+      return "wechat-refused";
+    case "WECHAT_PENDING":
+      return "wechat-pending";
+    case "CONNECTED_NO_TALK":
+    case "INTERESTED":
+    case "NEED_CALLBACK":
+      return "connected";
+    default:
+      return getPhoneResultLabel(record) === "未填写" ? "unfilled" : "connected";
+  }
+}
+
+function formatPhoneCallTime(value: DateLike) {
+  const date = toDate(value);
+
+  if (!date) {
+    return "";
+  }
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfCallDay = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+  ).getTime();
+
+  if (startOfCallDay === startOfToday) {
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(
+      2,
+      "0",
+    )}`;
+  }
+
+  if (startOfCallDay === startOfToday - 24 * 60 * 60 * 1000) {
+    return "昨天";
+  }
+
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
+function getStartOfDay(value: Date) {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+}
+
+function isDateToday(value: Date | null) {
+  if (!value) {
+    return false;
+  }
+
+  return getStartOfDay(value).getTime() === getStartOfDay(new Date()).getTime();
+}
+
+function isDateInPhoneTimeFilter(value: Date | null, filter: PhoneTimeFilterKey) {
+  if (filter === "all") {
+    return true;
+  }
+
+  if (!value) {
+    return false;
+  }
+
+  const now = new Date();
+  const startOfToday = getStartOfDay(now);
+
+  if (filter === "today") {
+    return value.getTime() >= startOfToday.getTime();
+  }
+
+  if (filter === "week") {
+    const start = new Date(startOfToday);
+    start.setDate(start.getDate() - 6);
+    return value.getTime() >= start.getTime();
+  }
+
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  return value.getTime() >= startOfMonth.getTime();
+}
+
+function getPhoneLocationLabel(item: CustomerListItem) {
+  return formatRegion(item.province, item.city, item.district) || "未知";
+}
+
+function getContactAddressLabel(item: CustomerListItem) {
+  return (
+    [item.province, item.city, item.district, item.address]
+      .filter((value): value is string => Boolean(value?.trim()))
+      .join(" / ") || "未填写"
+  );
+}
+
+function getCustomerDetailAddressLabel(
+  item: CustomerListItem,
+  detail: MobileCustomerDetail | null,
+) {
+  return (
+    [
+      detail?.profile.province ?? item.province,
+      detail?.profile.city ?? item.city,
+      detail?.profile.district ?? item.district,
+      detail?.profile.address ?? item.address,
+    ]
+      .filter((value): value is string => Boolean(value?.trim()))
+      .join(" / ") || "未填写地址"
+  );
+}
+
+function buildRecentPhoneHistoryEntry(
+  items: CustomerListItem[],
+  recentDialCustomer: RecentDialCustomer | null,
+) {
+  if (!recentDialCustomer) {
+    return null;
+  }
+
+  const customer = items.find((item) => item.id === recentDialCustomer.customerId);
+  const callTime = toDate(recentDialCustomer.calledAt);
+
+  if (!customer || !callTime) {
+    return null;
+  }
+
+  const hasPersistedRecord = customer.callRecords.some((record) => {
+    const recordTime = toDate(record.callTime)?.getTime() ?? 0;
+
+    return Math.abs(recordTime - callTime.getTime()) < 2 * 60 * 1000;
+  });
+
+  if (hasPersistedRecord) {
+    return null;
+  }
+
+  const modeLabel = getCallModeLabel(recentDialCustomer.callMode);
+
+  return {
+    id: `recent-${recentDialCustomer.customerId}-${recentDialCustomer.calledAt}`,
+    customer,
+    title: recentDialCustomer.customerName || customer.name || recentDialCustomer.phone,
+    phone: recentDialCustomer.phone,
+    callMode: recentDialCustomer.callMode,
+    modeLabel,
+    directionMark: "↗" as const,
+    locationLabel: getPhoneLocationLabel(customer),
+    callTime,
+    result: null,
+    resultCode: null,
+    resultLabel: recentDialCustomer.resultLabel?.trim() || "未填写",
+    resultFilterKey: "unfilled" as const,
+    timeLabel: formatPhoneCallTime(callTime),
+  } satisfies PhoneHistoryEntry;
+}
+
+function buildPhoneHistoryEntries(
+  items: CustomerListItem[],
+  recentDialCustomer: RecentDialCustomer | null,
+) {
+  const entries: PhoneHistoryEntry[] = [];
+  const recentEntry = buildRecentPhoneHistoryEntry(items, recentDialCustomer);
+
+  if (recentEntry) {
+    entries.push(recentEntry);
+  }
+
+  for (const customer of items) {
+    for (const record of customer.callRecords.slice(0, 4)) {
+      const modeLabel = getCallModeLabel(record.callSource);
+      const callTime = toDate(record.callTime);
+
+      entries.push({
+        id: record.id,
+        customer,
+        title: customer.name || customer.phone,
+        phone: customer.phone,
+        callMode: record.callSource,
+        modeLabel,
+        directionMark: "↗",
+        locationLabel: getPhoneLocationLabel(customer),
+        callTime,
+        result: record.result,
+        resultCode: record.resultCode,
+        resultLabel: getPhoneResultLabel(record),
+        resultFilterKey: getPhoneResultFilterKey(record),
+        timeLabel: formatPhoneCallTime(record.callTime),
+      });
+    }
+  }
+
+  return entries
+    .sort((left, right) => {
+      return (right.callTime?.getTime() ?? 0) - (left.callTime?.getTime() ?? 0);
+    })
+    .slice(0, 30);
 }
 
 function readRecentDialCustomer() {
@@ -465,12 +867,28 @@ function readRecentDialCustomer() {
       return null;
     }
 
+    const parsedResultLabel =
+      typeof parsed.resultLabel === "string" ? parsed.resultLabel.trim() : null;
+    const callMode =
+      parsed.callMode === "local-phone" || parsed.callMode === "crm-outbound"
+        ? parsed.callMode
+        : parsedResultLabel?.includes("本机")
+          ? "local-phone"
+          : "crm-outbound";
+
     return {
       customerId: parsed.customerId,
       customerName: parsed.customerName,
       phone: parsed.phone,
       calledAt: parsed.calledAt,
-      resultLabel: typeof parsed.resultLabel === "string" ? parsed.resultLabel : null,
+      callMode,
+      resultLabel:
+        parsedResultLabel === "本机通话" ||
+        parsedResultLabel === "本机" ||
+        parsedResultLabel === "CRM 外呼" ||
+        parsedResultLabel === "外呼"
+          ? "未填写"
+          : parsedResultLabel,
     } satisfies RecentDialCustomer;
   } catch {
     return null;
@@ -490,13 +908,15 @@ function writeRecentDialCustomer(customer: RecentDialCustomer) {
 
 function createRecentDialCustomer(
   item: CustomerListItem,
-  resultLabel: string | null = "刚刚拨打",
+  callMode: MobileCallMode,
+  resultLabel: string | null = "未填写",
 ) {
   return {
     customerId: item.id,
     customerName: item.name,
     phone: item.phone,
     calledAt: new Date().toISOString(),
+    callMode,
     resultLabel,
   } satisfies RecentDialCustomer;
 }
@@ -618,7 +1038,7 @@ function MobileHeader({
   return (
     <header
       className={cn(
-        "flex items-center justify-between px-5",
+        "lbn-mobile-safe-x flex items-center justify-between",
         compact ? "pb-2 pt-1" : "pb-3 pt-1",
       )}
     >
@@ -675,7 +1095,7 @@ function MessageRow({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-3 border-b border-black/5 px-5 py-3.5 text-left last:border-b-0"
+      className="flex w-full items-center gap-3 border-b border-black/5 px-[var(--lbn-mobile-x)] py-3.5 text-left last:border-b-0"
     >
       <IconBubble icon={icon} tone={tone} />
       <span className="min-w-0 flex-1">
@@ -691,191 +1111,347 @@ function MessageRow({
 
 function MessagesTab({
   data,
-  dashboardData,
-  mobileDashboardState,
-  onOpenCustomers,
-  onOpenDialpad,
+  recentDialCustomer,
+  callMode,
+  canCreateCallRecord,
+  onSelectCustomer,
+  onStartCall,
 }: Readonly<{
   data: CustomerCenterData;
-  dashboardData: CustomerOperatingDashboardData | null;
-  mobileDashboardState: MobileDashboardApiState;
-  onOpenCustomers: (queue?: string) => void;
-  onOpenDialpad: () => void;
+  recentDialCustomer: RecentDialCustomer | null;
+  callMode: MobileCallMode;
+  canCreateCallRecord: boolean;
+  onSelectCustomer: (customer: CustomerListItem) => void;
+  onStartCall: (
+    customer: CustomerListItem,
+    triggerSource: MobileCallTriggerSource,
+    mode: MobileCallMode,
+  ) => void;
 }>) {
-  const mobileDashboard = mobileDashboardState.dashboard;
-  const dashboardRows = dashboardData?.employees ?? [];
-  const totals =
-    dashboardRows.length > 0
-      ? getDashboardTotals(dashboardRows)
-      : {
-          assigned: data.summary.todayAssignedCount,
-          calls: 0,
-          connected: 0,
-          wechat: data.summary.pendingWechatCount,
-          invitation: data.summary.pendingInvitationCount,
-          deal: data.summary.pendingDealCount,
-          revenue: 0,
-        };
-  const connectRate =
-    totals.assigned > 0 ? `${Math.round((totals.connected / totals.assigned) * 100)}%` : "0%";
-  const dashboardStats = [
-    {
-      label: "待跟进",
-      value: mobileDashboard
-        ? String(mobileDashboard.todayFollowUps)
-        : String(totals.assigned),
-      note: mobileDashboard ? "今日" : dashboardData?.scopeLabel ?? "当前范围",
-    },
-    {
-      label: "本月外呼",
-      value: mobileDashboard ? String(mobileDashboard.monthlyCalls) : String(totals.calls),
-      note: mobileDashboard ? "本月" : `接通率 ${connectRate}`,
-    },
-    {
-      label: "本月成交",
-      value: mobileDashboard
-        ? formatCurrencyAmount(Number(mobileDashboard.monthlySalesVolume))
-        : String(totals.wechat),
-      note: mobileDashboard ? "已审核订单" : "新增微信",
-    },
-    { label: "今日邀约", value: String(totals.invitation), note: "直播/活动" },
-    { label: "今日成交", value: String(totals.deal), note: "通过订单" },
-    { label: "销售额", value: formatCurrencyAmount(totals.revenue), note: dashboardData?.periodLabel ?? "今日" },
-  ];
-  const rankedRows = [...dashboardRows]
-    .sort((left, right) => {
-      if (right.todayRevenueAmount !== left.todayRevenueAmount) {
-        return right.todayRevenueAmount - left.todayRevenueAmount;
-      }
-
-      if (right.todayDealCount !== left.todayDealCount) {
-        return right.todayDealCount - left.todayDealCount;
-      }
-
-      return right.todayCallCount - left.todayCallCount;
-    })
-    .slice(0, 5);
+  const historyEntries = useMemo(
+    () => buildPhoneHistoryEntries(data.queueItems, recentDialCustomer),
+    [data.queueItems, recentDialCustomer],
+  );
+  const fallbackCustomers = data.queueItems.slice(0, 8);
+  const [viewMode, setViewMode] = useState<"history" | "today">("history");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [timeFilter, setTimeFilter] = useState<PhoneTimeFilterKey>("all");
+  const [resultFilter, setResultFilter] = useState<PhoneResultFilterKey>("all");
+  const effectiveTimeFilter = viewMode === "today" ? "today" : timeFilter;
+  const filteredEntries = useMemo(
+    () =>
+      historyEntries.filter((entry) => {
+        return (
+          isDateInPhoneTimeFilter(entry.callTime, effectiveTimeFilter) &&
+          (resultFilter === "all" || entry.resultFilterKey === resultFilter)
+        );
+      }),
+    [effectiveTimeFilter, historyEntries, resultFilter],
+  );
+  const todayEntries = useMemo(
+    () => historyEntries.filter((entry) => isDateToday(entry.callTime)),
+    [historyEntries],
+  );
+  const todayStats = useMemo(
+    () => ({
+      calls: todayEntries.length,
+      missed: todayEntries.filter((entry) => entry.resultFilterKey === "missed").length,
+      wechatAdded: todayEntries.filter((entry) => entry.resultFilterKey === "wechat-added").length,
+      refused: todayEntries.filter((entry) => entry.resultFilterKey === "wechat-refused").length,
+    }),
+    [todayEntries],
+  );
+  const activeFilterCount =
+    (timeFilter === "all" ? 0 : 1) + (resultFilter === "all" ? 0 : 1);
 
   return (
-    <section>
-      <MobileHeader
-        title="今日"
-        action={
+    <section className="lbn-phone-page">
+      <PhonePageHeader
+        title={viewMode === "today" ? "今日数据" : "通话"}
+        left={
           <button
             type="button"
-            onClick={() => onOpenDialpad()}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#7a8290] shadow-[0_8px_24px_rgba(16,24,40,0.08)]"
-            aria-label="打开拨号盘"
+            onClick={() => setViewMode((value) => (value === "history" ? "today" : "history"))}
+            className="lbn-phone-nav-button lbn-phone-press h-12 px-5 text-[17px] font-medium text-black"
           >
-            <PhoneCall className="h-5 w-5" aria-hidden />
+            {viewMode === "history" ? "今日" : "全部"}
           </button>
+        }
+        right={
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setFilterOpen((value) => !value)}
+              className="lbn-phone-nav-button lbn-phone-press h-12 w-12 text-black"
+              aria-label="通话筛选"
+              aria-expanded={filterOpen}
+            >
+              <IoOptionsOutline className="h-7 w-7" aria-hidden />
+              {activeFilterCount > 0 ? (
+                <span className="lbn-phone-filter-dot" aria-hidden />
+              ) : null}
+            </button>
+            {filterOpen ? (
+              <div className="lbn-phone-filter-popover">
+                <div className="text-[15px] font-semibold text-[#8e8e93]">时间</div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {phoneTimeFilterOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setTimeFilter(option.value)}
+                      className={cn(
+                        "lbn-phone-filter-chip lbn-phone-press",
+                        timeFilter === option.value && "is-active",
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-5 text-[15px] font-semibold text-[#8e8e93]">结果</div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {phoneResultFilterOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setResultFilter(option.value)}
+                      className={cn(
+                        "lbn-phone-filter-chip lbn-phone-press",
+                        resultFilter === option.value && "is-active",
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTimeFilter("all");
+                    setResultFilter("all");
+                  }}
+                  className="mt-5 h-10 w-full rounded-full text-[15px] font-medium text-[#0a84ff] active:bg-black/5"
+                >
+                  清除筛选
+                </button>
+              </div>
+            ) : null}
+          </div>
         }
       />
 
-      <div className="px-5">
-        <div className="rounded-[20px] border border-black/5 bg-white px-4 py-4 shadow-[0_12px_28px_rgba(16,24,40,0.045)]">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 text-[16px] font-semibold text-[#1677ff]">
-                <BarChart3 className="h-5 w-5" aria-hidden />
-                <span>经营 Dashboard</span>
-              </div>
-              <div className="mt-1 text-[13px] text-[#8b93a1]">
-                {dashboardData?.asOfDateLabel ?? "今日"} · {dashboardData?.scopeLabel ?? "当前客户"}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => onOpenCustomers("new_imported")}
-              className="shrink-0 rounded-full bg-[#f2f8ff] px-3 py-1.5 text-[12px] font-semibold text-[#1677ff]"
-            >
-              新导入
-            </button>
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-2.5">
-            {dashboardStats.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                onClick={() => onOpenCustomers()}
-                className="min-w-0 rounded-[15px] bg-[#f7f8fb] px-3 py-3 text-left"
-              >
-                <div className="truncate text-[21px] font-semibold leading-none text-[#20242c]">
-                  {item.value}
-                </div>
-                <div className="mt-2 truncate text-[13px] font-medium text-[#475467]">
-                  {item.label}
-                </div>
-                <div className="mt-0.5 truncate text-[12px] text-[#98a1af]">{item.note}</div>
-              </button>
-            ))}
-          </div>
-          {mobileDashboardState.loading || mobileDashboardState.error ? (
-            <div className="mt-3 rounded-[14px] bg-[#f7f8fb] px-3 py-2 text-[12px] text-[#667085]">
-              {mobileDashboardState.error ?? "同步中..."}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="mt-3 grid grid-cols-3 gap-2.5">
-          {[
-            { label: "客户池", value: data.summary.customerCount, queue: undefined },
-            { label: "新导入", value: data.summary.todayNewImportedCount, queue: "new_imported" },
-            { label: "待加微", value: data.summary.pendingWechatCount, queue: "pending_wechat" },
-          ].map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              onClick={() => onOpenCustomers(item.queue)}
-              className="rounded-[15px] bg-white px-3 py-3 text-left shadow-[0_8px_20px_rgba(16,24,40,0.03)]"
-            >
-              <div className="text-[19px] font-semibold text-[#20242c]">{item.value}</div>
-              <div className="mt-1 truncate text-[12px] text-[#98a1af]">{item.label}</div>
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-5 overflow-hidden rounded-[22px] bg-white shadow-[0_14px_32px_rgba(16,24,40,0.045)]">
-          <div className="flex items-center justify-between border-b border-black/5 px-5 py-4">
-            <h2 className="text-[18px] font-semibold text-[#20242c]">员工今日表现</h2>
-            <span className="text-[12px] text-[#98a1af]">{dashboardData?.periodLabel ?? "今日"}</span>
-          </div>
-          {rankedRows.length > 0 ? (
-            rankedRows.map((row) => (
-              <button
-                key={row.userId}
-                type="button"
-                onClick={() => onOpenCustomers()}
-                className="flex w-full items-center gap-3 border-b border-black/5 px-5 py-4 text-left last:border-b-0"
-              >
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-[#eaf3ff] text-[15px] font-semibold text-[#1677ff]">
-                  {row.name.slice(0, 1)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="truncate text-[16px] font-semibold text-[#20242c]">
-                      {row.name || row.username}
-                    </span>
-                    <span className="shrink-0 text-[13px] font-semibold text-[#20242c]">
-                      {row.todayRevenue}
-                    </span>
-                  </div>
-                  <div className="mt-1 truncate text-[12px] text-[#98a1af]">
-                    分配 {row.todayAssignedCount} · 通话 {row.todayCallCount} · 成交 {row.todayDealCount}
-                  </div>
-                </div>
-                <ChevronRight className="h-5 w-5 text-[#c5cad3]" aria-hidden />
-              </button>
+      {viewMode === "today" ? (
+        <PhoneTodayPanel
+          entries={todayEntries}
+          stats={todayStats}
+          callMode={callMode}
+          canCreateCallRecord={canCreateCallRecord}
+          onSelectCustomer={onSelectCustomer}
+          onStartCall={onStartCall}
+        />
+      ) : (
+        <div className="lbn-phone-list">
+          {filteredEntries.length > 0 ? (
+            filteredEntries.map((entry) => (
+              <PhoneHistoryRow
+                key={entry.id}
+                entry={entry}
+                callMode={callMode}
+                canCreateCallRecord={canCreateCallRecord}
+                onSelectCustomer={onSelectCustomer}
+                onStartCall={onStartCall}
+              />
             ))
-          ) : (
-            <div className="px-5 py-8 text-center text-[14px] text-[#98a1af]">
-              今日暂无员工经营数据
+          ) : historyEntries.length > 0 ? (
+            <div className="px-8 py-16 text-center text-[16px] text-[#8e8e93]">
+              当前筛选下没有通话记录
             </div>
+          ) : (
+            fallbackCustomers.map((customer) => (
+              <PhoneFallbackCallRow
+                key={customer.id}
+                customer={customer}
+                callMode={callMode}
+                canCreateCallRecord={canCreateCallRecord}
+                onSelectCustomer={onSelectCustomer}
+                onStartCall={onStartCall}
+              />
+            ))
           )}
         </div>
-      </div>
+      )}
     </section>
+  );
+}
+
+function PhoneHistoryRow({
+  entry,
+  callMode,
+  canCreateCallRecord,
+  onSelectCustomer,
+  onStartCall,
+}: Readonly<{
+  entry: PhoneHistoryEntry;
+  callMode: MobileCallMode;
+  canCreateCallRecord: boolean;
+  onSelectCustomer: (customer: CustomerListItem) => void;
+  onStartCall: (
+    customer: CustomerListItem,
+    triggerSource: MobileCallTriggerSource,
+    mode: MobileCallMode,
+  ) => void;
+}>) {
+  return (
+    <div className="lbn-phone-call-row">
+      <button
+        type="button"
+        onClick={() => onSelectCustomer(entry.customer)}
+        className="lbn-phone-row-main lbn-phone-press flex min-w-0 flex-1 items-center gap-4 text-left"
+      >
+        <PhoneAvatar name={entry.title} photoUrl={entry.customer.avatarUrl} />
+        <span className="min-w-0 flex-1 border-b border-[#e5e5ea] py-4">
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="min-w-0 flex-1 truncate text-[23px] font-semibold leading-7 text-black">
+              {entry.title}
+            </span>
+            <span className="shrink-0 text-[20px] font-light text-[#8e8e93]">
+              {entry.timeLabel}
+            </span>
+          </span>
+          <span className="mt-1 flex items-center gap-1.5 text-[16px] leading-5 text-[#8e8e93]">
+            <span className="text-[#b7b7bd]">{entry.directionMark}</span>
+            <span className="lbn-phone-mode-badge">{entry.modeLabel}</span>
+            <span className="truncate">{entry.resultLabel}</span>
+          </span>
+        </span>
+      </button>
+      <PhoneCircleCallButton
+        label={`拨打 ${entry.title}`}
+        disabled={!canCreateCallRecord}
+        onClick={() => onStartCall(entry.customer, "card", callMode)}
+      />
+    </div>
+  );
+}
+
+function PhoneFallbackCallRow({
+  customer,
+  callMode,
+  canCreateCallRecord,
+  onSelectCustomer,
+  onStartCall,
+}: Readonly<{
+  customer: CustomerListItem;
+  callMode: MobileCallMode;
+  canCreateCallRecord: boolean;
+  onSelectCustomer: (customer: CustomerListItem) => void;
+  onStartCall: (
+    customer: CustomerListItem,
+    triggerSource: MobileCallTriggerSource,
+    mode: MobileCallMode,
+  ) => void;
+}>) {
+  return (
+    <div className="lbn-phone-call-row">
+      <button
+        type="button"
+        onClick={() => onSelectCustomer(customer)}
+        className="lbn-phone-row-main lbn-phone-press flex min-w-0 flex-1 items-center gap-4 text-left"
+      >
+        <PhoneAvatar name={customer.name} photoUrl={customer.avatarUrl} />
+        <span className="min-w-0 flex-1 border-b border-[#e5e5ea] py-4">
+          <span className="block truncate text-[23px] font-semibold leading-7 text-black">
+            {customer.phone}
+          </span>
+          <span className="mt-1 block truncate text-[16px] leading-5 text-[#8e8e93]">
+            {getCallModeLabel(callMode)} 未填写
+          </span>
+        </span>
+      </button>
+      <PhoneCircleCallButton
+        label={`拨打 ${customer.name}`}
+        disabled={!canCreateCallRecord}
+        onClick={() => onStartCall(customer, "card", callMode)}
+      />
+    </div>
+  );
+}
+
+function PhoneTodayPanel({
+  entries,
+  stats,
+  callMode,
+  canCreateCallRecord,
+  onSelectCustomer,
+  onStartCall,
+}: Readonly<{
+  entries: PhoneHistoryEntry[];
+  stats: {
+    calls: number;
+    missed: number;
+    wechatAdded: number;
+    refused: number;
+  };
+  callMode: MobileCallMode;
+  canCreateCallRecord: boolean;
+  onSelectCustomer: (customer: CustomerListItem) => void;
+  onStartCall: (
+    customer: CustomerListItem,
+    triggerSource: MobileCallTriggerSource,
+    mode: MobileCallMode,
+  ) => void;
+}>) {
+  return (
+    <div className="lbn-phone-today px-5 pb-6">
+      <section className="lbn-phone-today-hero">
+        <div>
+          <div className="text-[15px] font-medium text-[#8e8e93]">今日通话</div>
+          <div className="mt-1 text-[54px] font-light leading-none text-black tabular-nums">
+            {stats.calls}
+          </div>
+        </div>
+        <div className="text-right text-[14px] leading-5 text-[#8e8e93]">
+          <div>已加微 {stats.wechatAdded}</div>
+          <div>未接通 {stats.missed}</div>
+        </div>
+      </section>
+
+      <div className="mt-4 grid grid-cols-3 gap-3">
+        {[
+          { label: "未接通", value: stats.missed },
+          { label: "已加微", value: stats.wechatAdded },
+          { label: "拒加", value: stats.refused },
+        ].map((item) => (
+          <div key={item.label} className="lbn-phone-today-stat">
+            <div className="text-[26px] font-light leading-none text-black tabular-nums">
+              {item.value}
+            </div>
+            <div className="mt-1 text-[13px] font-medium text-[#8e8e93]">{item.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-6 px-1 text-[15px] font-semibold text-[#8e8e93]">今日记录</div>
+      <div className="lbn-phone-list -mx-5 mt-1">
+        {entries.length > 0 ? (
+          entries.map((entry) => (
+            <PhoneHistoryRow
+              key={entry.id}
+              entry={entry}
+              callMode={callMode}
+              canCreateCallRecord={canCreateCallRecord}
+              onSelectCustomer={onSelectCustomer}
+              onStartCall={onStartCall}
+            />
+          ))
+        ) : (
+          <div className="px-8 py-14 text-center text-[16px] text-[#8e8e93]">
+            今天还没有通话记录
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -909,41 +1485,84 @@ function SearchShell({
   );
 }
 
-function CallModeSwitch({
-  value,
-  onChange,
+function PhoneAvatar({
+  name,
+  size = "md",
+  photoUrl = null,
 }: Readonly<{
-  value: MobileCallMode;
-  onChange: (value: MobileCallMode) => void;
+  name: string;
+  size?: "sm" | "md" | "lg";
+  photoUrl?: string | null;
+}>) {
+  const sizeClassName = {
+    sm: "h-9 w-9",
+    md: "h-[58px] w-[58px]",
+    lg: "h-[92px] w-[92px]",
+  }[size];
+
+  return (
+    <span
+      className={cn(
+        "lbn-phone-avatar inline-flex shrink-0 items-center justify-center rounded-full",
+        sizeClassName,
+      )}
+      aria-label={name}
+    >
+      {photoUrl ? (
+        <span
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url(${photoUrl})` }}
+          aria-hidden
+        />
+      ) : (
+        <>
+          <span className="lbn-phone-avatar-head" />
+          <span className="lbn-phone-avatar-body" />
+        </>
+      )}
+    </span>
+  );
+}
+
+function PhoneCircleCallButton({
+  label,
+  disabled,
+  onClick,
+}: Readonly<{
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
 }>) {
   return (
-    <div className="grid grid-cols-2 gap-2 rounded-[18px] bg-white p-1.5 shadow-[0_8px_22px_rgba(16,24,40,0.04)]">
-      {mobileCallModeOptions.map((option) => {
-        const active = option.value === value;
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="lbn-phone-call-button lbn-phone-press inline-flex h-[54px] w-[54px] shrink-0 items-center justify-center rounded-full text-[#198cff] disabled:text-[#c7c7cc]"
+      aria-label={label}
+    >
+      <IoCallSharp className="h-6 w-6" aria-hidden />
+    </button>
+  );
+}
 
-        return (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => onChange(option.value)}
-            className={cn(
-              "min-h-14 rounded-[14px] px-3 py-2 text-left transition",
-              active ? "bg-[#1677ff] text-white" : "bg-[#f7f8fb] text-[#667085]",
-            )}
-          >
-            <span className="block text-[14px] font-semibold">{option.label}</span>
-            <span
-              className={cn(
-                "mt-0.5 block text-[11px] leading-4",
-                active ? "text-white/82" : "text-[#98a1af]",
-              )}
-            >
-              {option.description}
-            </span>
-          </button>
-        );
-      })}
-    </div>
+function PhonePageHeader({
+  title,
+  left,
+  right,
+}: Readonly<{
+  title: string;
+  left?: React.ReactNode;
+  right?: React.ReactNode;
+}>) {
+  return (
+    <header className="lbn-phone-header">
+      <div className="flex min-w-[76px] justify-start">{left}</div>
+      <h1 className="min-w-0 flex-1 truncate text-center text-[21px] font-semibold text-black">
+        {title}
+      </h1>
+      <div className="flex min-w-[76px] justify-end">{right}</div>
+    </header>
   );
 }
 
@@ -1222,7 +1841,7 @@ function CustomerRow({
   const workStatus = item.workingStatuses[0] ?? null;
   const region = formatRegion(item.province, item.city, item.district);
   const primaryProduct = getCustomerPrimaryProduct(item);
-  const importSignal = getCustomerImportSignal(item);
+  const assignmentLabel = getCustomerAssignmentLabel(item);
 
   function startCall(mode: MobileCallMode) {
     if (!canCreateCallRecord) {
@@ -1233,13 +1852,13 @@ function CustomerRow({
   }
 
   return (
-    <div className="rounded-[18px] border border-black/5 bg-white px-4 py-3 shadow-[0_8px_20px_rgba(16,24,40,0.04)]">
-      <div className="flex items-start gap-3">
-        <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
-          <div className="flex items-center gap-2">
-            <h3 className="truncate text-[16px] font-semibold leading-5 text-[#20242c]">
-              {item.name}
-            </h3>
+    <div className="overflow-hidden rounded-[18px] border border-black/5 bg-white px-4 py-3 shadow-[0_8px_20px_rgba(16,24,40,0.04)]">
+      <button type="button" onClick={onSelect} className="block w-full min-w-0 text-left">
+        <div className="flex min-w-0 items-center gap-2">
+          <h3 className="min-w-0 flex-1 truncate text-[16px] font-semibold leading-5 text-[#20242c]">
+            {item.name}
+          </h3>
+          <span className="shrink-0">
             <StatusBadge
               label={getCustomerExecutionDisplayLongLabel({
                 executionClass: item.executionClass,
@@ -1248,69 +1867,71 @@ function CustomerRow({
               })}
               variant={executionVariant}
             />
-          </div>
-          <div className="mt-1 truncate text-[13px] text-[#667085]">
-            {item.phone} · {region}
-          </div>
-          <div className="mt-1.5 grid gap-0.5 text-[12px] leading-5 text-[#667085]">
-            {primaryProduct ? (
-              <div className="truncate">
-                <span className="font-medium text-[#344054]">意向</span> · {primaryProduct}
-              </div>
-            ) : null}
-            <div className="truncate text-[#98a1af]">{importSignal}</div>
-          </div>
-          <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5">
-            {workStatus ? (
-              <StatusBadge
-                label={getCustomerWorkStatusLabel(workStatus)}
-                variant={getCustomerWorkStatusVariant(workStatus)}
-              />
-            ) : null}
-            {item.customerTags.slice(0, 2).map((tag) => (
-              <span
-                key={tag.id}
-                className="inline-flex max-w-[96px] items-center truncate rounded-full bg-[#f2f4f7] px-2 py-1 text-[11px] font-medium text-[#667085]"
-              >
-                {tag.tag.name}
-              </span>
-            ))}
-          </div>
-          <div className="mt-1.5 truncate text-[12px] text-[#98a1af]">
-            {latestCall
-              ? `${latestCall.resultLabel} · ${formatNullableRelativeDate(latestCall.callTime)}`
-              : formatNullableRelativeDate(item.latestFollowUpAt)}
-          </div>
-        </button>
-
-        <div className="grid shrink-0 gap-2">
-          <button
-            type="button"
-            onClick={() => startCall("crm-outbound")}
-            aria-label={`CRM 外呼 ${item.name}`}
-            disabled={!canCreateCallRecord}
-            className={cn(
-              "inline-flex h-9 min-w-14 items-center justify-center rounded-full px-3 text-[12px] font-semibold text-white shadow-[0_10px_22px_rgba(22,119,255,0.2)]",
-              canCreateCallRecord ? "bg-[#1677ff]" : "bg-[#d0d5dd]",
-            )}
-          >
-            外呼
-          </button>
-          <button
-            type="button"
-            onClick={() => startCall("local-phone")}
-            aria-label={`本机通话 ${item.name}`}
-            disabled={!canCreateCallRecord}
-            className={cn(
-              "inline-flex h-9 min-w-14 items-center justify-center rounded-full px-3 text-[12px] font-semibold",
-              canCreateCallRecord
-                ? "bg-[#eaf3ff] text-[#1677ff]"
-                : "bg-[#f2f4f7] text-[#98a1af]",
-            )}
-          >
-            本机
-          </button>
+          </span>
         </div>
+        <div className="mt-1 truncate text-[13px] text-[#667085]">
+          {item.phone} · {region}
+        </div>
+        <div className="mt-1.5 grid min-w-0 gap-0.5 text-[12px] leading-5 text-[#667085]">
+          {primaryProduct ? (
+            <div className="truncate">
+              <span className="font-medium text-[#344054]">意向</span> · {primaryProduct}
+            </div>
+          ) : null}
+          <div className="truncate text-[#98a1af]">分配 · {assignmentLabel}</div>
+        </div>
+        <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5 overflow-hidden">
+          {workStatus ? (
+            <StatusBadge
+              label={getCustomerWorkStatusLabel(workStatus)}
+              variant={getCustomerWorkStatusVariant(workStatus)}
+            />
+          ) : null}
+          {item.customerTags.slice(0, 2).map((tag) => (
+            <span
+              key={tag.id}
+              className="inline-flex max-w-[96px] items-center truncate rounded-full bg-[#f2f4f7] px-2 py-1 text-[11px] font-medium text-[#667085]"
+            >
+              {tag.tag.name}
+            </span>
+          ))}
+        </div>
+        <div className="mt-1.5 truncate text-[12px] text-[#98a1af]">
+          {latestCall
+            ? `${latestCall.resultLabel} · ${formatNullableRelativeDate(latestCall.callTime)}`
+            : formatNullableRelativeDate(item.latestFollowUpAt)}
+        </div>
+      </button>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => startCall("crm-outbound")}
+          aria-label={`外呼 ${item.name}`}
+          disabled={!canCreateCallRecord}
+          className={cn(
+            "inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-[14px] px-3 text-[13px] font-semibold text-white shadow-[0_10px_22px_rgba(22,119,255,0.16)]",
+            canCreateCallRecord ? "bg-[#1677ff]" : "bg-[#d0d5dd]",
+          )}
+        >
+          <PhoneCall className="h-4 w-4 shrink-0" aria-hidden />
+          <span className="truncate">外呼</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => startCall("local-phone")}
+          aria-label={`本机 ${item.name}`}
+          disabled={!canCreateCallRecord}
+          className={cn(
+            "inline-flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-[14px] px-3 text-[13px] font-semibold",
+            canCreateCallRecord
+              ? "bg-[#eaf3ff] text-[#1677ff]"
+              : "bg-[#f2f4f7] text-[#98a1af]",
+          )}
+        >
+          <Phone className="h-4 w-4 shrink-0" aria-hidden />
+          <span className="truncate">本机</span>
+        </button>
       </div>
     </div>
   );
@@ -1321,11 +1942,8 @@ function CustomersTab({
   mobileCustomersState,
   mobileCustomersApiEnabled,
   searchText,
-  setSearchText,
+  callMode,
   canCreateCallRecord,
-  onSearchSubmit,
-  onQueueChange,
-  onApplyFilters,
   onRefreshCustomers,
   onLoadMoreCustomers,
   onSelectCustomer,
@@ -1335,16 +1953,8 @@ function CustomersTab({
   mobileCustomersState: MobileCustomersApiState;
   mobileCustomersApiEnabled: boolean;
   searchText: string;
-  setSearchText: (value: string) => void;
+  callMode: MobileCallMode;
   canCreateCallRecord: boolean;
-  onSearchSubmit: () => void;
-  onQueueChange: (queue: string) => void;
-  onApplyFilters: (next: {
-    queue: string | null;
-    executionClasses: string | null;
-    assignedFrom: string | null;
-    assignedTo: string | null;
-  }) => void;
   onRefreshCustomers: () => void;
   onLoadMoreCustomers: () => void;
   onSelectCustomer: (customer: CustomerListItem) => void;
@@ -1354,7 +1964,6 @@ function CustomersTab({
     mode: MobileCallMode,
   ) => void;
 }>) {
-  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const fallbackItemMap = useMemo(
     () => new Map(data.queueItems.map((item) => [item.id, item])),
     [data.queueItems],
@@ -1368,19 +1977,31 @@ function CustomersTab({
   );
   const sourceItems = apiItems ?? data.queueItems;
   const localQuery = normalizeSearchValue(searchText);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [classFilter, setClassFilter] = useState<CustomerExecutionClassValue | "all">("all");
+  const [assignedTimeFilter, setAssignedTimeFilter] = useState<PhoneTimeFilterKey>("all");
   const filteredItems = useMemo(() => {
-    if (!localQuery) {
-      return sourceItems;
-    }
-
     return sourceItems.filter((item) => {
+      if (classFilter !== "all" && item.executionClass !== classFilter) {
+        return false;
+      }
+
+      if (!isDateInPhoneTimeFilter(toDate(item.assignedAt), assignedTimeFilter)) {
+        return false;
+      }
+
+      if (!localQuery) {
+        return true;
+      }
+
       return (
         normalizeSearchValue(item.name).includes(localQuery) ||
+        normalizeSearchValue(getCustomerPrimaryProduct(item)).includes(localQuery) ||
         normalizeDialValue(item.phone).includes(normalizeDialValue(searchText)) ||
-        normalizeSearchValue(item.owner?.name ?? "").includes(localQuery)
+        normalizeSearchValue(getContactAddressLabel(item)).includes(localQuery)
       );
     });
-  }, [sourceItems, localQuery, searchText]);
+  }, [assignedTimeFilter, classFilter, sourceItems, localQuery, searchText]);
   const totalCount =
     mobileCustomersState.pagination?.total ??
     (apiItems ? filteredItems.length : data.pagination.totalCount);
@@ -1391,123 +2012,250 @@ function CustomersTab({
     mobileCustomersState.pagination?.total === null
       ? `${sourceItems.length}+ 位`
       : `${totalCount} 位`;
+  const activeFilterCount =
+    (classFilter === "all" ? 0 : 1) + (assignedTimeFilter === "all" ? 0 : 1);
 
   return (
-    <section>
-      <MobileHeader
-        title="客户"
-        action={
-          <>
+    <section className="lbn-phone-page">
+      <PhonePageHeader
+        title="联系人"
+        left={
+          <span className="lbn-phone-header-count" aria-label={`当前客户数量 ${listCountLabel}`}>
+            {mobileCustomersState.loading ? "同步中" : listCountLabel}
+          </span>
+        }
+        right={
+          <div className="relative">
             <button
               type="button"
-              onClick={onRefreshCustomers}
-              disabled={!mobileCustomersApiEnabled || mobileCustomersState.loading}
-              className={cn(
-                "inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#20242c] shadow-[0_8px_24px_rgba(16,24,40,0.08)]",
-                (!mobileCustomersApiEnabled || mobileCustomersState.loading) &&
-                  "text-[#98a1af]",
-              )}
-              aria-label="刷新客户列表"
+              onClick={() => setFilterOpen((value) => !value)}
+              className="lbn-phone-nav-button lbn-phone-press h-12 w-12 text-black"
+              aria-label="联系人筛选"
+              aria-expanded={filterOpen}
             >
-              <RefreshCw
-                className={cn(
-                  "h-5 w-5",
-                  mobileCustomersState.loading ? "animate-spin" : "",
-                )}
-                aria-hidden
-              />
+              <IoOptionsOutline className="h-7 w-7" aria-hidden />
+              {activeFilterCount > 0 ? (
+                <span className="lbn-phone-filter-dot" aria-hidden />
+              ) : null}
             </button>
-            <button
-              type="button"
-              onClick={() => setFilterDrawerOpen(true)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-[#20242c] shadow-[0_8px_24px_rgba(16,24,40,0.08)]"
-              aria-label="打开客户筛选"
-            >
-              <Filter className="h-5 w-5" aria-hidden />
-            </button>
-          </>
+            {filterOpen ? (
+              <div className="lbn-phone-filter-popover">
+                <div className="text-[15px] font-semibold text-[#8e8e93]">客户阶段</div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {[
+                    { value: "all" as const, label: "全部客户" },
+                    ...customerExecutionClassOptions,
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setClassFilter(option.value)}
+                      className={cn(
+                        "lbn-phone-filter-chip lbn-phone-press",
+                        classFilter === option.value && "is-active",
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-5 text-[15px] font-semibold text-[#8e8e93]">分配时间</div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {phoneTimeFilterOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setAssignedTimeFilter(option.value)}
+                      className={cn(
+                        "lbn-phone-filter-chip lbn-phone-press",
+                        assignedTimeFilter === option.value && "is-active",
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setClassFilter("all");
+                    setAssignedTimeFilter("all");
+                  }}
+                  className="mt-5 h-10 w-full rounded-full text-[15px] font-medium text-[#0a84ff] active:bg-black/5"
+                >
+                  清除筛选
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onRefreshCustomers();
+                    setFilterOpen(false);
+                  }}
+                  disabled={!mobileCustomersApiEnabled || mobileCustomersState.loading}
+                  className="mt-1 h-10 w-full rounded-full text-[15px] font-medium text-[#8e8e93] active:bg-black/5 disabled:text-[#c7c7cc]"
+                >
+                  {mobileCustomersState.loading ? "同步中..." : "重新同步"}
+                </button>
+              </div>
+            ) : null}
+          </div>
         }
       />
 
-      <div className="px-5">
-        <SearchShell
-          value={searchText}
-          onChange={setSearchText}
-          onSubmit={onSearchSubmit}
-          placeholder="搜索公司名称/姓名/电话/负责人"
-        />
-
-        <CustomerFilterRail
-          data={data}
-          onQueueChange={onQueueChange}
-          onOpenFilters={() => setFilterDrawerOpen(true)}
-        />
-
-        <div className="mt-4 flex items-center justify-between">
-          <h2 className="text-[18px] font-semibold text-[#20242c]">客户列表</h2>
-          <span className="text-[12px] text-[#98a1af]">
-            {mobileCustomersState.loading ? "同步中" : listCountLabel}
-          </span>
+      <div className="lbn-phone-list px-5">
+        <div className="mb-1 flex items-center justify-end px-1 text-[13px] text-[#8e8e93]">
+          {mobileCustomersState.error ? <span>同步失败</span> : null}
         </div>
 
-        {mobileCustomersState.error ? (
-          <div className="mt-2.5 rounded-[16px] bg-[#fff4f4] px-4 py-3 text-[13px] text-[#b42318]">
-            {mobileCustomersState.error}
-          </div>
-        ) : null}
-
-        {!mobileCustomersApiEnabled ? (
-          <div className="mt-2.5 rounded-[16px] bg-white px-4 py-3 text-[12px] leading-5 text-[#667085] shadow-[0_8px_20px_rgba(16,24,40,0.035)]">
-            当前筛选使用页面结果，移动 JSON API 将在后续补齐日期/标签等高级过滤。
-          </div>
-        ) : null}
-
-        <div className="mt-2.5 grid gap-2.5">
-          {filteredItems.length > 0 ? (
-            filteredItems.map((item) => (
-              <CustomerRow
-                key={item.id}
-                item={item}
-                canCreateCallRecord={canCreateCallRecord}
-                onSelect={() => onSelectCustomer(item)}
-                onStartCall={onStartCall}
+        {filteredItems.length > 0 ? (
+          filteredItems.map((item) => (
+            <div key={item.id} className="lbn-phone-contact-row">
+              <button
+                type="button"
+                onClick={() => onSelectCustomer(item)}
+                className="flex min-w-0 flex-1 items-center gap-4 text-left"
+              >
+                <PhoneAvatar name={item.name} photoUrl={item.avatarUrl} />
+                <span className="lbn-phone-contact-main">
+                  <span className="flex min-w-0 items-baseline gap-2">
+                    <span className="min-w-0 shrink-0 truncate text-[21px] font-semibold leading-7 text-black">
+                      {item.name}
+                    </span>
+                    <span className="min-w-0 truncate text-[11px] font-medium leading-4 text-[#8e8e93]">
+                      {getCustomerPrimaryProduct(item) || "未填写"}
+                    </span>
+                  </span>
+                  <span className="mt-0.5 flex min-w-0 items-baseline gap-1.5 leading-5">
+                    <span className="shrink-0 text-[12px] font-medium tabular-nums text-[#8e8e93]">
+                      {item.phone}
+                    </span>
+                    <span className="shrink-0 text-[12px] text-[#c7c7cc]">·</span>
+                    <span className="min-w-0 truncate text-[15px] font-light text-[#8e8e93]">
+                      {getContactAddressLabel(item)}
+                    </span>
+                  </span>
+                </span>
+              </button>
+              <PhoneCircleCallButton
+                label={`拨打 ${item.name}`}
+                disabled={!canCreateCallRecord}
+                onClick={() => onStartCall(item, "card", callMode)}
               />
-            ))
-          ) : (
-            <div className="rounded-[22px] bg-white px-5 py-10 text-center text-[15px] text-[#98a1af]">
-              当前范围暂无客户
             </div>
-          )}
-        </div>
+          ))
+        ) : (
+          <div className="px-5 py-16 text-center text-[16px] text-[#8e8e93]">
+            当前通讯录暂无客户
+          </div>
+        )}
 
         {apiItems ? (
           <button
             type="button"
             onClick={onLoadMoreCustomers}
             disabled={!hasMore || mobileCustomersState.loading || mobileCustomersState.loadingMore}
-            className={cn(
-              "mt-3 h-12 w-full rounded-[16px] text-[14px] font-semibold transition",
-              hasMore && !mobileCustomersState.loading && !mobileCustomersState.loadingMore
-                ? "bg-white text-[#1677ff] shadow-[0_8px_20px_rgba(16,24,40,0.04)]"
-                : "bg-[#eef1f5] text-[#98a1af]",
-            )}
+            className="mt-3 h-12 w-full rounded-full text-[15px] font-medium text-[#2f80ed] disabled:text-[#c7c7cc]"
           >
             {mobileCustomersState.loadingMore
               ? "加载中..."
               : hasMore
-                ? "加载更多"
-                : "没有更多客户"}
+                ? "查看更多"
+                : "已显示全部"}
           </button>
         ) : null}
       </div>
+    </section>
+  );
+}
 
-      {filterDrawerOpen ? (
-        <CustomerFilterDrawer
-          data={data}
-          onClose={() => setFilterDrawerOpen(false)}
-          onApply={onApplyFilters}
-        />
-      ) : null}
+function SearchTab({
+  data,
+  searchText,
+  setSearchText,
+  callMode,
+  canCreateCallRecord,
+  onSelectCustomer,
+  onStartCall,
+}: Readonly<{
+  data: CustomerCenterData;
+  searchText: string;
+  setSearchText: (value: string) => void;
+  callMode: MobileCallMode;
+  canCreateCallRecord: boolean;
+  onSelectCustomer: (customer: CustomerListItem) => void;
+  onStartCall: (
+    customer: CustomerListItem,
+    triggerSource: MobileCallTriggerSource,
+    mode: MobileCallMode,
+  ) => void;
+}>) {
+  const normalizedQuery = normalizeSearchValue(searchText);
+  const normalizedDialQuery = normalizeDialValue(searchText);
+  const results = useMemo(() => {
+    if (!normalizedQuery && !normalizedDialQuery) {
+      return data.queueItems.slice(0, 12);
+    }
+
+    return data.queueItems
+      .filter((item) => {
+        return (
+          normalizeSearchValue(item.name).includes(normalizedQuery) ||
+          normalizeSearchValue(getCustomerPrimaryProduct(item)).includes(normalizedQuery) ||
+          normalizeDialValue(item.phone).includes(normalizedDialQuery)
+        );
+      })
+      .slice(0, 30);
+  }, [data.queueItems, normalizedDialQuery, normalizedQuery]);
+
+  return (
+    <section className="lbn-phone-page">
+      <PhonePageHeader title="搜索" />
+      <div className="px-5">
+        <form
+          onSubmit={(event) => event.preventDefault()}
+          className="lbn-phone-search-field"
+        >
+          <IoSearchIcon className="h-8 w-8 shrink-0 text-black" aria-hidden />
+          <input
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+            placeholder="搜索"
+            className="min-w-0 flex-1 bg-transparent text-[24px] font-light text-black outline-none placeholder:text-[#8e8e93]"
+          />
+        </form>
+
+        <div className="mt-5">
+          <div className="mb-2 px-1 text-[15px] font-semibold text-[#8e8e93]">
+            {searchText ? `${results.length} 个结果` : "最近联系人"}
+          </div>
+          <div className="lbn-phone-list -mx-1">
+            {results.map((item) => (
+              <div key={item.id} className="lbn-phone-contact-row">
+                <button
+                  type="button"
+                  onClick={() => onSelectCustomer(item)}
+                  className="lbn-phone-row-main lbn-phone-press flex min-w-0 flex-1 items-center gap-4 text-left"
+                >
+                  <PhoneAvatar name={item.name} photoUrl={item.avatarUrl} />
+                  <span className="min-w-0 flex-1 border-b border-[#e5e5ea] py-4">
+                    <span className="block truncate text-[22px] font-semibold leading-7 text-black">
+                      {item.name}
+                    </span>
+                    <span className="mt-1 block truncate text-[16px] leading-5 text-[#8e8e93]">
+                      {item.phone} · {getCustomerPrimaryProduct(item) || getPhoneLocationLabel(item)}
+                    </span>
+                  </span>
+                </button>
+                <PhoneCircleCallButton
+                  label={`拨打 ${item.name}`}
+                  disabled={!canCreateCallRecord}
+                  onClick={() => onStartCall(item, "card", callMode)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
@@ -1517,9 +2265,8 @@ function DialpadTab({
   dialNumber,
   setDialNumber,
   callMode,
-  setCallMode,
+  onCallModeChange,
   canCreateCallRecord,
-  recentDialCustomer,
   onSelectCustomer,
   onStartCall,
 }: Readonly<{
@@ -1527,9 +2274,8 @@ function DialpadTab({
   dialNumber: string;
   setDialNumber: (value: string) => void;
   callMode: MobileCallMode;
-  setCallMode: (value: MobileCallMode) => void;
+  onCallModeChange: (value: MobileCallMode) => void;
   canCreateCallRecord: boolean;
-  recentDialCustomer: RecentDialCustomer | null;
   onSelectCustomer: (customer: CustomerListItem) => void;
   onStartCall: (
     customer: CustomerListItem,
@@ -1541,18 +2287,22 @@ function DialpadTab({
   const suggestions = filterDialCustomers(items, dialNumber).filter(
     (item) => item.id !== matchedCustomer?.id,
   );
-  const displayNumber = dialNumber || "输入号码";
-  const recentCustomerItem = recentDialCustomer
-    ? items.find((item) => item.id === recentDialCustomer.customerId) ?? null
+  const previewCustomer = matchedCustomer ?? suggestions[0] ?? null;
+  const displayNumber = formatDialDisplayNumber(dialNumber);
+  const normalizedNumber = normalizeDialValue(dialNumber);
+  const previewProductSignal = previewCustomer
+    ? getCustomerDialProductSignal(previewCustomer)
     : null;
+  const previewPhoneDisplay = previewCustomer
+    ? splitDialMatchedDisplay(previewCustomer.phone, dialNumber)
+    : null;
+  const [linePickerOpen, setLinePickerOpen] = useState(false);
 
   function appendDialValue(value: string) {
     setDialNumber(`${dialNumber}${value}`);
   }
 
-  function startDial(mode: MobileCallMode = callMode) {
-    const normalizedNumber = normalizeDialValue(dialNumber);
-
+  function startDial(mode: MobileCallMode) {
     if (!normalizedNumber) {
       return;
     }
@@ -1562,163 +2312,159 @@ function DialpadTab({
       return;
     }
 
-    window.location.href = `tel:${normalizedNumber}`;
+    window.location.assign(`tel:${normalizedNumber}`);
+  }
+
+  function startPrimaryDial() {
+    startDial(callMode);
   }
 
   return (
-    <section>
-      <MobileHeader title="拨号盘" compact />
-
-      <div className="px-5">
-        <SearchShell
-          value={dialNumber}
-          onChange={setDialNumber}
-          placeholder="搜索客户或输入号码"
-        />
-
-        <div className="mt-3">
-          <CallModeSwitch value={callMode} onChange={setCallMode} />
-        </div>
-
-        {recentDialCustomer ? (
-          <div className="mt-4 rounded-[20px] bg-white px-4 py-3 shadow-[0_8px_20px_rgba(16,24,40,0.035)]">
-            <div className="flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  if (recentCustomerItem) {
-                    onSelectCustomer(recentCustomerItem);
-                    return;
-                  }
-
-                  setDialNumber(recentDialCustomer.phone);
-                }}
-                className="min-w-0 flex-1 text-left"
-              >
-                <div className="text-[12px] font-medium text-[#98a1af]">上次拨打</div>
-                <div className="mt-1 flex min-w-0 items-center gap-2">
-                  <span className="truncate text-[16px] font-semibold text-[#20242c]">
-                    {recentDialCustomer.customerName}
-                  </span>
-                  <span className="shrink-0 text-[12px] text-[#98a1af]">
-                    {formatNullableRelativeDate(recentDialCustomer.calledAt)}
-                  </span>
-                </div>
-                <div className="mt-0.5 truncate text-[13px] text-[#667085]">
-                  {recentDialCustomer.phone}
-                  {recentDialCustomer.resultLabel ? ` · ${recentDialCustomer.resultLabel}` : ""}
-                </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => setDialNumber(recentDialCustomer.phone)}
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f2f8ff] text-[#1677ff]"
-                aria-label="填入上次拨打号码"
-              >
-                <Phone className="h-5 w-5" aria-hidden />
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="mt-6 min-h-[104px] rounded-[20px] bg-white px-5 py-4 text-center shadow-[0_10px_24px_rgba(16,24,40,0.04)]">
-          <div
-            className={cn(
-              "truncate text-[28px] font-light leading-9 tracking-normal",
-              dialNumber ? "text-[#20242c]" : "text-[#c2c7d0]",
-            )}
+    <section className="lbn-mobile-dialpad-page">
+      <header className="lbn-mobile-dialpad-header">
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setLinePickerOpen((value) => !value)}
+            className="lbn-phone-line-switch lbn-phone-press"
+            aria-label="切换呼叫线路"
+            aria-expanded={linePickerOpen}
           >
-            {displayNumber}
-          </div>
-          {matchedCustomer ? (
-            <button
-              type="button"
-              onClick={() => onSelectCustomer(matchedCustomer)}
-              className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full bg-[#f2f8ff] px-3 py-1.5 text-[13px] font-medium text-[#1677ff]"
-            >
-              <UserRound className="h-4 w-4" aria-hidden />
-              <span className="truncate">{matchedCustomer.name}</span>
-            </button>
-          ) : suggestions.length > 0 ? (
-            <div className="lbn-mobile-scrollbar-none mt-3 flex gap-2 overflow-x-auto pb-1">
-              {suggestions.map((item) => (
+            <span className="lbn-phone-line-chip">
+              {callMode === "crm-outbound" ? "外呼" : "本机"}
+            </span>
+            <span className="lbn-phone-line-chevrons" aria-hidden>
+              <span />
+              <span />
+            </span>
+          </button>
+          {linePickerOpen ? (
+            <div className="lbn-phone-line-popover">
+              <p className="px-5 pb-3 pt-4 text-[16px] text-[#8e8e93]">
+                选择现在要使用的线路。
+              </p>
+              {[
+                { value: "crm-outbound" as const, label: "使用外呼" },
+                { value: "local-phone" as const, label: "使用本机" },
+              ].map((option) => (
                 <button
-                  key={item.id}
+                  key={option.value}
                   type="button"
-                  onClick={() => setDialNumber(item.phone)}
-                  className="shrink-0 rounded-full bg-[#f5f7fa] px-3 py-1.5 text-[13px] text-[#667085]"
+                  onClick={() => {
+                    onCallModeChange(option.value);
+                    setLinePickerOpen(false);
+                  }}
+                  className="lbn-phone-popover-option lbn-phone-press flex w-full items-center gap-3 px-5 py-3 text-left"
                 >
-                  {item.name}
+                  <span className="w-5 text-[24px] leading-none text-black">
+                    {callMode === option.value ? "✓" : ""}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[21px] font-medium leading-6 text-black">
+                      {option.label}
+                    </span>
+                  </span>
                 </button>
               ))}
             </div>
           ) : null}
         </div>
+        <span
+          className={cn(
+            "lbn-phone-cti-dot",
+            canCreateCallRecord ? "is-ready" : "is-offline",
+          )}
+          role="status"
+          aria-label={canCreateCallRecord ? "CTI Ready" : "CTI Offline"}
+        />
+      </header>
 
-        <div className="mt-6 grid gap-3">
-          {keypadRows.map((row) => (
-            <div key={row.map((item) => item.value).join("")} className="grid grid-cols-3 gap-3">
-              {row.map((key) => (
-                <button
-                  key={key.value}
-                  type="button"
-                  onClick={() => appendDialValue(key.value)}
-                  className="flex h-[66px] flex-col items-center justify-center rounded-[16px] bg-white text-[#1677ff] shadow-[0_8px_18px_rgba(16,24,40,0.03)]"
-                >
-                  <span className="text-[31px] font-light leading-none">{key.value}</span>
-                  <span className="mt-1 h-4 text-[12px] font-medium text-[#8b93a1]">
-                    {key.letters}
-                  </span>
-                </button>
-              ))}
-            </div>
-          ))}
-        </div>
+      <div className="lbn-mobile-dialpad-display">
+        {displayNumber ? (
+          <div className="lbn-mobile-dial-display-number">
+            {displayNumber}
+          </div>
+        ) : (
+          <div className="h-[64px]" aria-hidden />
+        )}
 
-        <div className="mt-5 grid grid-cols-3 items-center gap-3">
+        {dialNumber && previewCustomer && previewPhoneDisplay ? (
           <button
             type="button"
-            onClick={() => startDial("crm-outbound")}
-            disabled={!matchedCustomer || !canCreateCallRecord}
-            className="inline-flex h-12 items-center justify-center rounded-[16px] bg-[#eaf3ff] px-3 text-[13px] font-semibold text-[#1677ff] disabled:bg-[#f2f4f7] disabled:text-[#98a1af]"
+            onClick={() => onSelectCustomer(previewCustomer)}
+            className="lbn-phone-match-card lbn-phone-press"
           >
-            外呼
+            <PhoneAvatar name={previewCustomer.name} size="sm" photoUrl={previewCustomer.avatarUrl} />
+            <span className="min-w-0 flex-1 truncate text-[20px] font-light text-[#8e8e93]">
+              {previewCustomer.name}
+            </span>
+            <span className="shrink-0 whitespace-nowrap text-[20px] font-light">
+              <span className="text-black">{previewPhoneDisplay.matched}</span>
+              <span className="text-[#8e8e93]">{previewPhoneDisplay.rest}</span>
+            </span>
           </button>
-          <button
-            type="button"
-            onClick={() => startDial(callMode)}
-            disabled={!normalizeDialValue(dialNumber)}
-            className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-full bg-[#1677ff] text-white shadow-[0_16px_28px_rgba(22,119,255,0.24)] disabled:bg-[#d0d5dd] disabled:shadow-none"
-            aria-label="拨打电话"
-          >
-            <Phone className="h-8 w-8" aria-hidden />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (normalizeDialValue(dialNumber)) {
-                startDial("local-phone");
-                return;
-              }
+        ) : null}
 
-              setDialNumber(dialNumber.slice(0, -1));
-            }}
-            className="inline-flex h-12 items-center justify-center rounded-[16px] bg-white px-3 text-[13px] font-semibold text-[#475467]"
-            aria-label="本机通话"
+        {dialNumber && previewProductSignal ? (
+          <div className="lbn-phone-dial-product" title={previewProductSignal.value}>
+            <span>{previewProductSignal.label}</span>
+            <strong>{previewProductSignal.value}</strong>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="lbn-mobile-ios-dialpad" aria-label="拨号键盘">
+        {keypadRows.map((row) => (
+          <div
+            key={row.map((item) => item.value).join("")}
+            className="grid grid-cols-3 justify-items-center gap-x-[var(--lbn-mobile-ios-key-gap-x)] gap-y-[var(--lbn-mobile-ios-key-gap-y)]"
           >
-            本机
-          </button>
+            {row.map((key) => (
+              <button
+                key={key.value}
+                type="button"
+                onClick={() => appendDialValue(key.value)}
+                className="lbn-mobile-ios-key lbn-phone-press flex flex-col items-center justify-center rounded-full text-black"
+              >
+                <span className="lbn-mobile-ios-key-number tabular-nums">
+                  {key.value}
+                </span>
+                <span className="lbn-mobile-ios-key-letters">
+                  {key.letters}
+                </span>
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <div className="lbn-mobile-ios-actions">
+        <div aria-hidden />
+        <button
+          type="button"
+          onClick={startPrimaryDial}
+          disabled={!normalizedNumber}
+          className="lbn-mobile-ios-call-button lbn-phone-press mx-auto inline-flex items-center justify-center rounded-full bg-[#34c759] text-white disabled:bg-[#d1d5db] disabled:shadow-none"
+          aria-label="拨打电话"
+        >
+          <IoCall className="h-10 w-10" aria-hidden />
+        </button>
+        <div className="flex items-center justify-center">
           {dialNumber ? (
             <button
               type="button"
               onClick={() => setDialNumber(dialNumber.slice(0, -1))}
-              className="col-start-3 ml-auto inline-flex h-10 w-10 items-center justify-center rounded-full text-[#475467]"
+              className="lbn-phone-press inline-flex h-12 w-12 items-center justify-center rounded-full text-[#8e8e93]"
               aria-label="删除一位号码"
             >
-              <Delete className="h-6 w-6" aria-hidden />
+              <IoBackspace className="h-8 w-8" aria-hidden />
             </button>
           ) : null}
         </div>
+      </div>
+
+      <div className="sr-only" aria-live="polite">
+        当前线路为 {callMode === "crm-outbound" ? "外呼" : "本机"}
       </div>
     </section>
   );
@@ -1803,7 +2549,7 @@ function AppsTab({
   openDialpad,
   openMessages,
   onOpenModule,
-  onSelectCustomer,
+  onOpenOrder,
 }: Readonly<{
   data: CustomerCenterData;
   canAccessCallRecordings: boolean;
@@ -1811,7 +2557,7 @@ function AppsTab({
   openDialpad: () => void;
   openMessages: () => void;
   onOpenModule: (module: MobileModuleView) => void;
-  onSelectCustomer: (customer: CustomerListItem) => void;
+  onOpenOrder: (customer: CustomerListItem) => void;
 }>) {
   const orderCustomers = data.queueItems
     .filter((item) => {
@@ -1831,122 +2577,163 @@ function AppsTab({
     title: "订单中心",
     description: "交易单、收款、催收和履约入口。",
   } satisfies MobileModuleView;
+  const executionRows: Array<{
+    title: string;
+    description: string;
+    icon: MobileIcon;
+    onClick: () => void;
+  }> = [
+    {
+      title: "交易单",
+      description: "查看审核状态、成交金额与供应商拆单结果。",
+      icon: PackageCheck,
+      onClick: () => onOpenModule(orderModule),
+    },
+    {
+      title: "收款",
+      description: "跟进定金、尾款、到付与收款确认。",
+      icon: CreditCard,
+      onClick: () =>
+        onOpenModule({
+          kind: "orders",
+          title: "收款记录",
+          description: "查看收款提交、确认与驳回结果。",
+        }),
+    },
+    {
+      title: "履约",
+      description: "查看发货执行、物流节点和异常跟进。",
+      icon: Truck,
+      onClick: () =>
+        onOpenModule({
+          kind: "orders",
+          title: "发货履约",
+          description: "查看发货执行、批次和物流跟进。",
+        }),
+    },
+    {
+      title: "质检",
+      description: "回看通话录音、AI 摘要和风险信号。",
+      icon: ShieldCheck,
+      onClick: () =>
+        canAccessCallRecordings
+          ? onOpenModule({
+              kind: "recordings",
+              title: "录音质检",
+              description: "筛选录音、回看 AI 总结和质检信号。",
+            })
+          : openMessages(),
+    },
+  ];
 
   return (
     <section>
-      <MobileHeader title="订单" />
-      <div className="grid gap-4 px-5">
-        <div className="rounded-[24px] bg-white px-5 py-5 shadow-[0_16px_36px_rgba(16,24,40,0.055)]">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-[20px] font-semibold text-[#20242c]">订单入口</h2>
-              <p className="mt-1 text-[13px] text-[#98a1af]">从客户到成交执行</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => onOpenModule(orderModule)}
-              className="rounded-full bg-[#f2f8ff] px-3 py-1.5 text-[12px] font-semibold text-[#1677ff]"
-            >
-              查看
-            </button>
-          </div>
-          <div className="mt-5 grid grid-cols-3 gap-3">
-            {[
-              { label: "客户", value: data.summary.customerCount },
-              { label: "已成交", value: data.queueItems.filter((item) => item.approvedTradeOrderCount > 0).length },
-              { label: "金额", value: formatCurrencyAmount(visibleRevenue) },
-            ].map((item) => (
-              <div key={item.label} className="rounded-[16px] bg-[#f7f8fb] px-3 py-3">
-                <div className="truncate text-[20px] font-semibold text-[#20242c]">
-                  {item.value}
+      <MobileHeader
+        title="订单"
+        action={
+          <button
+            type="button"
+            onClick={() => openCustomers()}
+            className="inline-flex h-10 items-center rounded-full bg-[#1677ff] px-3 text-[13px] font-semibold text-white shadow-[0_12px_22px_rgba(22,119,255,0.18)]"
+          >
+            <ClipboardList className="mr-1.5 h-4 w-4" aria-hidden />
+            客户建单
+          </button>
+        }
+      />
+      <div className="lbn-mobile-safe-x lbn-mobile-stack">
+        <div className="lbn-mobile-card-radius overflow-hidden bg-[#20242c] text-white shadow-[0_18px_42px_rgba(16,24,40,0.18)]">
+          <div className="px-[var(--lbn-mobile-x)] py-[var(--lbn-mobile-gap)]">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="text-[12px] font-semibold uppercase tracking-[0.12em] text-white/45">
+                  Trade Console
                 </div>
-                <div className="mt-1 truncate text-[12px] text-[#98a1af]">{item.label}</div>
+                <h2 className="mt-1 text-[21px] font-semibold leading-7">移动成交台</h2>
+                <p className="mt-1 text-[12px] leading-5 text-white/58">
+                  从客户意向直接进入下单、收款与履约跟进。
+                </p>
               </div>
-            ))}
+              <button
+                type="button"
+                onClick={() => onOpenModule(orderModule)}
+                className="inline-flex h-9 shrink-0 items-center rounded-full bg-white/10 px-3 text-[12px] font-semibold text-white"
+              >
+                总览
+              </button>
+            </div>
+            <div className="mt-4 grid grid-cols-3 gap-[var(--lbn-mobile-gap-sm)]">
+              {[
+                { label: "客户", value: data.summary.customerCount },
+                {
+                  label: "成交客户",
+                  value: data.queueItems.filter((item) => item.approvedTradeOrderCount > 0)
+                    .length,
+                },
+                { label: "成交额", value: formatCurrencyAmount(visibleRevenue) },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className="lbn-mobile-control-radius min-w-0 border border-white/10 bg-white/[0.07] px-3 py-3"
+                >
+                  <div className="truncate text-[18px] font-semibold tabular-nums text-white">
+                    {item.value}
+                  </div>
+                  <div className="mt-1 truncate text-[11px] text-white/48">{item.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-4 border-t border-white/10 bg-white/[0.04]">
+            {[
+              { label: "建单", icon: ClipboardList, onClick: () => openCustomers() },
+              { label: "外呼", icon: PhoneCall, onClick: openDialpad },
+              {
+                label: "催收",
+                icon: WalletCards,
+                onClick: () =>
+                  onOpenModule({
+                    kind: "orders",
+                    title: "催收任务",
+                    description: "跟进尾款、COD 和运费催收任务。",
+                  }),
+              },
+              {
+                label: "商品",
+                icon: Package,
+                onClick: () =>
+                  onOpenModule({
+                    kind: "generic",
+                    title: "商品中心",
+                    description: "维护商品、SKU 和供应商相关主数据。",
+                    href: "/products",
+                    iconName: "products",
+                  }),
+              },
+            ].map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={item.onClick}
+                  className="flex min-h-[var(--lbn-mobile-dial-key-height)] flex-col items-center justify-center gap-1 border-r border-white/10 text-[12px] font-semibold text-white/82 last:border-r-0"
+                >
+                  <Icon className="h-4 w-4" aria-hidden />
+                  {item.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <AppSection title="订单流程">
-          <AppTile
-            icon={ClipboardList}
-            label="客户建单"
-            tone="blue"
-            onClick={() => openCustomers()}
-          />
-          <AppTile
-            icon={PackageCheck}
-            label="交易单"
-            tone="green"
-            onClick={() => onOpenModule(orderModule)}
-          />
-          <AppTile
-            icon={CreditCard}
-            label="收款"
-            tone="amber"
-            onClick={() =>
-              onOpenModule({
-                kind: "orders",
-                title: "收款记录",
-                description: "查看收款提交、确认与驳回结果。",
-              })
-            }
-          />
-          <AppTile
-            icon={WalletCards}
-            label="催收"
-            tone="red"
-            onClick={() =>
-              onOpenModule({
-                kind: "orders",
-                title: "催收任务",
-                description: "跟进尾款、COD 和运费催收任务。",
-              })
-            }
-          />
-          <AppTile
-            icon={Truck}
-            label="履约"
-            tone="violet"
-            onClick={() =>
-              onOpenModule({
-                kind: "orders",
-                title: "发货履约",
-                description: "查看发货执行、批次和物流跟进。",
-              })
-            }
-          />
-          <AppTile
-            icon={Package}
-            label="商品"
-            tone="slate"
-            onClick={() =>
-              onOpenModule({
-                kind: "generic",
-                title: "商品中心",
-                description: "维护商品、SKU 和供应商相关主数据。",
-                href: "/products",
-                iconName: "products",
-              })
-            }
-          />
-          <AppTile icon={PhoneCall} label="电话" tone="green" onClick={openDialpad} />
-          <AppTile
-            icon={Mic}
-            label="录音"
-            tone="red"
-            onClick={() =>
-              onOpenModule({
-                kind: "recordings",
-                title: "通话录音",
-                description: "按员工、客户、日期和 AI 信号筛选录音与质检结果。",
-              })
-            }
-          />
-        </AppSection>
-
-        <div className="overflow-hidden rounded-[22px] bg-white shadow-[0_12px_28px_rgba(16,24,40,0.045)]">
-          <div className="flex items-center justify-between border-b border-black/5 px-5 py-4">
-            <h2 className="text-[18px] font-semibold text-[#20242c]">可转订单客户</h2>
+        <div className="lbn-mobile-card-radius overflow-hidden bg-white shadow-[0_12px_28px_rgba(16,24,40,0.045)]">
+          <div className="flex items-center justify-between border-b border-black/5 px-[var(--lbn-mobile-x)] py-[var(--lbn-mobile-gap)]">
+            <div>
+              <h2 className="text-[18px] font-semibold text-[#20242c]">优先建单客户</h2>
+              <p className="mt-0.5 text-[12px] text-[#98a1af]">有意向、复购或成交信号的客户</p>
+            </div>
             <button
               type="button"
               onClick={() => openCustomers()}
@@ -1960,40 +2747,49 @@ function AppsTab({
               <OrderCustomerMiniRow
                 key={customer.id}
                 customer={customer}
-                onClick={() => onSelectCustomer(customer)}
+                onClick={() => onOpenOrder(customer)}
               />
             ))
           ) : (
-            <div className="px-5 py-8 text-center text-[14px] text-[#98a1af]">
+            <div className="px-[var(--lbn-mobile-x)] py-8 text-center text-[14px] text-[#98a1af]">
               当前范围暂无意向或成交客户
             </div>
           )}
         </div>
 
-        <AppSection title="销售协同">
-          <AppTile icon={BarChart3} label="今日" tone="violet" onClick={openMessages} />
-          <AppTile
-            icon={UsersRound}
-            label="客户"
-            tone="blue"
-            onClick={() => openCustomers()}
-          />
-          <AppTile icon={Search} label="检索" tone="slate" onClick={() => openCustomers()} />
-          <AppTile
-            icon={ShieldCheck}
-            label="质检"
-            tone="green"
-            onClick={() =>
-              canAccessCallRecordings
-                ? onOpenModule({
-                    kind: "recordings",
-                    title: "录音质检",
-                    description: "筛选录音、回看 AI 总结和质检信号。",
-                  })
-                : openCustomers()
-            }
-          />
-        </AppSection>
+        <div className="lbn-mobile-card-radius overflow-hidden bg-white shadow-[0_12px_28px_rgba(16,24,40,0.045)]">
+          <div className="border-b border-black/5 px-[var(--lbn-mobile-x)] py-[var(--lbn-mobile-gap)]">
+            <h2 className="text-[18px] font-semibold text-[#20242c]">执行入口</h2>
+            <p className="mt-0.5 text-[12px] text-[#98a1af]">保留工作台密度，不做图标宫格</p>
+          </div>
+          <div className="divide-y divide-black/[0.05]">
+            {executionRows.map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <button
+                  key={item.title}
+                  type="button"
+                  onClick={item.onClick}
+                  className="flex w-full items-center gap-3 px-[var(--lbn-mobile-x)] py-3.5 text-left active:bg-[#f7f8fb]"
+                >
+                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-[#f2f8ff] text-[#1677ff]">
+                    <Icon className="h-5 w-5" aria-hidden />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px] font-semibold text-[#20242c]">
+                      {item.title}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[12px] text-[#667085]">
+                      {item.description}
+                    </span>
+                  </span>
+                  <ChevronRight className="h-5 w-5 text-[#c5cad3]" aria-hidden />
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -2450,12 +3246,20 @@ function MeTab({
 
 function CustomerDetailDrawer({
   customer,
+  callMode,
+  onCallModeChange,
+  callResultOptions,
   canCreateCallRecord,
   onStartCall,
   onOpenOrder,
+  onAvatarUpdated,
+  onRemarkUpdated,
   onClose,
 }: Readonly<{
   customer: CustomerListItem | null;
+  callMode: MobileCallMode;
+  onCallModeChange: (value: MobileCallMode) => void;
+  callResultOptions: readonly CallResultOption[];
   canCreateCallRecord: boolean;
   onStartCall: (
     customer: CustomerListItem,
@@ -2463,6 +3267,8 @@ function CustomerDetailDrawer({
     mode: MobileCallMode,
   ) => void;
   onOpenOrder: (customer: CustomerListItem) => void;
+  onAvatarUpdated: (customerId: string, avatarUrl: string | null) => void;
+  onRemarkUpdated: (customerId: string, remark: string | null) => void;
   onClose: () => void;
 }>) {
   const [detailState, setDetailState] = useState<{
@@ -2470,6 +3276,16 @@ function CustomerDetailDrawer({
     detail: MobileCustomerDetail | null;
     error: string | null;
   } | null>(null);
+  const [linePickerOpen, setLinePickerOpen] = useState(false);
+  const [callHistoryExpanded, setCallHistoryExpanded] = useState(false);
+  const [customerPhotoUrl, setCustomerPhotoUrl] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [remarkEditing, setRemarkEditing] = useState(false);
+  const [remarkDraft, setRemarkDraft] = useState("");
+  const [remarkSaving, setRemarkSaving] = useState(false);
+  const [remarkError, setRemarkError] = useState<string | null>(null);
+  const detailSectionRef = useRef<HTMLDivElement>(null);
   const customerId = customer?.id ?? null;
 
   useEffect(() => {
@@ -2490,6 +3306,9 @@ function CustomerDetailDrawer({
           detail: payload.customer,
           error: null,
         });
+        setCustomerPhotoUrl(
+          payload.customer.avatarUrl ?? customer?.avatarUrl ?? readStoredCustomerPhoto(customerId),
+        );
       })
       .catch((error) => {
         if (canceled) {
@@ -2506,7 +3325,44 @@ function CustomerDetailDrawer({
     return () => {
       canceled = true;
     };
-  }, [customerId]);
+  }, [customer?.avatarUrl, customerId]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (!customerId) {
+        setCustomerPhotoUrl(null);
+        setRemarkDraft("");
+        setRemarkEditing(false);
+        setRemarkError(null);
+        setRemarkSaving(false);
+        return;
+      }
+
+      setCustomerPhotoUrl(customer?.avatarUrl ?? readStoredCustomerPhoto(customerId));
+      setPhotoError(null);
+      setPhotoUploading(false);
+      setCallHistoryExpanded(false);
+      setLinePickerOpen(false);
+      setRemarkError(null);
+      setRemarkSaving(false);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [customer?.avatarUrl, customerId]);
+
+  const detailRemarkForSync =
+    detailState?.customerId === customerId ? detailState.detail?.profile.remark : undefined;
+
+  useEffect(() => {
+    if (!customerId || remarkEditing) {
+      return;
+    }
+
+    const syncedRemark =
+      detailRemarkForSync !== undefined ? detailRemarkForSync ?? "" : customer?.remark ?? "";
+
+    setRemarkDraft(syncedRemark);
+  }, [customer?.remark, customerId, detailRemarkForSync, remarkEditing]);
 
   if (!customer) {
     return null;
@@ -2517,25 +3373,33 @@ function CustomerDetailDrawer({
   const detail = activeDetailState?.detail ?? null;
   const detailError = activeDetailState?.error ?? null;
   const detailLoading = !activeDetailState;
-  const latestCall = customer.callRecords[0] ?? null;
-  const detailCalls = detail?.timeline.callRecords ?? [];
-  const detailOrders = detail?.orders ?? [];
-  const region = detail
-    ? formatRegion(
-        detail.profile.province,
-        detail.profile.city,
-        detail.profile.district,
-      )
-    : formatRegion(customer.province, customer.city, customer.district);
-  const executionVariant = getCustomerExecutionDisplayVariant({
-    executionClass: customer.executionClass,
-    newImported: customer.newImported,
-    pendingFirstCall: customer.pendingFirstCall,
-  });
-  const primaryProduct = getCustomerPrimaryProduct(customer);
-  const importSignal = getCustomerImportSignal(customer);
+  const addressLabel = getCustomerDetailAddressLabel(customer, detail);
   const displayPhone = detail?.phone ?? customer.phone;
-  const displayRemark = detail?.profile.remark ?? customer.remark;
+  const displayRemark = detail ? detail.profile.remark : customer.remark;
+  const assignmentLabel = getCustomerAssignmentLabel(customer, detail);
+  const productSignal = getCustomerDialProductSignal(customer);
+  const callResultLabelMap = new Map(
+    callResultOptions.map((option) => [option.value, option.label]),
+  );
+  const detailCallRecords = detail
+    ? detail.timeline.callRecords.map((record) => {
+        const resolvedCode = record.resultCode?.trim() || record.result || null;
+
+        return {
+          ...record,
+          resultLabel: resolvedCode
+            ? callResultLabelMap.get(resolvedCode) ?? resolvedCode
+            : "未填写",
+        };
+      })
+    : customer.callRecords;
+  const latestCall = detailCallRecords[0] ?? null;
+  const visibleCallRecords = callHistoryExpanded
+    ? detailCallRecords
+    : detailCallRecords.slice(0, 1);
+  const callSummary = latestCall
+    ? `${getCallModeLabel(latestCall.callSource)} ${getPhoneResultLabel(latestCall)} · ${formatNullableRelativeDate(latestCall.callTime)}`
+    : "暂无记录";
 
   function startCall(mode: MobileCallMode) {
     if (!canCreateCallRecord || !customer) {
@@ -2545,388 +3409,415 @@ function CustomerDetailDrawer({
     onStartCall(customer, "detail", mode);
   }
 
+  function startPreferredCall() {
+    startCall(callMode);
+  }
+
+  function sendSms() {
+    const phone = displayPhone.trim().replace(/\s+/g, "");
+
+    if (!phone || isMaskedPhone(phone)) {
+      return;
+    }
+
+    window.location.assign(`sms:${phone}`);
+  }
+
+  function openOrder() {
+    if (!customer) {
+      return;
+    }
+
+    onOpenOrder(customer);
+    onClose();
+  }
+
+  function scrollToDetails() {
+    detailSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
+  async function handleCustomerPhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0] ?? null;
+    event.currentTarget.value = "";
+    const activeCustomerId = customer?.id ?? null;
+
+    if (!file || !activeCustomerId) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setPhotoError("请选择图片文件。");
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setPhotoError("照片不能超过 2MB。");
+      return;
+    }
+
+    const previousPhotoUrl = customerPhotoUrl;
+    setPhotoUploading(true);
+
+    try {
+      const dataUrl = await readImageFileAsDataUrl(file);
+      setCustomerPhotoUrl(dataUrl);
+      const payload = await uploadMobileCustomerAvatar(activeCustomerId, file);
+      setCustomerPhotoUrl(payload.customer.avatarUrl);
+      onAvatarUpdated(activeCustomerId, payload.customer.avatarUrl);
+      setDetailState((current) => {
+        if (current?.customerId !== activeCustomerId || !current.detail) {
+          return current;
+        }
+
+        return {
+          ...current,
+          detail: {
+            ...current.detail,
+            avatarUrl: payload.customer.avatarUrl,
+          },
+        };
+      });
+      setPhotoError(null);
+    } catch (error) {
+      setCustomerPhotoUrl(previousPhotoUrl);
+      setPhotoError(error instanceof Error ? error.message : "照片上传失败。");
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
+
+  function startRemarkEditing() {
+    setRemarkDraft(displayRemark ?? "");
+    setRemarkError(null);
+    setRemarkEditing(true);
+  }
+
+  async function saveRemark() {
+    const activeCustomerId = customer?.id;
+
+    if (!activeCustomerId) {
+      return;
+    }
+
+    const nextRemark = remarkDraft.trim();
+
+    setRemarkSaving(true);
+    setRemarkError(null);
+
+    try {
+      const payload = await updateMobileCustomerRemark(activeCustomerId, nextRemark);
+      const savedRemark = payload.customer.remark;
+
+      setDetailState((current) => {
+        if (current?.customerId !== activeCustomerId || !current.detail) {
+          return current;
+        }
+
+        return {
+          ...current,
+          detail: {
+            ...current.detail,
+            profile: {
+              ...current.detail.profile,
+              remark: savedRemark,
+            },
+          },
+        };
+      });
+      onRemarkUpdated(activeCustomerId, savedRemark);
+      setRemarkDraft(savedRemark ?? "");
+      setRemarkEditing(false);
+    } catch (error) {
+      setRemarkError(error instanceof Error ? error.message : "备注保存失败。");
+    } finally {
+      setRemarkSaving(false);
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-[62]">
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="关闭客户详情"
-        className="absolute inset-0 bg-black/28 backdrop-blur-[8px]"
-      />
-      <section className="absolute inset-x-0 bottom-0 max-h-[88svh] overflow-y-auto rounded-t-[28px] bg-[#f7f8fb] px-5 pb-8 pt-4 shadow-[0_-22px_60px_rgba(16,24,40,0.18)]">
-        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-[#d0d5dd]" />
+    <div className="fixed inset-0 z-[62] bg-[#d8e2ef]">
+      <section className="lbn-phone-contact-detail">
+        <header className="flex shrink-0 items-center justify-between px-5 pb-4 pt-[max(18px,env(safe-area-inset-top))]">
+          <button
+            type="button"
+            onClick={onClose}
+            className="lbn-phone-detail-control lbn-phone-press inline-flex h-12 w-12 items-center justify-center rounded-full text-white"
+            aria-label="返回通讯录"
+          >
+            <IoChevronBack className="h-8 w-8" aria-hidden />
+          </button>
+          <span
+            className={cn("lbn-phone-cti-dot", canCreateCallRecord && "is-ready")}
+            role="status"
+            aria-label={canCreateCallRecord ? "通话可用" : "通话不可用"}
+            title={canCreateCallRecord ? "通话可用" : "通话不可用"}
+          />
+        </header>
 
-        <div className="rounded-[24px] bg-white px-5 py-5 shadow-[0_12px_28px_rgba(16,24,40,0.05)]">
-          <div className="flex items-start gap-3">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] bg-[#eaf3ff] text-[#1677ff]">
-              <UserRound className="h-8 w-8" aria-hidden />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <h2 className="truncate text-[24px] font-semibold text-[#20242c]">
-                  {customer.name}
-                </h2>
-                <StatusBadge
-                  label={getCustomerExecutionDisplayLongLabel({
-                    executionClass: customer.executionClass,
-                    newImported: customer.newImported,
-                    pendingFirstCall: customer.pendingFirstCall,
-                  })}
-                  variant={executionVariant}
-                />
-              </div>
-              <p className="mt-1 truncate text-[15px] text-[#667085]">{displayPhone}</p>
-              <p className="mt-1 truncate text-[13px] text-[#98a1af]">{region}</p>
-              {detail?.wechatId ? (
-                <p className="mt-1 truncate text-[13px] text-[#667085]">
-                  微信 · {detail.wechatId}
-                </p>
-              ) : null}
-              {primaryProduct ? (
-                <p className="mt-2 line-clamp-1 text-[13px] text-[#667085]">
-                  意向 · {primaryProduct}
-                </p>
-              ) : null}
-              <p className="mt-1 truncate text-[12px] text-[#98a1af]">{importSignal}</p>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f2f4f7] text-[#667085]"
-              aria-label="关闭"
-            >
-              <X className="h-5 w-5" aria-hidden />
-            </button>
-          </div>
-
-          {detailLoading ? (
-            <div className="mt-4 rounded-[16px] bg-[#f7f8fb] px-4 py-3 text-[13px] text-[#667085]">
-              正在同步移动端详情...
-            </div>
-          ) : null}
-
-          {detailError ? (
-            <div className="mt-4 rounded-[16px] bg-[#fff4f4] px-4 py-3 text-[13px] text-[#b42318]">
-              {detailError}
-            </div>
-          ) : null}
-
-          {detail?.tags.length ? (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {detail.tags.slice(0, 6).map((tag) => (
-                <span
-                  key={tag.id}
-                  className="inline-flex max-w-[120px] truncate rounded-full bg-[#f2f4f7] px-2.5 py-1 text-[12px] font-medium text-[#667085]"
-                >
-                  {tag.name}
-                </span>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="mt-5 grid grid-cols-3 gap-3">
-            <div className="rounded-[16px] bg-[#f7f8fb] px-3 py-3">
-              <div className="text-[20px] font-semibold text-[#20242c]">
-                {detail ? detail.timeline.callRecords.length : customer._count.callRecords}
-              </div>
-              <div className="mt-1 text-[12px] text-[#98a1af]">通话</div>
-            </div>
-            <div className="rounded-[16px] bg-[#f7f8fb] px-3 py-3">
-              <div className="text-[20px] font-semibold text-[#20242c]">
-                {detail ? detailOrders.length : customer.approvedTradeOrderCount}
-              </div>
-              <div className="mt-1 text-[12px] text-[#98a1af]">成交</div>
-            </div>
-            <div className="rounded-[16px] bg-[#f7f8fb] px-3 py-3">
-              <div className="truncate text-[20px] font-semibold text-[#20242c]">
-                {formatMoney(
-                  detail
-                    ? String(
-                        detailOrders.reduce(
-                          (sum, order) => sum + Number(order.finalAmount || 0),
-                          0,
-                        ),
-                      )
-                    : customer.lifetimeTradeAmount,
-                )}
-              </div>
-              <div className="mt-1 text-[12px] text-[#98a1af]">金额</div>
-            </div>
-          </div>
-
-          <div className="mt-5 grid grid-cols-3 gap-3">
-            <button
-              type="button"
-              onClick={() => onOpenOrder(customer)}
-              className="inline-flex h-12 items-center justify-center rounded-[16px] bg-[#1677ff] text-[15px] font-semibold text-white shadow-[0_14px_28px_rgba(22,119,255,0.22)]"
-            >
-              <ClipboardList className="mr-2 h-5 w-5" aria-hidden />
-              下单
-            </button>
-            <button
-              type="button"
-              onClick={() => startCall("crm-outbound")}
-              disabled={!canCreateCallRecord}
-              className={cn(
-                "inline-flex h-12 items-center justify-center rounded-[16px] text-[15px] font-semibold",
-                canCreateCallRecord
-                  ? "bg-[#eaf3ff] text-[#1677ff]"
-                  : "bg-[#f2f4f7] text-[#98a1af]",
-              )}
-            >
-              外呼
-            </button>
-            <button
-              type="button"
-              onClick={() => startCall("local-phone")}
-              disabled={!canCreateCallRecord}
-              className={cn(
-                "inline-flex h-12 items-center justify-center rounded-[16px] text-[15px] font-semibold",
-                canCreateCallRecord
-                  ? "bg-[#f7f8fb] text-[#475467]"
-                  : "bg-[#f2f4f7] text-[#98a1af]",
-              )}
-            >
-              本机
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-4 rounded-[22px] bg-white px-5 py-5">
-          <h3 className="text-[18px] font-semibold text-[#20242c]">最近通话</h3>
-          <div className="mt-3 space-y-3">
-            {detailCalls.length > 0
-              ? detailCalls.slice(0, 3).map((record) => (
-                  <div
-                    key={record.id}
-                    className="rounded-[16px] border border-black/5 bg-[#fbfcfe] px-4 py-3"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-[15px] font-medium text-[#20242c]">
-                        {formatMobileDetailCallLabel(record)}
-                      </span>
-                      <span className="shrink-0 text-[12px] text-[#98a1af]">
-                        {formatNullableRelativeDate(record.callTime)}
-                      </span>
-                    </div>
-                    {record.remark ? (
-                      <p className="mt-2 line-clamp-2 text-[13px] leading-5 text-[#667085]">
-                        {record.remark}
-                      </p>
-                    ) : null}
-                  </div>
-                ))
-              : customer.callRecords.slice(0, 3).map((record) => (
-              <div
-                key={record.id}
-                className="rounded-[16px] border border-black/5 bg-[#fbfcfe] px-4 py-3"
+        <div className="lbn-mobile-scrollbar-none min-h-0 flex-1 overflow-y-auto px-5 pb-[calc(112px+env(safe-area-inset-bottom))]">
+          <div className="flex flex-col items-center pt-12 text-center text-white">
+            <PhoneAvatar name={customer.name} size="lg" photoUrl={customerPhotoUrl} />
+            <div className="relative mt-8">
+              <button
+                type="button"
+                onClick={() => setLinePickerOpen((value) => !value)}
+                className="lbn-phone-detail-line-switch lbn-phone-press"
+                aria-expanded={linePickerOpen}
               >
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[15px] font-medium text-[#20242c]">
-                    {record.resultLabel}
+                <span>始终使用：</span>
+                <strong>{callMode === "crm-outbound" ? "外呼" : "本机"}</strong>
+              </button>
+              {linePickerOpen ? (
+                <div className="lbn-phone-line-popover lbn-phone-detail-line-popover">
+                  {[
+                    { value: "crm-outbound" as const, label: "外呼" },
+                    { value: "local-phone" as const, label: "本机" },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        onCallModeChange(option.value);
+                        setLinePickerOpen(false);
+                      }}
+                      className="lbn-phone-popover-option lbn-phone-press flex w-full items-center gap-3 px-5 py-3 text-left"
+                    >
+                      <span className="w-5 text-[24px] leading-none text-black">
+                        {callMode === option.value ? "✓" : ""}
+                      </span>
+                      <span className="block text-[21px] font-medium leading-6 text-black">
+                        {option.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <h2 className="mt-2 max-w-full truncate text-[42px] font-semibold leading-tight">
+              {customer.name}
+            </h2>
+            <div className="mt-8 grid w-full grid-cols-4 gap-4">
+              <button
+                type="button"
+                disabled={!displayPhone || isMaskedPhone(displayPhone)}
+                onClick={sendSms}
+                className="lbn-phone-press flex min-w-0 flex-col items-center gap-2 text-white disabled:opacity-45"
+              >
+                <span className="lbn-phone-detail-action inline-flex h-16 w-16 items-center justify-center rounded-full">
+                  <IoChatbubble className="h-7 w-7" aria-hidden />
+                </span>
+                <span className="truncate text-[12px]">信息</span>
+              </button>
+              <button
+                type="button"
+                disabled={!canCreateCallRecord}
+                onClick={startPreferredCall}
+                className="lbn-phone-press flex min-w-0 flex-col items-center gap-2 text-white disabled:opacity-45"
+              >
+                <span className="lbn-phone-detail-action inline-flex h-16 w-16 items-center justify-center rounded-full">
+                  <IoCall className="h-7 w-7" aria-hidden />
+                </span>
+                <span className="truncate text-[12px]">通话</span>
+              </button>
+              <button
+                type="button"
+                onClick={openOrder}
+                className="lbn-phone-press flex min-w-0 flex-col items-center gap-2 text-white"
+              >
+                <span className="lbn-phone-detail-action inline-flex h-16 w-16 items-center justify-center rounded-full">
+                  <ClipboardList className="h-7 w-7" aria-hidden />
+                </span>
+                <span className="truncate text-[12px]">下单</span>
+              </button>
+              <button
+                type="button"
+                onClick={scrollToDetails}
+                className="lbn-phone-press flex min-w-0 flex-col items-center gap-2 text-white"
+              >
+                <span className="lbn-phone-detail-action inline-flex h-16 w-16 items-center justify-center rounded-full">
+                  <FileText className="h-7 w-7" aria-hidden />
+                </span>
+                <span className="truncate text-[12px]">详情</span>
+              </button>
+            </div>
+          </div>
+
+          <label className="lbn-phone-glass-card lbn-phone-press mt-6 block cursor-pointer overflow-hidden rounded-[28px] text-white">
+            <input
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={handleCustomerPhotoChange}
+            />
+            <span className="flex items-center gap-3 px-5 py-5">
+              <PhoneAvatar name={customer.name} size="sm" photoUrl={customerPhotoUrl} />
+              <span className="min-w-0 flex-1 truncate text-[22px]">联系人照片与海报</span>
+              <span className="text-[15px] text-white/72">
+                {photoUploading ? "上传中" : customerPhotoUrl ? "更换" : "上传"}
+              </span>
+              <ChevronRight className="h-7 w-7" aria-hidden />
+            </span>
+            {photoError ? (
+              <span className="block border-t border-white/14 px-5 py-3 text-left text-[13px] text-white/74">
+                {photoError}
+              </span>
+            ) : null}
+          </label>
+
+          <div className="lbn-phone-glass-card mt-4 rounded-[28px] px-5 py-5 text-white">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="text-[18px] text-white/86">电话</div>
+                <div className="mt-1 text-[24px] font-light">{displayPhone}</div>
+                <div className="mt-3 max-w-[13rem] break-words text-left text-[18px] leading-6 text-white/78">
+                  {addressLabel}
+                </div>
+              </div>
+              <div className="shrink-0 text-right">
+                <div className="text-[15px] text-white/58">分配时间</div>
+                <div className="mt-1 max-w-[9.5rem] truncate text-[16px] text-white/88">
+                  {assignmentLabel}
+                </div>
+              </div>
+            </div>
+            <div className="my-5 h-px bg-white/18" />
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-[20px] text-white/90">备注</div>
+              {!remarkEditing ? (
+                <button
+                  type="button"
+                  onClick={startRemarkEditing}
+                  className="lbn-phone-press rounded-full px-3 py-1 text-[15px] text-white/74 active:bg-white/12"
+                >
+                  编辑
+                </button>
+              ) : null}
+            </div>
+            {remarkEditing ? (
+              <div className="mt-3">
+                <textarea
+                  value={remarkDraft}
+                  onChange={(event) => setRemarkDraft(event.target.value)}
+                  maxLength={1000}
+                  rows={4}
+                  autoFocus
+                  placeholder="输入客户备注"
+                  className="min-h-28 w-full resize-none rounded-[22px] border border-white/18 bg-white/14 px-4 py-3 text-[16px] leading-6 text-white outline-none backdrop-blur-xl placeholder:text-white/48 focus:border-white/30"
+                />
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <span className="text-[13px] text-white/54">
+                    {remarkDraft.trim().length}/1000
                   </span>
-                  <span className="shrink-0 text-[12px] text-[#98a1af]">
-                    {formatNullableRelativeDate(record.callTime)}
+                  <span className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRemarkDraft(displayRemark ?? "");
+                        setRemarkError(null);
+                        setRemarkEditing(false);
+                      }}
+                      disabled={remarkSaving}
+                      className="lbn-phone-press h-10 rounded-full px-4 text-[15px] text-white/72 disabled:opacity-45"
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void saveRemark()}
+                      disabled={remarkSaving}
+                      className="lbn-phone-press h-10 rounded-full bg-white px-5 text-[15px] font-medium text-[#0a84ff] disabled:opacity-45"
+                    >
+                      {remarkSaving ? "保存中" : "保存"}
+                    </button>
                   </span>
                 </div>
-                {record.remark ? (
-                  <p className="mt-2 line-clamp-2 text-[13px] leading-5 text-[#667085]">
-                    {record.remark}
-                  </p>
-                ) : null}
               </div>
-            ))}
-            {!latestCall && detailCalls.length === 0 ? (
-              <div className="rounded-[16px] bg-[#f7f8fb] px-4 py-6 text-center text-[14px] text-[#98a1af]">
-                暂无通话记录
+            ) : (
+              <button
+                type="button"
+                onClick={startRemarkEditing}
+                className="lbn-phone-press mt-2 block min-h-12 w-full rounded-[18px] px-0 py-1 text-left text-[16px] leading-6 text-white/72"
+              >
+                {displayRemark || (detailLoading ? "正在同步客户资料..." : "暂无备注")}
+              </button>
+            )}
+            {remarkError ? <p className="mt-3 text-[13px] text-white/72">{remarkError}</p> : null}
+            {detailError ? (
+              <p className="mt-3 text-[13px] text-white/72">{detailError}</p>
+            ) : null}
+          </div>
+
+          <div className="lbn-phone-glass-card mt-4 overflow-hidden rounded-[28px] text-white">
+            <button
+              type="button"
+              onClick={() => setCallHistoryExpanded((value) => !value)}
+              className="lbn-phone-press block w-full px-5 py-4 text-left"
+            >
+              <span className="block text-[20px]">通话记录：{callSummary}</span>
+              <span className="mt-1 block text-[15px] text-white/70">
+                {callHistoryExpanded ? "收起通话记录" : "展开通话记录"}
+              </span>
+            </button>
+            {callHistoryExpanded ? (
+              <div className="border-t border-white/16 px-5 py-2">
+                {visibleCallRecords.length > 0 ? (
+                  visibleCallRecords.map((record) => (
+                    <div
+                      key={record.id}
+                      className="flex min-w-0 items-center justify-between gap-3 border-b border-white/10 py-3 last:border-b-0"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-[16px] text-white">
+                          {getCallModeLabel(record.callSource)} {getPhoneResultLabel(record)}
+                        </span>
+                        <span className="mt-0.5 block text-[13px] text-white/60">
+                          {formatNullableRelativeDate(record.callTime)}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-[13px] text-white/60">
+                        {record.durationSeconds > 0
+                          ? formatCallDuration(record.durationSeconds)
+                          : "未计时"}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="py-4 text-[15px] text-white/66">暂无通话记录</div>
+                )}
               </div>
             ) : null}
           </div>
-        </div>
 
-        {detail?.timeline.followUpTasks.length ? (
-          <div className="mt-4 rounded-[22px] bg-white px-5 py-5">
-            <h3 className="text-[18px] font-semibold text-[#20242c]">跟进待办</h3>
-            <div className="mt-3 space-y-3">
-              {detail.timeline.followUpTasks.slice(0, 3).map((task) => (
-                <div
-                  key={task.id}
-                  className="rounded-[16px] border border-black/5 bg-[#fbfcfe] px-4 py-3"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="truncate text-[15px] font-medium text-[#20242c]">
-                      {task.subject}
-                    </span>
-                    <span className="shrink-0 text-[12px] text-[#98a1af]">
-                      {formatNullableRelativeDate(task.dueAt)}
-                    </span>
-                  </div>
-                  {task.content ? (
-                    <p className="mt-2 line-clamp-2 text-[13px] leading-5 text-[#667085]">
-                      {task.content}
-                    </p>
-                  ) : null}
+          <div
+            ref={detailSectionRef}
+            className="lbn-phone-glass-card mt-4 rounded-[28px] px-5 py-5 text-white"
+          >
+            <div className="text-[20px] text-white/90">客户详情</div>
+            <div className="mt-4 grid gap-3 text-left">
+              {[
+                ["姓名", customer.name],
+                ["电话", displayPhone],
+                ["地址", addressLabel],
+                ["微信", detail?.wechatId || "未填写"],
+                ["承接人", customer.owner?.name || "未分配"],
+                ["分配时间", assignmentLabel],
+                ["客户等级", customer.executionClass],
+                ["商品", productSignal ? `${productSignal.label}：${productSignal.value}` : "暂无"],
+                ["成交单数", `${customer.approvedTradeOrderCount} 单`],
+                ["最近跟进", formatNullableRelativeDate(customer.latestFollowUpAt)],
+              ].map(([label, value]) => (
+                <div key={label} className="flex min-w-0 items-start gap-4">
+                  <span className="w-20 shrink-0 text-[15px] text-white/58">{label}</span>
+                  <span className="min-w-0 flex-1 break-words text-[16px] text-white/88">
+                    {value}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
-        ) : null}
-
-        {detailOrders.length > 0 ? (
-          <div className="mt-4 rounded-[22px] bg-white px-5 py-5">
-            <h3 className="text-[18px] font-semibold text-[#20242c]">历史订单</h3>
-            <div className="mt-3 space-y-3">
-              {detailOrders.slice(0, 3).map((order) => (
-                <div
-                  key={order.id}
-                  className="rounded-[16px] border border-black/5 bg-[#fbfcfe] px-4 py-3"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="truncate text-[15px] font-medium text-[#20242c]">
-                      {order.tradeNo}
-                    </span>
-                    <span className="shrink-0 text-[13px] font-semibold text-[#1677ff]">
-                      ¥{formatMoney(order.finalAmount)}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex items-center justify-between gap-3 text-[12px] text-[#98a1af]">
-                    <span>{order.tradeStatus}</span>
-                    <span>{formatNullableRelativeDate(order.createdAt)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {displayRemark ? (
-          <div className="mt-4 rounded-[22px] bg-white px-5 py-5">
-            <h3 className="text-[18px] font-semibold text-[#20242c]">客户备注</h3>
-            <p className="mt-2 text-[14px] leading-6 text-[#667085]">{displayRemark}</p>
-          </div>
-        ) : null}
-      </section>
-    </div>
-  );
-}
-
-function CustomerOrderDrawer({
-  customer,
-  onClose,
-  onOpenOrders,
-  onStartCall,
-}: Readonly<{
-  customer: CustomerListItem | null;
-  onClose: () => void;
-  onOpenOrders: (customer: CustomerListItem) => void;
-  onStartCall: (
-    customer: CustomerListItem,
-    triggerSource: MobileCallTriggerSource,
-    mode: MobileCallMode,
-  ) => void;
-}>) {
-  if (!customer) {
-    return null;
-  }
-
-  const primaryProduct = getCustomerPrimaryProduct(customer) || "未填写意向商品";
-  const latestCall = customer.callRecords[0] ?? null;
-
-  return (
-    <div className="fixed inset-0 z-[64]">
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="关闭下单入口"
-        className="absolute inset-0 bg-black/28 backdrop-blur-[8px]"
-      />
-      <section className="absolute inset-x-0 bottom-0 max-h-[82svh] overflow-y-auto rounded-t-[26px] bg-[#f7f8fb] px-5 pb-8 pt-4 shadow-[0_-22px_60px_rgba(16,24,40,0.18)]">
-        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-[#d0d5dd]" />
-
-        <div className="rounded-[22px] bg-white px-5 py-5 shadow-[0_12px_28px_rgba(16,24,40,0.05)]">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <div className="text-[13px] font-medium text-[#98a1af]">下单客户</div>
-              <h2 className="mt-1 truncate text-[22px] font-semibold text-[#20242c]">
-                {customer.name}
-              </h2>
-              <p className="mt-1 truncate text-[13px] text-[#667085]">{customer.phone}</p>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f2f4f7] text-[#667085]"
-              aria-label="关闭"
-            >
-              <X className="h-5 w-5" aria-hidden />
-            </button>
-          </div>
-
-          <div className="mt-4 grid grid-cols-3 gap-3">
-            <div className="rounded-[15px] bg-[#f7f8fb] px-3 py-3">
-              <div className="truncate text-[18px] font-semibold text-[#20242c]">
-                {customer.approvedTradeOrderCount}
-              </div>
-              <div className="mt-1 text-[12px] text-[#98a1af]">成交单</div>
-            </div>
-            <div className="rounded-[15px] bg-[#f7f8fb] px-3 py-3">
-              <div className="truncate text-[18px] font-semibold text-[#20242c]">
-                {formatMoney(customer.lifetimeTradeAmount)}
-              </div>
-              <div className="mt-1 text-[12px] text-[#98a1af]">成交额</div>
-            </div>
-            <div className="rounded-[15px] bg-[#f7f8fb] px-3 py-3">
-              <div className="truncate text-[18px] font-semibold text-[#20242c]">
-                {customer._count.callRecords}
-              </div>
-              <div className="mt-1 text-[12px] text-[#98a1af]">通话</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 rounded-[22px] bg-white px-5 py-5">
-          <h3 className="text-[17px] font-semibold text-[#20242c]">订单信息</h3>
-          <div className="mt-3 grid gap-3">
-            <div className="rounded-[16px] bg-[#fbfcfe] px-4 py-3">
-              <div className="text-[12px] text-[#98a1af]">意向商品</div>
-              <div className="mt-1 line-clamp-2 text-[14px] font-medium leading-5 text-[#20242c]">
-                {primaryProduct}
-              </div>
-            </div>
-            <div className="rounded-[16px] bg-[#fbfcfe] px-4 py-3">
-              <div className="text-[12px] text-[#98a1af]">最近通话</div>
-              <div className="mt-1 truncate text-[14px] font-medium text-[#20242c]">
-                {latestCall
-                  ? `${latestCall.resultLabel} · ${formatNullableRelativeDate(latestCall.callTime)}`
-                  : "暂无通话记录"}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-3 gap-3">
-          <button
-            type="button"
-            onClick={() => onOpenOrders(customer)}
-            className="inline-flex h-12 items-center justify-center rounded-[16px] bg-[#1677ff] text-[15px] font-semibold text-white shadow-[0_14px_28px_rgba(22,119,255,0.22)]"
-          >
-            <ClipboardList className="mr-2 h-5 w-5" aria-hidden />
-            创建订单
-          </button>
-          <button
-            type="button"
-            onClick={() => onStartCall(customer, "detail", "crm-outbound")}
-            className="inline-flex h-12 items-center justify-center rounded-[16px] bg-white text-[15px] font-semibold text-[#1677ff]"
-          >
-            外呼
-          </button>
-          <button
-            type="button"
-            onClick={() => onStartCall(customer, "detail", "local-phone")}
-            className="inline-flex h-12 items-center justify-center rounded-[16px] bg-white text-[15px] font-semibold text-[#475467]"
-          >
-            本机
-          </button>
         </div>
       </section>
     </div>
@@ -2968,9 +3859,12 @@ function MobileModulePanel({
     module.kind === "generic" ? getNavigationIcon(module.iconName) : module.kind === "orders" ? PackageCheck : Mic;
 
   return (
-    <div className="fixed inset-0 z-[66] bg-[#f7f8fb]">
-      <section className="lbn-mobile-screen mx-auto min-h-[100svh] max-w-[520px] overflow-y-auto bg-[#f7f8fb] pb-8">
-        <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-black/5 bg-[#f7f8fb]/95 px-5 py-4 backdrop-blur-xl">
+    <div className="fixed inset-0 z-[66] overflow-hidden bg-[#f7f8fb]">
+      <section className="lbn-mobile-panel mx-auto flex w-full max-w-[520px] flex-col overflow-hidden bg-[#f7f8fb]">
+        <header
+          className="z-10 flex shrink-0 items-center gap-3 border-b border-black/5 bg-[#f7f8fb]/95 px-5 pb-4 backdrop-blur-xl"
+          style={{ paddingTop: "max(16px, env(safe-area-inset-top))" }}
+        >
           <button
             type="button"
             onClick={onClose}
@@ -2987,7 +3881,7 @@ function MobileModulePanel({
           </div>
         </header>
 
-        <div className="grid gap-4 px-5 pt-5">
+        <div className="lbn-mobile-scrollbar-none grid min-h-0 flex-1 content-start gap-4 overflow-y-auto px-5 pb-[calc(28px+env(safe-area-inset-bottom))] pt-5">
           <div className="rounded-[24px] bg-white px-5 py-5 shadow-[0_16px_36px_rgba(16,24,40,0.055)]">
             <div className="flex items-center gap-4">
               <IconBubble
@@ -3111,10 +4005,13 @@ function BottomNav({
   activeTab: MobileTab;
   onTabChange: (tab: MobileTab) => void;
 }>) {
+  const primaryTabs = tabs.slice(0, 3);
+  const searchTab = tabs.find((tab) => tab.key === "search");
+
   return (
-    <nav className="lbn-mobile-bottom-nav relative z-50 w-full shrink-0 border-t border-black/5 bg-white/95 px-3 pt-2 shadow-[0_-8px_24px_rgba(16,24,40,0.06)] backdrop-blur-xl">
-      <div className="grid grid-cols-5">
-        {tabs.map((tab) => {
+    <nav className="lbn-phone-bottom-nav">
+      <div className="lbn-phone-tab-pill">
+        {primaryTabs.map((tab) => {
           const active = activeTab === tab.key;
           const Icon = tab.icon;
 
@@ -3124,18 +4021,31 @@ function BottomNav({
               type="button"
               onClick={() => onTabChange(tab.key)}
               className={cn(
-                "flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-[16px] text-[12px] font-medium",
-                active ? "text-[#1677ff]" : "text-[#344054]",
+                "lbn-phone-dock-button lbn-phone-press relative flex h-[64px] min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-full text-[13px] font-semibold",
+                active ? "is-active text-[#0a84ff]" : "text-black",
               )}
               aria-current={active ? "page" : undefined}
             >
-              <Icon className={cn("h-6 w-6", active ? "fill-[#1677ff]/10" : "")} aria-hidden />
+              <Icon className="h-7 w-7" aria-hidden />
               <span>{tab.label}</span>
             </button>
           );
         })}
       </div>
-      <div className="mx-auto mt-1 hidden h-1 w-28 rounded-full bg-[#101828]/45 supports-[padding:max(0px)]:block" />
+      {searchTab ? (
+        <button
+          type="button"
+          onClick={() => onTabChange(searchTab.key)}
+          className={cn(
+            "lbn-phone-search-tab lbn-phone-press",
+            activeTab === searchTab.key ? "is-active text-[#0a84ff]" : "text-black",
+          )}
+          aria-current={activeTab === searchTab.key ? "page" : undefined}
+          aria-label={searchTab.label}
+        >
+          <IoSearchIcon className="h-9 w-9" aria-hidden />
+        </button>
+      ) : null}
     </nav>
   );
 }
@@ -3147,7 +4057,6 @@ function getInitialTab(value: string | null): MobileTab {
 export function MobileAppShell({
   data,
   currentUser,
-  dashboardData,
   navigationGroups,
   canCreateCallRecord,
   canAccessCallRecordings,
@@ -3167,17 +4076,11 @@ export function MobileAppShell({
   );
   const [searchText, setSearchText] = useState(data.filters.search);
   const [dialNumber, setDialNumber] = useState("");
-  const [callMode, setCallMode] = useState<MobileCallMode>("crm-outbound");
+  const [callMode, setCallMode] = useState<MobileCallMode>(() => readStoredCallMode());
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerListItem | null>(null);
   const [orderCustomer, setOrderCustomer] = useState<CustomerListItem | null>(null);
   const [activeModule, setActiveModule] = useState<MobileModuleView | null>(null);
   const [outboundNotice, setOutboundNotice] = useState<MobileOutboundNotice | null>(null);
-  const [mobileDashboardState, setMobileDashboardState] =
-    useState<MobileDashboardApiState>({
-      dashboard: null,
-      loading: true,
-      error: null,
-    });
   const [mobileCustomersState, setMobileCustomersState] =
     useState<MobileCustomersApiState>({
       items: null,
@@ -3233,44 +4136,6 @@ export function MobileAppShell({
   useEffect(() => {
     void refreshNativeRecorderReadiness();
   }, [refreshNativeRecorderReadiness]);
-
-  useEffect(() => {
-    let canceled = false;
-
-    setMobileDashboardState((current) => ({
-      ...current,
-      loading: true,
-      error: null,
-    }));
-
-    void fetchMobileDashboard()
-      .then((payload) => {
-        if (canceled) {
-          return;
-        }
-
-        setMobileDashboardState({
-          dashboard: payload.dashboard,
-          loading: false,
-          error: null,
-        });
-      })
-      .catch((error) => {
-        if (canceled) {
-          return;
-        }
-
-        setMobileDashboardState((current) => ({
-          ...current,
-          loading: false,
-          error: error instanceof Error ? error.message : "移动端工作台同步失败。",
-        }));
-      });
-
-    return () => {
-      canceled = true;
-    };
-  }, []);
 
   const loadMobileCustomers = useCallback(
     async (input: { page?: number; append?: boolean } = {}) => {
@@ -3404,21 +4269,9 @@ export function MobileAppShell({
     switchTab("messages");
   }
 
-  function submitSearch() {
-    replaceMobileQuery({ search: searchText.trim() || null });
-  }
-
-  function changeQueue(queue: string) {
-    replaceMobileQuery({ queue });
-  }
-
-  function applyCustomerFilters(next: {
-    queue: string | null;
-    executionClasses: string | null;
-    assignedFrom: string | null;
-    assignedTo: string | null;
-  }) {
-    replaceMobileQuery(next);
+  function changeCallMode(nextMode: MobileCallMode) {
+    setCallMode(nextMode);
+    writeStoredCallMode(nextMode);
   }
 
   function refreshMobileCustomers() {
@@ -3450,13 +4303,34 @@ export function MobileAppShell({
     setOrderCustomer(customer);
   }
 
-  function openCustomerOrders(customer: CustomerListItem) {
-    setOrderCustomer(null);
-    setActiveModule({
-      kind: "orders",
-      title: `${customer.name} · 下单`,
-      description: getCustomerPrimaryProduct(customer) || "客户订单入口",
+  function handleCustomerAvatarUpdated(customerId: string, avatarUrl: string | null) {
+    setSelectedCustomer((current) =>
+      current?.id === customerId ? { ...current, avatarUrl } : current,
+    );
+    setOrderCustomer((current) =>
+      current?.id === customerId ? { ...current, avatarUrl } : current,
+    );
+    setMobileCustomersState((current) => {
+      if (!current.items) {
+        return current;
+      }
+
+      return {
+        ...current,
+        items: current.items.map((item) =>
+          item.id === customerId ? { ...item, avatarUrl } : item,
+        ),
+      };
     });
+  }
+
+  function handleCustomerRemarkUpdated(customerId: string, remark: string | null) {
+    setSelectedCustomer((current) =>
+      current?.id === customerId ? { ...current, remark } : current,
+    );
+    setOrderCustomer((current) =>
+      current?.id === customerId ? { ...current, remark } : current,
+    );
   }
 
   async function resolveCustomerPhoneForCall(customer: CustomerListItem) {
@@ -3494,7 +4368,7 @@ export function MobileAppShell({
 
       const recent = createRecentDialCustomer(
         callableCustomer,
-        mode === "crm-outbound" ? "CRM 外呼" : "本机通话",
+        mode,
       );
       setRecentDialCustomer(recent);
       writeRecentDialCustomer(recent);
@@ -3516,7 +4390,7 @@ export function MobileAppShell({
   async function startCrmOutboundCall(customer: CustomerListItem) {
     setOutboundNotice({
       tone: "pending",
-      title: "CRM 外呼发起中",
+      title: "外呼发起中",
       description: `${customer.name} · 正在提交到 CTI 线路`,
     });
 
@@ -3536,13 +4410,13 @@ export function MobileAppShell({
       } | null;
 
       if (!response.ok) {
-        throw new Error(payload?.message ?? "CRM 外呼发起失败。");
+        throw new Error(payload?.message ?? "外呼发起失败。");
       }
 
       const sessionId = payload?.call?.sessionId;
       setOutboundNotice({
         tone: "pending",
-        title: "CRM 外呼已提交",
+        title: "外呼已提交",
         description: "等待坐席接听和客户接通，录音由服务器归档。",
       });
 
@@ -3552,8 +4426,8 @@ export function MobileAppShell({
     } catch (error) {
       setOutboundNotice({
         tone: "failed",
-        title: "CRM 外呼失败",
-        description: error instanceof Error ? error.message : "CRM 外呼发起失败。",
+        title: "外呼失败",
+        description: error instanceof Error ? error.message : "外呼发起失败。",
       });
     }
   }
@@ -3585,7 +4459,7 @@ export function MobileAppShell({
         if (session.status === "ENDED") {
           setOutboundNotice({
             tone: "success",
-            title: "CRM 外呼已结束",
+            title: "外呼已结束",
             description: session.durationSeconds
               ? `${customerName} · 通话 ${formatCallDuration(session.durationSeconds)}${
                   session.recordingImportedAt ? "，录音已归档" : ""
@@ -3599,7 +4473,7 @@ export function MobileAppShell({
         if (session.status === "FAILED" || session.status === "CANCELED") {
           setOutboundNotice({
             tone: "failed",
-            title: "CRM 外呼未接通",
+            title: "外呼未接通",
             description: session.failureMessage ?? "线路返回失败或客户未接通。",
           });
           router.refresh();
@@ -3639,15 +4513,16 @@ export function MobileAppShell({
   }
 
   return (
-    <main className="lbn-mobile-app mx-auto max-w-[520px] bg-[#f7f8fb] text-[#20242c] shadow-[0_0_0_1px_rgba(16,24,40,0.04)]">
-      <div className="lbn-mobile-screen">
+    <main className="lbn-mobile-app mx-auto max-w-[520px] bg-[#f5f7fa] text-[#20242c] shadow-[0_0_0_1px_rgba(16,24,40,0.04)]">
+      <div className={cn("lbn-mobile-screen", activeTab === "dialpad" && "lbn-mobile-screen--dialpad")}>
         {activeTab === "messages" ? (
           <MessagesTab
             data={data}
-            dashboardData={dashboardData}
-            mobileDashboardState={mobileDashboardState}
-            onOpenCustomers={openCustomers}
-            onOpenDialpad={openDialpad}
+            recentDialCustomer={recentDialCustomer}
+            callMode={callMode}
+            canCreateCallRecord={canCreateCallRecord}
+            onSelectCustomer={setSelectedCustomer}
+            onStartCall={startCustomerCall}
           />
         ) : null}
         {activeTab === "customers" ? (
@@ -3656,11 +4531,8 @@ export function MobileAppShell({
             mobileCustomersState={mobileCustomersState}
             mobileCustomersApiEnabled={mobileCustomersApiEnabled}
             searchText={searchText}
-            setSearchText={setSearchText}
+            callMode={callMode}
             canCreateCallRecord={canCreateCallRecord}
-            onSearchSubmit={submitSearch}
-            onQueueChange={changeQueue}
-            onApplyFilters={applyCustomerFilters}
             onRefreshCustomers={refreshMobileCustomers}
             onLoadMoreCustomers={loadMoreMobileCustomers}
             onSelectCustomer={setSelectedCustomer}
@@ -3673,9 +4545,19 @@ export function MobileAppShell({
             dialNumber={dialNumber}
             setDialNumber={setDialNumber}
             callMode={callMode}
-            setCallMode={setCallMode}
+            onCallModeChange={changeCallMode}
             canCreateCallRecord={canCreateCallRecord}
-            recentDialCustomer={recentDialCustomer}
+            onSelectCustomer={setSelectedCustomer}
+            onStartCall={startCustomerCall}
+          />
+        ) : null}
+        {activeTab === "search" ? (
+          <SearchTab
+            data={data}
+            searchText={searchText}
+            setSearchText={setSearchText}
+            callMode={callMode}
+            canCreateCallRecord={canCreateCallRecord}
             onSelectCustomer={setSelectedCustomer}
             onStartCall={startCustomerCall}
           />
@@ -3688,7 +4570,7 @@ export function MobileAppShell({
             openDialpad={openDialpad}
             openMessages={openMessages}
             onOpenModule={openModule}
-            onSelectCustomer={setSelectedCustomer}
+            onOpenOrder={openOrderEntry}
           />
         ) : null}
         {activeTab === "me" ? (
@@ -3749,16 +4631,30 @@ export function MobileAppShell({
 
       <CustomerDetailDrawer
         customer={selectedCustomer}
+        callMode={callMode}
+        onCallModeChange={changeCallMode}
+        callResultOptions={data.callResultOptions}
         canCreateCallRecord={canCreateCallRecord}
         onStartCall={startCustomerCall}
         onOpenOrder={openOrderEntry}
+        onAvatarUpdated={handleCustomerAvatarUpdated}
+        onRemarkUpdated={handleCustomerRemarkUpdated}
         onClose={() => setSelectedCustomer(null)}
       />
 
-      <CustomerOrderDrawer
+      <MobileOrderComposer
         customer={orderCustomer}
         onClose={() => setOrderCustomer(null)}
-        onOpenOrders={openCustomerOrders}
+        onCompleted={(message, tradeNo) => {
+          setOrderCustomer(null);
+          setOutboundNotice({
+            tone: "success",
+            title: "移动端订单已处理",
+            description: `${tradeNo} · ${message}`,
+          });
+          router.refresh();
+          void loadMobileCustomers({ page: 1 });
+        }}
         onStartCall={startCustomerCall}
       />
 
