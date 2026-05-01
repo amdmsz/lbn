@@ -5,6 +5,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOWNLOAD_DIR="${DOWNLOAD_DIR:-$PROJECT_ROOT/public/downloads}"
 RELEASE_TAG="${1:-latest}"
 CLIENT_VERSION="${CLIENT_VERSION:-}"
+ANDROID_RELEASE_ASSET="${ANDROID_RELEASE_ASSET:-Lbn-CRM-Android.apk}"
 
 if [[ -z "$CLIENT_VERSION" ]]; then
   CLIENT_VERSION="$(node -p "require('./public/client-update.json').version")"
@@ -30,7 +31,7 @@ download_asset() {
 
 mkdir -p "$DOWNLOAD_DIR"
 
-download_asset "Lbn-CRM-Android-debug.apk" "Lbn-CRM-Android.apk"
+download_asset "$ANDROID_RELEASE_ASSET" "Lbn-CRM-Android.apk"
 download_asset "Lbn-CRM-${CLIENT_VERSION}-x64.zip" "Lbn-CRM-${CLIENT_VERSION}-x64.zip"
 download_asset "Lbn-CRM-${CLIENT_VERSION}-x64.exe" "Lbn-CRM-${CLIENT_VERSION}-x64.exe"
 

@@ -1,5 +1,16 @@
 apply plugin: 'com.android.application'
 
+def releaseSigningPropsFile = rootProject.file('release-signing.properties')
+def releaseSigningProps = new Properties()
+
+if (releaseSigningPropsFile.exists()) {
+    releaseSigningPropsFile.withInputStream { releaseSigningProps.load(it) }
+}
+
+def hasReleaseSigning = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword'].every {
+    releaseSigningProps.getProperty(it)?.trim()
+}
+
 android {
     namespace "com.lbn.crm"
     compileSdk rootProject.ext.compileSdkVersion
@@ -16,8 +27,23 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile rootProject.file(releaseSigningProps.getProperty('storeFile'))
+                storePassword releaseSigningProps.getProperty('storePassword')
+                keyAlias releaseSigningProps.getProperty('keyAlias')
+                keyPassword releaseSigningProps.getProperty('keyPassword')
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            } else {
+                logger.warn("Release signing is not configured. Run `npm run mobile:release-keystore` before producing production APKs.")
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

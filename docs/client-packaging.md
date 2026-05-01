@@ -86,6 +86,32 @@ cd C:\Users\amdmsz\Documents\LbnCrm\apps\mobile\android
 .\gradlew.bat assembleDebug
 ```
 
+正式分发不要长期使用 debug APK。先生成一次本机 release keystore：
+
+```powershell
+cd C:\Users\amdmsz\Documents\LbnCrm
+npm run mobile:release-keystore
+```
+
+然后构建签名 release APK，并同步到 CRM 下载目录：
+
+```powershell
+npm run mobile:release:android
+```
+
+生成后的正式 APK：
+
+```text
+public/downloads/Lbn-CRM-Android.apk
+```
+
+必须备份这些本机签名文件，后续升级要继续用同一个签名：
+
+```text
+apps/mobile/android/release/lbn-crm-release.jks
+apps/mobile/android/release-signing.properties
+```
+
 ## 客户端更新检测
 
 客户端启动时会读取 CRM 服务端静态文件：

@@ -8,6 +8,8 @@
 /apps/mobile/android/.gradle
 /apps/mobile/android/app/build
 /apps/mobile/android/build
+/apps/mobile/android/release/
+/apps/mobile/android/release-signing.properties
 /.pnp
 .pnp.*
 .yarn/*

@@ -55,6 +55,8 @@
     "mobile:install": "npm install --prefix apps/mobile",
     "mobile:add:android": "npm run add:android --prefix apps/mobile",
     "mobile:sync": "npm run sync --prefix apps/mobile",
+    "mobile:release-keystore": "powershell -ExecutionPolicy Bypass -File scripts/create-android-release-keystore.ps1",
+    "mobile:release:android": "powershell -ExecutionPolicy Bypass -File scripts/build-android-release.ps1",
     "mobile:open:android": "npm run open:android --prefix apps/mobile"
   },
   "dependencies": {
