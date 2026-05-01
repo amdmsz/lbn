@@ -2,7 +2,7 @@
 
 更新时间：2026-05-01
 
-目标：让手机 App / Windows EXE 在没有 Tailscale 的情况下，通过公网域名访问内网 CRM。
+目标：让手机 App / Windows EXE 在没有 Tailscale 的情况下，通过公网域名访问内网 CRM，并通过 CRM 自己的 `/downloads` 目录分发安装包。
 
 最终访问路径：
 
@@ -158,6 +158,21 @@ https://crm.cclbn.com/mobile
 ```
 
 能打开登录页后，App/EXE 就能正常登录。
+
+同时验证客户端更新清单和安装包下载：
+
+```bash
+curl -I https://crm.cclbn.com/client-update.json
+curl -I https://crm.cclbn.com/downloads/Lbn-CRM-Android.apk
+curl -I https://crm.cclbn.com/downloads/Lbn-CRM-0.1.4-x64.zip
+```
+
+如果这些地址返回 404，先在内网 CRM 服务器执行：
+
+```bash
+cd /var/www/jiuzhuang-crm
+bash scripts/sync-client-downloads.sh v0.1.4
+```
 
 ## 8. 回滚
 

@@ -1,16 +1,17 @@
-# Windows EXE / Android APP 内网打包说明
+# Windows EXE / Android APP 打包与分发说明
 
 当前客户端固定访问：
 
 ```text
-http://crm.cclbn.com
+https://crm.cclbn.com
 ```
 
-客户端只是安装壳，业务逻辑、数据库、权限和审计仍然在内网 CRM 服务端。
+客户端只是安装壳，业务逻辑、数据库、权限和审计仍然在 CRM 服务端。
+同一局域网可以通过内网 DNS / 路由优先走内网；手机在外网时通过公网 FRP 入口访问同一个域名。
 
 ## 前置条件
 
-先确认内网服务端可访问：
+先确认本地或服务器端可访问：
 
 ```powershell
 cd C:\Users\amdmsz\Documents\LbnCrm
@@ -20,10 +21,10 @@ npm run dev
 在同一内网电脑或手机浏览器打开：
 
 ```text
-http://crm.cclbn.com
+https://crm.cclbn.com
 ```
 
-如果浏览器打不开，EXE / APP 也打不开，需要先处理 DNS、反向代理、防火墙、端口或服务端绑定地址。
+如果浏览器打不开，EXE / APP 也打不开，需要先处理 DNS、FRP、反向代理、防火墙、端口或服务端绑定地址。
 
 ## Windows EXE
 
@@ -105,6 +106,13 @@ npm run mobile:release:android
 public/downloads/Lbn-CRM-Android.apk
 ```
 
+当前服务端更新清单版本为 `0.1.4`，Android release APK 也必须保持：
+
+```text
+versionCode 4
+versionName "0.1.4"
+```
+
 必须备份这些本机签名文件，后续升级要继续用同一个签名：
 
 ```text
@@ -117,7 +125,7 @@ apps/mobile/android/release-signing.properties
 客户端启动时会读取 CRM 服务端静态文件：
 
 ```text
-http://crm.cclbn.com/client-update.json
+https://crm.cclbn.com/client-update.json
 ```
 
 当 `version` 高于当前客户端版本时：
@@ -134,11 +142,45 @@ http://crm.cclbn.com/client-update.json
 GitHub Release 资产建议固定命名：
 
 ```text
-Lbn-CRM-Setup.exe
-Lbn-CRM-Android-debug.apk
+Lbn-CRM-<version>-x64.exe
+Lbn-CRM-<version>-x64.zip
+Lbn-CRM-Android.apk
 ```
 
-这样客户端可以一直使用 `releases/latest/download/...` 下载最新安装包。
+CRM 对外分发地址固定为：
+
+```text
+https://crm.cclbn.com/downloads/Lbn-CRM-Android.apk
+https://crm.cclbn.com/downloads/Lbn-CRM-<version>-x64.zip
+https://crm.cclbn.com/downloads/Lbn-CRM-<version>-x64.exe
+```
+
+服务器从 GitHub Release 同步安装包到自己的下载目录：
+
+```bash
+cd /var/www/jiuzhuang-crm
+bash scripts/sync-client-downloads.sh v0.1.4
+sudo chown -R crm:crm public/downloads
+sudo chmod 644 public/downloads/Lbn-CRM-Android.apk
+sudo chmod 644 public/downloads/Lbn-CRM-0.1.4-x64.zip
+sudo chmod 644 public/downloads/Lbn-CRM-0.1.4-x64.exe
+```
+
+如果服务器访问 GitHub 不稳定，可以从本地 Windows 上传 APK：
+
+```powershell
+scp "C:\Users\amdmsz\Documents\LbnCrm\public\downloads\Lbn-CRM-Android.apk" crm@<内网服务器IP>:/tmp/Lbn-CRM-Android.apk
+```
+
+再到服务器放入 CRM 下载目录：
+
+```bash
+cd /var/www/jiuzhuang-crm
+sudo mkdir -p public/downloads
+sudo mv /tmp/Lbn-CRM-Android.apk public/downloads/Lbn-CRM-Android.apk
+sudo chown -R crm:crm public/downloads
+sudo chmod 644 public/downloads/Lbn-CRM-Android.apk
+```
 
 ## 修改内网地址
 
@@ -147,7 +189,7 @@ Lbn-CRM-Android-debug.apk
 - `apps/desktop/main.cjs`
 - `apps/mobile/capacitor.config.json`
 
-把 `http://crm.cclbn.com` 换成新的内网地址后重新打包。
+把 `https://crm.cclbn.com` 换成新的服务地址后重新打包。
 
 ## 不要放进客户端的东西
 

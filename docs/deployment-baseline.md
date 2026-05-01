@@ -1,6 +1,6 @@
 # 正式部署基线
 
-更新时间：2026-04-28
+更新时间：2026-05-01
 
 本文档是当前仓库正式部署主文档。
 
@@ -62,6 +62,8 @@ staging 验收请看：[docs/staging-checklist.md](./staging-checklist.md)
 - 发布后冒烟脚本：[scripts/release-smoke.sh](../scripts/release-smoke.sh)
 - GitHub Actions 发布护栏工作流：[.github/workflows/release-guardrails.yml](../.github/workflows/release-guardrails.yml)
 - 单机更新脚本模板：[scripts/deploy-update.sh](../scripts/deploy-update.sh)
+- 客户端安装包同步脚本：[scripts/sync-client-downloads.sh](../scripts/sync-client-downloads.sh)
+- 客户端打包与分发说明：[docs/client-packaging.md](./client-packaging.md)
 - lead import worker 入口脚本：[scripts/lead-import-worker.ts](../scripts/lead-import-worker.ts)
 - lead import runtime 自检脚本：[scripts/check-lead-import-runtime.ts](../scripts/check-lead-import-runtime.ts)
 - recycle auto finalize runbook：[docs/recycle-auto-finalize-runbook.md](./recycle-auto-finalize-runbook.md)
@@ -77,6 +79,7 @@ staging 验收请看：[docs/staging-checklist.md](./staging-checklist.md)
 - lead import worker 仍然需要以独立 systemd service 运行，执行 `npm run worker:lead-imports`
 - 如果启用 CRM 外呼，CTI Gateway 需要以独立 systemd service 运行，执行 `npm run cti-gateway`
 - 如果启用录音 AI，Call AI worker 推荐按 systemd timer 每分钟 one-shot 触发，执行 `npm run worker:call-ai -- --enqueue-missing --limit=<N>`
+- Windows / Android 客户端安装包不提交到 Git；正式分发时从 GitHub Release 同步到 `public/downloads`
 - recycle auto finalize 不推荐做成常驻 service；当前正式基线应按 one-shot 调度执行，具体命令、dry-run 演练、停用和回滚口径见 [docs/recycle-auto-finalize-runbook.md](./recycle-auto-finalize-runbook.md)
 
 当前正式 migration 链除了 baseline 外，还包含首发后新增的正式 additive migration：
@@ -393,7 +396,25 @@ B. 头像上传目录
 目录不存在时允许自动创建
 如果你希望头像在部署后持续保留，必须纳入备份
 
-C. 录音存储目录
+C. 客户端下载目录
+物理目录：public/downloads
+写入点：scripts/sync-client-downloads.sh 或人工上传
+对外访问路径：
+
+```text
+/downloads/Lbn-CRM-Android.apk
+/downloads/Lbn-CRM-<version>-x64.zip
+/downloads/Lbn-CRM-<version>-x64.exe
+```
+
+要求：
+
+目录必须存在，且 Nginx / Next.js 可读取
+安装包本身不提交到 Git，只保留 public/downloads/.gitkeep
+发布 App / EXE 后需要执行 `bash scripts/sync-client-downloads.sh <tag>`，或人工上传到该目录
+该目录可从 GitHub Release 重新生成，默认不纳入 runtime backup
+
+D. 录音存储目录
 物理目录：由 `CALL_RECORDING_STORAGE_DIR` 指定，例如 `/mnt/lbn-storage/recordings`
 写入点：PBX / Asterisk 服务端录音，以及 CRM mobile upload / webhook import 映射
 访问方式：通过 `/api/call-recordings/[id]/audio` 读取，支持 HTTP Range
@@ -405,7 +426,7 @@ CRM 进程必须能读取录音文件
 如果 Asterisk 与 CRM 共用挂载盘，`CTI_ASTERISK_RECORDING_DIR` 必须等于或位于 `CALL_RECORDING_STORAGE_DIR` 下面
 录音目录必须纳入独立容量监控和备份策略
 
-D. Next.js 构建产物与 runtime
+E. Next.js 构建产物与 runtime
 物理目录：`.next`、`runtime`
 
 要求：
@@ -417,10 +438,12 @@ D. Next.js 构建产物与 runtime
 
 ```bash
 sudo mkdir -p /srv/jiuzhuang-crm/current/public/exports/shipping
+sudo mkdir -p /srv/jiuzhuang-crm/current/public/downloads
 sudo mkdir -p /srv/jiuzhuang-crm/current/public/uploads/avatars
 sudo mkdir -p /srv/jiuzhuang-crm/current/runtime
 sudo mkdir -p /mnt/lbn-storage/recordings
 sudo chown -R crm:crm \
+  /srv/jiuzhuang-crm/current/public/downloads \
   /srv/jiuzhuang-crm/current/public/exports \
   /srv/jiuzhuang-crm/current/public/uploads \
   /srv/jiuzhuang-crm/current/runtime
@@ -451,6 +474,7 @@ BACKUP_DIR=/srv/backups/jiuzhuang-crm/runtime-assets bash scripts/backup-runtime
 public/exports
 public/uploads
 
+`public/downloads` 中的客户端安装包默认不备份；它们应从 GitHub Release 重新同步，或由本地重新上传。
 录音目录通常在独立挂载盘，例如 `/mnt/lbn-storage/recordings`，不由 `backup-runtime-assets.sh` 默认归档。生产需要单独做容量监控、周期备份和恢复演练。
 
 至少在这些场景前执行备份：
@@ -520,6 +544,25 @@ release preflight（含 npm ci --include=dev / prisma validate / prisma generate
 npm run prisma:deploy:safe -- --skip-generate
 systemctl restart <service>
 可选 release smoke
+
+如果本次发布包含 Windows / Android 客户端安装包，Web 发布成功后继续同步 CRM 自己的下载目录：
+
+```bash
+cd /var/www/jiuzhuang-crm
+bash scripts/sync-client-downloads.sh v0.1.4
+sudo chown -R crm:crm public/downloads
+sudo chmod 644 public/downloads/Lbn-CRM-Android.apk
+sudo chmod 644 public/downloads/Lbn-CRM-0.1.4-x64.zip
+sudo chmod 644 public/downloads/Lbn-CRM-0.1.4-x64.exe
+```
+
+同步后至少验证：
+
+```bash
+curl -I http://127.0.0.1:3000/downloads/Lbn-CRM-Android.apk
+curl -I https://crm.cclbn.com/downloads/Lbn-CRM-Android.apk
+curl -I https://crm.cclbn.com/client-update.json
+```
 13. 日志与最低回滚方案
 日志
 
@@ -637,6 +680,7 @@ LEAD_IMPORT_WORKER_CONCURRENCY、LEAD_IMPORT_CHUNK_SIZE 是否配置异常
 访问 /products
 执行 npm run prisma:status
 手动确认 public/exports/shipping 和 public/uploads/avatars 可写
+确认 https://crm.cclbn.com/downloads/Lbn-CRM-Android.apk 可以下载
 手动确认 Redis 可连通
 确认 jiuzhuang-crm-import-worker 正常启动
 从线索导入入口提交一批异步导入并确认批次被消费

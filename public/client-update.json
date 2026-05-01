@@ -1,6 +1,6 @@
 {
   "version": "0.1.4",
-  "notes": "优化 Windows 桌面端圆角透明窗口、顶部空白拖拽区域、桌面级顶部栏质感，并接入正式代码签名构建配置。",
+  "notes": "升级外呼与本机通话稳定性，接入 Android 签名 release APK，并统一从 CRM 下载目录分发 Windows / Android 客户端。",
   "windows": {
     "downloadUrl": "https://crm.cclbn.com/downloads/Lbn-CRM-0.1.4-x64.zip"
   },
