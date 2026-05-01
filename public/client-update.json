@@ -2,9 +2,9 @@
   "version": "0.1.4",
   "notes": "优化 Windows 桌面端圆角透明窗口、顶部空白拖拽区域、桌面级顶部栏质感，并接入正式代码签名构建配置。",
   "windows": {
-    "downloadUrl": "https://github.com/amdmsz/lbn/releases/latest/download/Lbn-CRM-0.1.4-x64.zip"
+    "downloadUrl": "https://crm.cclbn.com/downloads/Lbn-CRM-0.1.4-x64.zip"
   },
   "android": {
-    "downloadUrl": "https://github.com/amdmsz/lbn/releases/latest/download/Lbn-CRM-Android-debug.apk"
+    "downloadUrl": "https://crm.cclbn.com/downloads/Lbn-CRM-Android.apk"
   }
 }

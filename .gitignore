@@ -30,6 +30,8 @@
 .DS_Store
 *.pem
 /public/exports/
+/public/downloads/*
+!/public/downloads/.gitkeep
 /public/uploads/
 /runtime/
 /backups/

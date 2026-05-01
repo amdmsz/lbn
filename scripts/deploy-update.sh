@@ -53,11 +53,13 @@ if [[ -n "${RUN_MIGRATE_DEPLOY:-}" ]]; then
 fi
 
 mkdir -p "$PROJECT_ROOT/public/exports/shipping"
+mkdir -p "$PROJECT_ROOT/public/downloads"
 mkdir -p "$PROJECT_ROOT/public/uploads/avatars"
 mkdir -p "$PROJECT_ROOT/runtime/imports/lead-imports"
 
 if [[ -n "$APP_USER" && -n "$APP_GROUP" ]]; then
   chown -R "$APP_USER:$APP_GROUP" \
+    "$PROJECT_ROOT/public/downloads" \
     "$PROJECT_ROOT/public/exports" \
     "$PROJECT_ROOT/public/uploads" \
     "$PROJECT_ROOT/runtime/imports"
