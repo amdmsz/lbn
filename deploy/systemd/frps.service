@@ -1,0 +1,21 @@
+[Unit]
+Description=FRP server for Jiuzhuang CRM public tunnel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/frps -c /etc/frp/frps.toml
+Restart=always
+RestartSec=5
+LimitNOFILE=1048576
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/etc/frp
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

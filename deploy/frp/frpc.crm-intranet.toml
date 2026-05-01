@@ -1,0 +1,17 @@
+# Intranet CRM server: /etc/frp/frpc.toml
+# Replace __PUBLIC_FRP_SERVER__ with your public server IP or domain.
+
+serverAddr = "__PUBLIC_FRP_SERVER__"
+serverPort = 7000
+
+auth.tokenSource.type = "file"
+auth.tokenSource.file.path = "/etc/frp/frp-token"
+
+transport.tls.enable = true
+
+[[proxies]]
+name = "jiuzhuang-crm-web"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 3000
+remotePort = 18080

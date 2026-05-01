@@ -1,0 +1,11 @@
+# Public server: /etc/frp/frps.toml
+# Keep port 7000 open only for the intranet CRM server when possible.
+
+bindAddr = "0.0.0.0"
+bindPort = 7000
+
+auth.tokenSource.type = "file"
+auth.tokenSource.file.path = "/etc/frp/frp-token"
+
+# Require TLS for frpc <-> frps control/data channels.
+transport.tls.force = true
