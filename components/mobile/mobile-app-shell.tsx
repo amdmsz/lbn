@@ -78,6 +78,10 @@ import {
   type MobileApiPagination,
   type MobileCustomerDetail,
 } from "@/lib/mobile/client-api";
+import {
+  resolveMobileDialpadCallAction,
+  type MobileCallMode,
+} from "@/lib/mobile/dialpad-call-routing";
 import type {
   NavigationGroup,
   NavigationIconName,
@@ -86,7 +90,6 @@ import type {
 import { cn } from "@/lib/utils";
 
 type MobileTab = "messages" | "customers" | "dialpad" | "search" | "apps" | "me";
-type MobileCallMode = "crm-outbound" | "local-phone";
 type DateLike = Date | string | null | undefined;
 type MobileIcon = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
 type CustomerExecutionClassValue = "A" | "B" | "C" | "D" | "E";
@@ -1952,6 +1955,12 @@ function DialpadTab({
   const previewPhoneDisplay = previewCustomer
     ? splitDialMatchedDisplay(previewCustomer.phone, dialNumber)
     : null;
+  const dialAction = resolveMobileDialpadCallAction({
+    callMode,
+    normalizedNumber,
+    hasMatchedCustomer: Boolean(matchedCustomer),
+    canCreateCallRecord,
+  });
   const [linePickerOpen, setLinePickerOpen] = useState(false);
 
   function appendDialValue(value: string) {
@@ -1959,11 +1968,22 @@ function DialpadTab({
   }
 
   function startDial(mode: MobileCallMode) {
-    if (!normalizedNumber) {
+    const action = resolveMobileDialpadCallAction({
+      callMode: mode,
+      normalizedNumber,
+      hasMatchedCustomer: Boolean(matchedCustomer),
+      canCreateCallRecord,
+    });
+
+    if (action.kind === "blocked") {
       return;
     }
 
-    if (matchedCustomer && canCreateCallRecord) {
+    if (action.kind === "crm-outbound") {
+      if (!matchedCustomer) {
+        return;
+      }
+
       onStartCall(matchedCustomer, "card", mode);
       return;
     }
@@ -2067,6 +2087,12 @@ function DialpadTab({
             <strong>{previewProductSignal.value}</strong>
           </div>
         ) : null}
+
+        {normalizedNumber && dialAction.kind === "blocked" ? (
+          <div className="mt-3 text-[15px] leading-6 text-[#8e8e93]">
+            {dialAction.reason}
+          </div>
+        ) : null}
       </div>
 
       <div className="lbn-mobile-ios-dialpad" aria-label="拨号键盘">
@@ -2099,7 +2125,7 @@ function DialpadTab({
         <button
           type="button"
           onClick={startPrimaryDial}
-          disabled={!normalizedNumber}
+          disabled={dialAction.kind === "blocked"}
           className="lbn-mobile-ios-call-button lbn-phone-press mx-auto inline-flex items-center justify-center rounded-full bg-[#34c759] text-white disabled:bg-[#d1d5db] disabled:shadow-none"
           aria-label="拨打电话"
         >
