@@ -8,6 +8,7 @@ import { getOutboundCallFailureLabel } from "@/lib/outbound-calls/metadata";
 import { cn } from "@/lib/utils";
 
 type CallState = "idle" | "calling" | "tracking" | "completed" | "failed";
+type StatusPlacement = "left" | "right";
 
 type OutboundCallSessionSnapshot = {
   id: string;
@@ -96,6 +97,7 @@ export function CustomerOutboundCallButton({
   className,
   disabled = false,
   showLabel = true,
+  statusPlacement = "right",
 }: Readonly<{
   customerId: string;
   customerName: string;
@@ -103,6 +105,7 @@ export function CustomerOutboundCallButton({
   className?: string;
   disabled?: boolean;
   showLabel?: boolean;
+  statusPlacement?: StatusPlacement;
 }>) {
   const router = useRouter();
   const [state, setState] = useState<CallState>("idle");
@@ -347,9 +350,16 @@ export function CustomerOutboundCallButton({
         : state === "failed" || verdict === "failed"
           ? XCircle
           : PhoneCall;
+  const statusPlacementClassName =
+    statusPlacement === "left" ? "left-0" : "right-0";
 
   return (
-    <span className="relative inline-flex flex-col items-end gap-1.5">
+    <span
+      className={cn(
+        "relative inline-flex flex-col gap-1.5",
+        statusPlacement === "left" ? "items-start" : "items-end",
+      )}
+    >
       <button
         type="button"
         aria-label={`${stateLabel}：${customerName}`}
@@ -379,7 +389,12 @@ export function CustomerOutboundCallButton({
       </button>
 
       {statusCopy || statusMessage ? (
-        <span className="absolute right-0 top-[calc(100%+0.4rem)] z-20 w-64 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-left text-xs shadow-[0_14px_34px_rgba(15,23,42,0.13)]">
+        <span
+          className={cn(
+            "absolute top-[calc(100%+0.4rem)] z-[70] w-64 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-left text-xs shadow-[0_14px_34px_rgba(15,23,42,0.13)]",
+            statusPlacementClassName,
+          )}
+        >
           {statusCopy ? (
             <>
               <span className="flex items-center justify-between gap-3">

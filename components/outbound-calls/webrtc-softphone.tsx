@@ -15,6 +15,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 
 type SimpleUser = import("sip.js/lib/platform/web").SimpleUser;
 type SimpleUserDelegate = import("sip.js/lib/platform/web").SimpleUserDelegate;
@@ -854,7 +855,12 @@ export function WebRtcSoftphone({
   const seatLabel = config?.seatNo ?? config?.authorizationUser ?? "No seat";
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex max-w-[calc(100vw-3rem)] justify-end text-[13px]">
+    <div
+      className={cn(
+        "fixed bottom-6 right-6 flex max-w-[calc(100vw-3rem)] justify-end text-[13px]",
+        activeCall ? "z-[10010]" : "z-40",
+      )}
+    >
       <audio ref={audioRef} autoPlay />
 
       {!widgetExpanded ? (

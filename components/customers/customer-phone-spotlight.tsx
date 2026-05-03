@@ -53,6 +53,7 @@ export function CustomerPhoneSpotlight({
             customerName={customerName}
             label="CRM 外呼"
             showLabel={false}
+            statusPlacement="left"
             className="h-8 w-8 border-primary/20 bg-primary/10 px-0 text-primary hover:border-primary/30 hover:bg-primary/15"
           />
         ) : isDialog ? (
