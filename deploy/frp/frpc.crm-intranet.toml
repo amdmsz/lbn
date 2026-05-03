@@ -9,9 +9,19 @@ auth.tokenSource.file.path = "/etc/frp/frp-token"
 
 transport.tls.enable = true
 
+# Normal CRM pages and APIs. Public Nginx routes these through 127.0.0.1:18080.
 [[proxies]]
 name = "jiuzhuang-crm-web"
 type = "tcp"
 localIP = "127.0.0.1"
 localPort = 3000
 remotePort = 18080
+
+# WebRTC seat WebSocket. Keep /asterisk/ws on the CRM HTTPS listener so the
+# existing Nginx -> Asterisk proxy path is preserved for external users.
+[[proxies]]
+name = "jiuzhuang-crm-wss"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 443
+remotePort = 18081

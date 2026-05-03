@@ -7,13 +7,23 @@
 最终访问路径：
 
 ```text
-App / EXE
+App / EXE 普通页面
   -> https://crm.cclbn.com
   -> 公网服务器 Nginx HTTPS
   -> 127.0.0.1:18080 on 公网服务器
   -> frps
   -> frpc on 内网 CRM
   -> 127.0.0.1:3000 on 内网 CRM
+
+WebRTC 坐席 /asterisk/ws
+  -> wss://crm.cclbn.com/asterisk/ws
+  -> 公网服务器 Nginx HTTPS
+  -> 127.0.0.1:18081 on 公网服务器
+  -> frps
+  -> frpc on 内网 CRM
+  -> 127.0.0.1:443 on 内网 CRM
+  -> 内网 CRM Nginx
+  -> Asterisk WebSocket
 ```
 
 ## 1. DNS
@@ -77,8 +87,8 @@ sudo systemctl status frps --no-pager
 7000/tcp
 ```
 
-不要对公网开放 `18080/tcp`。它只给公网服务器本机 Nginx 访问。
-模板里的 `proxyBindAddr = "127.0.0.1"` 会让 frp 暴露端口只监听本机，避免 `18080` 直接暴露到公网。
+不要对公网开放 `18080/tcp` 或 `18081/tcp`。它们只给公网服务器本机 Nginx 访问。
+模板里的 `proxyBindAddr = "127.0.0.1"` 会让 frp 暴露端口只监听本机，避免 `18080` / `18081` 直接暴露到公网。
 
 ## 5. 公网 Nginx + HTTPS
 
@@ -106,6 +116,20 @@ sudo systemctl reload nginx
 ```bash
 curl -I http://127.0.0.1:3000/login
 ```
+
+确保内网 CRM 的 HTTPS 入口能把 WebRTC 坐席 WebSocket 转给 Asterisk：
+
+```bash
+curl -ik --http1.1 --resolve crm.cclbn.com:443:127.0.0.1 \
+  -H 'Connection: Upgrade' \
+  -H 'Upgrade: websocket' \
+  -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+  -H 'Sec-WebSocket-Version: 13' \
+  -H 'Sec-WebSocket-Protocol: sip' \
+  https://crm.cclbn.com/asterisk/ws
+```
+
+期望返回 `101 Switching Protocols`。
 
 配置 frpc：
 
@@ -139,10 +163,24 @@ sudo systemctl restart jiuzhuang-crm
 ```bash
 curl -I http://127.0.0.1:18080/login
 curl -I https://crm.cclbn.com/login
-sudo ss -lntp | grep -E ':(7000|18080|80|443)\b'
+sudo ss -lntp | grep -E ':(7000|18080|18081|80|443)\b'
 sudo journalctl -u frps -n 80 --no-pager
 sudo journalctl -u nginx -n 80 --no-pager
 ```
+
+WebRTC 坐席公网验证：
+
+```bash
+curl -ik --http1.1 --max-time 8 \
+  -H 'Connection: Upgrade' \
+  -H 'Upgrade: websocket' \
+  -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+  -H 'Sec-WebSocket-Version: 13' \
+  -H 'Sec-WebSocket-Protocol: sip' \
+  https://crm.cclbn.com/asterisk/ws
+```
+
+期望返回 `101 Switching Protocols`。如果这里超时或不是 `101`，外网坐席无法启动。
 
 内网 CRM 服务器：
 
