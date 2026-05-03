@@ -718,46 +718,37 @@ export function TradeOrderForm({
               </button>
             }
           >
-            <div className="overflow-hidden rounded-2xl border border-border/60 bg-white/72">
-              <div className="hidden grid-cols-[2.7rem_minmax(0,1fr)_5.4rem_7.2rem_8.2rem_2.5rem] gap-3 border-b border-border/50 bg-muted/25 px-3.5 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground xl:grid">
-                <span>行</span>
-                <span>SKU</span>
-                <span>数量</span>
-                <span>成交单价</span>
-                <span className="text-right">行金额</span>
-                <span />
-              </div>
+            <div className="space-y-3">
+              {lines.map((line, index) => {
+                const selectedSku =
+                  availableSkuOptions.find((option) => option.id === line.skuId) ?? null;
+                const resolvedItem = resolvedItemByLineId.get(line.lineId);
+                const qty = Math.max(0, toNumber(line.qty));
+                const dealPrice = toNumber(line.dealPrice);
+                const fallbackLineTotal = qty * Math.max(0, dealPrice);
+                const lineTotal = resolvedItem?.finalAmount ?? fallbackLineTotal;
+                const listAmount = selectedSku
+                  ? qty * toNumber(selectedSku.defaultUnitPrice)
+                  : 0;
+                const discountAmount = Math.max(0, listAmount - fallbackLineTotal);
+                const lineIssues = issueMessagesByLine.get(line.lineId) ?? [];
 
-              <div className="divide-y divide-border/45">
-                {lines.map((line, index) => {
-                  const selectedSku =
-                    availableSkuOptions.find((option) => option.id === line.skuId) ?? null;
-                  const resolvedItem = resolvedItemByLineId.get(line.lineId);
-                  const qty = Math.max(0, toNumber(line.qty));
-                  const dealPrice = toNumber(line.dealPrice);
-                  const fallbackLineTotal = qty * Math.max(0, dealPrice);
-                  const lineTotal = resolvedItem?.finalAmount ?? fallbackLineTotal;
-                  const listAmount = selectedSku
-                    ? qty * toNumber(selectedSku.defaultUnitPrice)
-                    : 0;
-                  const discountAmount = Math.max(0, listAmount - fallbackLineTotal);
-                  const lineIssues = issueMessagesByLine.get(line.lineId) ?? [];
-
-                  return (
-                    <div
-                      key={line.lineId}
-                      className={cn(
-                        "grid gap-3 px-3.5 py-3.5 xl:grid-cols-[2.7rem_minmax(0,1fr)_5.4rem_7.2rem_8.2rem_2.5rem] xl:items-start",
-                        lineIssues.length > 0 ? "bg-amber-500/5" : "bg-transparent",
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-3 xl:block">
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-border/60 bg-card text-[12px] font-semibold tabular-nums text-foreground">
+                return (
+                  <div
+                    key={line.lineId}
+                    className={cn(
+                      "rounded-2xl border border-border/60 bg-white/78 p-3.5 shadow-[0_1px_0_rgba(255,255,255,0.76)_inset]",
+                      lineIssues.length > 0 && "border-amber-500/25 bg-amber-500/5",
+                    )}
+                  >
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+                      <div className="flex items-center justify-between gap-3 lg:w-12 lg:justify-center lg:pt-6">
+                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-card text-[12px] font-semibold tabular-nums text-foreground shadow-sm">
                           {index + 1}
                         </span>
                         <button
                           type="button"
-                          className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-border/60 bg-card px-2.5 text-[12px] font-medium text-muted-foreground transition hover:border-destructive/25 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-35 xl:hidden"
+                          className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border/60 bg-card px-2.5 text-[12px] font-medium text-muted-foreground transition hover:border-destructive/25 hover:bg-destructive/5 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-35 lg:hidden"
                           disabled={!canRemoveSkuLine}
                           onClick={() => removeLine(line.lineId)}
                         >
@@ -766,7 +757,7 @@ export function TradeOrderForm({
                         </button>
                       </div>
 
-                      <div className="min-w-0 space-y-2">
+                      <div className="min-w-0 flex-1">
                         <ProductSkuSearchField
                           label="选择 SKU"
                           placeholder="搜索商品、SKU、规格或供应商"
@@ -815,7 +806,7 @@ export function TradeOrderForm({
                                 </>
                               ) : (
                                 <span className="text-[12px] leading-5 text-muted-foreground">
-                                  多个独立酒必须分别添加为多条商品行。
+                                  搜索后选择具体 SKU；多个独立酒请分别添加为多条商品行。
                                 </span>
                               )}
                             </div>
@@ -823,8 +814,20 @@ export function TradeOrderForm({
                         />
                       </div>
 
+                      <button
+                        type="button"
+                        className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border/60 bg-card text-muted-foreground transition hover:border-destructive/25 hover:bg-destructive/5 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-35 lg:mt-6 lg:inline-flex"
+                        disabled={!canRemoveSkuLine}
+                        onClick={() => removeLine(line.lineId)}
+                        aria-label={`删除第 ${index + 1} 行商品`}
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
+
+                    <div className="mt-3 grid gap-3 md:grid-cols-[8rem_10rem_minmax(0,1fr)]">
                       <label className="block">
-                        <span className="crm-label xl:hidden">数量</span>
+                        <span className="crm-label">数量</span>
                         <input
                           type="number"
                           min="1"
@@ -838,7 +841,7 @@ export function TradeOrderForm({
                       </label>
 
                       <label className="block">
-                        <span className="crm-label xl:hidden">成交单价</span>
+                        <span className="crm-label">成交单价</span>
                         <input
                           type="number"
                           min="0"
@@ -852,60 +855,51 @@ export function TradeOrderForm({
                         />
                       </label>
 
-                      <div className="rounded-2xl border border-border/55 bg-muted/20 px-3 py-2 text-right">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground xl:hidden">
+                      <div className="rounded-2xl border border-border/55 bg-muted/20 px-3.5 py-2.5 md:text-right">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                           行金额
                         </p>
-                        <p className="text-sm font-semibold tabular-nums text-foreground">
+                        <p className="mt-1 text-base font-semibold tabular-nums text-foreground">
                           ¥{formatAmountForCell(lineTotal)}
                         </p>
                         <p className="mt-1 text-[11px] tabular-nums text-muted-foreground">
-                          优惠 ¥{formatAmountForCell(discountAmount)}
+                          列表价 ¥{formatAmountForCell(listAmount)} / 优惠 ¥
+                          {formatAmountForCell(discountAmount)}
                         </p>
                       </div>
-
-                      <button
-                        type="button"
-                        className="hidden h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-card text-muted-foreground transition hover:border-destructive/25 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-35 xl:inline-flex"
-                        disabled={!canRemoveSkuLine}
-                        onClick={() => removeLine(line.lineId)}
-                        aria-label={`删除第 ${index + 1} 行商品`}
-                      >
-                        <Trash2 className="h-4 w-4" aria-hidden="true" />
-                      </button>
-
-                      <div className="space-y-2 xl:col-start-2 xl:col-span-4">
-                        <label className="block">
-                          <span className="crm-label">优惠 / 特批原因</span>
-                          <textarea
-                            rows={2}
-                            value={line.discountReason}
-                            onChange={(event) =>
-                              updateLine(line.lineId, { discountReason: event.target.value })
-                            }
-                            placeholder="成交价低于列表价时填写；无优惠可留空"
-                            className="crm-textarea min-h-[4.6rem]"
-                          />
-                        </label>
-
-                        {lineIssues.length > 0 ? (
-                          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12px] leading-5 text-amber-800 dark:text-amber-300">
-                            {lineIssues.map((message) => (
-                              <div key={message} className="flex gap-2">
-                                <AlertTriangle
-                                  className="mt-0.5 h-3.5 w-3.5 shrink-0"
-                                  aria-hidden="true"
-                                />
-                                <span>{message}</span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
                     </div>
-                  );
-                })}
-              </div>
+
+                    <div className="mt-3 space-y-2">
+                      <label className="block">
+                        <span className="crm-label">优惠 / 特批原因</span>
+                        <textarea
+                          rows={2}
+                          value={line.discountReason}
+                          onChange={(event) =>
+                            updateLine(line.lineId, { discountReason: event.target.value })
+                          }
+                          placeholder="成交价低于列表价时填写；无优惠可留空"
+                          className="crm-textarea min-h-[4.25rem]"
+                        />
+                      </label>
+
+                      {lineIssues.length > 0 ? (
+                        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12px] leading-5 text-amber-800 dark:text-amber-300">
+                          {lineIssues.map((message) => (
+                            <div key={message} className="flex gap-2">
+                              <AlertTriangle
+                                className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                                aria-hidden="true"
+                              />
+                              <span>{message}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </FormSection>
 

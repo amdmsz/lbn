@@ -1433,18 +1433,27 @@ function renderOrdersTab({
   submitTradeOrderForReviewAction?: (formData: FormData) => Promise<void>;
 }>) {
   const orderSignals = getOrderSummarySignals(data);
+  const composerForm =
+    tradeOrderComposer && saveTradeOrderDraftAction && submitTradeOrderForReviewAction ? (
+      <TradeOrderForm
+        customer={tradeOrderComposer.customer}
+        paymentSchemeOptions={tradeOrderComposer.paymentSchemeOptions}
+        skuOptions={tradeOrderComposer.skuOptions}
+        draft={tradeOrderComposer.draft}
+        saveDraftAction={saveTradeOrderDraftAction}
+        submitForReviewAction={submitTradeOrderForReviewAction}
+      />
+    ) : null;
 
   return (
     <div className="space-y-5">
-      {canCreateSalesOrders ? (
+      {composerForm ? (
+        composerForm
+      ) : canCreateSalesOrders ? (
         <CustomerTabSection
           eyebrow="成交主单"
-          title={tradeOrderComposer ? "当前成交草稿" : "成交入口"}
-          description={
-            tradeOrderComposer
-              ? "已经存在草稿，继续在客户上下文里完成成交主单。"
-              : "需要推进成交时，再从客户详情进入主单编辑。"
-          }
+          title="成交入口"
+          description="需要推进成交时，再从客户详情进入主单编辑。"
           actions={
             <PortraitActionLink
               href={buildCustomerTradeOrderHref(
@@ -1457,22 +1466,9 @@ function renderOrdersTab({
             />
           }
         >
-          {tradeOrderComposer &&
-          saveTradeOrderDraftAction &&
-          submitTradeOrderForReviewAction ? (
-            <TradeOrderForm
-              customer={tradeOrderComposer.customer}
-              paymentSchemeOptions={tradeOrderComposer.paymentSchemeOptions}
-              skuOptions={tradeOrderComposer.skuOptions}
-              draft={tradeOrderComposer.draft}
-              saveDraftAction={saveTradeOrderDraftAction}
-              submitForReviewAction={submitTradeOrderForReviewAction}
-            />
-          ) : (
-            <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4 text-sm leading-6 text-[var(--color-sidebar-muted)]">
-              当前没有进行中的成交草稿。成交入口继续挂在客户画像里，需要推进时再进入。
-            </div>
-          )}
+          <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4 text-sm leading-6 text-[var(--color-sidebar-muted)]">
+            当前没有进行中的成交草稿。成交入口继续挂在客户画像里，需要推进时再进入。
+          </div>
         </CustomerTabSection>
       ) : null}
 
@@ -1817,28 +1813,62 @@ export function CustomerDetailWorkbench({
       tone: riskState.tone,
     },
   ];
+  const isTradeOrderComposerMode = activeTab === "orders" && Boolean(tradeOrderComposer);
 
   return (
     <WorkbenchLayout
       className="!gap-0"
       contentClassName="!space-y-0"
       header={
-        <section className="rounded-2xl border border-border/60 bg-card px-4 py-4 shadow-sm md:px-5 xl:px-6">
+        <section
+          className={cn(
+            "rounded-2xl border border-border/60 bg-card px-4 shadow-sm md:px-5",
+            isTradeOrderComposerMode ? "py-3" : "py-4 xl:px-6",
+          )}
+        >
           <PageContextLink
-            href={navigationContext.returnTo ?? "/customers"}
-            label={getCustomerDetailBackLabel(navigationContext)}
-            trail={[isPublicPoolContext ? "公海池" : "客户中心", "客户经营总览"]}
+            href={
+              isTradeOrderComposerMode
+                ? buildCustomerTabHref(shell.id, "orders", navigationContext)
+                : navigationContext.returnTo ?? "/customers"
+            }
+            label={
+              isTradeOrderComposerMode
+                ? "返回成交结果"
+                : getCustomerDetailBackLabel(navigationContext)
+            }
+            trail={[
+              isPublicPoolContext ? "公海池" : "客户中心",
+              isTradeOrderComposerMode ? "成交主单编辑" : "客户经营总览",
+            ]}
           />
 
-          <div className="mt-4 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div
+            className={cn(
+              "flex flex-col gap-4 xl:flex-row xl:justify-between",
+              isTradeOrderComposerMode ? "mt-3 xl:items-center" : "mt-4 xl:items-end",
+            )}
+          >
             <div className="min-w-0 flex-1 space-y-3">
               <div className="flex min-w-0 items-start gap-3">
-                <div className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-border/60 bg-muted/40 text-[1rem] font-semibold text-foreground shadow-sm">
+                <div
+                  className={cn(
+                    "inline-flex shrink-0 items-center justify-center rounded-2xl border border-border/60 bg-muted/40 font-semibold text-foreground shadow-sm",
+                    isTradeOrderComposerMode ? "h-10 w-10 text-[0.9rem]" : "h-12 w-12 text-[1rem]",
+                  )}
+                >
                   {getCustomerMonogram(shell.name)}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2.5">
-                    <h1 className="text-2xl font-semibold text-foreground md:text-[1.85rem]">
+                    <h1
+                      className={cn(
+                        "font-semibold text-foreground",
+                        isTradeOrderComposerMode
+                          ? "text-xl md:text-2xl"
+                          : "text-2xl md:text-[1.85rem]",
+                      )}
+                    >
                       {shell.name}
                     </h1>
                     <CustomerStatusBadge status={shell.status} />
@@ -1854,7 +1884,10 @@ export function CustomerDetailWorkbench({
                       phone={shell.phone}
                       triggerSource="detail"
                       variant="dialog"
-                      phoneClassName="text-3xl tracking-normal"
+                      phoneClassName={cn(
+                        "tracking-normal",
+                        isTradeOrderComposerMode ? "text-xl" : "text-3xl",
+                      )}
                       outboundCallEnabled={outboundCallEnabled && canCreateCalls}
                       outboundCallPlacement="icon"
                     />
@@ -1881,6 +1914,7 @@ export function CustomerDetailWorkbench({
               </div>
             </div>
 
+            {isTradeOrderComposerMode ? null : (
             <div className="max-w-xl rounded-2xl border border-border/40 bg-muted/30 px-4 py-3">
               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0">
@@ -1900,12 +1934,23 @@ export function CustomerDetailWorkbench({
                 />
               </div>
             </div>
+            )}
           </div>
         </section>
       }
     >
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <main className="min-w-0 space-y-4 lg:col-span-8">
+      <div
+        className={cn(
+          "grid grid-cols-1 gap-6",
+          isTradeOrderComposerMode ? "lg:grid-cols-1" : "lg:grid-cols-12",
+        )}
+      >
+        <main
+          className={cn(
+            "min-w-0 space-y-4",
+            isTradeOrderComposerMode ? "lg:col-span-full" : "lg:col-span-8",
+          )}
+        >
           <section
             id="customer-main"
             className="sticky top-0 z-10 rounded-2xl border border-border/60 bg-background/90 px-4 py-3 shadow-sm backdrop-blur-md md:px-5"
@@ -1969,6 +2014,7 @@ export function CustomerDetailWorkbench({
           })}
         </main>
 
+        {isTradeOrderComposerMode ? null : (
         <aside className="min-w-0 lg:col-span-4">
           <div className="sticky top-6 space-y-4">
             <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
@@ -2138,6 +2184,7 @@ export function CustomerDetailWorkbench({
             ) : null}
           </div>
         </aside>
+        )}
       </div>
 
       {canCreateCalls ? (
