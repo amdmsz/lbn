@@ -101,7 +101,7 @@ export default async function RecycleBinPage({
             isHistoryView
               ? `${activeTabLabel} tab 已切到 ${activeEntryStatusLabel} 历史终态视角：这里只读展示删除与解决审计，不提供历史恢复或历史 purge。`
               : isFinalizeTab
-              ? `${activeTabLabel} tab 已切到双终态 finalize 视角：move 只代表进入 3 天冷静期，到期后再按最新服务端真相收口为 PURGE 或 ARCHIVE。`
+              ? `${activeTabLabel} tab 已切到双终态 finalize 视角：move 进入回收站后即可按最新服务端真相收口为 PURGE 或 ARCHIVE。`
               : "统一治理已移入回收站的商品主数据、直播场次、线索、客户与交易订单。当前保留恢复、最终处理入口、基础筛选和治理详情。"
           }
           meta={
@@ -152,7 +152,7 @@ export default async function RecycleBinPage({
                   ? "含 Archive Payload"
                   : `结果 / ${activeEntryStatusLabel}`
                 : isFinalizeTab
-                  ? "3 天后仅封存"
+                  ? "当前终态"
                   : "清理受阻"
             }
             value={String(
@@ -168,7 +168,7 @@ export default async function RecycleBinPage({
                   ? "当前历史结果中，包含 archivePayloadJson 的条目数量。"
                   : `当前筛选结果中，最终结果为 ${activeEntryStatusLabel} 的历史条目数量。`
                 : isFinalizeTab
-                ? "当前筛选结果中，按最新 finalize preview 判断，3 天后只能 ARCHIVE 的对象数量。"
+                ? "当前筛选结果中，按最新 finalize preview 判断，最终终态为 ARCHIVE 的对象数量。"
                 : "当前筛选结果中，包含清理阻断项未通过或仅管理员可执行的对象。"
             }
             density="strip"

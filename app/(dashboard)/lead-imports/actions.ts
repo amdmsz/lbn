@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth/session";
 import { deleteImportedCustomersDirect } from "@/lib/customers/imported-customer-deletion";
 import { executeLeadImportBatchRollback } from "@/lib/lead-imports/batch-rollback";
 import { createCustomerContinuationImportBatchAsync } from "@/lib/lead-imports/customer-continuation-import";
+import { replaceDuplicateCustomerWithNewLead } from "@/lib/lead-imports/duplicate-replacement";
 import {
   createLeadImportBatchAsync,
   toggleLeadImportTemplate,
@@ -57,10 +58,23 @@ const leadImportBatchRollbackSchema = z.object({
   reason: z.string().trim().min(1, "请填写整批撤销原因").max(500, "撤销原因不能超过 500 字"),
 });
 
+const duplicateCustomerReplacementSchema = z.object({
+  batchId: z.string().trim().min(1, "缺少批次 ID"),
+  rowId: z.string().trim().min(1, "缺少导入行 ID"),
+  reason: z.string().trim().min(1, "请填写判断说明").max(500, "判断说明不能超过 500 字"),
+});
+
 export type ExecuteLeadImportBatchRollbackActionResult = {
   status: "success" | "error";
   message: string;
   rollbackMode: LeadImportBatchRollbackMode;
+};
+
+export type ReplaceDuplicateCustomerActionResult = {
+  status: "success" | "error";
+  message: string;
+  leadId: string | null;
+  oldCustomerId: string | null;
 };
 
 function getValue(formData: FormData, key: string) {
@@ -168,6 +182,48 @@ export async function executeLeadImportBatchRollbackAction(
       status: "error",
       message: error instanceof Error ? error.message : "整批撤销失败，请稍后重试。",
       rollbackMode: parsed.data.mode,
+    };
+  }
+}
+
+export async function replaceDuplicateCustomerWithNewLeadAction(
+  input: z.input<typeof duplicateCustomerReplacementSchema>,
+): Promise<ReplaceDuplicateCustomerActionResult> {
+  const actor = await getActor();
+  const parsed = duplicateCustomerReplacementSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      status: "error",
+      message: parsed.error.issues[0]?.message ?? "提交数据不完整。",
+      leadId: null,
+      oldCustomerId: null,
+    };
+  }
+
+  try {
+    const result = await replaceDuplicateCustomerWithNewLead(actor, parsed.data);
+
+    revalidatePath("/lead-imports");
+    revalidatePath(`/lead-imports/${parsed.data.batchId}`);
+    revalidatePath("/leads");
+    revalidatePath("/customers");
+    revalidatePath("/customers/public-pool");
+    revalidatePath("/dashboard");
+    revalidatePath(`/customers/${result.oldCustomerId}`);
+
+    return {
+      status: "success",
+      message: result.message,
+      leadId: result.leadId,
+      oldCustomerId: result.oldCustomerId,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "作为新线索处理失败，请稍后重试。",
+      leadId: null,
+      oldCustomerId: null,
     };
   }
 }

@@ -754,15 +754,7 @@ function matchesStateFilter(
       return !item.canRestore;
     case "purge_blocked":
       if (item.finalActionPreview) {
-        if (item.finalActionPreview.finalAction === "ARCHIVE") {
-          return true;
-        }
-
-        if (item.isExpired) {
-          return !item.canFinalizeNow;
-        }
-
-        return item.purgeRequiresAdmin || !item.canPurge;
+        return !item.canFinalizeNow;
       }
 
       return item.purgeRequiresAdmin || !item.canPurge;
@@ -923,74 +915,34 @@ function buildBlockerSummary(input: {
   return input.canActorPurge ? "可恢复，且可执行永久删除" : "可恢复；清理动作仅管理员可执行";
 }
 
-function formatRemainingTimeLabel(expiresAt: string, isExpired: boolean) {
-  if (isExpired) {
-    return "冷静期已到期";
-  }
-
-  const diffMs = new Date(expiresAt).getTime() - Date.now();
-
-  if (diffMs <= 0) {
-    return "冷静期已到期";
-  }
-
-  const totalHours = Math.max(1, Math.ceil(diffMs / (60 * 60 * 1000)));
-  const days = Math.floor(totalHours / 24);
-  const hours = totalHours % 24;
-
-  if (days > 0 && hours > 0) {
-    return `还剩 ${days} 天 ${hours} 小时`;
-  }
-
-  if (days > 0) {
-    return `还剩 ${days} 天`;
-  }
-
-  return `还剩 ${totalHours} 小时`;
-}
-
 function buildCustomerRecycleBlockerSummary(input: {
   restoreGuard: RecycleRestoreGuard;
   preview: RecycleFinalizePreview;
-  isExpired: boolean;
   canFinalizeNow: boolean;
 }) {
   const restoreSummary = input.restoreGuard.canRestore
     ? "可恢复"
     : `恢复受阻：${input.restoreGuard.blockerSummary}`;
 
-  if (input.isExpired) {
-    return `${restoreSummary}；${
-      input.canFinalizeNow
-        ? `已到最终处理窗口：${input.preview.finalAction}`
-        : `已到最终处理窗口：仅管理员可执行 ${input.preview.finalAction}`
-    }`;
-  }
-
-  if (input.preview.finalAction === "ARCHIVE") {
-    return `${restoreSummary}；3 天后仅 ARCHIVE`;
-  }
-
-  return `${restoreSummary}；3 天后可 PURGE`;
+  return `${restoreSummary}；${
+    input.canFinalizeNow
+      ? `当前可执行最终处理：${input.preview.finalAction}`
+      : `最终处理仅管理员可执行：${input.preview.finalAction}`
+  }`;
 }
 
 function buildCustomerEarlyPurgeSummary(input: {
   preview: RecycleFinalizePreview;
-  isExpired: boolean;
   canEarlyPurge: boolean;
   canFinalizeNow: boolean;
 }) {
-  if (input.isExpired) {
-    return input.canFinalizeNow
-      ? `冷静期已到期，请执行最终处理：${input.preview.finalAction}`
-      : `冷静期已到期，最终处理仅管理员可执行：${input.preview.finalAction}`;
-  }
-
   if (input.preview.finalAction === "ARCHIVE") {
-    return "当前不提供提前永久删除，3 天后仅 ARCHIVE。";
+    return input.canFinalizeNow
+      ? "当前可直接执行最终处理：ARCHIVE。"
+      : "最终处理仅管理员可执行：ARCHIVE。";
   }
 
-  return input.canEarlyPurge ? "当前可提前永久删除。" : "仅管理员可提前永久删除。";
+  return input.canEarlyPurge ? "当前可直接永久删除。" : "仅管理员可永久删除。";
 }
 
 function supportsFinalizePreview(targetType: RecycleBinListEntry["targetType"]) {
@@ -1005,45 +957,31 @@ function supportsFinalizePreview(targetType: RecycleBinListEntry["targetType"]) 
 function buildTradeOrderRecycleBlockerSummary(input: {
   restoreGuard: RecycleRestoreGuard;
   preview: RecycleFinalizePreview;
-  isExpired: boolean;
   canFinalizeNow: boolean;
 }) {
   const restoreSummary = input.restoreGuard.canRestore
     ? "可恢复"
     : `恢复受阻：${input.restoreGuard.blockerSummary}`;
 
-  if (input.isExpired) {
-    return `${restoreSummary}；${
-      input.canFinalizeNow
-        ? `已到最终处理窗口：${input.preview.finalAction}`
-        : `已到最终处理窗口：仅管理员可执行 ${input.preview.finalAction}`
-    }`;
-  }
-
-  if (input.preview.finalAction === "ARCHIVE") {
-    return `${restoreSummary}；3 天后仅 ARCHIVE`;
-  }
-
-  return `${restoreSummary}；3 天后可 PURGE`;
+  return `${restoreSummary}；${
+    input.canFinalizeNow
+      ? `当前可执行最终处理：${input.preview.finalAction}`
+      : `最终处理仅管理员可执行：${input.preview.finalAction}`
+  }`;
 }
 
 function buildTradeOrderEarlyPurgeSummary(input: {
   preview: RecycleFinalizePreview;
-  isExpired: boolean;
   canEarlyPurge: boolean;
   canFinalizeNow: boolean;
 }) {
-  if (input.isExpired) {
-    return input.canFinalizeNow
-      ? `冷静期已到期，请执行最终处理：${input.preview.finalAction}`
-      : `冷静期已到期，最终处理仅管理员可执行：${input.preview.finalAction}`;
-  }
-
   if (input.preview.finalAction === "ARCHIVE") {
-    return "当前不提供提前永久删除，3 天后仅 ARCHIVE。";
+    return input.canFinalizeNow
+      ? "当前可直接执行最终处理：ARCHIVE。"
+      : "最终处理仅管理员可执行：ARCHIVE。";
   }
 
-  return input.canEarlyPurge ? "当前可提前永久删除。" : "仅管理员可提前永久删除。";
+  return input.canEarlyPurge ? "当前可直接永久删除。" : "仅管理员可永久删除。";
 }
 
 function parseArchivePayload(
@@ -1983,12 +1921,10 @@ async function buildListItems(
       const canFinalizeNow = Boolean(
         finalizePreviewResult &&
           finalActionPreview?.canFinalize &&
-          isExpired &&
           canActorPurge,
       );
       const canEarlyPurge = Boolean(
         finalActionPreview &&
-          !isExpired &&
           canActorPurge &&
           finalActionPreview.canEarlyPurge,
       );
@@ -2072,14 +2008,12 @@ async function buildListItems(
             ? buildCustomerRecycleBlockerSummary({
                 restoreGuard: restoreGuard!,
                 preview: finalActionPreview,
-                isExpired,
                 canFinalizeNow,
               })
             : finalActionPreview && entry.targetType === "TRADE_ORDER"
               ? buildTradeOrderRecycleBlockerSummary({
                   restoreGuard: restoreGuard!,
                   preview: finalActionPreview,
-                  isExpired,
                   canFinalizeNow,
                 })
             : buildBlockerSummary({
@@ -2092,14 +2026,12 @@ async function buildListItems(
           finalActionPreview && entry.targetType === "CUSTOMER"
             ? buildCustomerEarlyPurgeSummary({
                 preview: finalActionPreview,
-                isExpired,
                 canEarlyPurge,
                 canFinalizeNow,
               })
             : finalActionPreview && entry.targetType === "TRADE_ORDER"
               ? buildTradeOrderEarlyPurgeSummary({
                   preview: finalActionPreview,
-                  isExpired,
                   canEarlyPurge,
                   canFinalizeNow,
               })
@@ -2122,19 +2054,12 @@ async function buildListItems(
             : canActorPurge && purgeGuard!.canPurge,
         purgeRequiresAdmin:
           finalActionPreview && isFinalizeTarget
-            ? Boolean(
-                finalActionPreview.canEarlyPurge && !isExpired && !canActorPurge,
-              )
+            ? Boolean(finalActionPreview.canEarlyPurge && !canActorPurge)
             : !canActorPurge,
         finalActionPreview,
         finalizeSummary: finalActionPreview?.blockerSummary ?? null,
         finalActionLabel: finalActionPreview?.finalActionLabel ?? null,
-        remainingTimeLabel: finalizePreviewResult
-          ? formatRemainingTimeLabel(
-              finalizePreviewResult.expiresAt,
-              finalizePreviewResult.isExpired,
-            )
-          : null,
+        remainingTimeLabel: null,
         finalizeBlockerGroups: finalActionPreview
           ? buildBlockerGroups({
               targetType: entry.targetType,

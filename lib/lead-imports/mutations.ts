@@ -32,7 +32,13 @@ import {
   type LeadImportFieldKey,
   type LeadImportMode,
   type LeadImportMappingConfig,
+  type LeadImportRowMappedData,
 } from "@/lib/lead-imports/metadata";
+import {
+  buildLeadImportDuplicateCustomerSnapshot,
+  leadImportDuplicateCustomerSelect,
+  type LeadImportDuplicateCustomerRecord,
+} from "@/lib/lead-imports/duplicate-customer";
 import { enqueueLeadImportBatchJob, getLeadImportChunkSize } from "@/lib/lead-imports/queue";
 import { readLeadImportSourceFile, saveLeadImportSourceFile } from "@/lib/lead-imports/storage";
 import { withVisibleLeadWhere } from "@/lib/leads/visibility";
@@ -42,25 +48,17 @@ type Actor = {
   role: RoleCode;
 };
 
-type ImportedLeadData = ReturnType<typeof buildMappedLeadData>["mappedData"];
+type ImportedLeadData = LeadImportRowMappedData;
 
-type ExistingCustomerForLeadImport = {
-  id: string;
-  phone: string;
-  name: string;
-  ownerId: string | null;
-  owner: {
-    name: string;
-    username: string;
-  } | null;
-};
+type ExistingCustomerForLeadImport = LeadImportDuplicateCustomerRecord;
 
 function buildExistingCustomerDuplicateReason(customer: ExistingCustomerForLeadImport) {
+  const snapshot = buildLeadImportDuplicateCustomerSnapshot(customer);
   const ownerText = customer.owner
     ? `\uFF0C\u5F53\u524D\u8D1F\u8D23\u4EBA\uFF1A${customer.owner.name} (@${customer.owner.username})`
     : "\uFF0C\u5F53\u524D\u6682\u65E0\u8D1F\u8D23\u4EBA";
 
-  return `\u7CFB\u7EDF\u5185\u5DF2\u5B58\u5728\u540C\u624B\u673A\u53F7\u5BA2\u6237\uFF1A${customer.name}${ownerText}`;
+  return `\u7CFB\u7EDF\u5185\u5DF2\u5B58\u5728\u540C\u624B\u673A\u53F7\u5BA2\u6237\uFF1A${customer.name}${ownerText}\uFF0C\u5BA2\u6237\u5206\u7C7B\uFF1A${snapshot.executionClassLabel}`;
 }
 
 type LeadImportPersistedRowSummary = {
@@ -144,7 +142,7 @@ function buildMappedLeadData(
 ) {
   const phoneRaw = getMappedValue(rawData, mapping, "phone");
   const normalizedPhone = normalizeImportedPhone(phoneRaw);
-  const mappedData = {
+  const mappedData: LeadImportRowMappedData = {
     phone: normalizedPhone,
     name: normalizeOptional(getMappedValue(rawData, mapping, "name")),
     address: normalizeOptional(getMappedValue(rawData, mapping, "address")),
@@ -269,18 +267,7 @@ async function createOrMatchCustomerForLead(
         publicPoolReason: PublicPoolReason.UNASSIGNED_IMPORT,
         publicPoolTeamId: input.actorTeamId,
       },
-      select: {
-        id: true,
-        phone: true,
-        name: true,
-        ownerId: true,
-        owner: {
-          select: {
-            name: true,
-            username: true,
-          },
-        },
-      },
+      select: leadImportDuplicateCustomerSelect,
     }));
 
   if (!matchedCustomer) {
@@ -520,20 +507,6 @@ async function processLeadImportRowTx(
           take: 1,
           select: {
             action: true,
-            customer: {
-              select: {
-                id: true,
-                phone: true,
-                name: true,
-                ownerId: true,
-                owner: {
-                  select: {
-                    name: true,
-                    username: true,
-                  },
-                },
-              },
-            },
           },
         },
       },
@@ -548,7 +521,7 @@ async function processLeadImportRowTx(
           mergeAction: existingRow.mergeLogs[0]?.action ?? null,
         },
         importedLead: null,
-        customer: existingRow.mergeLogs[0]?.customer ?? null,
+        customer: null,
       };
     }
 
@@ -567,6 +540,7 @@ async function processLeadImportRowTx(
     let linkedCustomerName: string | null = null;
     let mergeAction: LeadCustomerMergeAction | null = null;
     let tagSynced = false;
+    let mappedDataForRow: LeadImportRowMappedData = mappedData;
     let importedLead:
       | {
           id: string;
@@ -595,9 +569,12 @@ async function processLeadImportRowTx(
     } else if (input.existingCustomerMap.has(normalizedPhone)) {
       status = LeadImportRowStatus.DUPLICATE;
       dedupType = LeadDedupType.EXISTING_CUSTOMER;
-      errorReason = buildExistingCustomerDuplicateReason(
-        input.existingCustomerMap.get(normalizedPhone)!,
-      );
+      const duplicateCustomer = input.existingCustomerMap.get(normalizedPhone)!;
+      mappedDataForRow = {
+        ...mappedData,
+        duplicateCustomer: buildLeadImportDuplicateCustomerSnapshot(duplicateCustomer),
+      };
+      errorReason = buildExistingCustomerDuplicateReason(duplicateCustomer);
     } else {
       importedLead = await tx.lead.create({
         data: {
@@ -666,7 +643,7 @@ async function processLeadImportRowTx(
         mappedName: mappedData.name,
         errorReason,
         rawData: input.row.rawData as Prisma.InputJsonValue,
-        mappedData: mappedData as Prisma.InputJsonValue,
+        mappedData: mappedDataForRow as Prisma.InputJsonValue,
         dedupType,
         matchedLeadId,
         importedLeadId,
@@ -821,18 +798,7 @@ export async function processLeadImportBatchAsync(
           in: uniqueCandidatePhones,
         },
       },
-      select: {
-        id: true,
-        phone: true,
-        name: true,
-        ownerId: true,
-        owner: {
-          select: {
-            name: true,
-            username: true,
-          },
-        },
-      },
+      select: leadImportDuplicateCustomerSelect,
     }),
     prisma.tag.findFirst({
       where: {

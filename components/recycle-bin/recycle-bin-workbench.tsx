@@ -109,8 +109,8 @@ function getDialogMeta(state: RecycleBinDialogState): RecycleBinDialogMeta | nul
       badgeVariant: finalAction === "PURGE" ? "danger" : "info" as const,
       description:
         finalAction === "PURGE"
-          ? "冷静期已结束，将按最新服务端真相执行 PURGE。"
-          : "冷静期已结束，将按最新服务端真相执行 ARCHIVE。",
+          ? "将按最新服务端真相执行 PURGE。"
+          : "将按最新服务端真相执行 ARCHIVE。",
       primaryLabel: finalAction === "PURGE" ? "确认 PURGE" : "确认 ARCHIVE",
       impactLabel: "Finalize preview",
       impactHint:
@@ -122,18 +122,18 @@ function getDialogMeta(state: RecycleBinDialogState): RecycleBinDialogMeta | nul
 
   return {
     title:
-      state.item.finalActionPreview !== null ? "提前永久删除" : "永久删除对象",
-    badgeLabel: state.item.finalActionPreview !== null ? "提前永久删除" : "最终处理",
+      state.item.finalActionPreview !== null ? "直接永久删除" : "永久删除对象",
+    badgeLabel: state.item.finalActionPreview !== null ? "直接永久删除" : "最终处理",
     badgeVariant: "danger" as const,
     description:
       state.item.finalActionPreview !== null
-        ? "这会绕过 3 天冷静期，立即执行永久删除。仅 light 对象开放，且仅管理员可执行。"
+        ? "这会直接执行永久删除。仅 light 对象开放，且仅管理员可执行。"
         : "永久删除后会物理移除源对象，且无法恢复。",
-    primaryLabel: state.item.finalActionPreview !== null ? "确认提前永久删除" : "确认永久删除",
+    primaryLabel: state.item.finalActionPreview !== null ? "确认永久删除" : "确认永久删除",
     impactLabel: "最终处理说明",
     impactHint:
       state.item.finalActionPreview !== null
-        ? "提前永久删除前，服务端仍会按最新真相重算，不能只依赖移入回收站时的快照。"
+        ? "永久删除前，服务端仍会按最新真相重算，不能只依赖移入回收站时的快照。"
         : "永久删除前会再次实时重算清理阻断项，不能只依赖删除时的快照。",
   };
 }
@@ -291,7 +291,7 @@ function renderFinalizeActionButtons({
         恢复
       </button>
 
-      {item.isExpired ? (
+      {item.finalActionPreview ? (
         <button
           type="button"
           onClick={(event) => {
@@ -308,26 +308,20 @@ function renderFinalizeActionButtons({
         >
           执行最终处理
         </button>
-      ) : item.canPurge ? (
+      ) : (
         <button
           type="button"
           onClick={(event) => {
             event.stopPropagation();
             onOpenDialog("purge", item);
           }}
-        disabled={pending}
-        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm text-[var(--color-danger)] hover:border-[rgba(255,148,175,0.24)] hover:bg-[rgba(255,148,175,0.12)] disabled:cursor-not-allowed disabled:text-[var(--color-sidebar-muted)] disabled:opacity-55"
-        title="提前永久删除"
-      >
-        提前永久删除
-      </button>
-      ) : item.finalActionPreview?.finalAction === "ARCHIVE" ? (
-        <p className="text-xs leading-5 text-[var(--color-sidebar-muted)]">3 天后仅封存</p>
-      ) : item.purgeRequiresAdmin ? (
-        <p className="text-xs leading-5 text-[var(--color-sidebar-muted)]">
-          仅管理员可提前永久删除
-        </p>
-      ) : null}
+          disabled={!item.canPurge || pending}
+          className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm text-[var(--color-danger)] hover:border-[rgba(255,148,175,0.24)] hover:bg-[rgba(255,148,175,0.12)] disabled:cursor-not-allowed disabled:text-[var(--color-sidebar-muted)] disabled:opacity-55"
+          title={item.canPurge ? "永久删除对象" : item.purgeSummary}
+        >
+          永久删除
+        </button>
+      )}
     </div>
   );
 }
@@ -467,6 +461,32 @@ export function RecycleBinWorkbench({
   const showStatusColumns =
     !isHistoryView &&
     (activeTab === "leads" || activeTab === "trade-orders" || activeTab === "customers");
+  const [selectedEntryIds, setSelectedEntryIds] = useState<string[]>([]);
+  const batchSelectableItems = useMemo(
+    () => (isHistoryView ? [] : items),
+    [isHistoryView, items],
+  );
+  const selectedItems = useMemo(
+    () => batchSelectableItems.filter((item) => selectedEntryIds.includes(item.entryId)),
+    [batchSelectableItems, selectedEntryIds],
+  );
+  const selectedCount = selectedItems.length;
+  const allVisibleSelected =
+    batchSelectableItems.length > 0 && selectedCount === batchSelectableItems.length;
+  const customerGroups = useMemo(() => {
+    if (isHistoryView || activeTab !== "customers") {
+      return [];
+    }
+
+    const groups = new Map<string, number>();
+
+    for (const item of items) {
+      const label = item.customerSummary?.ownershipLabel ?? "未分类";
+      groups.set(label, (groups.get(label) ?? 0) + 1);
+    }
+
+    return Array.from(groups.entries()).map(([label, count]) => ({ label, count }));
+  }, [activeTab, isHistoryView, items]);
 
   function closeDialog() {
     setDialogState(null);
@@ -475,6 +495,24 @@ export function RecycleBinWorkbench({
   function openDialog(mode: "restore" | "purge" | "finalize", item: RecycleBinListItem) {
     setSelectedEntryId(item.entryId);
     setDialogState({ mode, item });
+  }
+
+  function resetBatchSelection() {
+    setSelectedEntryIds([]);
+  }
+
+  function toggleBatchSelection(entryId: string) {
+    setSelectedEntryIds((current) =>
+      current.includes(entryId)
+        ? current.filter((id) => id !== entryId)
+        : [...current, entryId],
+    );
+  }
+
+  function toggleAllVisibleSelection() {
+    setSelectedEntryIds(
+      allVisibleSelected ? [] : batchSelectableItems.map((item) => item.entryId),
+    );
   }
 
   function handleConfirm() {
@@ -499,6 +537,72 @@ export function RecycleBinWorkbench({
     });
   }
 
+  function handleBatchAction(mode: "restore" | "purge" | "finalize") {
+    const targets = selectedItems.filter((item) => {
+      if (mode === "restore") {
+        return item.canRestore;
+      }
+
+      if (mode === "finalize") {
+        return Boolean(item.finalActionPreview && item.canFinalizeNow);
+      }
+
+      return !item.finalActionPreview && item.canPurge;
+    });
+
+    if (targets.length === 0) {
+      setNotice({
+        status: "error",
+        message: "当前选择中没有可执行该批量动作的条目。",
+      });
+      return;
+    }
+
+    startTransition(async () => {
+      let successCount = 0;
+      let failedCount = 0;
+      const skippedCount = selectedItems.length - targets.length;
+      const failureExamples: string[] = [];
+
+      for (const item of targets) {
+        const formData = new FormData();
+        formData.set("entryId", item.entryId);
+
+        const result =
+          mode === "restore"
+            ? await restoreRecycleBinEntryAction(formData)
+            : mode === "finalize"
+              ? await finalizeRecycleBinEntryAction(formData)
+              : await purgeRecycleBinEntryAction(formData);
+
+        if (result.status === "success") {
+          successCount += 1;
+        } else {
+          failedCount += 1;
+          if (failureExamples.length < 2) {
+            failureExamples.push(`${item.name}：${result.message}`);
+          }
+        }
+      }
+
+      const actionLabel =
+        mode === "restore"
+          ? "批量恢复"
+          : mode === "finalize"
+            ? "批量最终处理"
+            : "批量永久删除";
+      const detail =
+        failureExamples.length > 0 ? ` 失败示例：${failureExamples.join("；")}` : "";
+
+      setNotice({
+        status: successCount > 0 ? "success" : "error",
+        message: `${actionLabel}完成：成功 ${successCount} 条，跳过 ${skippedCount} 条，失败 ${failedCount} 条。${detail}`,
+      });
+      resetBatchSelection();
+      router.refresh();
+    });
+  }
+
   return (
     <div className="space-y-4">
       {notice ? (
@@ -514,16 +618,98 @@ export function RecycleBinWorkbench({
             isHistoryView
               ? `${getTabLabel(activeTab)} tab 已切到 ${entryStatus.toUpperCase()} 历史视角：左侧只读展示删除与解决结果，右侧展示对象摘要、归档载荷与最终说明。`
               : isFinalizeTab
-              ? `${getTabLabel(activeTab)} tab 已切到 finalize 视角：左侧保留恢复，提前永久删除只对 light + ADMIN 开放，到期后统一执行最终处理。`
+              ? `${getTabLabel(activeTab)} tab 已切到 finalize 视角：左侧保留恢复，并可直接按最新 preview 执行 PURGE 或 ARCHIVE。`
               : "当前保留恢复、清理动作和 blocker 摘要；点击行即可在右侧查看更完整的治理详情。"
           }
           contentClassName="p-0"
         >
           {items.length > 0 ? (
-            <div className="crm-table-shell">
-              <table className="crm-table">
+            <div className="space-y-0">
+              <div className="border-b border-[var(--color-border-soft)] px-3 py-3">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!isHistoryView ? (
+                      <button
+                        type="button"
+                        onClick={toggleAllVisibleSelection}
+                        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+                      >
+                        {allVisibleSelected ? "取消当前页" : "选择当前页"}
+                      </button>
+                    ) : null}
+                    {activeTab === "customers" && customerGroups.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {customerGroups.map((group) => (
+                          <StatusBadge
+                            key={group.label}
+                            label={`${group.label} ${group.count}`}
+                            variant="neutral"
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {!isHistoryView && selectedCount > 0 ? (
+                    <div className="flex flex-wrap items-center gap-2 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2">
+                      <span className="text-xs font-medium text-[var(--color-sidebar-muted)]">
+                        已选 {selectedCount} 条
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleBatchAction("restore")}
+                        disabled={pending}
+                        className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-55"
+                      >
+                        批量恢复
+                      </button>
+                      {isFinalizeTab ? (
+                        <button
+                          type="button"
+                          onClick={() => handleBatchAction("finalize")}
+                          disabled={pending}
+                          className="crm-button crm-button-primary min-h-0 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-55"
+                        >
+                          批量最终处理
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleBatchAction("purge")}
+                          disabled={pending}
+                          className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-xs text-[var(--color-danger)] disabled:cursor-not-allowed disabled:opacity-55"
+                        >
+                          批量永久删除
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={resetBatchSelection}
+                        disabled={pending}
+                        className="crm-button crm-button-ghost min-h-0 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-55"
+                      >
+                        清空
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="crm-table-shell">
+                <table className="crm-table">
                 <thead>
                   <tr>
+                    {!isHistoryView ? (
+                      <th className="w-[64px]">
+                        <input
+                          type="checkbox"
+                          checked={allVisibleSelected}
+                          onChange={toggleAllVisibleSelection}
+                          aria-label="选择当前页回收站条目"
+                          className="h-4 w-4 rounded border border-[var(--color-border-soft)] bg-transparent text-[var(--color-accent)]"
+                        />
+                      </th>
+                    ) : null}
                     <th>对象类型</th>
                     <th>名称</th>
                     <th>次标识</th>
@@ -552,6 +738,21 @@ export function RecycleBinWorkbench({
                             : "hover:bg-[var(--color-shell-hover)]",
                         )}
                       >
+                        {!isHistoryView ? (
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={selectedEntryIds.includes(item.entryId)}
+                              onChange={(event) => {
+                                event.stopPropagation();
+                                toggleBatchSelection(item.entryId);
+                              }}
+                              onClick={(event) => event.stopPropagation()}
+                              aria-label={`选择回收站条目 ${item.name}`}
+                              className="h-4 w-4 rounded border border-[var(--color-border-soft)] bg-transparent text-[var(--color-accent)]"
+                            />
+                          </td>
+                        ) : null}
                         <td>
                           <StatusBadge
                             label={item.targetTypeLabel}
@@ -613,9 +814,9 @@ export function RecycleBinWorkbench({
                               <>
                                 {getFinalizeActionBadges(item)}
                                 <p className="text-xs leading-5 text-[var(--color-sidebar-muted)]">
-                                  {item.remainingTimeLabel
-                                    ? `剩余时间：${item.remainingTimeLabel}`
-                                    : "剩余时间：待重算"}
+                                  {item.canFinalizeNow
+                                    ? "当前可执行最终处理"
+                                    : "最终处理仅管理员可执行"}
                                 </p>
                               </>
                             ) : (
@@ -665,6 +866,7 @@ export function RecycleBinWorkbench({
                   })}
                 </tbody>
               </table>
+              </div>
             </div>
           ) : (
             <div className="p-4 md:p-5">
@@ -885,8 +1087,12 @@ export function RecycleBinWorkbench({
 
                       <div className="space-y-2">
                         <DetailRow
-                          label="剩余时间"
-                          value={selectedItem.remainingTimeLabel ?? "待重算"}
+                          label="执行窗口"
+                          value={
+                            selectedItem.canFinalizeNow
+                              ? "当前可执行最终处理"
+                              : "最终处理仅管理员可执行"
+                          }
                         />
                         <DetailRow
                           label="当前判断"
@@ -897,11 +1103,11 @@ export function RecycleBinWorkbench({
                           multiline
                         />
                         <DetailRow
-                          label="提前永久删除"
+                          label="最终处理动作"
                           value={
-                            selectedItem.finalActionPreview.canEarlyPurge
-                              ? "仅 ADMIN 可在冷静期内提前永久删除"
-                              : "当前不开放提前永久删除"
+                            selectedItem.finalActionPreview.finalAction === "PURGE"
+                              ? "当前终态为 PURGE，执行后会物理删除对象。"
+                              : "当前终态为 ARCHIVE，执行后会封存/脱敏归档。"
                           }
                           multiline
                         />
@@ -1000,8 +1206,8 @@ function RecycleBinConfirmDialog({
     state.mode === "restore"
       ? state.item.restoreRouteSnapshot
       : state.mode === "finalize"
-        ? `${state.item.remainingTimeLabel ?? "冷静期已到期"} / ${
-            state.item.finalActionPreview?.finalAction ?? "PURGE"
+        ? `${state.item.finalActionPreview?.finalAction ?? "PURGE"} / ${
+            state.item.finalActionLabel ?? state.item.finalizeSummary ?? "按最新 preview 执行"
           }`
         : meta.impactHint;
 
@@ -1085,7 +1291,7 @@ function RecycleBinConfirmDialog({
               : state.mode === "finalize"
                 ? "最终处理成功后会按 PURGE 或 ARCHIVE 收口；ARCHIVE 不会伪装成 PURGED。"
                 : state.item.finalActionPreview
-                  ? "提前永久删除会绕过 3 天冷静期，立即执行物理删除。"
+                  ? "永久删除会立即执行物理删除。"
                   : "永久删除成功后，该对象会从系统中彻底移除。"}
           </p>
           <div className="flex flex-wrap items-center justify-end gap-2">

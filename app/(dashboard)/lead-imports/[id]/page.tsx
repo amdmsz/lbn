@@ -15,6 +15,8 @@ import {
 import { auth } from "@/lib/auth/session";
 import {
   formatImportDateTime,
+  getLeadDedupTypeLabel,
+  getLeadDedupTypeVariant,
   getLeadCustomerMergeActionLabel,
   getLeadCustomerMergeActionVariant,
   getLeadImportFileTypeLabel,
@@ -29,7 +31,10 @@ import {
   type LeadImportMappingConfig,
 } from "@/lib/lead-imports/metadata";
 import { getLeadImportDetailData } from "@/lib/lead-imports/queries";
-import { executeLeadImportBatchRollbackAction } from "../actions";
+import {
+  executeLeadImportBatchRollbackAction,
+  replaceDuplicateCustomerWithNewLeadAction,
+} from "../actions";
 
 type LeadImportDetailData = NonNullable<
   Awaited<ReturnType<typeof getLeadImportDetailData>>
@@ -65,6 +70,15 @@ function formatLeadMappedPreview(value: Prisma.JsonValue | null) {
 
 function formatSummaryValue(value: string | null | undefined) {
   return value?.trim() ? value : "-";
+}
+
+function formatOptionalDateTime(value: string | null | undefined) {
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "-" : formatImportDateTime(date);
 }
 
 function formatCustomerContinuationSummary(summary: CustomerContinuationImportSummary) {
@@ -423,6 +437,22 @@ export default async function LeadImportDetailPage({
       ),
     );
   }
+
+  async function replaceDuplicateCustomerFormAction(formData: FormData) {
+    "use server";
+    const rowId = formData.get("rowId");
+    const reason = formData.get("reason");
+    const result = await replaceDuplicateCustomerWithNewLeadAction({
+      batchId,
+      rowId: typeof rowId === "string" ? rowId : "",
+      reason: typeof reason === "string" ? reason : "",
+    });
+
+    redirect(buildNoticeHref(detailHref, result.status, result.message));
+  }
+
+  const canReplaceDuplicateCustomer =
+    session.user.role === "ADMIN" || session.user.role === "SUPERVISOR";
 
   return (
     <div className="crm-page">
@@ -977,25 +1007,130 @@ export default async function LeadImportDetailPage({
           </div>
           {batch.duplicateRows.length > 0 ? (
             <div className="mt-4 space-y-3">
-              {batch.duplicateRows.map((row) => (
-                <div key={row.id} className="crm-subtle-panel">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge
-                      label={getLeadImportRowStatusLabel(row.status)}
-                      variant={getLeadImportRowStatusVariant(row.status)}
-                    />
+              {batch.duplicateRows.map((row) => {
+                const duplicateCustomer = row.duplicateCustomer;
+
+                return (
+                  <div key={row.id} className="crm-subtle-panel">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusBadge
+                        label={getLeadImportRowStatusLabel(row.status)}
+                        variant={getLeadImportRowStatusVariant(row.status)}
+                      />
+                      {row.dedupType ? (
+                        <StatusBadge
+                          label={getLeadDedupTypeLabel(row.dedupType)}
+                          variant={getLeadDedupTypeVariant(row.dedupType)}
+                        />
+                      ) : null}
+                      {duplicateCustomer ? (
+                        <StatusBadge
+                          label={duplicateCustomer.executionClassLabel}
+                          variant={
+                            duplicateCustomer.replacementEligible ? "success" : "neutral"
+                          }
+                        />
+                      ) : null}
+                    </div>
+                    <p className="mt-3 text-sm font-medium text-black/80">
+                      第 {row.rowNumber} 行 / {row.mappedName || row.phoneRaw || "未识别"}
+                    </p>
+                    <p className="mt-2 text-sm leading-7 text-black/60">
+                      {row.errorReason || "该行因手机号重复被直接剔除。"}
+                    </p>
+                    <p className="mt-1 text-sm text-black/55">
+                      手机号：{row.normalizedPhone || row.phoneRaw || "-"}
+                    </p>
+
+                    {duplicateCustomer ? (
+                      <div className="mt-3 rounded-[0.9rem] border border-black/8 bg-white/70 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-medium uppercase tracking-[0.08em] text-black/40">
+                              命中客户
+                            </p>
+                            <Link
+                              href={`/customers/${duplicateCustomer.customerId}`}
+                              className="crm-text-link text-sm font-semibold"
+                            >
+                              {duplicateCustomer.name} / {duplicateCustomer.phone}
+                            </Link>
+                          </div>
+                          <StatusBadge
+                            label={
+                              duplicateCustomer.replacementEligible
+                                ? "可作为新线索"
+                                : "不能替换"
+                            }
+                            variant={
+                              duplicateCustomer.replacementEligible ? "success" : "warning"
+                            }
+                          />
+                        </div>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          <DetailItem label="客户分类" value={duplicateCustomer.executionClassLabel} />
+                          <DetailItem label="客户状态" value={duplicateCustomer.statusLabel} />
+                          <DetailItem label="客户等级" value={duplicateCustomer.levelLabel} />
+                          <DetailItem label="归属分组" value={duplicateCustomer.ownershipLabel} />
+                          <DetailItem label="负责人" value={duplicateCustomer.ownerLabel} />
+                          <DetailItem
+                            label="通话 / 微信"
+                            value={`${duplicateCustomer.callRecordCount} / ${duplicateCustomer.wechatRecordCount}`}
+                          />
+                          <DetailItem
+                            label="最近通话"
+                            value={`${duplicateCustomer.latestCallResultLabel ?? "-"} · ${formatOptionalDateTime(
+                              duplicateCustomer.latestCallAt,
+                            )}`}
+                          />
+                          <DetailItem
+                            label="最近微信"
+                            value={formatOptionalDateTime(duplicateCustomer.latestWechatAt)}
+                          />
+                        </div>
+                        <p className="mt-3 text-sm leading-7 text-black/60">
+                          {duplicateCustomer.replacementReason}
+                        </p>
+
+                        {canReplaceDuplicateCustomer ? (
+                          <form
+                            action={replaceDuplicateCustomerFormAction}
+                            className="mt-3 space-y-2 border-t border-black/8 pt-3"
+                          >
+                            <input type="hidden" name="rowId" value={row.id} />
+                            <textarea
+                              name="reason"
+                              required
+                              rows={2}
+                              defaultValue={`原客户仍为${duplicateCustomer.executionClassLabel}，未接通且未加微信，作为新线索重新分配。`}
+                              className="crm-input min-h-[4.5rem] w-full resize-y text-sm"
+                              disabled={!duplicateCustomer.replacementEligible}
+                            />
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              <button
+                                type="submit"
+                                disabled={!duplicateCustomer.replacementEligible}
+                                className="crm-button crm-button-primary disabled:cursor-not-allowed disabled:opacity-55"
+                                title={
+                                  duplicateCustomer.replacementEligible
+                                    ? "剔除老客户并创建待分配新线索"
+                                    : duplicateCustomer.replacementReason
+                                }
+                              >
+                                作为新线索
+                              </button>
+                            </div>
+                          </form>
+                        ) : null}
+                      </div>
+                    ) : row.dedupType === "EXISTING_CUSTOMER" ? (
+                      <p className="mt-3 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-white/70 px-3 py-2 text-sm leading-7 text-black/55">
+                        历史导入行缺少重复客户快照；重新导入后可查看客户分类并执行主管判断。
+                      </p>
+                    ) : null}
                   </div>
-                  <p className="mt-3 text-sm font-medium text-black/80">
-                    第 {row.rowNumber} 行 / {row.mappedName || row.phoneRaw || "未识别"}
-                  </p>
-                  <p className="mt-2 text-sm leading-7 text-black/60">
-                    {row.errorReason || "该行因手机号重复被直接剔除。"}
-                  </p>
-                  <p className="mt-1 text-sm text-black/55">
-                    手机号：{row.normalizedPhone || row.phoneRaw || "-"}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="mt-4">

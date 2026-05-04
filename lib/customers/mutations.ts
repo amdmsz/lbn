@@ -66,6 +66,12 @@ export type TransferCustomerOwnerInput = {
   note?: string;
 };
 
+type TransferCustomerOwnerOptions = {
+  source?: "detail" | "batch";
+  selectionMode?: "manual" | "filtered";
+  selectedCount?: number;
+};
+
 const customerStatusValues = [
   "ACTIVE",
   "DORMANT",
@@ -511,12 +517,14 @@ export async function updateCustomerRemark(
 export async function transferCustomerOwner(
   actor: CustomerMutationActor,
   rawInput: TransferCustomerOwnerInput,
+  options: TransferCustomerOwnerOptions = {},
 ) {
   if (!canTransferCustomerOwner(actor.role)) {
     throw new Error("当前角色不能移交客户负责人。");
   }
 
   const parsed = transferCustomerOwnerSchema.parse(rawInput);
+  const transferSource = options.source ?? "detail";
 
   return prisma.$transaction(async (tx) => {
     const ownershipActor = await getCustomerOwnershipActorContextTx(tx, actor.id);
@@ -561,13 +569,31 @@ export async function transferCustomerOwner(
       actor: ownershipActor,
       targetSales,
       customerId: parsed.customerId,
-      reason: CustomerOwnershipEventReason.SUPERVISOR_ASSIGN,
+      reason:
+        transferSource === "batch"
+          ? CustomerOwnershipEventReason.BATCH_REALLOCATION
+          : CustomerOwnershipEventReason.SUPERVISOR_ASSIGN,
       note: parsed.note || null,
-      operationAction: "customer.owner.transferred_from_detail",
-      operationDescription: `移交客户负责人给 ${targetSales.name} (@${targetSales.username})。`,
+      operationAction:
+        transferSource === "batch"
+          ? "customer.owner.batch_transferred"
+          : "customer.owner.transferred_from_detail",
+      operationDescription:
+        transferSource === "batch"
+          ? `批量移交客户负责人给 ${targetSales.name} (@${targetSales.username})。`
+          : `移交客户负责人给 ${targetSales.name} (@${targetSales.username})。`,
       operationMetadata: {
-        source: "CUSTOMER_DETAIL_OWNER_TRANSFER",
+        source:
+          transferSource === "batch"
+            ? "CUSTOMER_CENTER_BATCH_OWNER_TRANSFER"
+            : "CUSTOMER_DETAIL_OWNER_TRANSFER",
         targetOwnerId: targetSales.id,
+        ...(transferSource === "batch"
+          ? {
+              selectionMode: options.selectionMode ?? "manual",
+              selectedCount: options.selectedCount ?? null,
+            }
+          : {}),
       },
     });
 

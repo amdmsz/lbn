@@ -52,6 +52,37 @@ export type LeadImportMode = (typeof leadImportModeValues)[number];
 export type LeadImportKind = "LEAD" | "CUSTOMER_CONTINUATION";
 export type LeadImportBatchRollbackMode =
   (typeof leadImportBatchRollbackModeValues)[number];
+export type LeadImportDuplicateCustomerExecutionClass = "A" | "B" | "C" | "D" | "E";
+export type LeadImportDuplicateCustomerSnapshot = {
+  customerId: string;
+  name: string;
+  phone: string;
+  ownerLabel: string;
+  statusLabel: string;
+  levelLabel: string;
+  executionClass: LeadImportDuplicateCustomerExecutionClass;
+  executionClassLabel: string;
+  ownershipLabel: string;
+  hasSuccessfulWechatSignal: boolean;
+  callRecordCount: number;
+  wechatRecordCount: number;
+  latestCallResultLabel: string | null;
+  latestCallAt: string | null;
+  latestWechatAt: string | null;
+  replacementEligible: boolean;
+  replacementReason: string;
+};
+export type LeadImportRowMappedData = {
+  phone: string | null;
+  name: string | null;
+  address: string | null;
+  interestedProduct: string | null;
+  campaignName: string | null;
+  sourceDetail: string | null;
+  remark: string | null;
+  source: LeadSource;
+  duplicateCustomer?: LeadImportDuplicateCustomerSnapshot | null;
+};
 export type CustomerContinuationImportAction =
   | "CREATED_CUSTOMER"
   | "MATCHED_EXISTING_CUSTOMER"

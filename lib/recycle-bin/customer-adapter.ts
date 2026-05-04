@@ -618,7 +618,7 @@ function buildFinalizePreview(input: {
       targetExists: true,
       finalAction: "PURGE",
       finalActionLabel: "可 purge",
-      blockerSummary: "当前客户仍满足误建轻客户条件，3 天冷静期结束后会执行 PURGE。",
+      blockerSummary: "当前客户仍满足误建轻客户条件，可直接执行 PURGE。",
       blockers: [],
       canEarlyPurge: true,
       earlyPurgeRequiresAdmin: true,
@@ -632,7 +632,7 @@ function buildFinalizePreview(input: {
     finalActionLabel: "仅封存",
     blockerSummary:
       input.blockers[0]?.description ??
-      "当前客户已进入需要保留业务真相或审计锚点的链路，3 天冷静期结束后仅封存。",
+      "当前客户已进入需要保留业务真相或审计锚点的链路，仅封存。",
     blockers: input.blockers,
     canEarlyPurge: false,
     earlyPurgeRequiresAdmin: true,

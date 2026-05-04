@@ -895,8 +895,8 @@ export async function buildProductFinalizePreview(
   return buildFinalizePreview({
     targetExists: true,
     blockers,
-    purgeSummary: "当前商品满足轻对象条件，3 天冷静期结束后会执行 PURGE。",
-    archiveSummary: "当前商品存在历史引用或商品聚合保留意义，3 天冷静期结束后仅 ARCHIVE。",
+    purgeSummary: "当前商品满足轻对象条件，可直接执行 PURGE。",
+    archiveSummary: "当前商品存在历史引用或商品聚合保留意义，仅 ARCHIVE。",
   });
 }
 
@@ -957,8 +957,8 @@ export async function buildProductSkuFinalizePreview(
   return buildFinalizePreview({
     targetExists: true,
     blockers,
-    purgeSummary: "当前 SKU 满足轻对象条件，3 天冷静期结束后会执行 PURGE。",
-    archiveSummary: "当前 SKU 已进入历史业务引用链，3 天冷静期结束后仅 ARCHIVE。",
+    purgeSummary: "当前 SKU 满足轻对象条件，可直接执行 PURGE。",
+    archiveSummary: "当前 SKU 已进入历史业务引用链，仅 ARCHIVE。",
   });
 }
 

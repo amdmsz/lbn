@@ -45,6 +45,7 @@ import type { RoleCode } from "@prisma/client";
 import type { CallResultOption } from "@/lib/calls/metadata";
 import { MobileCallFollowUpSheet } from "@/components/customers/mobile-call-followup-sheet";
 import { MobileOrderComposer } from "@/components/mobile/mobile-order-composer";
+import { WebRtcSoftphone } from "@/components/outbound-calls/webrtc-softphone";
 import {
   readNativeConnectionProfile,
   readNativeRecorderReadiness,
@@ -4110,7 +4111,7 @@ export function MobileAppShell({
       setOutboundNotice({
         tone: "pending",
         title: "外呼已提交",
-        description: "等待坐席接听和客户接通，录音由服务器归档。",
+        description: "请在右下角网页坐席接听，录音由服务器归档。",
       });
 
       if (sessionId) {
@@ -4350,6 +4351,8 @@ export function MobileAppShell({
         }}
         onStartCall={startCustomerCall}
       />
+
+      <WebRtcSoftphone role={currentUser.role} variant="mobile" />
 
       <MobileModulePanel
         module={activeModule}

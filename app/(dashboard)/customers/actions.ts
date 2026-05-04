@@ -6,6 +6,7 @@ import {
   canBatchManageCustomerTags,
   canBatchMoveCustomersToRecycleBin,
   canCreateCustomer,
+  canTransferCustomerOwner,
 } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
 import {
@@ -37,6 +38,7 @@ import {
 } from "@/lib/customers/queries";
 import {
   createOwnedCustomer,
+  transferCustomerOwner,
   updateCustomerRemark,
 } from "@/lib/customers/mutations";
 import { assignCustomerTag } from "@/lib/master-data/mutations";
@@ -53,6 +55,13 @@ const batchMoveCustomersToRecycleBinSchema = z.object({
   selectionMode: z.enum(["manual", "filtered"]).default("manual"),
   customerIds: z.array(z.string().trim().min(1)).default([]),
   reasonCode: z.string().trim().default("mistaken_creation"),
+});
+
+const batchTransferCustomerOwnerSchema = z.object({
+  selectionMode: z.enum(["manual", "filtered"]).default("manual"),
+  customerIds: z.array(z.string().trim().min(1)).default([]),
+  targetOwnerId: z.string().trim().min(1, "请选择新的负责人。"),
+  note: z.string().trim().max(500, "移交备注不能超过 500 个字符。").default(""),
 });
 
 const createOwnedCustomerActionSchema = z.object({
@@ -82,6 +91,7 @@ type BatchCustomerActionActor = Awaited<ReturnType<typeof getBatchCustomerActor>
 const CUSTOMER_BATCH_ALREADY_LABELS = {
   tag: "已有标签",
   recycle: "已在回收站",
+  transfer: "无需移交",
 } as const;
 
 export type BatchAddCustomerTagBlockedReason = CustomerBatchBlockedReasonSummary;
@@ -89,6 +99,7 @@ export type BatchMoveCustomersToRecycleBinBlockedReason =
   CustomerBatchBlockedReasonSummary;
 export type BatchAddCustomerTagActionResult = CustomerBatchActionResult;
 export type BatchMoveCustomersToRecycleBinActionResult = CustomerBatchActionResult;
+export type BatchTransferCustomerOwnerActionResult = CustomerBatchActionResult;
 export type CreateOwnedCustomerField = keyof z.output<typeof createOwnedCustomerActionSchema>;
 export type CreateOwnedCustomerActionResult = {
   status: "success" | "error";
@@ -253,6 +264,37 @@ function buildBatchRecycleLimitExceededResult(input: {
   });
 }
 
+function buildBatchTransferEmptyResult(
+  message: string,
+  code: CustomerBatchActionErrorCode = "unknown",
+): BatchTransferCustomerOwnerActionResult {
+  return buildBatchCustomerActionResult({
+    status: "error",
+    message,
+    error: { code, message },
+    skippedLabel: CUSTOMER_BATCH_ALREADY_LABELS.transfer,
+  });
+}
+
+function buildBatchTransferLimitExceededResult(input: {
+  selection: CustomerBatchSelection;
+  limitExceeded: CustomerBatchLimitExceeded;
+}): BatchTransferCustomerOwnerActionResult {
+  const message = `当前筛选结果共 ${input.limitExceeded.actualCount} 位客户，超过单次 ${input.limitExceeded.maxCount} 位上限，请先缩小筛选范围后再批量移交负责人。`;
+
+  return buildBatchCustomerActionResult({
+    status: "error",
+    message,
+    error: {
+      code: "limit_exceeded",
+      message,
+    },
+    selection: input.selection,
+    limitExceeded: input.limitExceeded,
+    skippedLabel: CUSTOMER_BATCH_ALREADY_LABELS.transfer,
+  });
+}
+
 function getCustomerRecycleReasonCode(rawValue: string): CustomerRecycleReasonCode {
   return CUSTOMER_RECYCLE_REASON_OPTIONS.some((option) => option.value === rawValue)
     ? (rawValue as CustomerRecycleReasonCode)
@@ -391,6 +433,34 @@ function buildBatchRecycleMessage(summary: {
   }
 
   return "所选客户均未移入回收站。";
+}
+
+function buildBatchTransferMessage(summary: {
+  successCount: number;
+  skippedCount: number;
+  blockedCount: number;
+}) {
+  if (summary.successCount > 0 && (summary.skippedCount > 0 || summary.blockedCount > 0)) {
+    return "已部分完成批量移交负责人。";
+  }
+
+  if (summary.successCount > 0) {
+    return "已完成批量移交负责人。";
+  }
+
+  if (summary.skippedCount > 0 && summary.blockedCount > 0) {
+    return "本次没有新增移交，部分客户已由该负责人承接，其余被阻断。";
+  }
+
+  if (summary.skippedCount > 0) {
+    return "所选客户已由该负责人承接，无需重复移交。";
+  }
+
+  return "所选客户均未移交负责人。";
+}
+
+function isAlreadyAssignedToTargetOwnerError(error: unknown) {
+  return error instanceof Error && error.message.includes("已由该负责人承接");
 }
 
 function getCustomerFilterParamsFromFormData(formData: FormData) {
@@ -702,6 +772,128 @@ export async function batchAddCustomerTagAction(
 
     return buildEmptyBatchTagResult(
       error instanceof Error ? error.message : "批量添加标签失败，请稍后重试。",
+    );
+  }
+}
+
+export async function batchTransferCustomerOwnerAction(
+  formData: FormData,
+): Promise<BatchTransferCustomerOwnerActionResult> {
+  try {
+    const actor = await getBatchCustomerActor();
+
+    if (!canTransferCustomerOwner(actor.role)) {
+      return buildBatchTransferEmptyResult(
+        "当前角色没有批量移交客户负责人的权限。",
+        "forbidden",
+      );
+    }
+
+    const parsed = batchTransferCustomerOwnerSchema.safeParse({
+      selectionMode: String(formData.get("selectionMode") ?? "manual"),
+      customerIds: formData.getAll("customerIds").map((value) => String(value).trim()),
+      targetOwnerId: String(formData.get("targetOwnerId") ?? "").trim(),
+      note: String(formData.get("note") ?? "").trim(),
+    });
+
+    if (!parsed.success) {
+      return buildBatchTransferEmptyResult(
+        parsed.error.issues[0]?.message ?? "提交数据不完整，无法执行批量移交负责人。",
+        "validation_error",
+      );
+    }
+
+    const resolvedSelection = await resolveBatchCustomerSelection({
+      actor,
+      selectionMode: parsed.data.selectionMode,
+      formData,
+      customerIds: parsed.data.customerIds,
+      filteredEmptyMessage: "当前筛选结果下没有可移交负责人的客户。",
+      staleSelectionMessage: "部分客户已不在当前客户工作台范围，请刷新后重试。",
+    });
+
+    if (resolvedSelection.status === "limit_exceeded") {
+      return buildBatchTransferLimitExceededResult(resolvedSelection);
+    }
+
+    const { customerIds, selection } = resolvedSelection;
+    let successCount = 0;
+    let skippedCount = 0;
+    let blockedCount = 0;
+    const blockedReasonMap = new Map<string, number>();
+
+    for (const customerId of customerIds) {
+      try {
+        await transferCustomerOwner(
+          {
+            id: actor.id,
+            role: actor.role,
+            teamId: actor.teamId,
+          },
+          {
+            customerId,
+            targetOwnerId: parsed.data.targetOwnerId,
+            note: parsed.data.note,
+          },
+          {
+            source: "batch",
+            selectionMode: parsed.data.selectionMode,
+            selectedCount: customerIds.length,
+          },
+        );
+        successCount += 1;
+      } catch (error) {
+        if (isAlreadyAssignedToTargetOwnerError(error)) {
+          skippedCount += 1;
+          continue;
+        }
+
+        blockedCount += 1;
+        const reason =
+          error instanceof Error ? error.message : "批量移交负责人失败，请稍后重试。";
+        blockedReasonMap.set(reason, (blockedReasonMap.get(reason) ?? 0) + 1);
+      }
+    }
+
+    if (successCount > 0 || skippedCount > 0) {
+      revalidatePath("/customers");
+      revalidatePath("/dashboard");
+    }
+
+    return buildBatchCustomerActionResult({
+      status: successCount > 0 || skippedCount > 0 ? "success" : "error",
+      message: buildBatchTransferMessage({
+        successCount,
+        skippedCount,
+        blockedCount,
+      }),
+      selection,
+      skippedLabel: CUSTOMER_BATCH_ALREADY_LABELS.transfer,
+      summary: {
+        totalCount: customerIds.length,
+        successCount,
+        skippedCount,
+        blockedCount,
+      },
+      blockedReasonSummary: buildSimpleBlockedReasons(blockedReasonMap),
+    });
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      "message" in error &&
+      typeof error.code === "string" &&
+      typeof error.message === "string"
+    ) {
+      return buildBatchTransferEmptyResult(
+        error.message,
+        error.code as CustomerBatchActionErrorCode,
+      );
+    }
+
+    return buildBatchTransferEmptyResult(
+      error instanceof Error ? error.message : "批量移交负责人失败，请稍后重试。",
     );
   }
 }

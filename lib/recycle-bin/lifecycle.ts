@@ -212,23 +212,6 @@ async function ensureActorCanAccessRecycleEntry(
   ensureMoveToRecycleBinPermission(actor, entry.targetType);
 }
 
-function buildExpiredRestoreGuard(restoreRouteSnapshot: string): RecycleRestoreGuard {
-  return {
-    canRestore: false,
-    blockerSummary: "3 天冷静期已结束，当前条目只能进入最终处理，不能再恢复。",
-    blockers: [
-      {
-        code: "recycle_restore_window_closed",
-        name: "恢复窗口已关闭",
-        description: "3 天冷静期已结束，当前条目只能进入最终处理，不能再恢复。",
-        group: "object_state",
-        suggestedAction: "改走最终处理，不再从回收站恢复到主工作台。",
-      },
-    ],
-    restoreRouteSnapshot,
-  };
-}
-
 function buildRestoreBlockedResult(
   entry: RecycleEntryForRestore,
   guard: RecycleRestoreGuard,
@@ -330,7 +313,7 @@ function buildPurgeGuardFromFinalizePreview(
     canPurge: false,
     blockerSummary:
       preview.finalAction === "ARCHIVE"
-        ? "当前对象 3 天后仅封存，不支持提前永久删除。"
+        ? "当前对象只能执行 ARCHIVE，不支持永久删除。"
         : preview.blockerSummary,
     blockers: preview.blockers,
   };
@@ -520,18 +503,6 @@ function buildPairedFinalizedBlocker(entry: RecycleEntryForRestore): RecycleRest
     description: `关联${targetLabel}「${entry.titleSnapshot}」已经完成回收站最终处理，当前对象不能再与它一起恢复。`,
     group: "object_state",
     suggestedAction: "确认该关联对象是否已经封存或永久删除；如需恢复，请先按数据修复流程处理关联对象。",
-  };
-}
-
-function buildPairedExpiredBlocker(entry: RecycleEntryForRestore): RecycleRestoreBlocker {
-  const targetLabel = getRecycleTargetTypeLabel(entry.targetType);
-
-  return {
-    code: "paired_restore_target_expired",
-    name: `关联${targetLabel}恢复窗口已关闭`,
-    description: `关联${targetLabel}「${entry.titleSnapshot}」的 3 天恢复窗口已关闭，当前对象不能单独恢复。`,
-    group: "object_state",
-    suggestedAction: "改走最终处理或人工数据修复流程，不要只恢复其中一边。",
   };
 }
 
@@ -1167,12 +1138,6 @@ export async function restoreFromRecycleBin(
     await ensureActorCanAccessRecycleEntry(tx, actor, entry);
     ensureRestorePermission(actor, entry.targetType);
 
-    if (isRecycleEntryExpired(entry)) {
-      const guard = buildExpiredRestoreGuard(entry.restoreRouteSnapshot);
-
-      return buildRestoreBlockedResult(entry, guard);
-    }
-
     const guard = await buildRestoreGuard(tx, {
       targetType: entry.targetType,
       targetId: entry.targetId,
@@ -1205,16 +1170,6 @@ export async function restoreFromRecycleBin(
 
       await ensureActorCanAccessRecycleEntry(tx, actor, pairedEntry);
       ensureRestorePermission(actor, pairedEntry.targetType);
-
-      if (isRecycleEntryExpired(pairedEntry)) {
-        return buildRestoreBlockedResult(
-          entry,
-          buildGuardWithPairedBlocker(
-            entry.restoreRouteSnapshot,
-            buildPairedExpiredBlocker(pairedEntry),
-          ),
-        );
-      }
 
       const pairedGuard = await buildRestoreGuard(tx, {
         targetType: pairedEntry.targetType,
@@ -1384,17 +1339,6 @@ export async function finalizeRecycleBinEntry(
       targetId: entry.targetId,
       domain: entry.domain,
     });
-
-    if (!isRecycleEntryExpired(entry)) {
-      return {
-        status: "blocked",
-        message: "3 天冷静期未结束，当前条目还不能执行最终处理。",
-        entryId: entry.id,
-        targetType: entry.targetType,
-        targetId: entry.targetId,
-        preview,
-      };
-    }
 
     if (!preview.canFinalize) {
       return {

@@ -6,6 +6,7 @@ import {
   canCreateCallRecord,
   canCreateCustomer,
   canCreateSalesOrder,
+  canTransferCustomerOwner,
 } from "@/lib/auth/access";
 import { CustomerCreateEntry } from "@/components/customers/customer-create-entry";
 import type { MoveCustomerToRecycleBinAction } from "@/components/customers/customer-recycle-entry";
@@ -62,8 +63,10 @@ export function CustomerCenterWorkbench({
           outboundCallEnabled={outboundCallEnabled}
           moveToRecycleBinAction={moveCustomerToRecycleBinAction}
           canBatchAddTags={canBatchManageCustomerTags(role)}
+          canBatchTransferOwner={canTransferCustomerOwner(role)}
           canBatchMoveToRecycleBin={canBatchMoveCustomersToRecycleBin(role)}
           batchTagOptions={data.tagOptions}
+          batchOwnerTransferOptions={data.salesBoard}
           emptyTitle="当前筛选条件下没有客户"
           emptyDescription="试试调整筛选条件或重置当前工作台范围。"
           filters={data.filters}

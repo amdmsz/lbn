@@ -28,6 +28,7 @@ import {
   collectCustomerContinuationCategories,
   getCustomerContinuationOutcomeBadges,
 } from "@/lib/lead-imports/customer-continuation-signals";
+import { parseLeadImportDuplicateCustomerSnapshot } from "@/lib/lead-imports/duplicate-customer";
 import {
   LEAD_IMPORT_PAGE_SIZE,
   buildLeadImportBatchProgress,
@@ -103,6 +104,16 @@ function parseCustomerContinuationRowMappedData(
   }
 
   return value as CustomerContinuationRowMappedData;
+}
+
+function parseDuplicateCustomerFromLeadImportRow(
+  value: Prisma.JsonValue | null,
+) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return parseLeadImportDuplicateCustomerSnapshot(value.duplicateCustomer);
 }
 
 type CustomerContinuationResultBucket =
@@ -1152,6 +1163,7 @@ export async function getLeadImportDetailData(
     ...row,
     customerMerge: row.mergeLogs[0] ?? null,
     customerContinuation: parseCustomerContinuationRowMappedData(row.mappedData),
+    duplicateCustomer: parseDuplicateCustomerFromLeadImportRow(row.mappedData),
   }));
   const rows = rawRows.map((row) => {
     return {

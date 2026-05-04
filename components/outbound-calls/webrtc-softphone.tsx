@@ -58,6 +58,8 @@ type SoftphoneStatus =
   | "in_call"
   | "failed";
 
+type WebRtcSoftphoneVariant = "desktop" | "mobile";
+
 const statusCopy: Record<SoftphoneStatus, string> = {
   loading: "读取坐席",
   disabled: "未启用",
@@ -223,8 +225,10 @@ async function fetchWebRtcConfig() {
 
 export function WebRtcSoftphone({
   role,
+  variant = "desktop",
 }: Readonly<{
   role: RoleCode;
+  variant?: WebRtcSoftphoneVariant;
 }>) {
   const [config, setConfig] = useState<WebRtcConfig | null>(null);
   const [status, setStatus] = useState<SoftphoneStatus>("loading");
@@ -853,12 +857,16 @@ export function WebRtcSoftphone({
   const statusBadgeClassName = getStatusBadgeClassName(status);
   const pillLabel = activeSeconds !== null ? formatElapsed(activeSeconds) : pillStatusCopy[status];
   const seatLabel = config?.seatNo ?? config?.authorizationUser ?? "No seat";
+  const mobileVariant = variant === "mobile";
 
   return (
     <div
       className={cn(
-        "fixed bottom-6 right-6 flex max-w-[calc(100vw-3rem)] justify-end text-[13px]",
-        activeCall ? "z-[10010]" : "z-40",
+        "fixed flex justify-end text-[13px]",
+        mobileVariant
+          ? "bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-3 max-w-[calc(100vw-1.5rem)]"
+          : "bottom-6 right-6 max-w-[calc(100vw-3rem)]",
+        activeCall ? "z-[10010]" : mobileVariant ? "z-[70]" : "z-40",
       )}
     >
       <audio ref={audioRef} autoPlay />
@@ -883,7 +891,12 @@ export function WebRtcSoftphone({
           ) : null}
         </button>
       ) : (
-        <div className="w-72 rounded-2xl border border-border/50 bg-background/85 p-4 text-foreground shadow-2xl backdrop-blur-xl transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]">
+        <div
+          className={cn(
+            "rounded-2xl border border-border/50 bg-background/85 p-4 text-foreground shadow-2xl backdrop-blur-xl transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]",
+            mobileVariant ? "w-72 max-w-[calc(100vw-1.5rem)]" : "w-72",
+          )}
+        >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
               <div className="flex items-center gap-2">

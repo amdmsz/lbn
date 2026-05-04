@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { FormEvent, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { useEffect, useState, useTransition } from "react";
 import {
+  ArrowRightLeft,
   CheckSquare2,
   ExternalLink,
   Eye,
@@ -18,6 +19,7 @@ import {
 import {
   batchAddCustomerTagAction,
   batchMoveCustomersToRecycleBinAction,
+  batchTransferCustomerOwnerAction,
 } from "@/app/(dashboard)/customers/actions";
 import {
   CustomerFollowUpDialog,
@@ -54,6 +56,7 @@ import {
 import type {
   CustomerCenterFilters,
   CustomerListItem,
+  SalesRepBoardItem,
 } from "@/lib/customers/queries";
 import { formatCurrency } from "@/lib/fulfillment/metadata";
 import { cn } from "@/lib/utils";
@@ -106,6 +109,8 @@ const customerFocusMaxAgeMs = 24 * 60 * 60 * 1000;
 const customerScrollMaxAgeMs = 30 * 60 * 1000;
 const initialBatchRecycleNoticeState =
   createInitialCustomerBatchActionNoticeState("已在回收站");
+const initialBatchTransferNoticeState =
+  createInitialCustomerBatchActionNoticeState("无需移交");
 const MOTIVATIONAL_QUOTES = [
   { text: "我们在想象中受的苦多于现实。", author: "塞内加 (Seneca)" },
   {
@@ -507,6 +512,134 @@ function BatchTagDialog({
   );
 }
 
+function BatchOwnerTransferDialog({
+  open,
+  selectedCount,
+  selectionMode,
+  filters,
+  ownerOptions,
+  selectedTargetOwnerId,
+  pending,
+  onClose,
+  onOwnerChange,
+  onSubmit,
+  selectedCustomerIds,
+}: Readonly<{
+  open: boolean;
+  selectedCount: number;
+  selectionMode: SelectionMode;
+  filters: CustomerCenterFilters;
+  ownerOptions: SalesRepBoardItem[];
+  selectedTargetOwnerId: string;
+  pending: boolean;
+  onClose: () => void;
+  onOwnerChange: (nextValue: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  selectedCustomerIds: string[];
+}>) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/28 px-4 py-8 lg:pl-[var(--dashboard-sidebar-width,0px)]"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="批量移交负责人"
+        className="crm-card w-full max-w-lg overflow-hidden"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="border-b border-[var(--color-border-soft)] px-5 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-semibold text-[var(--foreground)]">批量移交负责人</h3>
+              <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
+                本次会把已选 {selectedCount} 位客户逐条移交给新的销售负责人。已由目标负责人承接的客户会计入“无需移交”。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="crm-button crm-button-ghost min-h-0 px-3 py-2 text-sm"
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-4 px-5 py-4">
+          <input type="hidden" name="selectionMode" value={selectionMode} />
+          {selectionMode === "filtered" ? (
+            <FilterHiddenInputs filters={filters} />
+          ) : (
+            selectedCustomerIds.map((customerId) => (
+              <input key={customerId} type="hidden" name="customerIds" value={customerId} />
+            ))
+          )}
+
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-[var(--foreground)]">新的负责人</span>
+            <select
+              name="targetOwnerId"
+              value={selectedTargetOwnerId}
+              onChange={(event) => onOwnerChange(event.target.value)}
+              required
+              className="crm-input h-11 w-full"
+            >
+              <option value="">请选择销售负责人</option>
+              {ownerOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name} (@{option.username})
+                  {option.teamName ? ` / ${option.teamName}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-[var(--foreground)]">移交备注</span>
+            <textarea
+              name="note"
+              rows={3}
+              maxLength={500}
+              placeholder="可填写移交原因，选填"
+              disabled={pending}
+              className="crm-textarea"
+            />
+          </label>
+
+          <div className="rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-[13px] leading-6 text-[var(--color-sidebar-muted)]">
+            {selectionMode === "filtered"
+              ? `这次会按当前筛选结果批量处理 ${selectedCount} 位客户，服务端仍会校验当前账号可见范围、团队范围和目标销售状态。`
+              : "这次会按当前页手选客户批量移交，服务端仍会校验当前账号可见范围、团队范围和目标销售状态。"}
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="crm-button crm-button-secondary"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              disabled={pending || !selectedTargetOwnerId}
+              className="crm-button crm-button-primary disabled:cursor-not-allowed disabled:opacity-55"
+            >
+              {pending ? "移交中..." : "确认移交"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function BatchRecycleDialog({
   open,
   selectedCount,
@@ -609,8 +742,10 @@ export function CustomersTable({
   outboundCallEnabled = false,
   moveToRecycleBinAction,
   canBatchAddTags = false,
+  canBatchTransferOwner = false,
   canBatchMoveToRecycleBin = false,
   batchTagOptions = [],
+  batchOwnerTransferOptions = [],
   emptyTitle,
   emptyDescription,
   filters,
@@ -626,8 +761,10 @@ export function CustomersTable({
   outboundCallEnabled?: boolean;
   moveToRecycleBinAction?: MoveCustomerToRecycleBinAction;
   canBatchAddTags?: boolean;
+  canBatchTransferOwner?: boolean;
   canBatchMoveToRecycleBin?: boolean;
   batchTagOptions?: BatchTagOption[];
+  batchOwnerTransferOptions?: SalesRepBoardItem[];
   emptyTitle: string;
   emptyDescription: string;
   filters: CustomerCenterFilters;
@@ -643,8 +780,13 @@ export function CustomersTable({
     ids: [],
   });
   const [batchTagDialogOpen, setBatchTagDialogOpen] = useState(false);
+  const [batchOwnerTransferDialogOpen, setBatchOwnerTransferDialogOpen] = useState(false);
   const [batchRecycleDialogOpen, setBatchRecycleDialogOpen] = useState(false);
   const [selectedTagId, setSelectedTagId] = useState("");
+  const [selectedTargetOwnerId, setSelectedTargetOwnerId] = useState("");
+  const [batchTransferNotice, setBatchTransferNotice] = useState<CustomerBatchActionNoticeState>(
+    initialBatchTransferNoticeState,
+  );
   const [batchRecycleNotice, setBatchRecycleNotice] = useState<CustomerBatchActionNoticeState>(
     initialBatchRecycleNoticeState,
   );
@@ -656,6 +798,7 @@ export function CustomersTable({
   const [sheetCustomer, setSheetCustomer] = useState<CustomerListItem | null>(null);
   const [focusedCustomer, setFocusedCustomer] = useState<FocusedCustomerState | null>(null);
   const [batchTagPending, startBatchTagTransition] = useTransition();
+  const [batchOwnerTransferPending, startBatchOwnerTransferTransition] = useTransition();
   const [batchRecyclePending, startBatchRecycleTransition] = useTransition();
   const router = useRouter();
   const pathname = usePathname() || "/customers";
@@ -669,7 +812,8 @@ export function CustomersTable({
   const allCurrentPageSelected =
     items.length > 0 &&
     (selectionMode === "filtered" || manualSelectedIds.length === items.length);
-  const canBatchSelect = canBatchAddTags || canBatchMoveToRecycleBin;
+  const canBatchSelect =
+    canBatchAddTags || canBatchTransferOwner || canBatchMoveToRecycleBin;
   const filteredSelectionExceedsLimit =
     canBatchSelect && pagination.totalCount > MAX_BATCH_CUSTOMER_ACTION_SIZE;
   const canSelectFiltered =
@@ -680,6 +824,7 @@ export function CustomersTable({
     selectionMode === "filtered" && filteredSelectionExceedsLimit;
   const showBatchQuickSelect = canBatchSelect && selectedCount === 0;
   const showBatchActiveBar = canBatchSelect && selectedCount > 0;
+  const hasBatchOwnerTransferOptions = batchOwnerTransferOptions.length > 0;
 
   useEffect(() => {
     const stored = window.localStorage.getItem(customerViewStorageKey);
@@ -854,6 +999,7 @@ export function CustomersTable({
 
   function openBatchTagDialog() {
     setBatchRecycleNotice(initialBatchRecycleNoticeState);
+    setBatchTransferNotice(initialBatchTransferNoticeState);
     setSelectedTagId("");
     setBatchTagDialogOpen(true);
   }
@@ -863,8 +1009,21 @@ export function CustomersTable({
     setSelectedTagId("");
   }
 
+  function openBatchOwnerTransferDialog() {
+    setBatchRecycleNotice(initialBatchRecycleNoticeState);
+    setBatchTransferNotice(initialBatchTransferNoticeState);
+    setSelectedTargetOwnerId("");
+    setBatchOwnerTransferDialogOpen(true);
+  }
+
+  function closeBatchOwnerTransferDialog() {
+    setBatchOwnerTransferDialogOpen(false);
+    setSelectedTargetOwnerId("");
+  }
+
   function openBatchRecycleDialog() {
     setBatchRecycleNotice(initialBatchRecycleNoticeState);
+    setBatchTransferNotice(initialBatchTransferNoticeState);
     setBatchRecycleDialogOpen(true);
   }
 
@@ -933,6 +1092,28 @@ export function CustomersTable({
       });
 
       if (nextState.summary.successCount > 0) {
+        resetSelection();
+        router.refresh();
+      }
+    });
+  }
+
+  function handleBatchOwnerTransferSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+
+    startBatchOwnerTransferTransition(async () => {
+      const nextState = await batchTransferCustomerOwnerAction(formData);
+      setBatchTransferNotice(nextState);
+      closeBatchOwnerTransferDialog();
+      notifyCustomerBatchActionResult(nextState, {
+        defaultTitle: "批量移交已处理",
+        successLabel: "成功移交",
+        countUnitLabel: "位",
+      });
+
+      if (nextState.summary.successCount > 0 || nextState.summary.skippedCount > 0) {
         resetSelection();
         router.refresh();
       }
@@ -1398,6 +1579,23 @@ export function CustomersTable({
                 </p>
               </div>
 
+              {batchTransferNotice.blockedReasonSummary.length > 0 ? (
+                <div className="rounded-[0.95rem] border border-amber-200 bg-amber-50/70 px-4 py-3.5">
+                  <p className="text-[12px] font-semibold text-amber-900">移交阻断</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {batchTransferNotice.blockedReasonSummary.map((item) => (
+                      <span
+                        key={item.code}
+                        className="inline-flex items-center rounded-full border border-amber-200 bg-white px-2.5 py-1 text-[12px] font-medium text-amber-800"
+                        title={item.description}
+                      >
+                        {item.label} {item.count} 位
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               {batchRecycleNotice.blockedReasonSummary.length > 0 ? (
                 <CustomerRecycleBlockedReasonSummary
                   items={batchRecycleNotice.blockedReasonSummary}
@@ -1445,7 +1643,7 @@ export function CustomersTable({
                           ? "动作将应用到整个筛选结果。"
                           : allCurrentPageSelected && canSelectFiltered
                             ? `可扩展到 ${pagination.totalCount} 位筛选结果。`
-                            : "可添加标签或移入回收站。"}
+                            : "可添加标签、移交负责人或移入回收站。"}
                     </span>
                   </div>
 
@@ -1499,6 +1697,23 @@ export function CustomersTable({
                       >
                         <Tags className="h-3.5 w-3.5" />
                         标签
+                      </button>
+                    ) : null}
+
+                    {canBatchTransferOwner ? (
+                      <button
+                        type="button"
+                        onClick={openBatchOwnerTransferDialog}
+                        disabled={!hasBatchOwnerTransferOptions || batchExecutionBlockedByLimit}
+                        title={
+                          hasBatchOwnerTransferOptions
+                            ? "批量移交负责人"
+                            : "暂无可移交的销售账号"
+                        }
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-primary/20 bg-white px-3 text-xs font-semibold text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
+                      >
+                        <ArrowRightLeft className="h-3.5 w-3.5" />
+                        移交
                       </button>
                     ) : null}
 
@@ -1620,6 +1835,20 @@ export function CustomersTable({
         onClose={closeBatchTagDialog}
         onTagChange={setSelectedTagId}
         onSubmit={handleBatchTagSubmit}
+        selectedCustomerIds={manualSelectedIds}
+      />
+
+      <BatchOwnerTransferDialog
+        open={batchOwnerTransferDialogOpen}
+        selectedCount={selectedCount}
+        selectionMode={selectionMode}
+        filters={filters}
+        ownerOptions={batchOwnerTransferOptions}
+        selectedTargetOwnerId={selectedTargetOwnerId}
+        pending={batchOwnerTransferPending}
+        onClose={closeBatchOwnerTransferDialog}
+        onOwnerChange={setSelectedTargetOwnerId}
+        onSubmit={handleBatchOwnerTransferSubmit}
         selectedCustomerIds={manualSelectedIds}
       />
 
