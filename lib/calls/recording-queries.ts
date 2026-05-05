@@ -38,6 +38,7 @@ export type CallRecordingWorkbenchFilters = {
   to: string;
   minScore: string;
   maxScore: string;
+  page: number;
 };
 
 export type CallRecordingWorkbenchItem = {
@@ -105,8 +106,15 @@ export type CallRecordingWorkbenchData = {
     aiReadyCount: number;
     aiPendingCount: number;
   };
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  };
   items: CallRecordingWorkbenchItem[];
 };
+
+const callRecordingQueuePageSize = 30;
 
 export type CallRecordingAnalysisDetail = {
   id: string;
@@ -167,6 +175,16 @@ function parseScore(value: string) {
   return Math.min(100, Math.max(0, parsed));
 }
 
+function parsePage(value: string) {
+  const parsed = Number.parseInt(value, 10);
+
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
+    return 1;
+  }
+
+  return parsed;
+}
+
 function parseFilters(
   rawSearchParams?: Record<string, SearchParamsValue>,
 ): CallRecordingWorkbenchFilters {
@@ -182,6 +200,7 @@ function parseFilters(
     to: getParamValue(rawSearchParams?.to).trim(),
     minScore: getParamValue(rawSearchParams?.minScore).trim(),
     maxScore: getParamValue(rawSearchParams?.maxScore).trim(),
+    page: parsePage(getParamValue(rawSearchParams?.page).trim()),
   };
 }
 
@@ -294,6 +313,7 @@ export async function getCallRecordingWorkbenchData(
 
   const filters = parseFilters(rawSearchParams);
   const where = buildRecordingWhere(scope, filters);
+  const skip = (filters.page - 1) * callRecordingQueuePageSize;
   const salesWhere =
     viewer.role === "SUPERVISOR"
       ? viewer.teamId
@@ -311,7 +331,8 @@ export async function getCallRecordingWorkbenchData(
     prisma.callRecording.findMany({
       where,
       orderBy: [{ createdAt: "desc" }],
-      take: 80,
+      skip,
+      take: callRecordingQueuePageSize,
       select: {
         id: true,
         status: true,
@@ -432,6 +453,11 @@ export async function getCallRecordingWorkbenchData(
         (aiCountMap.get("PENDING") ?? 0) +
         (aiCountMap.get("TRANSCRIBING") ?? 0) +
         (aiCountMap.get("ANALYZING") ?? 0),
+    },
+    pagination: {
+      page: filters.page,
+      pageSize: callRecordingQueuePageSize,
+      totalPages: Math.max(1, Math.ceil(totalCount / callRecordingQueuePageSize)),
     },
     items: rows.map((row) => ({
       id: row.id,

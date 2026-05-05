@@ -217,7 +217,7 @@ function WorkbenchHero({
           <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-sidebar-muted)]">
             <span>Call Recording QA</span>
             <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
-            <span>{data.items.length} 条当前队列</span>
+            <span>{data.summary.totalCount} 条当前队列</span>
           </div>
           <h1 className="mt-2 text-[1.35rem] font-semibold tracking-[-0.04em] text-[var(--foreground)] md:text-[1.65rem]">
             录音质检工作台
@@ -725,6 +725,75 @@ function RecordingQueueList({
   );
 }
 
+function buildQueuePageHref(data: CallRecordingWorkbenchData, page: number) {
+  const params = new URLSearchParams();
+  const { filters } = data;
+
+  if (filters.search) params.set("q", filters.search);
+  if (filters.salesId) params.set("salesId", filters.salesId);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.aiStatus) params.set("aiStatus", filters.aiStatus);
+  if (filters.from) params.set("from", filters.from);
+  if (filters.to) params.set("to", filters.to);
+  if (filters.minScore) params.set("minScore", filters.minScore);
+  if (filters.maxScore) params.set("maxScore", filters.maxScore);
+  if (page > 1) params.set("page", String(page));
+
+  const query = params.toString();
+  return query ? `/call-recordings?${query}` : "/call-recordings";
+}
+
+function RecordingQueuePagination({
+  data,
+}: Readonly<{
+  data: CallRecordingWorkbenchData;
+}>) {
+  const { page, totalPages, pageSize } = data.pagination;
+
+  if (data.summary.totalCount <= pageSize) {
+    return null;
+  }
+
+  const hasPrevious = page > 1;
+  const hasNext = page < totalPages;
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-border-soft)] pt-3 text-[12px] text-[var(--color-sidebar-muted)]">
+      <span className="font-medium">
+        第 {page} / {totalPages} 页，每页 {pageSize} 条
+      </span>
+      <div className="flex items-center gap-2">
+        {hasPrevious ? (
+          <Link
+            href={buildQueuePageHref(data, page - 1)}
+            prefetch={false}
+            className="crm-button crm-button-secondary h-8 px-3 text-[12px]"
+          >
+            上一页
+          </Link>
+        ) : (
+          <span className="crm-button crm-button-secondary h-8 cursor-not-allowed px-3 text-[12px] opacity-45">
+            上一页
+          </span>
+        )}
+        {hasNext ? (
+          <Link
+            href={buildQueuePageHref(data, page + 1)}
+            prefetch={false}
+            className="crm-button crm-button-secondary h-8 px-3 text-[12px]"
+          >
+            下一页
+          </Link>
+        ) : (
+          <span className="crm-button crm-button-secondary h-8 cursor-not-allowed px-3 text-[12px] opacity-45">
+            下一页
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function CallRecordingsWorkbench({
   data,
   recordingStatuses,
@@ -769,6 +838,7 @@ export function CallRecordingsWorkbench({
         }
       >
         <RecordingQueueList items={data.items} />
+        <RecordingQueuePagination data={data} />
       </DataTableWrapper>
     </PageShell>
   );
