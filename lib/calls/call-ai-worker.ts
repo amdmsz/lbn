@@ -19,7 +19,6 @@ import {
   buildCallAiRuntimeConfigSnapshot,
   resolveCallAiRuntimeConfig,
   resolveCallAiWorkerRuntimeConfig,
-  type ResolvedCallAiWorkerRuntimeConfig,
 } from "@/lib/calls/call-runtime-config";
 import { shouldTranscodeRecordingForBrowser } from "@/lib/calls/recording-audio";
 import { readTranscodedRecordingFileBuffer } from "@/lib/calls/recording-playback-transcode";
@@ -42,6 +41,8 @@ type CallAiWorkerOptions = {
   retryFailed?: boolean;
   dryRun?: boolean;
   enqueueMissing?: boolean;
+  includeStaleInProgress?: boolean;
+  staleInProgressMinutes?: number;
   actorId?: string | null;
   logger?: CallAiWorkerLogger;
 };
@@ -74,9 +75,22 @@ const defaultLogger: CallAiWorkerLogger = {
 };
 
 const MIN_PLAYABLE_RECORDING_BYTES = 44;
+const DEFAULT_STALE_IN_PROGRESS_MINUTES = 30;
 
 function normalizeLimit(limit: number) {
   return Math.max(1, Math.min(50, Number.isFinite(limit) ? Math.floor(limit) : 5));
+}
+
+function normalizeStaleInProgressMinutes(minutes: number | undefined) {
+  return Math.max(
+    1,
+    Math.min(
+      24 * 60,
+      Number.isFinite(minutes ?? NaN)
+        ? Math.floor(minutes as number)
+        : DEFAULT_STALE_IN_PROGRESS_MINUTES,
+    ),
+  );
 }
 
 function toPrismaJson(value: unknown): Prisma.InputJsonValue {
@@ -86,14 +100,43 @@ function toPrismaJson(value: unknown): Prisma.InputJsonValue {
 async function loadPendingCallAiAnalyses(input: {
   limit: number;
   retryFailed?: boolean;
+  includeStaleInProgress?: boolean;
+  staleInProgressCutoff?: Date;
 }) {
+  const baseStatuses = input.retryFailed
+    ? [CallAiAnalysisStatus.PENDING, CallAiAnalysisStatus.FAILED]
+    : [CallAiAnalysisStatus.PENDING];
+  const statusWhere: Prisma.CallAiAnalysisWhereInput =
+    input.includeStaleInProgress && input.staleInProgressCutoff
+      ? {
+          OR: [
+            {
+              status: {
+                in: baseStatuses,
+              },
+            },
+            {
+              status: {
+                in: [
+                  CallAiAnalysisStatus.TRANSCRIBING,
+                  CallAiAnalysisStatus.ANALYZING,
+                ],
+              },
+              updatedAt: {
+                lt: input.staleInProgressCutoff,
+              },
+            },
+          ],
+        }
+      : {
+          status: {
+            in: baseStatuses,
+          },
+        };
+
   return prisma.callAiAnalysis.findMany({
     where: {
-      status: {
-        in: input.retryFailed
-          ? [CallAiAnalysisStatus.PENDING, CallAiAnalysisStatus.FAILED]
-          : [CallAiAnalysisStatus.PENDING],
-      },
+      ...statusWhere,
       recording: {
         is: {
           status: {
@@ -124,6 +167,7 @@ async function loadPendingCallAiAnalyses(input: {
     take: input.limit,
     select: {
       id: true,
+      status: true,
       callRecordId: true,
       recordingId: true,
       recording: {
@@ -585,6 +629,13 @@ export async function runCallAiAnalysisBatch(
   const startedAt = new Date();
   const logger = options.logger ?? defaultLogger;
   const limit = normalizeLimit(options.limit);
+  const staleInProgressMinutes = normalizeStaleInProgressMinutes(
+    options.staleInProgressMinutes,
+  );
+  const includeStaleInProgress = options.includeStaleInProgress ?? true;
+  const staleInProgressCutoff = new Date(
+    Date.now() - staleInProgressMinutes * 60 * 1000,
+  );
   const workerConfig = await resolveCallAiWorkerRuntimeConfig();
 
   if (!workerConfig.callAiWorkerEnabled && !options.dryRun) {
@@ -617,6 +668,8 @@ export async function runCallAiAnalysisBatch(
   const rows = await loadPendingCallAiAnalyses({
     limit,
     retryFailed: options.retryFailed,
+    includeStaleInProgress,
+    staleInProgressCutoff,
   });
 
   if (options.dryRun) {
@@ -624,9 +677,13 @@ export async function runCallAiAnalysisBatch(
       logger.info({
         event: "call_ai.dry_run_candidate",
         analysisId: row.id,
+        analysisStatus: row.status,
         recordingId: row.recordingId,
         callRecordId: row.callRecordId,
         recordingStatus: row.recording.status,
+        staleInProgressCutoff: includeStaleInProgress
+          ? staleInProgressCutoff.toISOString()
+          : null,
       });
     }
 
@@ -671,7 +728,9 @@ export async function runCallAiAnalysisBatch(
       callAiWorkerEnabled: workerConfig.callAiWorkerEnabled,
       callAiWorkerConcurrency: workerConfig.callAiWorkerConcurrency,
       callAiRetryLimit: workerConfig.callAiRetryLimit,
-    } satisfies Partial<ResolvedCallAiWorkerRuntimeConfig>,
+      staleInProgressMinutes,
+      includeStaleInProgress,
+    },
   });
   const provider = createCallAiProviderFromConfig(aiConfig);
 

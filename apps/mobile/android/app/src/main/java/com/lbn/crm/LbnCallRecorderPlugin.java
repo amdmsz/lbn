@@ -42,11 +42,7 @@ import java.util.concurrent.Executors;
             strings = {
                 Manifest.permission.CALL_PHONE,
                 Manifest.permission.READ_PHONE_STATE,
-                Manifest.permission.RECORD_AUDIO,
-                Manifest.permission.MODIFY_AUDIO_SETTINGS,
-                Manifest.permission.READ_EXTERNAL_STORAGE,
-                Manifest.permission.READ_MEDIA_AUDIO,
-                Manifest.permission.POST_NOTIFICATIONS
+                Manifest.permission.RECORD_AUDIO
             }
         )
     }

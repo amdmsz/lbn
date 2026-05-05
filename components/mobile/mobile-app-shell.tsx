@@ -50,6 +50,7 @@ import {
   readNativeRecorderReadiness,
   reloadNativeApp,
   requestNativeRecorderPermissions,
+  retryNativePendingUploads,
   saveNativeConnectionProfile,
   summarizeNativeRecorderReadiness,
   testNativeConnection,
@@ -3643,6 +3644,7 @@ export function MobileAppShell({
       lastSyncedAt: null,
     });
   const mobileCustomerRequestRef = useRef(0);
+  const nativePendingUploadRetryRef = useRef(false);
   const [recentDialCustomer, setRecentDialCustomer] = useState<RecentDialCustomer | null>(
     () => getRecentDialFromRecords(data.queueItems),
   );
@@ -3688,6 +3690,42 @@ export function MobileAppShell({
   useEffect(() => {
     void refreshNativeRecorderReadiness();
   }, [refreshNativeRecorderReadiness]);
+
+  useEffect(() => {
+    if (
+      nativePendingUploadRetryRef.current ||
+      nativeRecorderReadiness.status !== "ready"
+    ) {
+      return;
+    }
+
+    nativePendingUploadRetryRef.current = true;
+
+    void retryNativePendingUploads()
+      .then((result) => {
+        const queued = result.queued ?? 0;
+
+        if (queued <= 0) {
+          return;
+        }
+
+        setOutboundNotice({
+          tone: "pending",
+          title: "录音补传已启动",
+          description: `已提交 ${queued} 条本机录音补传任务，后台会继续上传到 CRM。`,
+        });
+      })
+      .catch((error) => {
+        setOutboundNotice({
+          tone: "failed",
+          title: "录音补传启动失败",
+          description:
+            error instanceof Error
+              ? error.message
+              : "本机录音补传任务启动失败，请重新打开 APP 后再试。",
+        });
+      });
+  }, [nativeRecorderReadiness.status]);
 
   const loadMobileCustomers = useCallback(
     async (input: { page?: number; append?: boolean } = {}) => {

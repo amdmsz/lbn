@@ -49,6 +49,8 @@ async function main() {
     retryFailed: hasFlag("retry-failed"),
     dryRun: hasFlag("dry-run"),
     enqueueMissing: hasFlag("enqueue-missing"),
+    includeStaleInProgress: !hasFlag("no-include-stale"),
+    staleInProgressMinutes: parsePositiveIntArg("stale-minutes", 30),
     actorId: process.env.CALL_AI_WORKER_ACTOR_ID?.trim() || null,
     logger: structuredLogger,
   });
