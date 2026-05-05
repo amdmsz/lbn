@@ -1311,6 +1311,7 @@ export function CustomersTable({
           </button>
           <Link
             href={buildCustomerPopupHref(row.id)}
+            prefetch={false}
             target="_blank"
             rel="noreferrer"
             onClick={() => rememberFocusedCustomer(row)}
@@ -1501,6 +1502,7 @@ export function CustomersTable({
                 </button>
                 <Link
                   href={buildCustomerPopupHref(row.id)}
+                  prefetch={false}
                   target="_blank"
                   rel="noreferrer"
                   onClick={() => rememberFocusedCustomer(row)}

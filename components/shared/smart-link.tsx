@@ -17,6 +17,7 @@ export function SmartLink({
   return (
     <Link
       {...props}
+      prefetch={props.prefetch ?? false}
       scroll={scroll ?? !scrollTargetId}
       onClick={(event) => {
         if (scrollTargetId) {

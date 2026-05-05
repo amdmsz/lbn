@@ -252,7 +252,7 @@ function CustomerFollowUpDialogBody({
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
-              <Link href={detailHref} className={quietActionLinkClassName}>
+              <Link href={detailHref} prefetch={false} className={quietActionLinkClassName}>
                 <span>客户详情</span>
                 <ChevronRight className="h-3.5 w-3.5" />
               </Link>
@@ -281,12 +281,12 @@ function CustomerFollowUpDialogBody({
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <Link href={liveHref} className={quietActionLinkClassName}>
+                  <Link href={liveHref} prefetch={false} className={quietActionLinkClassName}>
                     <span>直播邀约</span>
                     <ChevronRight className="h-3.5 w-3.5" />
                   </Link>
                   {canCreateSalesOrder ? (
-                    <Link href={orderHref} className={quietActionLinkClassName}>
+                    <Link href={orderHref} prefetch={false} className={quietActionLinkClassName}>
                       <span>订单</span>
                       <ChevronRight className="h-3.5 w-3.5" />
                     </Link>

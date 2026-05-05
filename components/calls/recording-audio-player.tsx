@@ -179,7 +179,7 @@ export function RecordingAudioPlayer({
     >
       <audio
         ref={audioRef}
-        preload="metadata"
+        preload="none"
         src={audioUrl}
         onLoadedMetadata={() => {
           syncDuration();

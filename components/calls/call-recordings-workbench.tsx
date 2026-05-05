@@ -634,6 +634,7 @@ function RecordingQueueItem({ item }: Readonly<{ item: CallRecordingWorkbenchIte
               <div className="min-w-0">
                 <Link
                   href={`/customers/${item.customer.id}?tab=calls`}
+                  prefetch={false}
                   className="crm-text-link block truncate text-[14px] font-semibold"
                 >
                   {item.customer.name}

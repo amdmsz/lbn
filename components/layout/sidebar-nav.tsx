@@ -215,6 +215,7 @@ function DesktopNavItem({
   return (
     <Link
       href={item.href}
+      prefetch={false}
       scroll={false}
       aria-current={active ? "page" : undefined}
       className={cn(
@@ -327,6 +328,7 @@ function OverflowMenu({
                           <Link
                             key={item.href}
                             href={item.href}
+                            prefetch={false}
                             scroll={false}
                             aria-current={active ? "page" : undefined}
                             onClick={onClose}
@@ -419,6 +421,7 @@ function MobileNavigationSheet({
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={false}
                   scroll={false}
                   aria-current={active ? "page" : undefined}
                   onClick={onClose}
@@ -481,6 +484,7 @@ function MobileNavigationSheet({
                               <Link
                                 key={item.href}
                                 href={item.href}
+                                prefetch={false}
                                 scroll={false}
                                 aria-current={active ? "page" : undefined}
                                 onClick={onClose}
