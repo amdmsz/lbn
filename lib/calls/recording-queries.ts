@@ -269,16 +269,6 @@ function toStringArray(value: unknown) {
     .filter(Boolean);
 }
 
-function buildTranscriptPreview(value: string | null | undefined) {
-  const text = value?.trim();
-
-  if (!text) {
-    return null;
-  }
-
-  return text.length > 220 ? `${text.slice(0, 220)}...` : text;
-}
-
 function buildCountMap(rows: Array<{ status: string; _count?: { _all?: number } | true }>) {
   return new Map(
     rows.map((row) => [
@@ -365,7 +355,6 @@ export async function getCallRecordingWorkbenchData(
             opportunityTagsJson: true,
             keywordsJson: true,
             nextActionSuggestion: true,
-            transcriptText: true,
           },
         },
         qualityReviews: {
@@ -473,9 +462,9 @@ export async function getCallRecordingWorkbenchData(
             opportunityTags: toStringArray(row.aiAnalysis.opportunityTagsJson),
             keywords: toStringArray(row.aiAnalysis.keywordsJson),
             nextActionSuggestion: row.aiAnalysis.nextActionSuggestion,
-            transcriptPreview: buildTranscriptPreview(row.aiAnalysis.transcriptText),
-            transcriptTextLength: row.aiAnalysis.transcriptText?.trim().length ?? 0,
-            hasTranscript: Boolean(row.aiAnalysis.transcriptText?.trim()),
+            transcriptPreview: null,
+            transcriptTextLength: 0,
+            hasTranscript: row.aiAnalysis.status === "READY",
           }
         : null,
       latestReview: row.qualityReviews[0]

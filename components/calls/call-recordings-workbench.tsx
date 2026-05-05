@@ -560,7 +560,7 @@ function RecordingTranscriptBlock({
           <span>语音转文字</span>
         </div>
         <span className="text-[11px] font-medium text-[var(--color-sidebar-muted)]">
-          {transcriptTextLength > 0 ? `${transcriptTextLength} 字` : "待生成"}
+          {transcriptTextLength > 0 ? `${transcriptTextLength} 字` : hasTranscript ? "按需加载" : "待生成"}
         </span>
       </div>
 
@@ -568,6 +568,10 @@ function RecordingTranscriptBlock({
         <p className="mt-3 line-clamp-4 whitespace-pre-wrap text-[12.5px] leading-6 text-[var(--foreground)]/84">
           {transcriptPreview}
         </p>
+      ) : hasTranscript ? (
+        <div className="mt-3 rounded-[0.75rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+          为保证队列打开速度，完整转写不进入首屏数据。点击下方按钮后加载当前录音的完整对话。
+        </div>
       ) : (
         <div className="mt-3 rounded-[0.75rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
           {ai
