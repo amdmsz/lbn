@@ -76,6 +76,7 @@ type PreviewRow = {
   name: string;
   phone: string;
   normalizedPhone: string;
+  remark: string;
   ownerUsername: string;
   tags: string;
   expectedOutcomes: CustomerContinuationOutcomeBadge[];
@@ -236,6 +237,7 @@ function buildPreviewRows(
         mapping.phone && row.rawData[mapping.phone]
           ? normalizeImportedPhone(row.rawData[mapping.phone] ?? "")
           : "",
+      remark: mapping.remark ? row.rawData[mapping.remark] ?? "" : "",
       ownerUsername: continuationPreview?.ownerUsername ?? "",
       tags: continuationPreview?.tags ?? "",
       expectedOutcomes: continuationPreview?.expectedOutcomes ?? [],
@@ -465,7 +467,7 @@ export function LeadImportUploadForm({
             <p className="text-sm text-black/55">
               {mode === "customer_continuation"
                 ? "固定模板至少需要手机号列；标签列可直接填写 A/B/C/D、跟进客户（未接通/拒接）、拒绝添加、无效客户（空号/停机）。"
-                : "固定模板必填列为手机号、姓名、地址，其余列可以留空。"}
+                : "固定模板必填列为手机号、姓名、地址；备注列会在预览和批次详情里直接展示，其余列可以留空。"}
             </p>
           </label>
 
@@ -597,6 +599,7 @@ export function LeadImportUploadForm({
                     <th>标准化手机号</th>
                     {mode === "customer_continuation" ? <th>负责人 / 标签</th> : null}
                     {mode === "customer_continuation" ? <th>预计承接结果</th> : null}
+                    {mode === "lead" ? <th>备注</th> : null}
                     <th>预览</th>
                   </tr>
                 </thead>
@@ -656,6 +659,11 @@ export function LeadImportUploadForm({
                               <span className="text-sm text-black/45">未命中自动承接规则</span>
                             )}
                           </div>
+                        </td>
+                      ) : null}
+                      {mode === "lead" ? (
+                        <td className="max-w-[16rem] whitespace-pre-wrap text-sm leading-6 text-black/60">
+                          {row.remark || "-"}
                         </td>
                       ) : null}
                       <td className="max-w-xl">

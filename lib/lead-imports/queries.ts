@@ -28,7 +28,12 @@ import {
   collectCustomerContinuationCategories,
   getCustomerContinuationOutcomeBadges,
 } from "@/lib/lead-imports/customer-continuation-signals";
-import { parseLeadImportDuplicateCustomerSnapshot } from "@/lib/lead-imports/duplicate-customer";
+import {
+  buildLeadImportDuplicateCustomerSnapshot,
+  leadImportDuplicateCustomerSelect,
+  parseLeadImportDuplicateCustomerSnapshot,
+  type LeadImportDuplicateCustomerRecord,
+} from "@/lib/lead-imports/duplicate-customer";
 import {
   LEAD_IMPORT_PAGE_SIZE,
   buildLeadImportBatchProgress,
@@ -114,6 +119,14 @@ function parseDuplicateCustomerFromLeadImportRow(
   }
 
   return parseLeadImportDuplicateCustomerSnapshot(value.duplicateCustomer);
+}
+
+function buildDuplicateCustomerFallbackSnapshot(
+  customer: LeadImportDuplicateCustomerRecord,
+) {
+  return buildLeadImportDuplicateCustomerSnapshot(
+    customer,
+  );
 }
 
 type CustomerContinuationResultBucket =
@@ -1165,9 +1178,44 @@ export async function getLeadImportDetailData(
     customerContinuation: parseCustomerContinuationRowMappedData(row.mappedData),
     duplicateCustomer: parseDuplicateCustomerFromLeadImportRow(row.mappedData),
   }));
+  const duplicateCustomerFallbackPhones = [
+    ...new Set(
+      rawRows.flatMap((row) =>
+        row.status === LeadImportRowStatus.DUPLICATE &&
+        row.dedupType === "EXISTING_CUSTOMER" &&
+        !row.duplicateCustomer &&
+        row.normalizedPhone
+          ? [row.normalizedPhone]
+          : [],
+      ),
+    ),
+  ];
+  const duplicateCustomerFallbackMap =
+    duplicateCustomerFallbackPhones.length > 0
+      ? new Map(
+          (
+            await prisma.customer.findMany({
+              where: {
+                phone: {
+                  in: duplicateCustomerFallbackPhones,
+                },
+              },
+              select: leadImportDuplicateCustomerSelect,
+            })
+          ).map((customer) => [
+            customer.phone,
+            buildDuplicateCustomerFallbackSnapshot(customer),
+          ]),
+        )
+      : new Map();
   const rows = rawRows.map((row) => {
     return {
       ...row,
+      duplicateCustomer:
+        row.duplicateCustomer ??
+        (row.normalizedPhone
+          ? duplicateCustomerFallbackMap.get(row.normalizedPhone) ?? null
+          : null),
       rollback: {
         preview: rollbackPreviewByRowNumber.get(row.rowNumber) ?? null,
         execution: rollbackExecutionByRowNumber.get(row.rowNumber) ?? null,

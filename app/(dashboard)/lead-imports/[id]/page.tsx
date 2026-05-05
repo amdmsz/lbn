@@ -60,12 +60,32 @@ function formatLeadMappedPreview(value: Prisma.JsonValue | null) {
     return "-";
   }
 
-  const entries = Object.entries(value)
-    .filter(([, item]) => typeof item === "string" && item.trim().length > 0)
-    .slice(0, 4)
-    .map(([key, item]) => `${key}: ${item}`);
+  const previewKeys = [
+    ["phone", "手机号"],
+    ["name", "姓名"],
+    ["address", "地址"],
+    ["interestedProduct", "意向商品"],
+    ["campaignName", "活动标记"],
+    ["sourceDetail", "来源详情"],
+  ] as const;
+  const entries = previewKeys.flatMap(([key, label]) => {
+    const item = value[key];
+    return typeof item === "string" && item.trim().length > 0
+      ? [`${label}: ${item}`]
+      : [];
+  });
 
   return entries.length > 0 ? entries.join(" / ") : "-";
+}
+
+function getLeadMappedRemark(value: Prisma.JsonValue | null) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return "-";
+  }
+
+  return typeof value.remark === "string" && value.remark.trim().length > 0
+    ? value.remark
+    : "-";
 }
 
 function formatSummaryValue(value: string | null | undefined) {
@@ -163,6 +183,15 @@ function getRowCustomerSnapshot(row: LeadImportDetailRow) {
           ? `/customers/${row.customerContinuation.result.customerId}`
           : null,
       helper: customerRemoved ? "客户已删除，当前展示导入快照" : null,
+    };
+  }
+
+  if (row.duplicateCustomer) {
+    return {
+      name: row.duplicateCustomer.name,
+      phone: row.duplicateCustomer.phone,
+      href: `/customers/${row.duplicateCustomer.customerId}`,
+      helper: `${row.duplicateCustomer.executionClassLabel} / ${row.duplicateCustomer.ownershipLabel}`,
     };
   }
 
@@ -851,12 +880,14 @@ export default async function LeadImportDetailPage({
                     <th>客户</th>
                     <th>归并结果</th>
                     <th>标签同步</th>
+                    <th>备注</th>
                     <th>说明</th>
                   </tr>
                 </thead>
                 <tbody>
                   {batch.rows.map((row) => {
                     const customer = getRowCustomerSnapshot(row);
+                    const duplicateCustomer = row.duplicateCustomer;
                     const rollbackAction = getRollbackActionSummary(row);
                     const executionMeta = row.rollback.execution
                       ? getRollbackExecutionMeta(row.rollback.execution.outcome)
@@ -924,6 +955,50 @@ export default async function LeadImportDetailPage({
                                 {customer.helper}
                               </p>
                             ) : null}
+                            {duplicateCustomer ? (
+                              <div className="mt-2 space-y-2">
+                                <div className="flex flex-wrap gap-1.5">
+                                  <StatusBadge
+                                    label={duplicateCustomer.executionClassLabel}
+                                    variant={
+                                      duplicateCustomer.replacementEligible
+                                        ? "success"
+                                        : "neutral"
+                                    }
+                                  />
+                                  <StatusBadge
+                                    label={duplicateCustomer.replacementEligible ? "可作为新线索" : "不能替换"}
+                                    variant={
+                                      duplicateCustomer.replacementEligible
+                                        ? "success"
+                                        : "warning"
+                                    }
+                                  />
+                                </div>
+                                {canReplaceDuplicateCustomer ? (
+                                  <form action={replaceDuplicateCustomerFormAction}>
+                                    <input type="hidden" name="rowId" value={row.id} />
+                                    <input
+                                      type="hidden"
+                                      name="reason"
+                                      value={`原客户仍为${duplicateCustomer.executionClassLabel}，未接通且未加微信，作为新线索重新分配。`}
+                                    />
+                                    <button
+                                      type="submit"
+                                      disabled={!duplicateCustomer.replacementEligible}
+                                      className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-55"
+                                      title={
+                                        duplicateCustomer.replacementEligible
+                                          ? "剔除老客户并创建待分配新线索"
+                                          : duplicateCustomer.replacementReason
+                                      }
+                                    >
+                                      作为新线索
+                                    </button>
+                                  </form>
+                                ) : null}
+                              </div>
+                            ) : null}
                           </div>
                         </td>
                         <td>
@@ -939,6 +1014,9 @@ export default async function LeadImportDetailPage({
                           )}
                         </td>
                         <td>{row.customerMerge ? (row.customerMerge.tagSynced ? "已同步" : "未同步") : "-"}</td>
+                        <td className="max-w-[18rem] whitespace-pre-wrap text-sm leading-6 text-black/60">
+                          {getLeadMappedRemark(row.mappedData)}
+                        </td>
                         <td>{row.rollback.preview?.reason || row.errorReason || "-"}</td>
                       </tr>
                     );
@@ -968,6 +1046,7 @@ export default async function LeadImportDetailPage({
                     <th>行号</th>
                     <th>姓名</th>
                     <th>手机号</th>
+                    {mode === "lead" ? <th>备注</th> : null}
                     <th>失败原因</th>
                     <th>映射预览</th>
                   </tr>
@@ -978,6 +1057,11 @@ export default async function LeadImportDetailPage({
                       <td>{row.rowNumber}</td>
                       <td>{row.mappedName || "-"}</td>
                       <td>{row.phoneRaw || "-"}</td>
+                      {mode === "lead" ? (
+                        <td className="max-w-[16rem] whitespace-pre-wrap text-sm leading-6 text-black/60">
+                          {getLeadMappedRemark(row.mappedData)}
+                        </td>
+                      ) : null}
                       <td className="text-[var(--color-danger)]">
                         {row.errorReason || "未知错误"}
                       </td>
