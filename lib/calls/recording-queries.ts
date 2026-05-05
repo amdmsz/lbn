@@ -76,8 +76,9 @@ export type CallRecordingWorkbenchItem = {
     opportunityTags: string[];
     keywords: string[];
     nextActionSuggestion: string | null;
-    transcriptText: string | null;
-    transcriptSegments: CallTranscriptSegment[];
+    transcriptPreview: string | null;
+    transcriptTextLength: number;
+    hasTranscript: boolean;
   } | null;
   latestReview: {
     id: string;
@@ -105,6 +106,23 @@ export type CallRecordingWorkbenchData = {
     aiPendingCount: number;
   };
   items: CallRecordingWorkbenchItem[];
+};
+
+export type CallRecordingAnalysisDetail = {
+  id: string;
+  aiAnalysis: {
+    status: string;
+    summary: string | null;
+    qualityScore: number | null;
+    customerIntent: string;
+    sentiment: string | null;
+    riskFlags: string[];
+    opportunityTags: string[];
+    keywords: string[];
+    nextActionSuggestion: string | null;
+    transcriptText: string | null;
+    transcriptSegments: CallTranscriptSegment[];
+  } | null;
 };
 
 function getParamValue(value: SearchParamsValue) {
@@ -251,6 +269,16 @@ function toStringArray(value: unknown) {
     .filter(Boolean);
 }
 
+function buildTranscriptPreview(value: string | null | undefined) {
+  const text = value?.trim();
+
+  if (!text) {
+    return null;
+  }
+
+  return text.length > 220 ? `${text.slice(0, 220)}...` : text;
+}
+
 function buildCountMap(rows: Array<{ status: string; _count?: { _all?: number } | true }>) {
   return new Map(
     rows.map((row) => [
@@ -338,7 +366,6 @@ export async function getCallRecordingWorkbenchData(
             keywordsJson: true,
             nextActionSuggestion: true,
             transcriptText: true,
-            transcriptJson: true,
           },
         },
         qualityReviews: {
@@ -446,10 +473,9 @@ export async function getCallRecordingWorkbenchData(
             opportunityTags: toStringArray(row.aiAnalysis.opportunityTagsJson),
             keywords: toStringArray(row.aiAnalysis.keywordsJson),
             nextActionSuggestion: row.aiAnalysis.nextActionSuggestion,
-            transcriptText: row.aiAnalysis.transcriptText,
-            transcriptSegments: extractStoredCallTranscriptSegments(
-              row.aiAnalysis.transcriptJson,
-            ),
+            transcriptPreview: buildTranscriptPreview(row.aiAnalysis.transcriptText),
+            transcriptTextLength: row.aiAnalysis.transcriptText?.trim().length ?? 0,
+            hasTranscript: Boolean(row.aiAnalysis.transcriptText?.trim()),
           }
         : null,
       latestReview: row.qualityReviews[0]
@@ -463,6 +489,71 @@ export async function getCallRecordingWorkbenchData(
           }
         : null,
     })),
+  };
+}
+
+export async function getCallRecordingAnalysisDetail(
+  viewer: CallRecordingViewer,
+  recordingId: string,
+): Promise<CallRecordingAnalysisDetail> {
+  if (!canAccessCallRecordingModule(viewer.role)) {
+    throw new Error("当前角色无权访问通话录音工作台。");
+  }
+
+  const scope = getCallRecordingScope(viewer.role, viewer.id, viewer.teamId);
+
+  if (!scope) {
+    throw new Error("当前角色无权访问通话录音工作台。");
+  }
+
+  const row = await prisma.callRecording.findFirst({
+    where: {
+      id: recordingId,
+      ...scope,
+    },
+    select: {
+      id: true,
+      aiAnalysis: {
+        select: {
+          status: true,
+          summary: true,
+          qualityScore: true,
+          customerIntent: true,
+          sentiment: true,
+          riskFlagsJson: true,
+          opportunityTagsJson: true,
+          keywordsJson: true,
+          nextActionSuggestion: true,
+          transcriptText: true,
+          transcriptJson: true,
+        },
+      },
+    },
+  });
+
+  if (!row) {
+    throw new Error("录音不存在或无权查看。");
+  }
+
+  return {
+    id: row.id,
+    aiAnalysis: row.aiAnalysis
+      ? {
+          status: row.aiAnalysis.status,
+          summary: row.aiAnalysis.summary,
+          qualityScore: row.aiAnalysis.qualityScore,
+          customerIntent: row.aiAnalysis.customerIntent,
+          sentiment: row.aiAnalysis.sentiment,
+          riskFlags: toStringArray(row.aiAnalysis.riskFlagsJson),
+          opportunityTags: toStringArray(row.aiAnalysis.opportunityTagsJson),
+          keywords: toStringArray(row.aiAnalysis.keywordsJson),
+          nextActionSuggestion: row.aiAnalysis.nextActionSuggestion,
+          transcriptText: row.aiAnalysis.transcriptText,
+          transcriptSegments: extractStoredCallTranscriptSegments(
+            row.aiAnalysis.transcriptJson,
+          ),
+        }
+      : null,
   };
 }
 

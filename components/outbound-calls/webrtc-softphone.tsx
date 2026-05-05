@@ -231,8 +231,8 @@ export function WebRtcSoftphone({
   variant?: WebRtcSoftphoneVariant;
 }>) {
   const [config, setConfig] = useState<WebRtcConfig | null>(null);
-  const [status, setStatus] = useState<SoftphoneStatus>("loading");
-  const [message, setMessage] = useState("正在读取网页坐席配置");
+  const [status, setStatus] = useState<SoftphoneStatus>("idle");
+  const [message, setMessage] = useState("点击展开后读取网页坐席配置");
   const [muted, setMuted] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [incomingStartedAt, setIncomingStartedAt] = useState<number | null>(null);
@@ -243,8 +243,9 @@ export function WebRtcSoftphone({
   const userRef = useRef<SimpleUser | null>(null);
   const mountedRef = useRef(true);
   const callStartedAtRef = useRef<number | null>(null);
-  const statusRef = useRef<SoftphoneStatus>("loading");
+  const statusRef = useRef<SoftphoneStatus>("idle");
   const configRef = useRef<WebRtcConfig | null>(null);
+  const configLoadPromiseRef = useRef<Promise<WebRtcConfig | null> | null>(null);
   const preferredAudioInputIdRef = useRef<string | null>(null);
   const lastAudioInputIdsRef = useRef<Set<string>>(new Set());
 
@@ -280,6 +281,63 @@ export function WebRtcSoftphone({
   useEffect(() => {
     configRef.current = config;
   }, [config]);
+
+  const ensureConfigLoaded = useCallback(async () => {
+    if (!canUseSoftphone(role)) {
+      safeSetStatus("disabled", "当前角色不需要网页坐席");
+      return null;
+    }
+
+    if (configRef.current) {
+      return configRef.current;
+    }
+
+    if (configLoadPromiseRef.current) {
+      return configLoadPromiseRef.current;
+    }
+
+    safeSetStatus("loading", "正在读取网页坐席配置");
+
+    const promise = fetchWebRtcConfig()
+      .then((nextConfig) => {
+        configRef.current = nextConfig;
+
+        if (!mountedRef.current) {
+          return nextConfig;
+        }
+
+        setConfig(nextConfig);
+
+        if (!nextConfig.enabled) {
+          safeSetStatus("disabled", nextConfig.unavailableReason ?? "网页坐席尚未启用");
+          return nextConfig;
+        }
+
+        if (!nextConfig.ctiEnabled) {
+          safeSetStatus("idle", "CTI 网关未启用，坐席可注册但不能发起外呼");
+          return nextConfig;
+        }
+
+        safeSetStatus("idle", "点击启用后接收 CRM 外呼");
+        return nextConfig;
+      })
+      .catch((error) => {
+        if (mountedRef.current) {
+          safeSetStatus(
+            "failed",
+            error instanceof Error ? error.message : "网页坐席配置异常",
+          );
+        }
+
+        return null;
+      })
+      .finally(() => {
+        configLoadPromiseRef.current = null;
+      });
+
+    configLoadPromiseRef.current = promise;
+    return promise;
+  }, [role, safeSetStatus]);
 
   useEffect(() => {
     const activeCall = status === "incoming" || status === "in_call";
@@ -319,50 +377,17 @@ export function WebRtcSoftphone({
   }, [status]);
 
   useEffect(() => {
-    mountedRef.current = true;
-
-    if (!canUseSoftphone(role)) {
-      setStatus("disabled");
-      setMessage("当前角色不需要网页坐席");
+    if (!expanded || configRef.current || status === "loading" || status === "failed") {
       return;
     }
 
-    let canceled = false;
+    void ensureConfigLoaded();
+  }, [ensureConfigLoaded, expanded, status]);
 
-    void fetchWebRtcConfig()
-      .then((nextConfig) => {
-        if (canceled) {
-          return;
-        }
-
-        setConfig(nextConfig);
-
-        if (!nextConfig.enabled) {
-          setStatus("disabled");
-          setMessage(nextConfig.unavailableReason ?? "网页坐席尚未启用");
-          return;
-        }
-
-        if (!nextConfig.ctiEnabled) {
-          setStatus("idle");
-          setMessage("CTI 网关未启用，坐席可注册但不能发起外呼");
-          return;
-        }
-
-        setStatus("idle");
-        setMessage("点击启用后接收 CRM 外呼");
-      })
-      .catch((error) => {
-        if (canceled) {
-          return;
-        }
-
-        setStatus("failed");
-        setMessage(error instanceof Error ? error.message : "网页坐席配置异常");
-      });
+  useEffect(() => {
+    mountedRef.current = true;
 
     return () => {
-      canceled = true;
       mountedRef.current = false;
 
       const currentUser = userRef.current;
@@ -377,7 +402,7 @@ export function WebRtcSoftphone({
           });
       }
     };
-  }, [role]);
+  }, []);
 
   const attachRemoteAudio = useCallback(() => {
     const currentAudio = audioRef.current;
@@ -452,21 +477,23 @@ export function WebRtcSoftphone({
   }, [refreshAudioInputDevices]);
 
   const connect = useCallback(async () => {
-    if (!config?.enabled) {
+    const currentConfig = configRef.current ?? (await ensureConfigLoaded());
+
+    if (!currentConfig?.enabled) {
       return;
     }
 
     if (
-      !config.webSocketServer ||
-      !config.sipUri ||
-      !config.authorizationUser ||
-      !config.password
+      !currentConfig.webSocketServer ||
+      !currentConfig.sipUri ||
+      !currentConfig.authorizationUser ||
+      !currentConfig.password
     ) {
       safeSetStatus("failed", "网页坐席配置不完整");
       return;
     }
 
-    if (config.secureContextRequired && !isLocalSecureEnough()) {
+    if (currentConfig.secureContextRequired && !isLocalSecureEnough()) {
       safeSetStatus(
         "failed",
         "浏览器麦克风需要 HTTPS；本地请用 localhost，生产请用 crm.cclbn.com",
@@ -561,9 +588,9 @@ export function WebRtcSoftphone({
       };
 
       const nextUser: SimpleUser = new sipModule.Web.SimpleUser(
-        config.webSocketServer,
+        currentConfig.webSocketServer,
         {
-          aor: config.sipUri,
+          aor: currentConfig.sipUri,
           delegate,
           media: {
             constraints: {
@@ -577,18 +604,18 @@ export function WebRtcSoftphone({
           reconnectionAttempts: 5,
           reconnectionDelay: 3,
           registererOptions: {
-            expires: config.registrationExpiresSeconds,
+            expires: currentConfig.registrationExpiresSeconds,
           },
           userAgentOptions: {
-            authorizationPassword: config.password,
-            authorizationUsername: config.authorizationUser,
-            contactName: config.seatNo ?? config.authorizationUser,
-            displayName: config.displayName ?? config.authorizationUser,
+            authorizationPassword: currentConfig.password,
+            authorizationUsername: currentConfig.authorizationUser,
+            contactName: currentConfig.seatNo ?? currentConfig.authorizationUser,
+            displayName: currentConfig.displayName ?? currentConfig.authorizationUser,
             logBuiltinEnabled: false,
             sessionDescriptionHandlerFactoryOptions: {
               iceGatheringTimeout: 5000,
               peerConnectionConfiguration: {
-                iceServers: config.iceServers,
+                iceServers: currentConfig.iceServers,
               },
             },
             userAgentString: "JiuzhuangCRM-WebRTC-Seat",
@@ -618,7 +645,7 @@ export function WebRtcSoftphone({
         error instanceof Error ? error.message : "网页坐席注册失败",
       );
     }
-  }, [attachRemoteAudio, config, refreshAudioInputDevices, safeSetStatus]);
+  }, [attachRemoteAudio, ensureConfigLoaded, refreshAudioInputDevices, safeSetStatus]);
 
   const reconnectIfReady = useCallback(
     (reason: "network" | "desktop") => {
@@ -808,6 +835,7 @@ export function WebRtcSoftphone({
     const removeCommandListener = window.lbnDesktop?.softphone.onCommand((event) => {
       if (event.command === "focusDialpad") {
         setExpanded(true);
+        void ensureConfigLoaded();
         return;
       }
 
@@ -828,7 +856,7 @@ export function WebRtcSoftphone({
     return () => {
       removeCommandListener?.();
     };
-  }, [decline, hangup]);
+  }, [decline, ensureConfigLoaded, hangup]);
 
   const toggleMute = useCallback(() => {
     const currentUser = userRef.current;
@@ -874,7 +902,10 @@ export function WebRtcSoftphone({
       {!widgetExpanded ? (
         <button
           type="button"
-          onClick={() => setExpanded(true)}
+          onClick={() => {
+            setExpanded(true);
+            void ensureConfigLoaded();
+          }}
           aria-expanded="false"
           aria-label={`打开网页坐席，当前状态：${statusCopy[status]}`}
           className="group inline-flex max-w-full items-center gap-2 rounded-full border border-border/50 bg-background/85 px-4 py-2 text-left text-foreground shadow-2xl backdrop-blur-xl transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] hover:-translate-y-0.5 hover:bg-background/95 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
@@ -957,7 +988,7 @@ export function WebRtcSoftphone({
             {status === "idle" || status === "failed" ? (
               <button
                 type="button"
-                disabled={!config?.enabled}
+                disabled={config !== null && !config.enabled}
                 onClick={() => void connect()}
                 className="inline-flex h-10 items-center gap-2 rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground transition hover:brightness-95 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
               >

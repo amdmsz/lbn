@@ -3,13 +3,11 @@ import {
   Activity,
   Bot,
   CheckCircle2,
-  ChevronDown,
   Clock,
   FileAudio,
   FileText,
   Gauge,
   Headphones,
-  MessageSquareText,
   Search,
   ShieldCheck,
   SlidersHorizontal,
@@ -18,9 +16,8 @@ import {
   Timer,
   UserRound,
 } from "lucide-react";
-import { CallAiInsightPanel } from "@/components/calls/call-ai-insight-panel";
-import { CallTranscriptDialogue } from "@/components/calls/call-transcript-dialogue";
 import { RecordingAudioPlayer } from "@/components/calls/recording-audio-player";
+import { RecordingTranscriptLoader } from "@/components/calls/recording-transcript-loader";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageShell } from "@/components/shared/page-shell";
@@ -503,31 +500,6 @@ function RecordingAiBlock({ item }: Readonly<{ item: CallRecordingWorkbenchItem 
           <span className="line-clamp-2">{ai.nextActionSuggestion}</span>
         </div>
       ) : null}
-
-      <details className="group rounded-[0.78rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2 transition-colors open:border-[rgba(30,64,175,0.2)]">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-[12px] font-medium text-[var(--foreground)]">
-          <span className="inline-flex items-center gap-1.5">
-            <MessageSquareText className="h-3.5 w-3.5 text-[var(--color-accent)]" />
-            完整 AI 质检
-          </span>
-          <ChevronDown className="h-3.5 w-3.5 text-[var(--color-sidebar-muted)] transition-transform group-open:rotate-180" />
-        </summary>
-        <CallAiInsightPanel
-          status={ai.status}
-          summary={ai.summary}
-          qualityScore={ai.qualityScore}
-          customerIntent={ai.customerIntent}
-          sentiment={ai.sentiment}
-          riskFlags={ai.riskFlags}
-          opportunityTags={ai.opportunityTags}
-          keywords={ai.keywords}
-          nextActionSuggestion={ai.nextActionSuggestion}
-          transcriptText={ai.transcriptText}
-          transcriptSegments={ai.transcriptSegments}
-          showTranscript={false}
-          className="mt-2"
-        />
-      </details>
     </div>
   );
 }
@@ -576,8 +548,9 @@ function RecordingTranscriptBlock({
   item: CallRecordingWorkbenchItem;
 }>) {
   const ai = item.aiAnalysis;
-  const transcriptText = ai?.transcriptText?.trim();
-  const transcriptSegments = ai?.transcriptSegments ?? [];
+  const transcriptPreview = ai?.transcriptPreview?.trim();
+  const transcriptTextLength = ai?.transcriptTextLength ?? 0;
+  const hasTranscript = Boolean(ai?.hasTranscript);
 
   return (
     <section className="rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-3">
@@ -587,23 +560,13 @@ function RecordingTranscriptBlock({
           <span>语音转文字</span>
         </div>
         <span className="text-[11px] font-medium text-[var(--color-sidebar-muted)]">
-          {transcriptSegments.length > 0
-            ? `${transcriptSegments.length} 段`
-            : transcriptText
-              ? `${transcriptText.length} 字`
-              : "待生成"}
+          {transcriptTextLength > 0 ? `${transcriptTextLength} 字` : "待生成"}
         </span>
       </div>
 
-      {transcriptSegments.length > 0 ? (
-        <CallTranscriptDialogue
-          segments={transcriptSegments}
-          maxSegments={null}
-          className="mt-3 max-h-[34rem] overflow-y-auto pr-1"
-        />
-      ) : transcriptText ? (
-        <p className="mt-3 max-h-[34rem] overflow-y-auto whitespace-pre-wrap pr-1 text-[12.5px] leading-6 text-[var(--foreground)]/84">
-          {transcriptText}
+      {transcriptPreview ? (
+        <p className="mt-3 line-clamp-4 whitespace-pre-wrap text-[12.5px] leading-6 text-[var(--foreground)]/84">
+          {transcriptPreview}
         </p>
       ) : (
         <div className="mt-3 rounded-[0.75rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
@@ -612,6 +575,8 @@ function RecordingTranscriptBlock({
             : "暂无 AI 转写。录音进入 AI 处理后，这里会显示完整对话文本。"}
         </div>
       )}
+
+      {hasTranscript ? <RecordingTranscriptLoader recordingId={item.id} /> : null}
     </section>
   );
 }
