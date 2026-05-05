@@ -34,7 +34,7 @@ import {
 } from "@/lib/mobile/client-api";
 import { cn } from "@/lib/utils";
 
-type MobileCallMode = "crm-outbound" | "local-phone";
+type MobileCallMode = "local-phone";
 
 type MobileOrderLineState = {
   lineId: string;
@@ -637,9 +637,9 @@ export function MobileOrderComposer({
             </div>
             <button
               type="button"
-              onClick={() => onStartCall(customer, "detail", "crm-outbound")}
+              onClick={() => onStartCall(customer, "detail", "local-phone")}
               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-[#eaf3ff] text-[#1677ff]"
-              aria-label="外呼客户"
+              aria-label="本机拨号客户"
             >
               <Phone className="h-4 w-4" aria-hidden />
             </button>

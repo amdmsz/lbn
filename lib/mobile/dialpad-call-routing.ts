@@ -1,9 +1,6 @@
-export type MobileCallMode = "crm-outbound" | "local-phone";
+export type MobileCallMode = "local-phone";
 
 export type MobileDialpadCallAction =
-  | {
-      kind: "crm-outbound";
-    }
   | {
       kind: "local-phone";
     }
@@ -32,14 +29,14 @@ export function resolveMobileDialpadCallAction(input: {
     };
   }
 
-  if (input.callMode === "crm-outbound" && !input.hasMatchedCustomer) {
+  if (!input.hasMatchedCustomer) {
     return {
       kind: "blocked",
-      reason: "外呼仅支持已匹配客户号码。",
+      reason: "请选择客户或输入已匹配客户号码，录音上传需要客户关联。",
     };
   }
 
   return {
-    kind: input.callMode === "crm-outbound" ? "crm-outbound" : "local-phone",
+    kind: "local-phone",
   };
 }

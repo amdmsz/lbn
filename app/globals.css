@@ -2192,12 +2192,12 @@ html[data-theme="dark"] [class*="border-[rgba(32,24,19"] {
   --lbn-mobile-dial-key-height: 62px;
   --lbn-mobile-dial-call-size: 64px;
   --lbn-mobile-dial-action-height: 44px;
-  --lbn-mobile-ios-key-size: clamp(78px, 21vw, 88px);
-  --lbn-mobile-ios-key-gap-x: clamp(30px, 9.6vw, 40px);
-  --lbn-mobile-ios-key-gap-y: clamp(19px, 2.8dvh, 27px);
-  --lbn-mobile-ios-call-size: clamp(86px, 23vw, 96px);
-  --lbn-mobile-ios-top-space: clamp(158px, 23dvh, 224px);
-  --lbn-mobile-ios-action-gap: clamp(18px, 3dvh, 30px);
+  --lbn-mobile-ios-key-size: clamp(70px, min(19vw, 9.2dvh), 86px);
+  --lbn-mobile-ios-key-gap-x: clamp(16px, 7.8vw, 34px);
+  --lbn-mobile-ios-key-gap-y: clamp(9px, 1.9dvh, 18px);
+  --lbn-mobile-ios-call-size: clamp(76px, min(22vw, 10.6dvh), 90px);
+  --lbn-mobile-ios-top-space: clamp(76px, 16dvh, 148px);
+  --lbn-mobile-ios-action-gap: clamp(8px, 1.8dvh, 18px);
   --lbn-mobile-order-footer-space: 132px;
   --lbn-mobile-toast-bottom: 96px;
   --lbn-phone-blue: #0a84ff;
@@ -2643,6 +2643,11 @@ html[data-theme="dark"] [class*="border-[rgba(32,24,19"] {
   color: #8e8e93;
 }
 
+.lbn-phone-line-switch.is-static,
+.lbn-phone-detail-line-switch.is-static {
+  pointer-events: none;
+}
+
 .lbn-phone-line-chip {
   display: inline-flex;
   height: 24px;
@@ -2970,7 +2975,7 @@ html[data-theme="dark"] [class*="border-[rgba(32,24,19"] {
 .lbn-mobile-dialpad-display {
   display: flex;
   min-height: 0;
-  flex: 0 1 var(--lbn-mobile-ios-top-space);
+  flex: 1 1 var(--lbn-mobile-ios-top-space);
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
@@ -3031,7 +3036,7 @@ html[data-theme="dark"] [class*="border-[rgba(32,24,19"] {
 
 .lbn-mobile-ios-dialpad {
   display: grid;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   gap: var(--lbn-mobile-ios-key-gap-y);
   padding: 0 var(--lbn-mobile-x);
   place-items: center;
@@ -3081,11 +3086,11 @@ html[data-theme="dark"] [class*="border-[rgba(32,24,19"] {
 
 .lbn-mobile-ios-actions {
   display: grid;
-  flex: 0 0 auto;
+  flex: 0 0 min-content;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
   padding: var(--lbn-mobile-ios-action-gap) var(--lbn-mobile-x)
-    clamp(14px, 2dvh, 22px);
+    clamp(8px, 1.6dvh, 16px);
 }
 
 .lbn-mobile-ios-call-button {
@@ -3158,10 +3163,10 @@ html[data-theme="dark"] [class*="border-[rgba(32,24,19"] {
     --lbn-mobile-dial-key-height: 54px;
     --lbn-mobile-dial-call-size: 58px;
     --lbn-mobile-dial-action-height: 42px;
-    --lbn-mobile-ios-key-size: 76px;
-    --lbn-mobile-ios-key-gap-x: 16px;
-    --lbn-mobile-ios-key-gap-y: 11px;
-    --lbn-mobile-ios-call-size: 86px;
+    --lbn-mobile-ios-key-size: clamp(64px, min(20vw, 9dvh), 74px);
+    --lbn-mobile-ios-key-gap-x: 12px;
+    --lbn-mobile-ios-key-gap-y: 8px;
+    --lbn-mobile-ios-call-size: clamp(70px, min(23vw, 10dvh), 82px);
     --lbn-mobile-order-footer-space: 120px;
     --lbn-mobile-toast-bottom: 88px;
   }
@@ -3213,10 +3218,12 @@ html[data-theme="dark"] [class*="border-[rgba(32,24,19"] {
     --lbn-mobile-dial-key-height: 48px;
     --lbn-mobile-dial-call-size: 56px;
     --lbn-mobile-dial-action-height: 40px;
-    --lbn-mobile-ios-key-size: 72px;
-    --lbn-mobile-ios-key-gap-x: 14px;
-    --lbn-mobile-ios-key-gap-y: 8px;
-    --lbn-mobile-ios-call-size: 82px;
+    --lbn-mobile-ios-key-size: clamp(62px, min(18vw, 9dvh), 72px);
+    --lbn-mobile-ios-key-gap-x: 12px;
+    --lbn-mobile-ios-key-gap-y: 7px;
+    --lbn-mobile-ios-call-size: clamp(68px, min(20vw, 10dvh), 78px);
+    --lbn-mobile-ios-top-space: clamp(52px, 10dvh, 76px);
+    --lbn-mobile-ios-action-gap: 6px;
     --lbn-mobile-order-footer-space: 112px;
     --lbn-mobile-toast-bottom: 82px;
   }
@@ -3237,7 +3244,7 @@ html[data-theme="dark"] [class*="border-[rgba(32,24,19"] {
   }
 
   .lbn-mobile-dialpad-display {
-    padding-bottom: 22px;
+    padding-bottom: 10px;
   }
 
   .lbn-mobile-ios-actions {

@@ -45,7 +45,6 @@ import type { RoleCode } from "@prisma/client";
 import type { CallResultOption } from "@/lib/calls/metadata";
 import { MobileCallFollowUpSheet } from "@/components/customers/mobile-call-followup-sheet";
 import { MobileOrderComposer } from "@/components/mobile/mobile-order-composer";
-import { WebRtcSoftphone } from "@/components/outbound-calls/webrtc-softphone";
 import {
   readNativeConnectionProfile,
   readNativeRecorderReadiness,
@@ -77,6 +76,7 @@ import {
   updateMobileCustomerRemark,
   type MobileApiCustomerListItem,
   type MobileApiPagination,
+  type MobileCallSource,
   type MobileCustomerDetail,
 } from "@/lib/mobile/client-api";
 import {
@@ -126,7 +126,7 @@ type RecentDialCustomer = {
   customerName: string;
   phone: string;
   calledAt: string;
-  callMode: MobileCallMode;
+  callMode: MobileCallSource;
   resultLabel: string | null;
 };
 
@@ -167,8 +167,8 @@ const customerExecutionClassOptions: Array<{
 ];
 
 const RECENT_DIAL_CUSTOMER_STORAGE_KEY = "lbncrm.mobile.recent-dial-customer";
-const MOBILE_CALL_MODE_STORAGE_KEY = "lbncrm.mobile.call-mode";
 const CUSTOMER_PHOTO_STORAGE_PREFIX = "lbncrm.mobile.customer-photo.";
+const MOBILE_LOCAL_CALL_MODE: MobileCallMode = "local-phone";
 
 const keypadRows = [
   [
@@ -309,43 +309,6 @@ function formatMoney(value: string) {
 
 function isMaskedPhone(value: string) {
   return value.includes("*");
-}
-
-function parseMobileCallMode(value: string | null | undefined): MobileCallMode | null {
-  return value === "crm-outbound" || value === "local-phone" ? value : null;
-}
-
-function generateClientCallCorrelationId(callMode: MobileCallMode) {
-  const randomPart =
-    typeof window !== "undefined" && "crypto" in window && window.crypto.randomUUID
-      ? window.crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-
-  return `${callMode}:${randomPart}`;
-}
-
-function readStoredCallMode() {
-  if (typeof window === "undefined") {
-    return "crm-outbound";
-  }
-
-  try {
-    return parseMobileCallMode(window.localStorage.getItem(MOBILE_CALL_MODE_STORAGE_KEY)) ?? "crm-outbound";
-  } catch {
-    return "crm-outbound";
-  }
-}
-
-function writeStoredCallMode(value: MobileCallMode) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(MOBILE_CALL_MODE_STORAGE_KEY, value);
-  } catch {
-    // Storage can be unavailable in restricted WebViews; the in-memory state still works.
-  }
 }
 
 function getCustomerPhotoStorageKey(customerId: string) {
@@ -624,7 +587,7 @@ type PhoneHistoryEntry = {
   customer: CustomerListItem;
   title: string;
   phone: string;
-  callMode: MobileCallMode;
+  callMode: MobileCallSource;
   modeLabel: "外呼" | "本机";
   directionMark: "↗" | "↙";
   locationLabel: string;
@@ -669,7 +632,7 @@ const phoneResultFilterOptions: Array<{
   { value: "connected", label: "已接通" },
 ];
 
-function getCallModeLabel(callMode: MobileCallMode | null | undefined): PhoneHistoryEntry["modeLabel"] {
+function getCallModeLabel(callMode: MobileCallSource | null | undefined): PhoneHistoryEntry["modeLabel"] {
   return callMode === "local-phone" ? "本机" : "外呼";
 }
 
@@ -922,19 +885,12 @@ function readRecentDialCustomer() {
 
     const parsedResultLabel =
       typeof parsed.resultLabel === "string" ? parsed.resultLabel.trim() : null;
-    const callMode =
-      parsed.callMode === "local-phone" || parsed.callMode === "crm-outbound"
-        ? parsed.callMode
-        : parsedResultLabel?.includes("本机")
-          ? "local-phone"
-          : "crm-outbound";
-
     return {
       customerId: parsed.customerId,
       customerName: parsed.customerName,
       phone: parsed.phone,
       calledAt: parsed.calledAt,
-      callMode,
+      callMode: "local-phone",
       resultLabel:
         parsedResultLabel === "本机通话" ||
         parsedResultLabel === "本机" ||
@@ -1925,7 +1881,6 @@ function DialpadTab({
   dialNumber,
   setDialNumber,
   callMode,
-  onCallModeChange,
   canCreateCallRecord,
   onSelectCustomer,
   onStartCall,
@@ -1934,7 +1889,6 @@ function DialpadTab({
   dialNumber: string;
   setDialNumber: (value: string) => void;
   callMode: MobileCallMode;
-  onCallModeChange: (value: MobileCallMode) => void;
   canCreateCallRecord: boolean;
   onSelectCustomer: (customer: CustomerListItem) => void;
   onStartCall: (
@@ -1962,8 +1916,6 @@ function DialpadTab({
     hasMatchedCustomer: Boolean(matchedCustomer),
     canCreateCallRecord,
   });
-  const [linePickerOpen, setLinePickerOpen] = useState(false);
-
   function appendDialValue(value: string) {
     setDialNumber(`${dialNumber}${value}`);
   }
@@ -1980,16 +1932,11 @@ function DialpadTab({
       return;
     }
 
-    if (action.kind === "crm-outbound") {
-      if (!matchedCustomer) {
-        return;
-      }
-
-      onStartCall(matchedCustomer, "card", mode);
+    if (!matchedCustomer) {
       return;
     }
 
-    window.location.assign(`tel:${normalizedNumber}`);
+    onStartCall(matchedCustomer, "card", mode);
   }
 
   function startPrimaryDial() {
@@ -1999,52 +1946,8 @@ function DialpadTab({
   return (
     <section className="lbn-mobile-dialpad-page">
       <header className="lbn-mobile-dialpad-header">
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setLinePickerOpen((value) => !value)}
-            className="lbn-phone-line-switch lbn-phone-press"
-            aria-label="切换呼叫线路"
-            aria-expanded={linePickerOpen}
-          >
-            <span className="lbn-phone-line-chip">
-              {callMode === "crm-outbound" ? "外呼" : "本机"}
-            </span>
-            <span className="lbn-phone-line-chevrons" aria-hidden>
-              <span />
-              <span />
-            </span>
-          </button>
-          {linePickerOpen ? (
-            <div className="lbn-phone-line-popover">
-              <p className="px-5 pb-3 pt-4 text-[16px] text-[#8e8e93]">
-                选择现在要使用的线路。
-              </p>
-              {[
-                { value: "crm-outbound" as const, label: "使用外呼" },
-                { value: "local-phone" as const, label: "使用本机" },
-              ].map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => {
-                    onCallModeChange(option.value);
-                    setLinePickerOpen(false);
-                  }}
-                  className="lbn-phone-popover-option lbn-phone-press flex w-full items-center gap-3 px-5 py-3 text-left"
-                >
-                  <span className="w-5 text-[24px] leading-none text-black">
-                    {callMode === option.value ? "✓" : ""}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-[21px] font-medium leading-6 text-black">
-                      {option.label}
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          ) : null}
+        <div className="lbn-phone-line-switch is-static" aria-label="当前使用本机拨号">
+          <span className="lbn-phone-line-chip">本机</span>
         </div>
         <span
           className={cn(
@@ -2052,7 +1955,7 @@ function DialpadTab({
             canCreateCallRecord ? "is-ready" : "is-offline",
           )}
           role="status"
-          aria-label={canCreateCallRecord ? "CTI Ready" : "CTI Offline"}
+          aria-label={canCreateCallRecord ? "本机拨号可用" : "本机拨号不可用"}
         />
       </header>
 
@@ -2147,7 +2050,7 @@ function DialpadTab({
       </div>
 
       <div className="sr-only" aria-live="polite">
-        当前线路为 {callMode === "crm-outbound" ? "外呼" : "本机"}
+        当前线路为本机
       </div>
     </section>
   );
@@ -2370,7 +2273,7 @@ function AppsTab({
           <div className="grid grid-cols-4 border-t border-white/10 bg-white/[0.04]">
             {[
               { label: "建单", icon: ClipboardList, onClick: () => openCustomers() },
-              { label: "外呼", icon: PhoneCall, onClick: openDialpad },
+              { label: "拨号", icon: PhoneCall, onClick: openDialpad },
               {
                 label: "催收",
                 icon: WalletCards,
@@ -2648,7 +2551,7 @@ function NativeRecorderCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="truncate text-[17px] font-semibold text-[#20242c]">
-              原生外呼检测
+              本机录音检测
             </h2>
             <span
               className={cn(
@@ -2791,7 +2694,7 @@ function MeTab({
     {
       icon: PhoneCall,
       tone: "amber" as const,
-      title: "外呼助手",
+      title: "本机拨号",
       value: nativeRecorderChecking ? "检测中" : nativeRecorderReadiness.title,
       onClick: openDialpad,
     },
@@ -2930,7 +2833,6 @@ function MeTab({
 function CustomerDetailDrawer({
   customer,
   callMode,
-  onCallModeChange,
   callResultOptions,
   canCreateCallRecord,
   onStartCall,
@@ -2941,7 +2843,6 @@ function CustomerDetailDrawer({
 }: Readonly<{
   customer: CustomerListItem | null;
   callMode: MobileCallMode;
-  onCallModeChange: (value: MobileCallMode) => void;
   callResultOptions: readonly CallResultOption[];
   canCreateCallRecord: boolean;
   onStartCall: (
@@ -2959,7 +2860,6 @@ function CustomerDetailDrawer({
     detail: MobileCustomerDetail | null;
     error: string | null;
   } | null>(null);
-  const [linePickerOpen, setLinePickerOpen] = useState(false);
   const [callHistoryExpanded, setCallHistoryExpanded] = useState(false);
   const [customerPhotoUrl, setCustomerPhotoUrl] = useState<string | null>(null);
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -3025,7 +2925,6 @@ function CustomerDetailDrawer({
       setPhotoError(null);
       setPhotoUploading(false);
       setCallHistoryExpanded(false);
-      setLinePickerOpen(false);
       setRemarkError(null);
       setRemarkSaving(false);
     }, 0);
@@ -3244,40 +3143,10 @@ function CustomerDetailDrawer({
           <div className="flex flex-col items-center pt-12 text-center text-white">
             <PhoneAvatar name={customer.name} size="lg" photoUrl={customerPhotoUrl} />
             <div className="relative mt-8">
-              <button
-                type="button"
-                onClick={() => setLinePickerOpen((value) => !value)}
-                className="lbn-phone-detail-line-switch lbn-phone-press"
-                aria-expanded={linePickerOpen}
-              >
-                <span>始终使用：</span>
-                <strong>{callMode === "crm-outbound" ? "外呼" : "本机"}</strong>
-              </button>
-              {linePickerOpen ? (
-                <div className="lbn-phone-line-popover lbn-phone-detail-line-popover">
-                  {[
-                    { value: "crm-outbound" as const, label: "外呼" },
-                    { value: "local-phone" as const, label: "本机" },
-                  ].map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => {
-                        onCallModeChange(option.value);
-                        setLinePickerOpen(false);
-                      }}
-                      className="lbn-phone-popover-option lbn-phone-press flex w-full items-center gap-3 px-5 py-3 text-left"
-                    >
-                      <span className="w-5 text-[24px] leading-none text-black">
-                        {callMode === option.value ? "✓" : ""}
-                      </span>
-                      <span className="block text-[21px] font-medium leading-6 text-black">
-                        {option.label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
+              <div className="lbn-phone-detail-line-switch is-static">
+                <span>本机拨号</span>
+                <strong>录音上传</strong>
+              </div>
             </div>
             <h2 className="mt-2 max-w-full truncate text-[42px] font-semibold leading-tight">
               {customer.name}
@@ -3669,7 +3538,7 @@ function MobileModulePanel({
               <MessageRow
                 icon={PhoneCall}
                 tone="green"
-                title="本机外呼"
+                title="本机拨号"
                 value="拨号、录音和通话补记"
                 onClick={openDialpad}
               />
@@ -3759,7 +3628,7 @@ export function MobileAppShell({
   );
   const [searchText, setSearchText] = useState(data.filters.search);
   const [dialNumber, setDialNumber] = useState("");
-  const [callMode, setCallMode] = useState<MobileCallMode>(() => readStoredCallMode());
+  const callMode = MOBILE_LOCAL_CALL_MODE;
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerListItem | null>(null);
   const [orderCustomer, setOrderCustomer] = useState<CustomerListItem | null>(null);
   const [activeModule, setActiveModule] = useState<MobileModuleView | null>(null);
@@ -3952,11 +3821,6 @@ export function MobileAppShell({
     switchTab("messages");
   }
 
-  function changeCallMode(nextMode: MobileCallMode) {
-    setCallMode(nextMode);
-    writeStoredCallMode(nextMode);
-  }
-
   function refreshMobileCustomers() {
     void loadMobileCustomers({ page: 1 });
   }
@@ -4056,11 +3920,6 @@ export function MobileAppShell({
       setRecentDialCustomer(recent);
       writeRecentDialCustomer(recent);
 
-      if (mode === "crm-outbound") {
-        void startCrmOutboundCall(callableCustomer, triggerSource);
-        return;
-      }
-
       startMobileCallFollowUpDial({
         customerId: callableCustomer.id,
         customerName: callableCustomer.name,
@@ -4068,142 +3927,6 @@ export function MobileAppShell({
         triggerSource,
       });
     })();
-  }
-
-  async function startCrmOutboundCall(
-    customer: CustomerListItem,
-    triggerSource: MobileCallTriggerSource,
-  ) {
-    const clientEventAt = new Date().toISOString();
-    const correlationId = generateClientCallCorrelationId("crm-outbound");
-
-    setOutboundNotice({
-      tone: "pending",
-      title: "外呼发起中",
-      description: `${customer.name} · 正在提交到 CTI 线路`,
-    });
-
-    try {
-      const response = await fetch("/api/outbound-calls/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customerId: customer.id,
-          correlationId,
-          clientEventAt,
-          triggerSource,
-        }),
-      });
-      const payload = (await response.json().catch(() => null)) as {
-        call?: {
-          sessionId?: string;
-          callRecordId?: string;
-          status?: string;
-        };
-        message?: string;
-      } | null;
-
-      if (!response.ok) {
-        throw new Error(payload?.message ?? "外呼发起失败。");
-      }
-
-      const sessionId = payload?.call?.sessionId;
-      setOutboundNotice({
-        tone: "pending",
-        title: "外呼已提交",
-        description: "请在右下角网页坐席接听，录音由服务器归档。",
-      });
-
-      if (sessionId) {
-        pollCrmOutboundSession(sessionId, customer.name);
-      }
-    } catch (error) {
-      setOutboundNotice({
-        tone: "failed",
-        title: "外呼失败",
-        description: error instanceof Error ? error.message : "外呼发起失败。",
-      });
-    }
-  }
-
-  function pollCrmOutboundSession(sessionId: string, customerName: string) {
-    let attempts = 0;
-
-    async function poll() {
-      attempts += 1;
-
-      try {
-        const response = await fetch(`/api/outbound-calls/${sessionId}`, {
-          cache: "no-store",
-        });
-        const payload = (await response.json().catch(() => null)) as {
-          session?: {
-            status?: string;
-            failureMessage?: string | null;
-            durationSeconds?: number | null;
-            recordingImportedAt?: string | null;
-          };
-        } | null;
-        const session = payload?.session;
-
-        if (!response.ok || !session?.status) {
-          throw new Error("外呼状态读取失败。");
-        }
-
-        if (session.status === "ENDED") {
-          setOutboundNotice({
-            tone: "success",
-            title: "外呼已结束",
-            description: session.durationSeconds
-              ? `${customerName} · 通话 ${formatCallDuration(session.durationSeconds)}${
-                  session.recordingImportedAt ? "，录音已归档" : ""
-                }`
-              : `${customerName} · 通话已结束`,
-          });
-          router.refresh();
-          return;
-        }
-
-        if (session.status === "FAILED" || session.status === "CANCELED") {
-          setOutboundNotice({
-            tone: "failed",
-            title: "外呼未接通",
-            description: session.failureMessage ?? "线路返回失败或客户未接通。",
-          });
-          router.refresh();
-          return;
-        }
-
-        if (session.status === "ANSWERED") {
-          setOutboundNotice({
-            tone: "pending",
-            title: "客户已接通",
-            description: `${customerName} · 正在通话，录音由服务器保存。`,
-          });
-        } else if (session.status === "RINGING") {
-          setOutboundNotice({
-            tone: "pending",
-            title: "客户振铃中",
-            description: `${customerName} · 等待客户接听。`,
-          });
-        }
-      } catch {
-        if (attempts > 3) {
-          setOutboundNotice({
-            tone: "failed",
-            title: "外呼状态暂不可用",
-            description: "请稍后在通话记录或录音质检中查看结果。",
-          });
-          return;
-        }
-      }
-
-      if (attempts < 80) {
-        window.setTimeout(poll, 1800);
-      }
-    }
-
-    window.setTimeout(poll, 1000);
   }
 
   return (
@@ -4239,7 +3962,6 @@ export function MobileAppShell({
             dialNumber={dialNumber}
             setDialNumber={setDialNumber}
             callMode={callMode}
-            onCallModeChange={changeCallMode}
             canCreateCallRecord={canCreateCallRecord}
             onSelectCustomer={setSelectedCustomer}
             onStartCall={startCustomerCall}
@@ -4326,7 +4048,6 @@ export function MobileAppShell({
       <CustomerDetailDrawer
         customer={selectedCustomer}
         callMode={callMode}
-        onCallModeChange={changeCallMode}
         callResultOptions={data.callResultOptions}
         canCreateCallRecord={canCreateCallRecord}
         onStartCall={startCustomerCall}
@@ -4351,8 +4072,6 @@ export function MobileAppShell({
         }}
         onStartCall={startCustomerCall}
       />
-
-      <WebRtcSoftphone role={currentUser.role} variant="mobile" />
 
       <MobileModulePanel
         module={activeModule}
