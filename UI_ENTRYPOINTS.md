@@ -251,6 +251,7 @@ Decommissioned entrypoints:
 
 - Left navigation recording entry for roles allowed by `canAccessCallRecordingModule`
 - Customer detail calls / recording context links
+- Failure recording subview: `/call-recordings/failures`
 - Audio stream API: `GET /api/call-recordings/[id]/audio`
 - Review API: `POST /api/call-recordings/[id]/reviews`
 - Admin config: `/settings/recording-storage`
@@ -259,6 +260,7 @@ Decommissioned entrypoints:
 **当前边界**
 
 - `/call-recordings` is the QA workbench, not a second customer workbench.
+- `/call-recordings/failures` is the failed-recording subview; failed records should not stay mixed into the QA queue.
 - Audio playback must keep HTTP Range support so users can drag the progress slider.
 - AI output is an assistant for review; it does not replace manual supervisor QA.
 - Call AI worker is a background batch process and should not block the recording page from loading.

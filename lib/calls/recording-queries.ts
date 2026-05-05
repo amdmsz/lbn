@@ -41,6 +41,8 @@ export type CallRecordingWorkbenchFilters = {
   page: number;
 };
 
+export type CallRecordingWorkbenchMode = "review" | "failures";
+
 export type CallRecordingWorkbenchItem = {
   id: string;
   status: string;
@@ -49,6 +51,8 @@ export type CallRecordingWorkbenchItem = {
   durationSeconds: number | null;
   fileSizeBytes: number | null;
   mimeType: string;
+  failureCode: string | null;
+  failureMessage: string | null;
   customer: {
     id: string;
     name: string;
@@ -92,6 +96,7 @@ export type CallRecordingWorkbenchItem = {
 };
 
 export type CallRecordingWorkbenchData = {
+  mode: CallRecordingWorkbenchMode;
   filters: CallRecordingWorkbenchFilters;
   salesOptions: Array<{
     id: string;
@@ -220,48 +225,42 @@ function buildDateWhere(filters: CallRecordingWorkbenchFilters) {
   } satisfies Prisma.CallRecordingWhereInput;
 }
 
-function buildScoreWhere(filters: CallRecordingWorkbenchFilters) {
+function buildAiAnalysisWhere(filters: CallRecordingWorkbenchFilters) {
   const minScore = parseScore(filters.minScore);
   const maxScore = parseScore(filters.maxScore);
 
-  if (minScore === null && maxScore === null) {
+  if (!filters.aiStatus && minScore === null && maxScore === null) {
     return {};
   }
 
   return {
     aiAnalysis: {
       is: {
-        qualityScore: {
-          ...(minScore !== null ? { gte: minScore } : {}),
-          ...(maxScore !== null ? { lte: maxScore } : {}),
-        },
+        ...(filters.aiStatus
+          ? { status: filters.aiStatus as CallAiAnalysisStatus }
+          : {}),
+        ...(minScore !== null || maxScore !== null
+          ? {
+              qualityScore: {
+                ...(minScore !== null ? { gte: minScore } : {}),
+                ...(maxScore !== null ? { lte: maxScore } : {}),
+              },
+            }
+          : {}),
       },
     },
   } satisfies Prisma.CallRecordingWhereInput;
 }
 
-function buildRecordingWhere(
+function buildBaseRecordingWhere(
   scope: Prisma.CallRecordingWhereInput,
   filters: CallRecordingWorkbenchFilters,
 ) {
   const search = filters.search.trim();
-  const where: Prisma.CallRecordingWhereInput = {
+  return {
     ...scope,
     ...buildDateWhere(filters),
     ...(filters.salesId ? { salesId: filters.salesId } : {}),
-    ...(filters.status
-      ? { status: filters.status as CallRecordingStatus }
-      : {}),
-    ...(filters.aiStatus
-      ? {
-          aiAnalysis: {
-            is: {
-              status: filters.aiStatus as CallAiAnalysisStatus,
-            },
-          },
-        }
-      : {}),
-    ...buildScoreWhere(filters),
     ...(search
       ? {
           OR: [
@@ -272,6 +271,24 @@ function buildRecordingWhere(
           ],
         }
       : {}),
+  } satisfies Prisma.CallRecordingWhereInput;
+}
+
+function buildRecordingWhere(
+  scope: Prisma.CallRecordingWhereInput,
+  filters: CallRecordingWorkbenchFilters,
+  mode: CallRecordingWorkbenchMode,
+) {
+  const statusWhere =
+    mode === "failures"
+      ? { status: CallRecordingStatus.FAILED }
+      : filters.status && filters.status !== "FAILED"
+        ? { status: filters.status as CallRecordingStatus }
+        : { status: { not: CallRecordingStatus.FAILED } };
+  const where: Prisma.CallRecordingWhereInput = {
+    ...buildBaseRecordingWhere(scope, filters),
+    ...statusWhere,
+    ...buildAiAnalysisWhere(filters),
   };
 
   return where;
@@ -300,6 +317,7 @@ function buildCountMap(rows: Array<{ status: string; _count?: { _all?: number } 
 export async function getCallRecordingWorkbenchData(
   viewer: CallRecordingViewer,
   rawSearchParams?: Record<string, SearchParamsValue>,
+  mode: CallRecordingWorkbenchMode = "review",
 ): Promise<CallRecordingWorkbenchData> {
   if (!canAccessCallRecordingModule(viewer.role)) {
     throw new Error("当前角色无权访问通话录音工作台。");
@@ -312,7 +330,8 @@ export async function getCallRecordingWorkbenchData(
   }
 
   const filters = parseFilters(rawSearchParams);
-  const where = buildRecordingWhere(scope, filters);
+  const baseWhere = buildBaseRecordingWhere(scope, filters);
+  const where = buildRecordingWhere(scope, filters, mode);
   const skip = (filters.page - 1) * callRecordingQueuePageSize;
   const salesWhere =
     viewer.role === "SUPERVISOR"
@@ -341,6 +360,8 @@ export async function getCallRecordingWorkbenchData(
         durationSeconds: true,
         fileSizeBytes: true,
         mimeType: true,
+        failureCode: true,
+        failureMessage: true,
         customer: {
           select: {
             id: true,
@@ -399,7 +420,7 @@ export async function getCallRecordingWorkbenchData(
     prisma.callRecording.count({ where }),
     prisma.callRecording.groupBy({
       by: ["status"],
-      where,
+      where: baseWhere,
       _count: { _all: true },
     }),
     prisma.callAiAnalysis.groupBy({
@@ -437,6 +458,7 @@ export async function getCallRecordingWorkbenchData(
   const aiCountMap = buildCountMap(aiStatusCounts);
 
   return {
+    mode,
     filters,
     salesOptions,
     summary: {
@@ -467,6 +489,8 @@ export async function getCallRecordingWorkbenchData(
       durationSeconds: row.durationSeconds,
       fileSizeBytes: row.fileSizeBytes,
       mimeType: row.mimeType,
+      failureCode: row.failureCode,
+      failureMessage: row.failureMessage,
       customer: row.customer,
       sales: row.sales,
       callRecord: {

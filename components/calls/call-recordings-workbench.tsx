@@ -1,8 +1,10 @@
 import Link from "next/link";
 import {
   Activity,
+  AlertTriangle,
   Bot,
   CheckCircle2,
+  ChevronDown,
   Clock,
   FileAudio,
   FileText,
@@ -209,22 +211,51 @@ function WorkbenchHero({
   const aiRate = formatPercent(data.summary.aiReadyCount, data.summary.totalCount);
   const playableRate = formatPercent(data.summary.readyCount, data.summary.totalCount);
   const failedRate = formatPercent(data.summary.failedCount, data.summary.totalCount);
+  const isFailureMode = data.mode === "failures";
+  const failureMetricValue = isFailureMode ? data.summary.failedCount : failedRate;
+  const failureMetricDetail = isFailureMode
+    ? `${data.summary.totalCount} 条匹配当前筛选`
+    : `${data.summary.failedCount} 条失败已拆分处理`;
 
   return (
     <section className="overflow-hidden rounded-[1.08rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-sm)]">
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1.35fr)_minmax(21rem,0.65fr)]">
         <div className="min-w-0 border-b border-[var(--color-border-soft)] px-4 py-4 md:px-5 lg:border-b-0 lg:border-r lg:py-5">
           <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-sidebar-muted)]">
-            <span>Call Recording QA</span>
+            <span>{isFailureMode ? "Recording Failure Queue" : "Call Recording QA"}</span>
             <span className="h-1 w-1 rounded-full bg-[var(--color-border)]" />
             <span>{data.summary.totalCount} 条当前队列</span>
           </div>
           <h1 className="mt-2 text-[1.35rem] font-semibold tracking-[-0.04em] text-[var(--foreground)] md:text-[1.65rem]">
-            录音质检工作台
+            {isFailureMode ? "录音失败记录" : "录音质检工作台"}
           </h1>
           <p className="mt-1 max-w-3xl text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">
-            按“客户识别、回听控制、完整转写、AI 结论”处理录音，先听清对话，再做质检判断。
+            {isFailureMode
+              ? "失败录音从质检队列拆出，单独查看失败原因、客户、员工和通话时间。"
+              : "每条默认折叠，先看员工、客户和时间；需要回听、AI 和转写时再展开。"}
           </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              href="/call-recordings"
+              prefetch={false}
+              className={cn(
+                "crm-button h-8 px-3 text-[12px]",
+                isFailureMode ? "crm-button-secondary" : "crm-button-primary",
+              )}
+            >
+              质检队列
+            </Link>
+            <Link
+              href="/call-recordings/failures"
+              prefetch={false}
+              className={cn(
+                "crm-button h-8 px-3 text-[12px]",
+                isFailureMode ? "crm-button-primary" : "crm-button-secondary",
+              )}
+            >
+              失败记录 {data.summary.failedCount}
+            </Link>
+          </div>
         </div>
 
         <div className="grid grid-cols-3 divide-x divide-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
@@ -278,9 +309,9 @@ function WorkbenchHero({
           tone="text-[var(--color-accent)]"
         />
         <SummaryMetric
-          label="异常占比"
-          value={failedRate}
-          detail={`${data.summary.failedCount} 条失败`}
+          label="失败记录"
+          value={failureMetricValue}
+          detail={failureMetricDetail}
           icon={Activity}
           tone="text-[var(--color-danger)]"
         />
@@ -298,6 +329,11 @@ function FilterDeck({
   recordingStatuses: string[];
   aiStatuses: string[];
 }>) {
+  const isFailureMode = data.mode === "failures";
+  const visibleRecordingStatuses = recordingStatuses.filter((status) =>
+    isFailureMode ? status === "FAILED" : status !== "FAILED",
+  );
+
   return (
     <DataTableWrapper
       title="筛选"
@@ -313,7 +349,7 @@ function FilterDeck({
     >
       <form
         className="grid gap-2 p-3 md:grid-cols-2 xl:grid-cols-[minmax(16rem,2fr)_repeat(5,minmax(0,1fr))_minmax(8rem,1fr)_auto]"
-        action="/call-recordings"
+        action={isFailureMode ? "/call-recordings/failures" : "/call-recordings"}
       >
         <label className="relative min-w-0">
           <span className="sr-only">搜索客户、手机或员工</span>
@@ -346,7 +382,7 @@ function FilterDeck({
           className="crm-select"
         >
           <option value="">录音状态</option>
-          {recordingStatuses.map((status) => (
+          {visibleRecordingStatuses.map((status) => (
             <option key={status} value={status}>
               {getRecordingStatusLabel(status)}
             </option>
@@ -585,141 +621,299 @@ function RecordingTranscriptBlock({
   );
 }
 
-function RecordingQueueItem({ item }: Readonly<{ item: CallRecordingWorkbenchItem }>) {
+function RecordingFailureDetails({
+  item,
+}: Readonly<{
+  item: CallRecordingWorkbenchItem;
+}>) {
+  const callDuration = item.durationSeconds ?? item.callRecord.durationSeconds;
+  const failureCode = item.failureCode?.trim() || "UNKNOWN";
+  const failureMessage = item.failureMessage?.trim() || "未记录失败原因";
+
+  return (
+    <div className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,0.65fr)]">
+      <section className="rounded-[0.9rem] border border-[rgba(220,38,38,0.14)] bg-[rgba(220,38,38,0.045)] px-3 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[var(--foreground)]">
+            <AlertTriangle className="h-3.5 w-3.5 text-[var(--color-danger)]" aria-hidden="true" />
+            失败原因
+          </span>
+          <span className="inline-flex rounded-full border border-[rgba(220,38,38,0.16)] bg-[var(--color-panel)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-danger)]">
+            {failureCode}
+          </span>
+        </div>
+        <p className="mt-3 whitespace-pre-wrap text-[12.5px] leading-6 text-[var(--foreground)]/84">
+          {failureMessage}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[var(--color-sidebar-muted)]">
+          <span className="rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2 py-0.5">
+            {item.mimeType}
+          </span>
+          <span className="rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2 py-0.5">
+            {formatRecordingFileSize(item.fileSizeBytes)}
+          </span>
+          <span className="rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2 py-0.5">
+            {formatDurationSeconds(callDuration)}
+          </span>
+        </div>
+      </section>
+
+      <section className="rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-3">
+        <div className="space-y-1.5">
+          <FieldLine
+            icon={Clock}
+            label="通话"
+            value={formatDateTime(item.callRecord.callTime)}
+          />
+          <FieldLine
+            icon={Timer}
+            label="时长"
+            value={formatDurationSeconds(item.callRecord.durationSeconds)}
+          />
+          <FieldLine
+            icon={UserRound}
+            label="员工"
+            value={`${item.sales.name} (@${item.sales.username})`}
+          />
+        </div>
+        <div className="mt-3 border-t border-[var(--color-border-soft)] pt-3">
+          <Link
+            href={`/customers/${item.customer.id}?tab=calls`}
+            prefetch={false}
+            className="crm-text-link text-[12px] font-semibold"
+          >
+            打开客户通话记录
+          </Link>
+          <p className="mt-2 line-clamp-2 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+            {item.callRecord.remark?.trim() || "无备注"}
+          </p>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function RecordingQueueItem({
+  item,
+  mode,
+}: Readonly<{
+  item: CallRecordingWorkbenchItem;
+  mode: CallRecordingWorkbenchData["mode"];
+}>) {
   const callDuration = item.durationSeconds ?? item.callRecord.durationSeconds;
   const uploadMeta = item.uploadedAt
     ? `上传 ${formatDateTime(item.uploadedAt)}`
     : `创建 ${formatDateTime(item.createdAt)}`;
   const tone = getQualityTone(item.aiAnalysis?.qualityScore);
+  const isFailureMode = mode === "failures";
+  const failureCode = item.failureCode?.trim() || "UNKNOWN";
+  const failureMessage = item.failureMessage?.trim() || "未记录失败原因";
 
   return (
-    <article className="group relative grid overflow-hidden rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-xs)] transition-[border-color,background-color,box-shadow] hover:border-[rgba(30,64,175,0.18)] hover:shadow-[var(--color-shell-shadow-sm)] lg:grid-cols-[minmax(0,1fr)_minmax(21rem,0.42fr)]">
-      <div className={cn("absolute inset-y-0 left-0 w-1", getQualityRailClass(tone))} />
-
-      <section className="min-w-0 space-y-4 px-4 py-4 pl-5">
-        <div className="grid gap-3 xl:grid-cols-[minmax(14rem,0.55fr)_minmax(22rem,1fr)]">
-          <div className="min-w-0 space-y-3 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <Link
-                  href={`/customers/${item.customer.id}?tab=calls`}
-                  prefetch={false}
-                  className="crm-text-link block truncate text-[14px] font-semibold"
-                >
-                  {item.customer.name}
-                </Link>
-                <p className="mt-1 truncate text-[11.5px] tabular-nums text-[var(--color-sidebar-muted)]">
-                  {item.customer.phone}
-                </p>
-              </div>
-              <StatusBadge
-                label={getRecordingStatusLabel(item.status)}
-                variant={getRecordingStatusVariant(item.status)}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <FieldLine
-                icon={Clock}
-                label="通话"
-                value={formatDateTime(item.callRecord.callTime)}
-              />
-              <FieldLine
-                icon={Timer}
-                label="时长"
-                value={formatDurationSeconds(item.callRecord.durationSeconds)}
-              />
-              <FieldLine
-                icon={UserRound}
-                label="员工"
-                value={`${item.sales.name} (@${item.sales.username})`}
-              />
-            </div>
-
-            <div className="border-t border-[var(--color-border-soft)] pt-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2 py-0.5 text-[11px] font-semibold text-[var(--foreground)]">
-                  {item.callRecord.resultLabel}
-                </span>
-                <span className="text-[11px] tabular-nums text-[var(--color-sidebar-muted)]">
-                  {formatDurationSeconds(callDuration)}
-                </span>
-              </div>
-              <p className="mt-2 line-clamp-3 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
-                {item.callRecord.remark?.trim() || "无备注"}
-              </p>
-            </div>
-          </div>
-
-          <div className="min-w-0 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-3">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--color-sidebar-muted)]">
-              <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--foreground)]">
-                <FileAudio className="h-3.5 w-3.5 text-[var(--color-accent)]" />
-                录音播放
-              </span>
-              <span>{formatRecordingFileSize(item.fileSizeBytes)}</span>
-            </div>
-            <RecordingAudioPlayer
-              recordingId={item.id}
-              status={item.status}
-              mimeType={item.mimeType}
-              durationSeconds={callDuration}
-              className="shadow-none"
+    <details className="group overflow-hidden rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-xs)] transition-[border-color,background-color,box-shadow] hover:border-[rgba(30,64,175,0.18)] hover:shadow-[var(--color-shell-shadow-sm)] [&>summary::-webkit-details-marker]:hidden">
+      <summary className="grid cursor-pointer list-none gap-3 px-3 py-3 md:grid-cols-[minmax(9rem,0.85fr)_minmax(12rem,1.05fr)_minmax(10rem,0.9fr)_minmax(10rem,0.8fr)_auto] md:items-center md:px-4">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
+            员工
+          </p>
+          <p className="mt-1 truncate text-[13px] font-semibold text-[var(--foreground)]">
+            {item.sales.name}
+            <span className="ml-1 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
+              @{item.sales.username}
+            </span>
+          </p>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
+            客户
+          </p>
+          <p className="mt-1 truncate text-[13px] font-semibold text-[var(--foreground)]">
+            {item.customer.name}
+          </p>
+          <p className="truncate text-[11px] tabular-nums text-[var(--color-sidebar-muted)]">
+            {item.customer.phone}
+          </p>
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
+            时间
+          </p>
+          <p className="mt-1 truncate text-[12px] font-semibold tabular-nums text-[var(--foreground)]">
+            {formatDateTime(item.callRecord.callTime)}
+          </p>
+          <p className="truncate text-[11px] text-[var(--color-sidebar-muted)]">
+            {formatDurationSeconds(item.callRecord.durationSeconds)}
+          </p>
+        </div>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5 md:justify-end">
+            <StatusBadge
+              label={getRecordingStatusLabel(item.status)}
+              variant={getRecordingStatusVariant(item.status)}
             />
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--color-sidebar-muted)]">
-              <span>{uploadMeta}</span>
-              <span className="tabular-nums">{item.mimeType}</span>
-            </div>
-          </div>
-        </div>
-
-        <RecordingTranscriptBlock item={item} />
-      </section>
-
-      <aside className="min-w-0 space-y-3 border-t border-[var(--color-border-soft)] px-4 py-4 lg:border-l lg:border-t-0 lg:self-start">
-        <div className="flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[var(--foreground)]">
-            <Sparkles className="h-3.5 w-3.5 text-[var(--color-accent)]" />
-            AI 分析
-          </span>
-          <span
-            className={cn(
-              "inline-flex h-7 items-center rounded-full border px-2.5 text-[11px] font-semibold tabular-nums",
-              getQualityToneClass(tone),
+            {isFailureMode ? (
+              <span className="inline-flex max-w-[12rem] rounded-full border border-[rgba(220,38,38,0.14)] bg-[rgba(220,38,38,0.045)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-danger)]">
+                <span className="truncate">{failureCode}</span>
+              </span>
+            ) : (
+              <span
+                className={cn(
+                  "inline-flex h-6 items-center rounded-full border px-2 text-[11px] font-semibold tabular-nums",
+                  getQualityToneClass(tone),
+                )}
+              >
+                {getScoreLabel(item.aiAnalysis?.qualityScore)}
+              </span>
             )}
-          >
-            {getScoreLabel(item.aiAnalysis?.qualityScore)}
-          </span>
+          </div>
+          {isFailureMode ? (
+            <p className="mt-1 line-clamp-1 text-right text-[11px] leading-5 text-[var(--color-sidebar-muted)]">
+              {failureMessage}
+            </p>
+          ) : null}
         </div>
-        <RecordingAiBlock item={item} />
-        <ReviewSummary item={item} />
-      </aside>
-    </article>
+        <ChevronDown
+          className="h-4 w-4 justify-self-start text-[var(--color-sidebar-muted)] transition-transform group-open:rotate-180 md:justify-self-end"
+          aria-hidden="true"
+        />
+      </summary>
+
+      <div className="border-t border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)]">
+        {isFailureMode ? (
+          <RecordingFailureDetails item={item} />
+        ) : (
+          <div className="relative grid overflow-hidden bg-[var(--color-panel)] lg:grid-cols-[minmax(0,1fr)_minmax(21rem,0.42fr)]">
+            <div className={cn("absolute inset-y-0 left-0 w-1", getQualityRailClass(tone))} />
+
+            <section className="min-w-0 space-y-4 px-4 py-4 pl-5">
+              <div className="grid gap-3 xl:grid-cols-[minmax(14rem,0.55fr)_minmax(22rem,1fr)]">
+                <div className="min-w-0 space-y-3 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/customers/${item.customer.id}?tab=calls`}
+                        prefetch={false}
+                        className="crm-text-link block truncate text-[14px] font-semibold"
+                      >
+                        {item.customer.name}
+                      </Link>
+                      <p className="mt-1 truncate text-[11.5px] tabular-nums text-[var(--color-sidebar-muted)]">
+                        {item.customer.phone}
+                      </p>
+                    </div>
+                    <StatusBadge
+                      label={getRecordingStatusLabel(item.status)}
+                      variant={getRecordingStatusVariant(item.status)}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <FieldLine
+                      icon={Clock}
+                      label="通话"
+                      value={formatDateTime(item.callRecord.callTime)}
+                    />
+                    <FieldLine
+                      icon={Timer}
+                      label="时长"
+                      value={formatDurationSeconds(item.callRecord.durationSeconds)}
+                    />
+                    <FieldLine
+                      icon={UserRound}
+                      label="员工"
+                      value={`${item.sales.name} (@${item.sales.username})`}
+                    />
+                  </div>
+
+                  <div className="border-t border-[var(--color-border-soft)] pt-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2 py-0.5 text-[11px] font-semibold text-[var(--foreground)]">
+                        {item.callRecord.resultLabel}
+                      </span>
+                      <span className="text-[11px] tabular-nums text-[var(--color-sidebar-muted)]">
+                        {formatDurationSeconds(callDuration)}
+                      </span>
+                    </div>
+                    <p className="mt-2 line-clamp-3 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                      {item.callRecord.remark?.trim() || "无备注"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="min-w-0 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-3">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--color-sidebar-muted)]">
+                    <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--foreground)]">
+                      <FileAudio className="h-3.5 w-3.5 text-[var(--color-accent)]" />
+                      录音播放
+                    </span>
+                    <span>{formatRecordingFileSize(item.fileSizeBytes)}</span>
+                  </div>
+                  <RecordingAudioPlayer
+                    recordingId={item.id}
+                    status={item.status}
+                    mimeType={item.mimeType}
+                    durationSeconds={callDuration}
+                    className="shadow-none"
+                  />
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--color-sidebar-muted)]">
+                    <span>{uploadMeta}</span>
+                    <span className="tabular-nums">{item.mimeType}</span>
+                  </div>
+                </div>
+              </div>
+
+              <RecordingTranscriptBlock item={item} />
+            </section>
+
+            <aside className="min-w-0 space-y-3 border-t border-[var(--color-border-soft)] px-4 py-4 lg:border-l lg:border-t-0 lg:self-start">
+              <div className="flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[var(--foreground)]">
+                  <Sparkles className="h-3.5 w-3.5 text-[var(--color-accent)]" />
+                  AI 分析
+                </span>
+                <span
+                  className={cn(
+                    "inline-flex h-7 items-center rounded-full border px-2.5 text-[11px] font-semibold tabular-nums",
+                    getQualityToneClass(tone),
+                  )}
+                >
+                  {getScoreLabel(item.aiAnalysis?.qualityScore)}
+                </span>
+              </div>
+              <RecordingAiBlock item={item} />
+              <ReviewSummary item={item} />
+            </aside>
+          </div>
+        )}
+      </div>
+    </details>
   );
 }
 
 function RecordingQueueList({
   items,
+  mode,
 }: Readonly<{
   items: CallRecordingWorkbenchItem[];
+  mode: CallRecordingWorkbenchData["mode"];
 }>) {
   if (items.length === 0) {
     return (
       <EmptyState
-        title="暂无录音"
-        description="当前筛选条件下没有可查看的通话录音。"
+        title={mode === "failures" ? "暂无失败录音" : "暂无质检录音"}
+        description={
+          mode === "failures"
+            ? "当前筛选条件下没有录音保存失败记录。"
+            : "当前筛选条件下没有可查看的通话录音。"
+        }
       />
     );
   }
 
   return (
     <div className="space-y-3">
-      <div className="hidden grid-cols-[minmax(0,1fr)_minmax(21rem,0.42fr)] gap-0 px-4 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)] lg:grid">
-        <span>Playback + Transcript</span>
-        <span>AI Analysis</span>
-      </div>
       {items.map((item) => (
-        <RecordingQueueItem key={item.id} item={item} />
+        <RecordingQueueItem key={item.id} item={item} mode={mode} />
       ))}
     </div>
   );
@@ -740,7 +934,9 @@ function buildQueuePageHref(data: CallRecordingWorkbenchData, page: number) {
   if (page > 1) params.set("page", String(page));
 
   const query = params.toString();
-  return query ? `/call-recordings?${query}` : "/call-recordings";
+  const basePath =
+    data.mode === "failures" ? "/call-recordings/failures" : "/call-recordings";
+  return query ? `${basePath}?${query}` : basePath;
 }
 
 function RecordingQueuePagination({
@@ -803,6 +999,8 @@ export function CallRecordingsWorkbench({
   recordingStatuses: string[];
   aiStatuses: string[];
 }>) {
+  const isFailureMode = data.mode === "failures";
+
   return (
     <PageShell
       header={<WorkbenchHero data={data} />}
@@ -815,9 +1013,13 @@ export function CallRecordingsWorkbench({
       }
     >
       <DataTableWrapper
-        title="质检队列"
-        description="每条录音按客户识别、回听控制、AI 结论分区，主管可以顺着一条记录完成判断。"
-        eyebrow="Review Queue"
+        title={isFailureMode ? "失败记录" : "质检队列"}
+        description={
+          isFailureMode
+            ? "失败录音从质检主队列拆出，默认显示员工、客户、时间和失败原因，展开后查看完整上下文。"
+            : "默认只显示员工、客户和通话时间；展开后再回听录音、查看转写和 AI 结论。"
+        }
+        eyebrow={isFailureMode ? "Failure Queue" : "Review Queue"}
         className="border-[var(--color-border-soft)]"
         contentClassName="p-3"
         toolbar={
@@ -827,8 +1029,14 @@ export function CallRecordingsWorkbench({
               {data.items.length} / {data.summary.totalCount} 条
             </span>
             <span className="hidden items-center gap-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-sidebar-muted)] sm:inline-flex">
-              <CheckCircle2 className="h-3.5 w-3.5 text-[var(--color-accent)]" aria-hidden="true" />
-              {data.summary.aiReadyCount} 条 AI 完成
+              {isFailureMode ? (
+                <AlertTriangle className="h-3.5 w-3.5 text-[var(--color-danger)]" aria-hidden="true" />
+              ) : (
+                <CheckCircle2 className="h-3.5 w-3.5 text-[var(--color-accent)]" aria-hidden="true" />
+              )}
+              {isFailureMode
+                ? `${data.summary.failedCount} 条失败记录`
+                : `${data.summary.aiReadyCount} 条 AI 完成`}
             </span>
             <span className="hidden items-center gap-1.5 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2.5 py-1 text-[11px] font-medium text-[var(--color-sidebar-muted)] sm:inline-flex">
               <Gauge className="h-3.5 w-3.5 text-[var(--color-warning)]" aria-hidden="true" />
@@ -837,7 +1045,7 @@ export function CallRecordingsWorkbench({
           </div>
         }
       >
-        <RecordingQueueList items={data.items} />
+        <RecordingQueueList items={data.items} mode={data.mode} />
         <RecordingQueuePagination data={data} />
       </DataTableWrapper>
     </PageShell>
