@@ -238,11 +238,14 @@ export async function getCustomerTradeOrderComposerData(
           rejectReason: true,
           items: {
             where: {
-              itemType: "SKU",
+              itemType: {
+                in: ["SKU", "GIFT"],
+              },
             },
             orderBy: { lineNo: "asc" },
             select: {
               id: true,
+              itemType: true,
               skuId: true,
               qty: true,
               dealUnitPriceSnapshot: true,
@@ -262,13 +265,23 @@ export async function getCustomerTradeOrderComposerData(
           ...draft,
           depositAmount: draft.depositAmount.toString(),
           insuranceAmount: draft.insuranceAmount.toString(),
-          items: draft.items.map((item) => ({
-            id: item.id,
-            skuId: item.skuId,
-            qty: item.qty,
-            dealUnitPriceSnapshot: item.dealUnitPriceSnapshot.toString(),
-            remark: item.remark,
-          })),
+          items: draft.items
+            .filter((item) => item.itemType === "SKU")
+            .map((item) => ({
+              id: item.id,
+              skuId: item.skuId,
+              qty: item.qty,
+              dealUnitPriceSnapshot: item.dealUnitPriceSnapshot.toString(),
+              remark: item.remark,
+            })),
+          giftItems: draft.items
+            .filter((item) => item.itemType === "GIFT")
+            .map((item) => ({
+              id: item.id,
+              skuId: item.skuId,
+              qty: item.qty,
+              remark: item.remark,
+            })),
         }
       : null,
   };
