@@ -4,6 +4,7 @@ import {
   ShippingFulfillmentStatus,
   ShippingReportStatus,
   TradeOrderStatus,
+  UserStatus,
   type RoleCode,
 } from "@prisma/client";
 import { z } from "zod";
@@ -33,6 +34,7 @@ export type TradeOrderFilters = {
   keyword: string;
   customerKeyword: string;
   supplierId: string;
+  salesId: string;
   statusView: "" | "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED";
   focusView:
     | ""
@@ -51,6 +53,7 @@ const tradeOrderFiltersSchema = z.object({
   keyword: z.string().trim().default(""),
   customerKeyword: z.string().trim().default(""),
   supplierId: z.string().trim().default(""),
+  salesId: z.string().trim().default(""),
   statusView: z
     .enum(["", "DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED"])
     .default(""),
@@ -109,6 +112,48 @@ async function getViewerTeamId(viewer: TradeOrderViewer) {
   });
 
   return user?.teamId ?? null;
+}
+
+async function getTradeOrderSalesOptions(
+  viewer: TradeOrderViewer,
+  teamId: string | null,
+) {
+  if (viewer.role === "SALES") {
+    return [];
+  }
+
+  if (viewer.role === "SUPERVISOR" && !teamId) {
+    return [];
+  }
+
+  const users = await prisma.user.findMany({
+    where: {
+      userStatus: UserStatus.ACTIVE,
+      disabledAt: null,
+      role: {
+        code: "SALES",
+      },
+      ...(viewer.role === "SUPERVISOR" ? { teamId } : {}),
+    },
+    orderBy: [{ team: { name: "asc" } }, { name: "asc" }, { username: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      username: true,
+      team: {
+        select: {
+          name: true,
+          code: true,
+        },
+      },
+    },
+  });
+
+  return users.map((user) => ({
+    id: user.id,
+    label: `${user.name} (@${user.username})`,
+    teamLabel: user.team?.name ?? user.team?.code ?? "未分组",
+  }));
 }
 
 function buildActorCustomerWhere(
@@ -294,6 +339,7 @@ export function parseTradeOrderFilters(
     keyword: getParamValue(rawSearchParams?.keyword),
     customerKeyword: getParamValue(rawSearchParams?.customerKeyword),
     supplierId: getParamValue(rawSearchParams?.supplierId),
+    salesId: getParamValue(rawSearchParams?.salesId),
     statusView:
       getParamValue(rawSearchParams?.statusView) ||
       getParamValue(rawSearchParams?.reviewStatus),
@@ -341,6 +387,15 @@ function buildTradeOrderCoreWhereInput(
         { customer: { is: { phone: { contains: filters.customerKeyword } } } },
         { receiverNameSnapshot: { contains: filters.customerKeyword } },
         { receiverPhoneSnapshot: { contains: filters.customerKeyword } },
+      ],
+    });
+  }
+
+  if (filters.salesId) {
+    andClauses.push({
+      OR: [
+        { ownerId: filters.salesId },
+        { customer: { is: { ownerId: filters.salesId } } },
       ],
     });
   }
@@ -625,6 +680,7 @@ export async function getTradeOrdersPageData(
     shippedCount,
     exceptionCount,
     suppliers,
+    salesOptions,
   ] = await Promise.all([
     prisma.tradeOrder.count({ where }),
     prisma.tradeOrder.count({
@@ -714,6 +770,7 @@ export async function getTradeOrdersPageData(
         name: true,
       },
     }),
+    getTradeOrderSalesOptions(viewer, teamId),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / TRADE_ORDER_PAGE_SIZE));
@@ -918,6 +975,7 @@ export async function getTradeOrdersPageData(
       page,
     },
     suppliers,
+    salesOptions,
     items: items.map((item) => ({
       ...item,
       finalAmount: item.finalAmount.toString(),

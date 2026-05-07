@@ -113,6 +113,7 @@ function buildPageHref(
     ["keyword", next.keyword],
     ["customerKeyword", next.customerKeyword],
     ["supplierId", next.supplierId],
+    ["salesId", next.salesId],
     ["statusView", next.statusView],
     ["focusView", next.focusView],
     ["supplierCount", next.supplierCount],
@@ -295,6 +296,17 @@ function getSortFilterLabel(value: TradeOrderFilters["sortBy"]) {
     default:
       return "最近更新";
   }
+}
+
+function getSalesFilterLabel(
+  value: string,
+  salesOptions: TradeOrdersData["salesOptions"],
+) {
+  if (!value) {
+    return "全部业务员";
+  }
+
+  return salesOptions.find((sales) => sales.id === value)?.label ?? "已选业务员";
 }
 
 function TradeOrderRowHeader({
@@ -690,6 +702,7 @@ export function TradeOrdersSection({
   items,
   filters,
   suppliers,
+  salesOptions,
   pagination,
   canCreate,
   canReview,
@@ -702,6 +715,7 @@ export function TradeOrdersSection({
   items: TradeOrdersData["items"];
   filters: TradeOrdersData["filters"];
   suppliers: TradeOrdersData["suppliers"];
+  salesOptions: TradeOrdersData["salesOptions"];
   pagination: TradeOrdersData["pagination"];
   canCreate: boolean;
   canReview: boolean;
@@ -924,6 +938,7 @@ export function TradeOrdersSection({
                       keyword: "",
                       customerKeyword: "",
                       supplierId: "",
+                      salesId: "",
                       statusView: "",
                       focusView: "",
                       supplierCount: "",
@@ -947,11 +962,11 @@ export function TradeOrdersSection({
                   高级筛选
                 </span>
                 <span className="text-muted-foreground/80">
-                  审核 {filters.statusView || "全部"} · {getSupplierCountFilterLabel(filters.supplierCount)} · {getSortFilterLabel(filters.sortBy)}
+                  审核 {filters.statusView || "全部"} · {getSalesFilterLabel(filters.salesId, salesOptions)} · {getSupplierCountFilterLabel(filters.supplierCount)} · {getSortFilterLabel(filters.sortBy)}
                 </span>
               </summary>
 
-              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                 <label className="space-y-1.5">
                   <span className="crm-label">审核状态</span>
                   <select
@@ -964,6 +979,22 @@ export function TradeOrdersSection({
                     <option value="PENDING_REVIEW">待审核</option>
                     <option value="APPROVED">已审核</option>
                     <option value="REJECTED">已驳回</option>
+                  </select>
+                </label>
+
+                <label className="space-y-1.5">
+                  <span className="crm-label">业务员</span>
+                  <select
+                    name="salesId"
+                    defaultValue={filters.salesId}
+                    className={tradeOrderInputClassName}
+                  >
+                    <option value="">全部业务员</option>
+                    {salesOptions.map((sales) => (
+                      <option key={sales.id} value={sales.id}>
+                        {sales.label} / {sales.teamLabel}
+                      </option>
+                    ))}
                   </select>
                 </label>
 
@@ -1026,6 +1057,7 @@ export function TradeOrdersSection({
             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
               <span>共 {pagination.totalCount} 张父单</span>
               <span>审核 {filters.statusView || "全部"}</span>
+              <span>{getSalesFilterLabel(filters.salesId, salesOptions)}</span>
               <span>{getSupplierCountFilterLabel(filters.supplierCount)}</span>
               <span>{getSortFilterLabel(filters.sortBy)}</span>
             </div>

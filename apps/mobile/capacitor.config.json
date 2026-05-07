@@ -3,7 +3,7 @@
   "appName": "Lbn CRM",
   "webDir": "www",
   "server": {
-    "url": "https://crm.cclbn.com/mobile",
+    "url": "https://123.207.59.121/mobile",
     "cleartext": true
   },
   "android": {

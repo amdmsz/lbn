@@ -1,14 +1,64 @@
 "use client";
 
+import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { RoleCode } from "@prisma/client";
-import { useSearchParams } from "next/navigation";
 import { DesktopWindowControls } from "@/components/layout/desktop-window-frame";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
-import { WebRtcSoftphone } from "@/components/outbound-calls/webrtc-softphone";
 import { ToastProvider } from "@/components/shared/toast-provider";
 import type { NavigationGroup } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
+
+const LazyWebRtcSoftphone = dynamic(
+  () =>
+    import("@/components/outbound-calls/webrtc-softphone").then(
+      (module) => module.WebRtcSoftphone,
+    ),
+  {
+    ssr: false,
+    loading: () => null,
+  },
+);
+
+type IdleScheduler = {
+  requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+  cancelIdleCallback?: (handle: number) => void;
+};
+
+function DeferredWebRtcSoftphone({ role }: Readonly<{ role: RoleCode }>) {
+  const [shouldRender, setShouldRender] = useState(false);
+
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof globalThis.setTimeout> | undefined;
+    let idleId: number | undefined;
+    const scheduleRender = () => setShouldRender(true);
+    const idleScheduler =
+      typeof window === "undefined" ? null : (window as Window & IdleScheduler);
+
+    if (idleScheduler?.requestIdleCallback) {
+      idleId = idleScheduler.requestIdleCallback(scheduleRender, { timeout: 1500 });
+    } else {
+      timeoutId = globalThis.setTimeout(scheduleRender, 800);
+    }
+
+    return () => {
+      if (idleId !== undefined) {
+        idleScheduler?.cancelIdleCallback?.(idleId);
+      }
+      if (timeoutId !== undefined) {
+        globalThis.clearTimeout(timeoutId);
+      }
+    };
+  }, []);
+
+  if (!shouldRender) {
+    return null;
+  }
+
+  return <LazyWebRtcSoftphone role={role} />;
+}
 
 export function DashboardShell({
   navigationGroups,
@@ -86,7 +136,7 @@ export function DashboardShell({
         </div>
       </main>
 
-      {isCompactMode ? null : <WebRtcSoftphone role={currentUser.role} />}
+      {isCompactMode ? null : <DeferredWebRtcSoftphone role={currentUser.role} />}
       <ToastProvider />
     </div>
   );

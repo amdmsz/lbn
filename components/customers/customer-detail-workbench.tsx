@@ -280,6 +280,33 @@ function formatAgeSummary(
   return `${days} 天前`;
 }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function getNumberField(value: unknown, key: string) {
+  return isPlainRecord(value) && typeof value[key] === "number"
+    ? value[key]
+    : 0;
+}
+
+function getHistoryArchiveCounts(snapshot: unknown) {
+  const counts = isPlainRecord(snapshot) ? snapshot.counts : null;
+
+  return {
+    leads: getNumberField(counts, "leads"),
+    callRecords: getNumberField(counts, "callRecords"),
+    wechatRecords: getNumberField(counts, "wechatRecords"),
+    followUpTasks: getNumberField(counts, "followUpTasks"),
+    customerTags: getNumberField(counts, "customerTags"),
+    ownershipEvents: getNumberField(counts, "ownershipEvents"),
+  };
+}
+
+function getHistoryArchiveVisibilityLabel(value: string) {
+  return value === "ALL_ROLES" ? "新负责人可见" : "仅主管以上可见";
+}
+
 function DetailFieldGrid({
   items,
   columns = "two",
@@ -1157,6 +1184,44 @@ function renderProfileTab({
           <p className="mt-4 text-sm leading-6 text-[var(--color-sidebar-muted)]">
             这里展示的是迁移承接参考摘要，不会并入新系统真实累计成交。
           </p>
+        </CustomerTabSection>
+      ) : null}
+
+      {data.historyArchives.length > 0 ? (
+        <CustomerTabSection
+          eyebrow="历史资源归档"
+          title="旧资源处理记录"
+          description="主管把重复命中的老客户转为新线索时，按处理策略保留的旧跟进快照。"
+        >
+          <div className="space-y-3">
+            {data.historyArchives.map((archive) => {
+              const counts = getHistoryArchiveCounts(archive.snapshot);
+
+              return (
+                <CompactArchiveCard
+                  key={archive.id}
+                  title={`${archive.sourceCustomerName} / ${archive.sourceCustomerPhone}`}
+                  meta={[
+                    `原负责人 ${archive.sourceOwnerLabel ?? "暂无"}`,
+                    `历史可见 ${getHistoryArchiveVisibilityLabel(archive.visibility)}`,
+                    `处理于 ${formatDateTime(archive.createdAt)}`,
+                    archive.sourceBatch
+                      ? `批次 ${archive.sourceBatch.fileName}`
+                      : "批次暂无",
+                    archive.createdBy
+                      ? `操作人 ${archive.createdBy.name} (@${archive.createdBy.username})`
+                      : "操作人暂无",
+                  ]}
+                  description={[
+                    `处理原因：${archive.reason}`,
+                    `快照：线索 ${counts.leads} / 通话 ${counts.callRecords} / 微信 ${counts.wechatRecords} / 跟进 ${counts.followUpTasks} / 标签 ${counts.customerTags} / 归属事件 ${counts.ownershipEvents}`,
+                  ].join("；")}
+                  href={archive.sourceBatch ? `/lead-imports/${archive.sourceBatch.id}` : undefined}
+                  hrefLabel={archive.sourceBatch ? "查看导入批次" : undefined}
+                />
+              );
+            })}
+          </div>
         </CustomerTabSection>
       ) : null}
 

@@ -320,6 +320,16 @@ export function getCustomerExecutionClassVariant(value: CustomerExecutionClass) 
   return customerExecutionClassMeta[value].variant;
 }
 
+const executionClassQuickResultMap: Partial<Record<CustomerExecutionClass, string>> = {
+  B: "WECHAT_ADDED",
+  D: "NOT_CONNECTED",
+  E: "REFUSED_WECHAT",
+};
+
+export function getCustomerExecutionClassQuickResult(value: CustomerExecutionClass) {
+  return executionClassQuickResultMap[value] ?? "";
+}
+
 export function isCustomerExecutionDisplayTemporary(
   input: CustomerExecutionDisplayInput,
 ) {

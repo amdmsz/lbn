@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { FormEvent, MouseEvent as ReactMouseEvent, ReactNode } from "react";
@@ -21,17 +22,11 @@ import {
   batchMoveCustomersToRecycleBinAction,
   batchTransferCustomerOwnerAction,
 } from "@/app/(dashboard)/customers/actions";
-import {
-  CustomerFollowUpDialog,
-  getCustomerExecutionClassQuickResult,
-} from "@/components/customers/customer-follow-up-dialog";
-import { CustomerDetailSheet } from "@/components/customers/customer-detail-sheet";
 import { CustomerPhoneSpotlight } from "@/components/customers/customer-phone-spotlight";
 import { InlineCustomerRemarkField } from "@/components/customers/inline-customer-remark-field";
 import { CustomerListCard } from "@/components/customers/customer-list-card";
 import { CustomerRecycleBlockedReasonSummary } from "@/components/customers/customer-recycle-blocked-reason-summary";
 import { type MoveCustomerToRecycleBinAction } from "@/components/customers/customer-recycle-entry";
-import { MobileCallFollowUpSheet } from "@/components/customers/mobile-call-followup-sheet";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
 import { EntityTable } from "@/components/shared/entity-table";
@@ -46,6 +41,7 @@ import { buildCustomersHref } from "@/lib/customers/filter-url";
 import {
   getCustomerExecutionDisplayLongLabel,
   getCustomerExecutionDisplayVariant,
+  getCustomerExecutionClassQuickResult,
   formatDateTime,
   formatRelativeDateTime,
   formatRegion,
@@ -60,6 +56,39 @@ import type {
 } from "@/lib/customers/queries";
 import { formatCurrency } from "@/lib/fulfillment/metadata";
 import { cn } from "@/lib/utils";
+
+const CustomerDetailSheet = dynamic(
+  () =>
+    import("@/components/customers/customer-detail-sheet").then(
+      (module) => module.CustomerDetailSheet,
+    ),
+  {
+    ssr: false,
+    loading: () => null,
+  },
+);
+
+const CustomerFollowUpDialog = dynamic(
+  () =>
+    import("@/components/customers/customer-follow-up-dialog").then(
+      (module) => module.CustomerFollowUpDialog,
+    ),
+  {
+    ssr: false,
+    loading: () => null,
+  },
+);
+
+const MobileCallFollowUpSheet = dynamic(
+  () =>
+    import("@/components/customers/mobile-call-followup-sheet").then(
+      (module) => module.MobileCallFollowUpSheet,
+    ),
+  {
+    ssr: false,
+    loading: () => null,
+  },
+);
 
 type PaginationData = {
   page: number;

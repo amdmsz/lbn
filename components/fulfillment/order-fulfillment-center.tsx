@@ -354,6 +354,7 @@ export function OrderFulfillmentCenter({
           items={tradeOrdersData.items}
           filters={tradeOrdersData.filters}
           suppliers={tradeOrdersData.suppliers}
+          salesOptions={tradeOrdersData.salesOptions}
           pagination={tradeOrdersData.pagination}
           canCreate={canCreateTradeOrder}
           canReview={canReviewTradeOrder}

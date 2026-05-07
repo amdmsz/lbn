@@ -2,12 +2,12 @@
 
 更新时间：2026-05-01
 
-目标：让手机 App / Windows EXE 在没有 Tailscale 的情况下，通过公网域名访问内网 CRM，并通过 CRM 自己的 `/downloads` 目录分发安装包。
+目标：让 Web / Windows EXE 通过公网域名访问内网 CRM，让 Android App 通过公网 IP 访问移动端入口，并通过 CRM 自己的 `/downloads` 目录分发安装包。
 
 最终访问路径：
 
 ```text
-App / EXE 普通页面
+Web / EXE 普通页面
   -> https://crm.cclbn.com
   -> 公网服务器 Nginx HTTPS
   -> 127.0.0.1:18080 on 公网服务器
@@ -24,6 +24,13 @@ WebRTC 坐席 /asterisk/ws
   -> 127.0.0.1:443 on 内网 CRM
   -> 内网 CRM Nginx
   -> Asterisk WebSocket
+
+Android App IP-only 入口
+  -> https://123.207.59.121/mobile
+  -> 公网服务器 Nginx HTTPS IP vhost
+  -> 127.0.0.1:18080 on 公网服务器
+  -> frps / frpc
+  -> 127.0.0.1:3000 on 内网 CRM
 ```
 
 ## 1. DNS
@@ -100,6 +107,8 @@ sudo sed -i 's/__SERVER_NAME__/crm.cclbn.com/g' /etc/nginx/sites-available/jiuzh
 sudo ln -sf /etc/nginx/sites-available/jiuzhuang-crm-public-frp.conf /etc/nginx/sites-enabled/jiuzhuang-crm-public-frp.conf
 sudo nginx -t
 ```
+
+模板已包含 `123.207.59.121` 的移动端 HTTP / HTTPS IP vhost。移动端 APK 不走域名，HTTPS vhost 使用 `/etc/nginx/ssl/jiuzhuang-crm-mobile-ip.crt`，证书信任随 Android APK 内置。
 
 首次签证书：
 
@@ -192,16 +201,16 @@ sudo journalctl -u jiuzhuang-crm -n 120 --no-pager
 手机关闭 Wi-Fi，只走 4G/5G，打开：
 
 ```text
-https://crm.cclbn.com/mobile
+https://123.207.59.121/mobile
 ```
 
-能打开登录页后，App/EXE 就能正常登录。
+能打开登录页后，Android App 的 IP-only 入口就具备基础可用性。
 
 同时验证客户端更新清单和安装包下载：
 
 ```bash
-curl -I https://crm.cclbn.com/client-update.json
-curl -I https://crm.cclbn.com/downloads/Lbn-CRM-Android.apk
+curl -k -I https://123.207.59.121/client-update.json
+curl -I http://123.207.59.121/downloads/Lbn-CRM-Android.apk
 curl -I https://crm.cclbn.com/downloads/Lbn-CRM-0.1.4-x64.zip
 ```
 

@@ -10,14 +10,15 @@ export type NativeRecordingCapability =
   | "SUPPORTED"
   | "UNSUPPORTED"
   | "BLOCKED";
+export type NativeRecorderPermissionMap = Record<string, NativePermissionState>;
 export type NativeDeviceProfile = {
   deviceFingerprint?: string;
   deviceModel?: string;
   androidVersion?: string;
   appVersion?: string;
   recordingCapability?: NativeRecordingCapability;
+  permissions?: NativeRecorderPermissionMap;
 };
-export type NativeRecorderPermissionMap = Record<string, NativePermissionState>;
 export type NativeRecorderReadinessStatus =
   | "browser-fallback"
   | "ready"
@@ -39,9 +40,12 @@ type NativePluginListenerHandle = {
 
 type NativeCallRecorderPlugin = {
   getDeviceProfile: () => Promise<NativeDeviceProfile>;
+  checkPermissions?: () => Promise<NativeRecorderPermissionMap>;
   requestPermissions?: (input?: {
     permissions?: string[];
   }) => Promise<NativeRecorderPermissionMap>;
+  checkRecorderPermissions?: () => Promise<NativeRecorderPermissionMap>;
+  requestRecorderPermissions?: () => Promise<NativeRecorderPermissionMap>;
   retryPendingUploads?: (input: {
     apiBaseUrl: string;
     chunkSizeBytes: number;
@@ -74,6 +78,8 @@ type NativeCallRecorderPlugin = {
 };
 
 const CALL_RECORDING_PERMISSION_ALIAS = "callRecording";
+const NATIVE_RECORDER_PERMISSION_MESSAGE =
+  "缺少电话、通话状态、麦克风、系统录音读取或通知权限。";
 
 type CapacitorGlobal = {
   getPlatform?: () => string;
@@ -164,6 +170,30 @@ function allKnownPermissionsGranted(
   return values.length > 0 && values.every((state) => state === "granted");
 }
 
+function nativeRecorderPermissionsReady(
+  permissions: NativeRecorderPermissionMap | null | undefined,
+) {
+  return !permissions || allKnownPermissionsGranted(permissions);
+}
+
+async function checkNativeRecorderPermissionMap(plugin: NativeCallRecorderPlugin) {
+  return (
+    (await plugin.checkRecorderPermissions?.()) ??
+    (await plugin.checkPermissions?.()) ??
+    null
+  );
+}
+
+async function requestNativeRecorderPermissionMap(plugin: NativeCallRecorderPlugin) {
+  return (
+    (await plugin.requestRecorderPermissions?.()) ??
+    (await plugin.requestPermissions?.({
+      permissions: [CALL_RECORDING_PERMISSION_ALIAS],
+    })) ??
+    null
+  );
+}
+
 function formatNativeDeviceDetail(profile: NativeDeviceProfile | null) {
   if (!profile) {
     return null;
@@ -209,19 +239,8 @@ export function summarizeNativeRecorderReadiness(input: {
       nativeAvailable: true,
       status: "blocked",
       title: "原生录音未就绪",
-      description: "电话、通话状态或麦克风权限未放开，请到系统权限中处理。",
-      detail,
-      profile,
-      permissions,
-    };
-  }
-
-  if (capability === "SUPPORTED" || allKnownPermissionsGranted(permissions)) {
-    return {
-      nativeAvailable: true,
-      status: "ready",
-      title: "原生录音已就绪",
-      description: "Android 原生拨号、前台录音服务和上传链路可用。",
+      description:
+        "电话、通话状态、麦克风、系统录音读取或通知权限未放开，请到系统权限中处理。",
       detail,
       profile,
       permissions,
@@ -233,7 +252,19 @@ export function summarizeNativeRecorderReadiness(input: {
       nativeAvailable: true,
       status: "needs-permission",
       title: "等待授权",
-      description: "需要授权电话、通话状态、麦克风和通知权限后才能本机拨号录音。",
+      description: "需要授权电话、通话状态、麦克风、系统录音读取和通知权限后才能本机拨号录音。",
+      detail,
+      profile,
+      permissions,
+    };
+  }
+
+  if (allKnownPermissionsGranted(permissions) || capability === "SUPPORTED") {
+    return {
+      nativeAvailable: true,
+      status: "ready",
+      title: "原生录音已就绪",
+      description: "Android 原生拨号、前台录音服务和上传链路可用。",
       detail,
       profile,
       permissions,
@@ -261,11 +292,12 @@ export async function readNativeRecorderReadiness() {
 
   try {
     const profile = await plugin.getDeviceProfile();
+    const permissions = await checkNativeRecorderPermissionMap(plugin);
 
     return summarizeNativeRecorderReadiness({
       nativeAvailable: true,
       profile,
-      permissions: null,
+      permissions,
     });
   } catch (error) {
     return {
@@ -288,10 +320,7 @@ export async function requestNativeRecorderPermissions() {
   let permissions: NativeRecorderPermissionMap | null = null;
 
   try {
-    permissions =
-      (await plugin.requestPermissions?.({
-        permissions: [CALL_RECORDING_PERMISSION_ALIAS],
-      })) ?? null;
+    permissions = await requestNativeRecorderPermissionMap(plugin);
 
     const profile = await plugin.getDeviceProfile();
 
@@ -511,10 +540,9 @@ export async function startNativeRecordedSimCall(input: {
       phone,
     });
 
-    const permissions =
-      (await plugin.requestPermissions?.({ permissions: ["callRecording"] })) ?? null;
+    const permissions = await requestNativeRecorderPermissionMap(plugin);
 
-    if (hasPermissionState(permissions, ["denied"])) {
+    if (!nativeRecorderPermissionsReady(permissions)) {
       await recordNativeCallEventBestEffort({
         callRecordId,
         action: "call.native_permission_denied",
@@ -522,7 +550,7 @@ export async function startNativeRecordedSimCall(input: {
         profile,
         recordingCapability: "BLOCKED",
         failureCode: "NATIVE_PERMISSION_DENIED",
-        failureMessage: "缺少电话、通话状态或麦克风权限。",
+        failureMessage: NATIVE_RECORDER_PERMISSION_MESSAGE,
         metadata: {
           permissions,
           launchCallSupported: false,
@@ -536,7 +564,7 @@ export async function startNativeRecordedSimCall(input: {
         nativeStarted: false,
         callRecordId,
         phone,
-        errorMessage: "缺少电话、通话状态或麦克风权限。",
+        errorMessage: NATIVE_RECORDER_PERMISSION_MESSAGE,
       };
     }
 

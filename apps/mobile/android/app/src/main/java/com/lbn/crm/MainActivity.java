@@ -29,7 +29,9 @@ import java.util.concurrent.Executors;
 public class MainActivity extends BridgeActivity {
     public static final String PREFERENCES_NAME = "lbn_crm_connection";
     public static final String KEY_SERVER_URL = "serverUrl";
-    public static final String PRODUCTION_SERVER_URL = "https://crm.cclbn.com/mobile";
+    public static final String PRODUCTION_SERVER_HOST = "123.207.59.121";
+    public static final String PRODUCTION_SERVER_BASE_URL = "https://" + PRODUCTION_SERVER_HOST;
+    public static final String PRODUCTION_SERVER_URL = PRODUCTION_SERVER_BASE_URL + "/mobile";
     public static final String LOCAL_TEST_SERVER_URL = "http://192.168.31.128:3000/mobile";
     public static final String DEFAULT_SERVER_URL = BuildConfig.DEBUG
             ? LOCAL_TEST_SERVER_URL
@@ -147,6 +149,14 @@ public class MainActivity extends BridgeActivity {
             value = value.substring(0, value.length() - 1);
         }
 
+        if (isLegacyProductionServerUrl(value)) {
+            return PRODUCTION_SERVER_URL;
+        }
+
+        if (isInsecureProductionIpServerUrl(value)) {
+            return PRODUCTION_SERVER_URL;
+        }
+
         try {
             URL url = new URL(value);
             String path = url.getPath() == null ? "" : url.getPath();
@@ -161,6 +171,20 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    private static boolean isLegacyProductionServerUrl(String value) {
+        String normalizedValue = value.toLowerCase();
+        return "https://crm.cclbn.com".equals(normalizedValue)
+                || "https://crm.cclbn.com/mobile".equals(normalizedValue)
+                || "http://crm.cclbn.com".equals(normalizedValue)
+                || "http://crm.cclbn.com/mobile".equals(normalizedValue);
+    }
+
+    private static boolean isInsecureProductionIpServerUrl(String value) {
+        String normalizedValue = value.toLowerCase();
+        return "http://123.207.59.121".equals(normalizedValue)
+                || "http://123.207.59.121/mobile".equals(normalizedValue);
+    }
+
     public static String getUpdateManifestUrl(Context context) {
         try {
             URL url = new URL(getServerUrl(context));
@@ -169,7 +193,7 @@ public class MainActivity extends BridgeActivity {
         } catch (Exception error) {
             return BuildConfig.DEBUG
                     ? "http://192.168.31.128:3000/client-update.json"
-                    : "https://crm.cclbn.com/client-update.json";
+                    : PRODUCTION_SERVER_BASE_URL + "/client-update.json";
         }
     }
 

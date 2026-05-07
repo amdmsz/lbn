@@ -196,6 +196,42 @@ function buildAudioConstraints(deviceId?: string | null): MediaTrackConstraints 
   };
 }
 
+function getWebRtcSoftphoneErrorMessage(error: unknown) {
+  if (!(error instanceof Error)) {
+    return "网页坐席注册失败";
+  }
+
+  const name = error.name;
+  const message = error.message.toLowerCase();
+
+  if (
+    name === "NotFoundError" ||
+    name === "DevicesNotFoundError" ||
+    message.includes("requested device not found") ||
+    message.includes("device not found")
+  ) {
+    return "未检测到麦克风或耳麦，请插入并启用输入设备后重新启用坐席。";
+  }
+
+  if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+    return "浏览器麦克风权限被拒绝，请在地址栏站点权限中允许麦克风。";
+  }
+
+  if (name === "NotReadableError" || name === "TrackStartError") {
+    return "麦克风被系统或其他软件占用，请关闭占用程序后重新启用坐席。";
+  }
+
+  if (name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") {
+    return "已保存的麦克风不可用，系统已重置设备选择，请重新启用坐席。";
+  }
+
+  if (name === "SecurityError") {
+    return "浏览器安全策略阻止麦克风，请使用 HTTPS 的 crm.cclbn.com 访问。";
+  }
+
+  return error.message || "网页坐席注册失败";
+}
+
 function isLocalSecureEnough() {
   if (typeof window === "undefined") {
     return true;
@@ -642,7 +678,7 @@ export function WebRtcSoftphone({
 
       safeSetStatus(
         "failed",
-        error instanceof Error ? error.message : "网页坐席注册失败",
+        getWebRtcSoftphoneErrorMessage(error),
       );
     }
   }, [attachRemoteAudio, ensureConfigLoaded, refreshAudioInputDevices, safeSetStatus]);

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -13,10 +14,6 @@ import {
   SquarePen,
   Trash2,
 } from "lucide-react";
-import {
-  CustomerFollowUpDialog,
-  getCustomerExecutionClassQuickResult,
-} from "@/components/customers/customer-follow-up-dialog";
 import { CustomerCallRecordForm } from "@/components/customers/customer-call-record-form";
 import { CustomerCallRecordHistory } from "@/components/customers/customer-call-record-history";
 import {
@@ -29,6 +26,7 @@ import { startMobileCallFollowUpDial } from "@/lib/calls/mobile-call-followup";
 import {
   getCustomerExecutionDisplayLongLabel,
   getCustomerExecutionDisplayVariant,
+  getCustomerExecutionClassQuickResult,
   formatDateTime,
   formatRelativeDateTime,
   formatRegion,
@@ -40,6 +38,17 @@ import { getCustomerOwnershipModeLabel } from "@/lib/customers/public-pool-metad
 import type { CustomerListItem } from "@/lib/customers/queries";
 import { formatCurrency } from "@/lib/fulfillment/metadata";
 import { cn } from "@/lib/utils";
+
+const CustomerFollowUpDialog = dynamic(
+  () =>
+    import("@/components/customers/customer-follow-up-dialog").then(
+      (module) => module.CustomerFollowUpDialog,
+    ),
+  {
+    ssr: false,
+    loading: () => null,
+  },
+);
 
 function normalizeDate(value: Date | string | null | undefined) {
   if (!value) {

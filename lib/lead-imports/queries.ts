@@ -1,6 +1,7 @@
 import {
   LeadImportBatchStatus,
   LeadImportRowStatus,
+  UserStatus,
   type Prisma,
   type RoleCode,
 } from "@prisma/client";
@@ -127,6 +128,45 @@ function buildDuplicateCustomerFallbackSnapshot(
   return buildLeadImportDuplicateCustomerSnapshot(
     customer,
   );
+}
+
+async function getDuplicateReplacementSalesOptions(viewer: LeadImportViewer) {
+  if (viewer.role !== "ADMIN" && viewer.role !== "SUPERVISOR") {
+    return [];
+  }
+
+  if (viewer.role === "SUPERVISOR" && !viewer.teamId) {
+    return [];
+  }
+
+  const salesUsers = await prisma.user.findMany({
+    where: {
+      userStatus: UserStatus.ACTIVE,
+      disabledAt: null,
+      role: {
+        code: "SALES",
+      },
+      ...(viewer.role === "SUPERVISOR" ? { teamId: viewer.teamId } : {}),
+    },
+    orderBy: [{ team: { name: "asc" } }, { name: "asc" }, { username: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      username: true,
+      team: {
+        select: {
+          name: true,
+          code: true,
+        },
+      },
+    },
+  });
+
+  return salesUsers.map((sales) => ({
+    id: sales.id,
+    label: `${sales.name} (@${sales.username})`,
+    teamLabel: sales.team?.name ?? sales.team?.code ?? "未分组",
+  }));
 }
 
 type CustomerContinuationResultBucket =
@@ -1285,6 +1325,7 @@ export async function getLeadImportDetailData(
     (!parsedCustomerContinuationReport ||
       typeof parsedCustomerContinuationReport.summary.categoryACustomers !== "number") &&
     batch.totalRows > rows.length;
+  const duplicateReplacementSalesOptions = await getDuplicateReplacementSalesOptions(viewer);
 
   return {
     ...batch,
@@ -1347,6 +1388,7 @@ export async function getLeadImportDetailData(
       duplicateRows: batch.duplicateRows,
       failedRows: batch.failedRows,
     }),
+    duplicateReplacementSalesOptions,
     failureRows,
     duplicateRows,
     importedRows,

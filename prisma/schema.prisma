@@ -575,6 +575,11 @@ enum LeadImportBatchRollbackMode {
   HARD_DELETE
 }
 
+enum CustomerHistoryArchiveVisibility {
+  ALL_ROLES
+  SUPERVISOR_ONLY
+}
+
 enum RecycleTargetType {
   PRODUCT
   PRODUCT_SKU
@@ -702,141 +707,142 @@ model Role {
 }
 
 model Team {
-  id           String   @id @default(cuid())
-  code         String   @unique
-  name         String   @unique
-  description  String?  @db.Text
-  supervisorId String?  @unique
-  supervisor   User?    @relation("TeamSupervisor", fields: [supervisorId], references: [id])
-  users        User[]   @relation("UserTeam")
-  publicPoolSetting TeamPublicPoolSetting?
-  publicPoolCustomers Customer[] @relation("CustomerPublicPoolTeam")
+  id                      String                   @id @default(cuid())
+  code                    String                   @unique
+  name                    String                   @unique
+  description             String?                  @db.Text
+  supervisorId            String?                  @unique
+  supervisor              User?                    @relation("TeamSupervisor", fields: [supervisorId], references: [id])
+  users                   User[]                   @relation("UserTeam")
+  publicPoolSetting       TeamPublicPoolSetting?
+  publicPoolCustomers     Customer[]               @relation("CustomerPublicPoolTeam")
   customerOwnershipEvents CustomerOwnershipEvent[] @relation("CustomerOwnershipEventTeam")
-  callRecordings CallRecording[] @relation("CallRecordingTeam")
-  outboundCallSessions OutboundCallSession[] @relation("OutboundCallSessionTeam")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  callRecordings          CallRecording[]          @relation("CallRecordingTeam")
+  outboundCallSessions    OutboundCallSession[]    @relation("OutboundCallSessionTeam")
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
 
   @@map("teams")
 }
 
 model TeamPublicPoolSetting {
-  id                              String   @id @default(cuid())
-  teamId                          String   @unique
-  team                            Team     @relation(fields: [teamId], references: [id])
-  autoRecycleEnabled              Boolean  @default(true)
-  ownerExitRecycleEnabled         Boolean  @default(true)
-  autoAssignEnabled               Boolean  @default(false)
-  autoAssignStrategy              PublicPoolAutoAssignStrategy @default(NONE)
-  autoAssignBatchSize             Int      @default(20)
-  maxActiveCustomersPerSales      Int?
-  roundRobinCursorUserId          String?
-  defaultInactiveDays             Int      @default(14)
-  respectClaimLock                Boolean  @default(true)
-  strongEffectProtectionDays      Int      @default(7)
-  mediumEffectProtectionDays      Int      @default(3)
-  weakEffectResetsClock           Boolean  @default(false)
-  negativeRequiresSupervisorReview Boolean @default(true)
-  salesCanClaim                   Boolean  @default(true)
-  salesCanRelease                 Boolean  @default(false)
-  batchRecycleEnabled             Boolean  @default(true)
-  batchAssignEnabled              Boolean  @default(true)
-  createdAt                       DateTime @default(now())
-  updatedAt                       DateTime @updatedAt
+  id                               String                       @id @default(cuid())
+  teamId                           String                       @unique
+  team                             Team                         @relation(fields: [teamId], references: [id])
+  autoRecycleEnabled               Boolean                      @default(true)
+  ownerExitRecycleEnabled          Boolean                      @default(true)
+  autoAssignEnabled                Boolean                      @default(false)
+  autoAssignStrategy               PublicPoolAutoAssignStrategy @default(NONE)
+  autoAssignBatchSize              Int                          @default(20)
+  maxActiveCustomersPerSales       Int?
+  roundRobinCursorUserId           String?
+  defaultInactiveDays              Int                          @default(14)
+  respectClaimLock                 Boolean                      @default(true)
+  strongEffectProtectionDays       Int                          @default(7)
+  mediumEffectProtectionDays       Int                          @default(3)
+  weakEffectResetsClock            Boolean                      @default(false)
+  negativeRequiresSupervisorReview Boolean                      @default(true)
+  salesCanClaim                    Boolean                      @default(true)
+  salesCanRelease                  Boolean                      @default(false)
+  batchRecycleEnabled              Boolean                      @default(true)
+  batchAssignEnabled               Boolean                      @default(true)
+  createdAt                        DateTime                     @default(now())
+  updatedAt                        DateTime                     @updatedAt
 
   @@map("team_public_pool_settings")
 }
 
 model User {
-  id                      String           @id @default(cuid())
-  username                String           @unique
-  passwordHash            String
-  name                    String
-  avatarPath              String?
-  phone                   String?          @unique
-  teamId                  String?
-  team                    Team?            @relation("UserTeam", fields: [teamId], references: [id])
-  supervisorId            String?
-  supervisor              User?            @relation("UserSupervisor", fields: [supervisorId], references: [id])
-  subordinates            User[]           @relation("UserSupervisor")
-  userStatus              UserStatus       @default(ACTIVE)
-  mustChangePassword      Boolean          @default(false)
-  lastLoginAt             DateTime?
-  invitedAt               DateTime?
-  invitedById             String?
-  invitedBy               User?            @relation("UserInviter", fields: [invitedById], references: [id])
-  invitedUsers            User[]           @relation("UserInviter")
-  disabledAt              DateTime?
-  disabledById            String?
-  disabledBy              User?            @relation("UserDisabler", fields: [disabledById], references: [id])
-  disabledUsers           User[]           @relation("UserDisabler")
-  roleId                  String
-  role                    Role             @relation(fields: [roleId], references: [id])
-  permissionGrants        UserPermissionGrant[] @relation("UserPermissionGrantUser")
-  grantedPermissionGrants UserPermissionGrant[] @relation("UserPermissionGrantBy")
-  supervisedTeam          Team?            @relation("TeamSupervisor")
-  ownedLeads              Lead[]           @relation("LeadOwner")
-  ownedCustomers          Customer[]       @relation("CustomerOwner")
-  publicPoolLastOwnedCustomers Customer[]  @relation("CustomerLastOwner")
-  assignedLeadRecords     LeadAssignment[] @relation("LeadAssignmentTo")
-  createdLeadAssignments  LeadAssignment[] @relation("LeadAssignmentBy")
-  previousLeadAssignments LeadAssignment[] @relation("LeadAssignmentFrom")
-  ownedFollowUpTasks      FollowUpTask[]   @relation("FollowUpTaskOwner")
-  createdFollowUpTasks    FollowUpTask[]   @relation("FollowUpTaskCreator")
-  callRecords             CallRecord[]     @relation("CallRecordSales")
-  callRecordings          CallRecording[]  @relation("CallRecordingSales")
-  outboundCallSeatBinding OutboundCallSeatBinding? @relation("OutboundCallSeatBindingUser")
-  outboundCallSessions    OutboundCallSession[] @relation("OutboundCallSessionSales")
-  callActionEventsAsSales CallActionEvent[] @relation("CallActionEventSales")
-  callActionEventsAsActor CallActionEvent[] @relation("CallActionEventActor")
-  mobileDevices           MobileDevice[]   @relation("MobileDeviceUser")
-  callQualityReviews      CallQualityReview[] @relation("CallQualityReviewReviewer")
-  wechatRecords           WechatRecord[]   @relation("WechatRecordSales")
-  createdLiveSessions     LiveSession[]    @relation("LiveSessionCreator")
-  liveInvitations         LiveInvitation[] @relation("LiveInvitationSales")
-  confirmedLiveAudienceRecords LiveAudienceRecord[] @relation("LiveAudienceRecordConfirmedBy")
-  ownedOrders             Order[]          @relation("OrderOwner")
-  ownedSalesOrders        SalesOrder[]     @relation("SalesOrderOwner")
-  createdSalesOrders      SalesOrder[]     @relation("SalesOrderCreatedBy")
-  updatedSalesOrders      SalesOrder[]     @relation("SalesOrderUpdatedBy")
-  reviewedSalesOrders     SalesOrder[]     @relation("SalesOrderReviewer")
-  ownedPaymentPlans       PaymentPlan[]    @relation("PaymentPlanOwner")
-  createdPaymentPlans     PaymentPlan[]    @relation("PaymentPlanCreatedBy")
-  updatedPaymentPlans     PaymentPlan[]    @relation("PaymentPlanUpdatedBy")
-  ownedPaymentRecords     PaymentRecord[]  @relation("PaymentRecordOwner")
-  submittedPaymentRecords PaymentRecord[]  @relation("PaymentRecordSubmittedBy")
-  confirmedPaymentRecords PaymentRecord[]  @relation("PaymentRecordConfirmedBy")
-  ownedCollectionTasks    CollectionTask[] @relation("CollectionTaskOwner")
-  createdCollectionTasks  CollectionTask[] @relation("CollectionTaskCreatedBy")
-  updatedCollectionTasks  CollectionTask[] @relation("CollectionTaskUpdatedBy")
-  giftRecords             GiftRecord[]     @relation("GiftRecordSales")
-  shippingTasks           ShippingTask[]   @relation("ShippingTaskAssignee")
-  createdSuppliers        Supplier[]       @relation("SupplierCreatedBy")
-  updatedSuppliers        Supplier[]       @relation("SupplierUpdatedBy")
-  createdProducts         Product[]        @relation("ProductCreatedBy")
-  updatedProducts         Product[]        @relation("ProductUpdatedBy")
-  productSavedViews       ProductSavedView[]
-  exportedShippingBatches ShippingExportBatch[] @relation("ShippingExportBatchExporter")
-  logisticsFollowUpTasks  LogisticsFollowUpTask[] @relation("LogisticsFollowUpTaskOwner")
-  codCollectionRecords    CodCollectionRecord[]   @relation("CodCollectionRecordOwner")
-  createdLeadImportBatches   LeadImportBatch[]    @relation("LeadImportBatchCreator")
-  createdLeadImportTemplates LeadImportTemplate[] @relation("LeadImportTemplateCreator")
-  assignedCustomerTags    CustomerTag[]    @relation("CustomerTagAssignedBy")
-  assignedLeadTags        LeadTag[]        @relation("LeadTagAssignedBy")
-  operationLogs           OperationLog[]   @relation("OperationLogActor")
-  updatedSystemSettings   SystemSetting[]  @relation("SystemSettingUpdatedBy")
-  systemSettingRevisions  SystemSettingRevision[] @relation("SystemSettingRevisionChangedBy")
-  recycleBinEntriesDeleted RecycleBinEntry[] @relation("RecycleBinEntryDeletedBy")
-  recycleBinEntriesResolved RecycleBinEntry[] @relation("RecycleBinEntryResolvedBy")
-  customerOwnershipEventsAsActor CustomerOwnershipEvent[] @relation("CustomerOwnershipEventActor")
-  customerOwnershipEventsFrom CustomerOwnershipEvent[] @relation("CustomerOwnershipEventFromOwner")
-  customerOwnershipEventsTo CustomerOwnershipEvent[] @relation("CustomerOwnershipEventToOwner")
+  id                                        String                            @id @default(cuid())
+  username                                  String                            @unique
+  passwordHash                              String
+  name                                      String
+  avatarPath                                String?
+  phone                                     String?                           @unique
+  teamId                                    String?
+  team                                      Team?                             @relation("UserTeam", fields: [teamId], references: [id])
+  supervisorId                              String?
+  supervisor                                User?                             @relation("UserSupervisor", fields: [supervisorId], references: [id])
+  subordinates                              User[]                            @relation("UserSupervisor")
+  userStatus                                UserStatus                        @default(ACTIVE)
+  mustChangePassword                        Boolean                           @default(false)
+  lastLoginAt                               DateTime?
+  invitedAt                                 DateTime?
+  invitedById                               String?
+  invitedBy                                 User?                             @relation("UserInviter", fields: [invitedById], references: [id])
+  invitedUsers                              User[]                            @relation("UserInviter")
+  disabledAt                                DateTime?
+  disabledById                              String?
+  disabledBy                                User?                             @relation("UserDisabler", fields: [disabledById], references: [id])
+  disabledUsers                             User[]                            @relation("UserDisabler")
+  roleId                                    String
+  role                                      Role                              @relation(fields: [roleId], references: [id])
+  permissionGrants                          UserPermissionGrant[]             @relation("UserPermissionGrantUser")
+  grantedPermissionGrants                   UserPermissionGrant[]             @relation("UserPermissionGrantBy")
+  supervisedTeam                            Team?                             @relation("TeamSupervisor")
+  ownedLeads                                Lead[]                            @relation("LeadOwner")
+  ownedCustomers                            Customer[]                        @relation("CustomerOwner")
+  publicPoolLastOwnedCustomers              Customer[]                        @relation("CustomerLastOwner")
+  assignedLeadRecords                       LeadAssignment[]                  @relation("LeadAssignmentTo")
+  createdLeadAssignments                    LeadAssignment[]                  @relation("LeadAssignmentBy")
+  previousLeadAssignments                   LeadAssignment[]                  @relation("LeadAssignmentFrom")
+  ownedFollowUpTasks                        FollowUpTask[]                    @relation("FollowUpTaskOwner")
+  createdFollowUpTasks                      FollowUpTask[]                    @relation("FollowUpTaskCreator")
+  callRecords                               CallRecord[]                      @relation("CallRecordSales")
+  callRecordings                            CallRecording[]                   @relation("CallRecordingSales")
+  outboundCallSeatBinding                   OutboundCallSeatBinding?          @relation("OutboundCallSeatBindingUser")
+  outboundCallSessions                      OutboundCallSession[]             @relation("OutboundCallSessionSales")
+  callActionEventsAsSales                   CallActionEvent[]                 @relation("CallActionEventSales")
+  callActionEventsAsActor                   CallActionEvent[]                 @relation("CallActionEventActor")
+  mobileDevices                             MobileDevice[]                    @relation("MobileDeviceUser")
+  callQualityReviews                        CallQualityReview[]               @relation("CallQualityReviewReviewer")
+  wechatRecords                             WechatRecord[]                    @relation("WechatRecordSales")
+  createdLiveSessions                       LiveSession[]                     @relation("LiveSessionCreator")
+  liveInvitations                           LiveInvitation[]                  @relation("LiveInvitationSales")
+  confirmedLiveAudienceRecords              LiveAudienceRecord[]              @relation("LiveAudienceRecordConfirmedBy")
+  ownedOrders                               Order[]                           @relation("OrderOwner")
+  ownedSalesOrders                          SalesOrder[]                      @relation("SalesOrderOwner")
+  createdSalesOrders                        SalesOrder[]                      @relation("SalesOrderCreatedBy")
+  updatedSalesOrders                        SalesOrder[]                      @relation("SalesOrderUpdatedBy")
+  reviewedSalesOrders                       SalesOrder[]                      @relation("SalesOrderReviewer")
+  ownedPaymentPlans                         PaymentPlan[]                     @relation("PaymentPlanOwner")
+  createdPaymentPlans                       PaymentPlan[]                     @relation("PaymentPlanCreatedBy")
+  updatedPaymentPlans                       PaymentPlan[]                     @relation("PaymentPlanUpdatedBy")
+  ownedPaymentRecords                       PaymentRecord[]                   @relation("PaymentRecordOwner")
+  submittedPaymentRecords                   PaymentRecord[]                   @relation("PaymentRecordSubmittedBy")
+  confirmedPaymentRecords                   PaymentRecord[]                   @relation("PaymentRecordConfirmedBy")
+  ownedCollectionTasks                      CollectionTask[]                  @relation("CollectionTaskOwner")
+  createdCollectionTasks                    CollectionTask[]                  @relation("CollectionTaskCreatedBy")
+  updatedCollectionTasks                    CollectionTask[]                  @relation("CollectionTaskUpdatedBy")
+  giftRecords                               GiftRecord[]                      @relation("GiftRecordSales")
+  shippingTasks                             ShippingTask[]                    @relation("ShippingTaskAssignee")
+  createdSuppliers                          Supplier[]                        @relation("SupplierCreatedBy")
+  updatedSuppliers                          Supplier[]                        @relation("SupplierUpdatedBy")
+  createdProducts                           Product[]                         @relation("ProductCreatedBy")
+  updatedProducts                           Product[]                         @relation("ProductUpdatedBy")
+  productSavedViews                         ProductSavedView[]
+  exportedShippingBatches                   ShippingExportBatch[]             @relation("ShippingExportBatchExporter")
+  logisticsFollowUpTasks                    LogisticsFollowUpTask[]           @relation("LogisticsFollowUpTaskOwner")
+  codCollectionRecords                      CodCollectionRecord[]             @relation("CodCollectionRecordOwner")
+  createdLeadImportBatches                  LeadImportBatch[]                 @relation("LeadImportBatchCreator")
+  createdLeadImportTemplates                LeadImportTemplate[]              @relation("LeadImportTemplateCreator")
+  createdCustomerHistoryArchives            CustomerHistoryArchive[]          @relation("CustomerHistoryArchiveCreatedBy")
+  assignedCustomerTags                      CustomerTag[]                     @relation("CustomerTagAssignedBy")
+  assignedLeadTags                          LeadTag[]                         @relation("LeadTagAssignedBy")
+  operationLogs                             OperationLog[]                    @relation("OperationLogActor")
+  updatedSystemSettings                     SystemSetting[]                   @relation("SystemSettingUpdatedBy")
+  systemSettingRevisions                    SystemSettingRevision[]           @relation("SystemSettingRevisionChangedBy")
+  recycleBinEntriesDeleted                  RecycleBinEntry[]                 @relation("RecycleBinEntryDeletedBy")
+  recycleBinEntriesResolved                 RecycleBinEntry[]                 @relation("RecycleBinEntryResolvedBy")
+  customerOwnershipEventsAsActor            CustomerOwnershipEvent[]          @relation("CustomerOwnershipEventActor")
+  customerOwnershipEventsFrom               CustomerOwnershipEvent[]          @relation("CustomerOwnershipEventFromOwner")
+  customerOwnershipEventsTo                 CustomerOwnershipEvent[]          @relation("CustomerOwnershipEventToOwner")
   requestedImportedCustomerDeletionRequests ImportedCustomerDeletionRequest[] @relation("ImportedCustomerDeletionRequestRequester")
   reviewedImportedCustomerDeletionRequests  ImportedCustomerDeletionRequest[] @relation("ImportedCustomerDeletionRequestReviewer")
   executedImportedCustomerDeletionRequests  ImportedCustomerDeletionRequest[] @relation("ImportedCustomerDeletionRequestExecutor")
-  executedLeadImportBatchRollbacks         LeadImportBatchRollback[]         @relation("LeadImportBatchRollbackActor")
-  createdAt               DateTime         @default(now())
-  updatedAt               DateTime         @updatedAt
+  executedLeadImportBatchRollbacks          LeadImportBatchRollback[]         @relation("LeadImportBatchRollbackActor")
+  createdAt                                 DateTime                          @default(now())
+  updatedAt                                 DateTime                          @updatedAt
 
   @@index([roleId])
   @@index([userStatus])
@@ -848,7 +854,7 @@ model User {
 }
 
 model RecycleBinEntry {
-  id                     String                 @id @default(cuid())
+  id                     String                  @id @default(cuid())
   targetType             RecycleTargetType
   targetId               String
   domain                 RecycleDomain
@@ -857,20 +863,20 @@ model RecycleBinEntry {
   originalStatusSnapshot String?
   restoreRouteSnapshot   String
   deleteReasonCode       RecycleDeleteReasonCode
-  deleteReasonText       String?                @db.Text
-  deletedAt              DateTime               @default(now())
+  deleteReasonText       String?                 @db.Text
+  deletedAt              DateTime                @default(now())
   deletedById            String
-  deletedBy              User                   @relation("RecycleBinEntryDeletedBy", fields: [deletedById], references: [id])
+  deletedBy              User                    @relation("RecycleBinEntryDeletedBy", fields: [deletedById], references: [id])
   recycleExpiresAt       DateTime
-  status                 RecycleEntryStatus     @default(ACTIVE)
-  activeEntryKey         String?                @unique
+  status                 RecycleEntryStatus      @default(ACTIVE)
+  activeEntryKey         String?                 @unique
   resolvedAt             DateTime?
   resolvedById           String?
-  resolvedBy             User?                  @relation("RecycleBinEntryResolvedBy", fields: [resolvedById], references: [id])
+  resolvedBy             User?                   @relation("RecycleBinEntryResolvedBy", fields: [resolvedById], references: [id])
   blockerSnapshotJson    Json?
   archivePayloadJson     Json?
-  createdAt              DateTime               @default(now())
-  updatedAt              DateTime               @updatedAt
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 
   @@index([targetType, targetId])
   @@index([domain, status, deletedAt])
@@ -897,7 +903,7 @@ model UserPermissionGrant {
 }
 
 model Lead {
-  id                String               @id @default(cuid())
+  id                String                   @id @default(cuid())
   source            LeadSource
   sourceDetail      String?
   campaignName      String?
@@ -908,17 +914,17 @@ model Lead {
   district          String?
   address           String?
   interestedProduct String?
-  isFirstPurchase   Boolean              @default(false)
-  remark            String?              @db.Text
-  status            LeadStatus           @default(NEW)
-  conversionStatus  LeadConversionStatus @default(UNCONVERTED)
+  isFirstPurchase   Boolean                  @default(false)
+  remark            String?                  @db.Text
+  status            LeadStatus               @default(NEW)
+  conversionStatus  LeadConversionStatus     @default(UNCONVERTED)
   ownerId           String?
-  owner             User?                @relation("LeadOwner", fields: [ownerId], references: [id])
+  owner             User?                    @relation("LeadOwner", fields: [ownerId], references: [id])
   customerId        String?
-  customer          Customer?            @relation(fields: [customerId], references: [id])
+  customer          Customer?                @relation(fields: [customerId], references: [id])
   rolledBackAt      DateTime?
   rolledBackBatchId String?
-  rolledBackBatch   LeadImportBatch?     @relation("LeadRolledBackBatch", fields: [rolledBackBatchId], references: [id])
+  rolledBackBatch   LeadImportBatch?         @relation("LeadRolledBackBatch", fields: [rolledBackBatchId], references: [id])
   lastFollowUpAt    DateTime?
   nextFollowUpAt    DateTime?
   assignments       LeadAssignment[]
@@ -930,8 +936,9 @@ model Lead {
   giftRecords       GiftRecord[]
   leadTags          LeadTag[]
   mergeLogs         LeadCustomerMergeLog[]
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
+  historyArchives   CustomerHistoryArchive[] @relation("CustomerHistoryArchiveLead")
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
 
   @@index([phone])
   @@index([status])
@@ -945,54 +952,55 @@ model Lead {
 }
 
 model Customer {
-  id              String           @id @default(cuid())
-  name            String
-  phone           String           @unique
-  wechatId        String?
-  province        String?
-  city            String?
-  district        String?
-  address         String?
-  avatarPath      String?
-  status          CustomerStatus   @default(ACTIVE)
-  level           CustomerLevel    @default(NEW)
-  ownerId         String?
-  owner           User?            @relation("CustomerOwner", fields: [ownerId], references: [id])
-  ownershipMode   CustomerOwnershipMode @default(PRIVATE)
-  lastOwnerId     String?
-  lastOwner       User?            @relation("CustomerLastOwner", fields: [lastOwnerId], references: [id])
-  publicPoolEnteredAt DateTime?
-  publicPoolReason PublicPoolReason?
-  claimLockedUntil DateTime?
-  lastEffectiveFollowUpAt DateTime?
-  publicPoolTeamId String?
-  publicPoolTeam  Team?            @relation("CustomerPublicPoolTeam", fields: [publicPoolTeamId], references: [id])
-  remark          String?          @db.Text
-  leads           Lead[]
-  followUpTasks   FollowUpTask[]
-  callRecords     CallRecord[]
-  callRecordings  CallRecording[]
-  outboundCallSessions OutboundCallSession[]
-  callActionEvents CallActionEvent[]
-  wechatRecords   WechatRecord[]
-  liveInvitations LiveInvitation[]
-  liveAudienceRecords LiveAudienceRecord[]
-  candidateLiveAudienceRecords LiveAudienceRecord[] @relation("LiveAudienceCandidateCustomer")
-  orders          Order[]
-  salesOrders     SalesOrder[]
-  tradeOrders     TradeOrder[]
-  paymentPlans    PaymentPlan[]
-  paymentRecords  PaymentRecord[]
-  collectionTasks CollectionTask[]
-  giftRecords     GiftRecord[]
-  shippingTasks   ShippingTask[]
-  logisticsFollowUpTasks LogisticsFollowUpTask[]
-  codCollectionRecords   CodCollectionRecord[]
-  customerTags    CustomerTag[]
-  mergeLogs       LeadCustomerMergeLog[]
-  ownershipEvents CustomerOwnershipEvent[]
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id                           String                   @id @default(cuid())
+  name                         String
+  phone                        String                   @unique
+  wechatId                     String?
+  province                     String?
+  city                         String?
+  district                     String?
+  address                      String?
+  avatarPath                   String?
+  status                       CustomerStatus           @default(ACTIVE)
+  level                        CustomerLevel            @default(NEW)
+  ownerId                      String?
+  owner                        User?                    @relation("CustomerOwner", fields: [ownerId], references: [id])
+  ownershipMode                CustomerOwnershipMode    @default(PRIVATE)
+  lastOwnerId                  String?
+  lastOwner                    User?                    @relation("CustomerLastOwner", fields: [lastOwnerId], references: [id])
+  publicPoolEnteredAt          DateTime?
+  publicPoolReason             PublicPoolReason?
+  claimLockedUntil             DateTime?
+  lastEffectiveFollowUpAt      DateTime?
+  publicPoolTeamId             String?
+  publicPoolTeam               Team?                    @relation("CustomerPublicPoolTeam", fields: [publicPoolTeamId], references: [id])
+  remark                       String?                  @db.Text
+  leads                        Lead[]
+  followUpTasks                FollowUpTask[]
+  callRecords                  CallRecord[]
+  callRecordings               CallRecording[]
+  outboundCallSessions         OutboundCallSession[]
+  callActionEvents             CallActionEvent[]
+  wechatRecords                WechatRecord[]
+  liveInvitations              LiveInvitation[]
+  liveAudienceRecords          LiveAudienceRecord[]
+  candidateLiveAudienceRecords LiveAudienceRecord[]     @relation("LiveAudienceCandidateCustomer")
+  orders                       Order[]
+  salesOrders                  SalesOrder[]
+  tradeOrders                  TradeOrder[]
+  paymentPlans                 PaymentPlan[]
+  paymentRecords               PaymentRecord[]
+  collectionTasks              CollectionTask[]
+  giftRecords                  GiftRecord[]
+  shippingTasks                ShippingTask[]
+  logisticsFollowUpTasks       LogisticsFollowUpTask[]
+  codCollectionRecords         CodCollectionRecord[]
+  customerTags                 CustomerTag[]
+  mergeLogs                    LeadCustomerMergeLog[]
+  ownershipEvents              CustomerOwnershipEvent[]
+  historyArchives              CustomerHistoryArchive[] @relation("CustomerHistoryArchiveTargetCustomer")
+  createdAt                    DateTime                 @default(now())
+  updatedAt                    DateTime                 @updatedAt
 
   @@index([status])
   @@index([ownerId])
@@ -1080,26 +1088,26 @@ model FollowUpTask {
 }
 
 model CallRecord {
-  id              String     @id @default(cuid())
-  leadId          String?
-  lead            Lead?      @relation(fields: [leadId], references: [id])
-  customerId      String?
-  customer        Customer?  @relation(fields: [customerId], references: [id])
-  salesId         String
-  sales           User       @relation("CallRecordSales", fields: [salesId], references: [id])
-  callTime        DateTime
-  durationSeconds Int        @default(0)
-  result          CallResult?
-  resultCode      String?
-  remark          String?    @db.Text
-  nextFollowUpAt  DateTime?
-  recording       CallRecording?
-  outboundSession OutboundCallSession?
+  id               String               @id @default(cuid())
+  leadId           String?
+  lead             Lead?                @relation(fields: [leadId], references: [id])
+  customerId       String?
+  customer         Customer?            @relation(fields: [customerId], references: [id])
+  salesId          String
+  sales            User                 @relation("CallRecordSales", fields: [salesId], references: [id])
+  callTime         DateTime
+  durationSeconds  Int                  @default(0)
+  result           CallResult?
+  resultCode       String?
+  remark           String?              @db.Text
+  nextFollowUpAt   DateTime?
+  recording        CallRecording?
+  outboundSession  OutboundCallSession?
   callActionEvents CallActionEvent[]
-  aiAnalysis      CallAiAnalysis?
-  qualityReviews  CallQualityReview[]
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  aiAnalysis       CallAiAnalysis?
+  qualityReviews   CallQualityReview[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
 
   @@index([leadId, callTime])
   @@index([customerId, callTime])
@@ -1109,20 +1117,20 @@ model CallRecord {
 }
 
 model OutboundCallSeatBinding {
-  id               String               @id @default(cuid())
-  userId           String               @unique
-  user             User                 @relation("OutboundCallSeatBindingUser", fields: [userId], references: [id])
-  provider         OutboundCallProvider @default(MOCK)
+  id               String                @id @default(cuid())
+  userId           String                @unique
+  user             User                  @relation("OutboundCallSeatBindingUser", fields: [userId], references: [id])
+  provider         OutboundCallProvider  @default(MOCK)
   seatNo           String
   extensionNo      String?
   displayNumber    String?
   routingGroup     String?
-  enabled          Boolean              @default(true)
+  enabled          Boolean               @default(true)
   lastRegisteredAt DateTime?
   metadataJson     Json?
   sessions         OutboundCallSession[]
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
 
   @@unique([provider, seatNo], map: "outbound_call_seat_bindings_provider_seatNo_key")
   @@index([provider, enabled], map: "outbound_call_seat_bindings_provider_enabled_idx")
@@ -1253,21 +1261,21 @@ model CallRecording {
 }
 
 model CallRecordingUpload {
-  id              String                    @id @default(cuid())
-  recordingId     String
-  recording       CallRecording             @relation(fields: [recordingId], references: [id])
-  status          CallRecordingUploadStatus @default(INITIATED)
-  chunkSizeBytes  Int
-  totalChunks     Int
-  uploadedChunks  Int                       @default(0)
-  totalSizeBytes  Int
-  sha256          String?
-  chunkStateJson  Json?
-  expiresAt       DateTime
-  completedAt     DateTime?
-  failureMessage  String?                   @db.Text
-  createdAt       DateTime                  @default(now())
-  updatedAt       DateTime                  @updatedAt
+  id             String                    @id @default(cuid())
+  recordingId    String
+  recording      CallRecording             @relation(fields: [recordingId], references: [id])
+  status         CallRecordingUploadStatus @default(INITIATED)
+  chunkSizeBytes Int
+  totalChunks    Int
+  uploadedChunks Int                       @default(0)
+  totalSizeBytes Int
+  sha256         String?
+  chunkStateJson Json?
+  expiresAt      DateTime
+  completedAt    DateTime?
+  failureMessage String?                   @db.Text
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
 
   @@index([recordingId, createdAt])
   @@index([status, expiresAt])
@@ -1436,35 +1444,35 @@ model WechatRecord {
 }
 
 model LiveSession {
-  id                         String            @id @default(cuid())
-  title                      String
-  hostName                   String
-  startAt                    DateTime
-  roomId                     String?
-  roomLink                   String?
-  targetProduct              String?
-  remark                     String?           @db.Text
-  status                     LiveSessionStatus @default(DRAFT)
-  source                     LiveSessionSource @default(MANUAL)
-  wecomLivingId              String?           @unique
-  wecomAnchorUserId          String?
-  wecomLiveStatus            String?
-  actualStartAt              DateTime?
-  actualEndAt                DateTime?
-  viewerCount                Int?
-  totalWatchDurationSeconds  Int?
-  peakOnlineCount            Int?
-  lastSyncedAt               DateTime?
-  syncStatus                 LiveSyncStatus    @default(NEVER_SYNCED)
-  syncError                  String?           @db.Text
-  wecomRaw                   Json?
-  createdById                String?
-  createdBy                  User?             @relation("LiveSessionCreator", fields: [createdById], references: [id])
-  invitations                LiveInvitation[]
-  audienceRecords            LiveAudienceRecord[]
-  giftRecords                GiftRecord[]
-  createdAt                  DateTime          @default(now())
-  updatedAt                  DateTime          @updatedAt
+  id                        String               @id @default(cuid())
+  title                     String
+  hostName                  String
+  startAt                   DateTime
+  roomId                    String?
+  roomLink                  String?
+  targetProduct             String?
+  remark                    String?              @db.Text
+  status                    LiveSessionStatus    @default(DRAFT)
+  source                    LiveSessionSource    @default(MANUAL)
+  wecomLivingId             String?              @unique
+  wecomAnchorUserId         String?
+  wecomLiveStatus           String?
+  actualStartAt             DateTime?
+  actualEndAt               DateTime?
+  viewerCount               Int?
+  totalWatchDurationSeconds Int?
+  peakOnlineCount           Int?
+  lastSyncedAt              DateTime?
+  syncStatus                LiveSyncStatus       @default(NEVER_SYNCED)
+  syncError                 String?              @db.Text
+  wecomRaw                  Json?
+  createdById               String?
+  createdBy                 User?                @relation("LiveSessionCreator", fields: [createdById], references: [id])
+  invitations               LiveInvitation[]
+  audienceRecords           LiveAudienceRecord[]
+  giftRecords               GiftRecord[]
+  createdAt                 DateTime             @default(now())
+  updatedAt                 DateTime             @updatedAt
 
   @@index([status, startAt])
   @@index([source, startAt])
@@ -1474,24 +1482,24 @@ model LiveSession {
 }
 
 model LiveInvitation {
-  id                   String           @id @default(cuid())
+  id                   String               @id @default(cuid())
   liveSessionId        String
-  liveSession          LiveSession      @relation(fields: [liveSessionId], references: [id])
+  liveSession          LiveSession          @relation(fields: [liveSessionId], references: [id])
   leadId               String?
-  lead                 Lead?            @relation(fields: [leadId], references: [id])
+  lead                 Lead?                @relation(fields: [leadId], references: [id])
   customerId           String?
-  customer             Customer?        @relation(fields: [customerId], references: [id])
+  customer             Customer?            @relation(fields: [customerId], references: [id])
   salesId              String
-  sales                User             @relation("LiveInvitationSales", fields: [salesId], references: [id])
-  invitationStatus     InvitationStatus @default(PENDING)
+  sales                User                 @relation("LiveInvitationSales", fields: [salesId], references: [id])
+  invitationStatus     InvitationStatus     @default(PENDING)
   invitedAt            DateTime?
-  invitationMethod     InvitationMethod @default(MANUAL)
-  attendanceStatus     AttendanceStatus @default(NOT_ATTENDED)
-  watchDurationMinutes Int?             @default(0)
-  giftQualified        Boolean          @default(false)
-  remark               String?          @db.Text
-  createdAt            DateTime         @default(now())
-  updatedAt            DateTime         @updatedAt
+  invitationMethod     InvitationMethod     @default(MANUAL)
+  attendanceStatus     AttendanceStatus     @default(NOT_ATTENDED)
+  watchDurationMinutes Int?                 @default(0)
+  giftQualified        Boolean              @default(false)
+  remark               String?              @db.Text
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
   audienceRecords      LiveAudienceRecord[]
 
   @@index([liveSessionId, salesId])
@@ -1501,36 +1509,36 @@ model LiveInvitation {
 }
 
 model LiveAudienceRecord {
-  id                       String                  @id @default(cuid())
-  liveSessionId            String
-  liveSession              LiveSession             @relation(fields: [liveSessionId], references: [id])
-  wecomLivingId            String
-  wecomUserId              String?
-  wecomExternalUserId      String?
-  viewerPhoneMasked        String?
-  viewerPhoneEncrypted     String?                 @db.Text
-  phoneHash                String?
-  nickname                 String?
-  watchDurationSeconds     Int?
-  firstEnterAt             DateTime?
-  lastLeaveAt              DateTime?
-  raw                      Json?
-  matchStatus              LiveAudienceMatchStatus @default(UNMATCHED)
-  matchMethod              LiveAudienceMatchMethod?
-  candidateCustomerId      String?
-  candidateCustomer        Customer?               @relation("LiveAudienceCandidateCustomer", fields: [candidateCustomerId], references: [id])
-  candidateConfidence      Int?
-  confirmedById            String?
-  confirmedBy              User?                   @relation("LiveAudienceRecordConfirmedBy", fields: [confirmedById], references: [id])
-  confirmedAt              DateTime?
-  customerId               String?
-  customer                 Customer?               @relation(fields: [customerId], references: [id])
-  liveInvitationId         String?
-  liveInvitation           LiveInvitation?         @relation(fields: [liveInvitationId], references: [id])
-  matchNote                String?                 @db.Text
-  dedupeKey                String                  @unique
-  createdAt                DateTime                @default(now())
-  updatedAt                DateTime                @updatedAt
+  id                   String                   @id @default(cuid())
+  liveSessionId        String
+  liveSession          LiveSession              @relation(fields: [liveSessionId], references: [id])
+  wecomLivingId        String
+  wecomUserId          String?
+  wecomExternalUserId  String?
+  viewerPhoneMasked    String?
+  viewerPhoneEncrypted String?                  @db.Text
+  phoneHash            String?
+  nickname             String?
+  watchDurationSeconds Int?
+  firstEnterAt         DateTime?
+  lastLeaveAt          DateTime?
+  raw                  Json?
+  matchStatus          LiveAudienceMatchStatus  @default(UNMATCHED)
+  matchMethod          LiveAudienceMatchMethod?
+  candidateCustomerId  String?
+  candidateCustomer    Customer?                @relation("LiveAudienceCandidateCustomer", fields: [candidateCustomerId], references: [id])
+  candidateConfidence  Int?
+  confirmedById        String?
+  confirmedBy          User?                    @relation("LiveAudienceRecordConfirmedBy", fields: [confirmedById], references: [id])
+  confirmedAt          DateTime?
+  customerId           String?
+  customer             Customer?                @relation(fields: [customerId], references: [id])
+  liveInvitationId     String?
+  liveInvitation       LiveInvitation?          @relation(fields: [liveInvitationId], references: [id])
+  matchNote            String?                  @db.Text
+  dedupeKey            String                   @unique
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
 
   @@index([liveSessionId, matchStatus])
   @@index([wecomLivingId])
@@ -1544,70 +1552,70 @@ model LiveAudienceRecord {
 }
 
 model Supplier {
-  id          String   @id @default(cuid())
-  code        String   @unique
-  name        String
-  contactName String?
-  contactPhone String?
-  remark      String?  @db.Text
-  enabled     Boolean  @default(true)
-  createdById String?
-  createdBy   User?    @relation("SupplierCreatedBy", fields: [createdById], references: [id])
-  updatedById String?
-  updatedBy   User?    @relation("SupplierUpdatedBy", fields: [updatedById], references: [id])
-  products    Product[]
-  salesOrders SalesOrder[]
-  shippingTasks ShippingTask[] @relation("ShippingTaskSupplier")
+  id            String                @id @default(cuid())
+  code          String                @unique
+  name          String
+  contactName   String?
+  contactPhone  String?
+  remark        String?               @db.Text
+  enabled       Boolean               @default(true)
+  createdById   String?
+  createdBy     User?                 @relation("SupplierCreatedBy", fields: [createdById], references: [id])
+  updatedById   String?
+  updatedBy     User?                 @relation("SupplierUpdatedBy", fields: [updatedById], references: [id])
+  products      Product[]
+  salesOrders   SalesOrder[]
+  shippingTasks ShippingTask[]        @relation("ShippingTaskSupplier")
   exportBatches ShippingExportBatch[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
 
   @@index([enabled, createdAt])
   @@map("supplier")
 }
 
 model Product {
-  id          String   @id @default(cuid())
-  supplierId  String
-  supplier    Supplier @relation(fields: [supplierId], references: [id])
-  code        String   @unique
-  name        String
-  mainImagePath String?
-  brandName   String?
-  seriesName  String?
-  categoryCode String?
+  id                    String           @id @default(cuid())
+  supplierId            String
+  supplier              Supplier         @relation(fields: [supplierId], references: [id])
+  code                  String           @unique
+  name                  String
+  mainImagePath         String?
+  brandName             String?
+  seriesName            String?
+  categoryCode          String?
   primarySalesSceneCode String?
-  supplyGroupCode String?
-  financeCategoryCode String?
-  description String?  @db.Text
-  internalSupplyRemark String? @db.Text
-  enabled     Boolean  @default(true)
-  createdById String?
-  createdBy   User?    @relation("ProductCreatedBy", fields: [createdById], references: [id])
-  updatedById String?
-  updatedBy   User?    @relation("ProductUpdatedBy", fields: [updatedById], references: [id])
-  skus        ProductSku[]
-  salesOrderItems SalesOrderItem[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  supplyGroupCode       String?
+  financeCategoryCode   String?
+  description           String?          @db.Text
+  internalSupplyRemark  String?          @db.Text
+  enabled               Boolean          @default(true)
+  createdById           String?
+  createdBy             User?            @relation("ProductCreatedBy", fields: [createdById], references: [id])
+  updatedById           String?
+  updatedBy             User?            @relation("ProductUpdatedBy", fields: [updatedById], references: [id])
+  skus                  ProductSku[]
+  salesOrderItems       SalesOrderItem[]
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
 
   @@index([supplierId, enabled, createdAt])
   @@map("product")
 }
 
 model ProductSku {
-  id                     String   @id @default(cuid())
+  id                     String           @id @default(cuid())
   productId              String
-  product                Product  @relation(fields: [productId], references: [id])
+  product                Product          @relation(fields: [productId], references: [id])
   skuName                String
-  defaultUnitPrice       Decimal  @db.Decimal(10, 2)
-  codSupported           Boolean  @default(false)
-  insuranceSupported     Boolean  @default(false)
-  defaultInsuranceAmount Decimal  @default(0) @db.Decimal(10, 2)
-  enabled                Boolean  @default(true)
+  defaultUnitPrice       Decimal          @db.Decimal(10, 2)
+  codSupported           Boolean          @default(false)
+  insuranceSupported     Boolean          @default(false)
+  defaultInsuranceAmount Decimal          @default(0) @db.Decimal(10, 2)
+  enabled                Boolean          @default(true)
   salesOrderItems        SalesOrderItem[]
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
 
   @@index([productId, enabled, createdAt])
   @@map("productsku")
@@ -1667,49 +1675,49 @@ model ProductBundleItem {
 }
 
 model TradeOrder {
-  id                     String                   @id @default(cuid())
-  tradeNo                String                   @unique
-  customerId             String
-  customer               Customer                 @relation(fields: [customerId], references: [id])
-  ownerId                String?
-  reviewStatus           SalesOrderReviewStatus   @default(PENDING_REVIEW)
-  tradeStatus            TradeOrderStatus         @default(DRAFT)
-  paymentScheme          SalesOrderPaymentScheme  @default(FULL_PREPAID)
-  listAmount             Decimal                  @default(0) @db.Decimal(10, 2)
-  dealAmount             Decimal                  @default(0) @db.Decimal(10, 2)
-  goodsAmount            Decimal                  @default(0) @db.Decimal(10, 2)
-  discountAmount         Decimal                  @default(0) @db.Decimal(10, 2)
-  finalAmount            Decimal                  @default(0) @db.Decimal(10, 2)
-  depositAmount          Decimal                  @default(0) @db.Decimal(10, 2)
-  collectedAmount        Decimal                  @default(0) @db.Decimal(10, 2)
-  paidAmount             Decimal                  @default(0) @db.Decimal(10, 2)
-  remainingAmount        Decimal                  @default(0) @db.Decimal(10, 2)
-  codAmount              Decimal                  @default(0) @db.Decimal(10, 2)
-  insuranceRequired      Boolean                  @default(false)
-  insuranceAmount        Decimal                  @default(0) @db.Decimal(10, 2)
-  discountReason         String?                  @db.Text
-  receiverNameSnapshot   String
-  receiverPhoneSnapshot  String
-  receiverAddressSnapshot String                  @db.Text
-  reviewerId             String?
-  reviewedAt             DateTime?
-  rejectReason           String?                  @db.Text
-  remark                 String?                  @db.Text
-  createdById            String?
-  updatedById            String?
-  items                  TradeOrderItem[]
-  components             TradeOrderItemComponent[]
-  salesOrders            SalesOrder[]
-  salesOrderItems        SalesOrderItem[]
-  shippingTasks          ShippingTask[]
-  paymentPlans           PaymentPlan[]
-  paymentRecords         PaymentRecord[]
-  collectionTasks        CollectionTask[]
-  logisticsFollowUpTasks LogisticsFollowUpTask[]
-  codCollectionRecords   CodCollectionRecord[]
-  exportLines            ShippingExportLine[]
-  createdAt              DateTime                 @default(now())
-  updatedAt              DateTime                 @updatedAt
+  id                      String                    @id @default(cuid())
+  tradeNo                 String                    @unique
+  customerId              String
+  customer                Customer                  @relation(fields: [customerId], references: [id])
+  ownerId                 String?
+  reviewStatus            SalesOrderReviewStatus    @default(PENDING_REVIEW)
+  tradeStatus             TradeOrderStatus          @default(DRAFT)
+  paymentScheme           SalesOrderPaymentScheme   @default(FULL_PREPAID)
+  listAmount              Decimal                   @default(0) @db.Decimal(10, 2)
+  dealAmount              Decimal                   @default(0) @db.Decimal(10, 2)
+  goodsAmount             Decimal                   @default(0) @db.Decimal(10, 2)
+  discountAmount          Decimal                   @default(0) @db.Decimal(10, 2)
+  finalAmount             Decimal                   @default(0) @db.Decimal(10, 2)
+  depositAmount           Decimal                   @default(0) @db.Decimal(10, 2)
+  collectedAmount         Decimal                   @default(0) @db.Decimal(10, 2)
+  paidAmount              Decimal                   @default(0) @db.Decimal(10, 2)
+  remainingAmount         Decimal                   @default(0) @db.Decimal(10, 2)
+  codAmount               Decimal                   @default(0) @db.Decimal(10, 2)
+  insuranceRequired       Boolean                   @default(false)
+  insuranceAmount         Decimal                   @default(0) @db.Decimal(10, 2)
+  discountReason          String?                   @db.Text
+  receiverNameSnapshot    String
+  receiverPhoneSnapshot   String
+  receiverAddressSnapshot String                    @db.Text
+  reviewerId              String?
+  reviewedAt              DateTime?
+  rejectReason            String?                   @db.Text
+  remark                  String?                   @db.Text
+  createdById             String?
+  updatedById             String?
+  items                   TradeOrderItem[]
+  components              TradeOrderItemComponent[]
+  salesOrders             SalesOrder[]
+  salesOrderItems         SalesOrderItem[]
+  shippingTasks           ShippingTask[]
+  paymentPlans            PaymentPlan[]
+  paymentRecords          PaymentRecord[]
+  collectionTasks         CollectionTask[]
+  logisticsFollowUpTasks  LogisticsFollowUpTask[]
+  codCollectionRecords    CodCollectionRecord[]
+  exportLines             ShippingExportLine[]
+  createdAt               DateTime                  @default(now())
+  updatedAt               DateTime                  @updatedAt
 
   @@index([customerId, createdAt])
   @@index([ownerId, reviewStatus, createdAt])
@@ -1718,34 +1726,34 @@ model TradeOrder {
 }
 
 model TradeOrderItem {
-  id                     String                   @id @default(cuid())
-  tradeOrderId           String
-  tradeOrder             TradeOrder               @relation(fields: [tradeOrderId], references: [id])
-  lineNo                 Int
-  itemType               TradeOrderItemType
-  itemSourceType         TradeOrderItemSourceType
-  productId              String?
-  skuId                  String?
-  bundleId               String?
-  bundle                 ProductBundle?           @relation(fields: [bundleId], references: [id])
-  titleSnapshot          String
-  productNameSnapshot    String?
-  skuNameSnapshot        String?
-  specSnapshot           String?
-  unitSnapshot           String?
-  bundleCodeSnapshot     String?
-  bundleNameSnapshot     String?
-  bundleVersionSnapshot  Int?
-  listUnitPriceSnapshot  Decimal                  @default(0) @db.Decimal(10, 2)
-  dealUnitPriceSnapshot  Decimal                  @default(0) @db.Decimal(10, 2)
-  qty                    Int
-  subtotal               Decimal                  @default(0) @db.Decimal(10, 2)
-  discountAmount         Decimal                  @default(0) @db.Decimal(10, 2)
-  remark                 String?                  @db.Text
-  components             TradeOrderItemComponent[]
-  salesOrderItems        SalesOrderItem[]
-  createdAt              DateTime                 @default(now())
-  updatedAt              DateTime                 @updatedAt
+  id                    String                    @id @default(cuid())
+  tradeOrderId          String
+  tradeOrder            TradeOrder                @relation(fields: [tradeOrderId], references: [id])
+  lineNo                Int
+  itemType              TradeOrderItemType
+  itemSourceType        TradeOrderItemSourceType
+  productId             String?
+  skuId                 String?
+  bundleId              String?
+  bundle                ProductBundle?            @relation(fields: [bundleId], references: [id])
+  titleSnapshot         String
+  productNameSnapshot   String?
+  skuNameSnapshot       String?
+  specSnapshot          String?
+  unitSnapshot          String?
+  bundleCodeSnapshot    String?
+  bundleNameSnapshot    String?
+  bundleVersionSnapshot Int?
+  listUnitPriceSnapshot Decimal                   @default(0) @db.Decimal(10, 2)
+  dealUnitPriceSnapshot Decimal                   @default(0) @db.Decimal(10, 2)
+  qty                   Int
+  subtotal              Decimal                   @default(0) @db.Decimal(10, 2)
+  discountAmount        Decimal                   @default(0) @db.Decimal(10, 2)
+  remark                String?                   @db.Text
+  components            TradeOrderItemComponent[]
+  salesOrderItems       SalesOrderItem[]
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
 
   @@unique([tradeOrderId, lineNo])
   @@index([tradeOrderId, itemType, createdAt])
@@ -1754,11 +1762,11 @@ model TradeOrderItem {
 }
 
 model TradeOrderItemComponent {
-  id                             String                              @id @default(cuid())
+  id                             String                            @id @default(cuid())
   tradeOrderId                   String
-  tradeOrder                     TradeOrder                          @relation(fields: [tradeOrderId], references: [id])
+  tradeOrder                     TradeOrder                        @relation(fields: [tradeOrderId], references: [id])
   tradeOrderItemId               String
-  tradeOrderItem                 TradeOrderItem                      @relation(fields: [tradeOrderItemId], references: [id])
+  tradeOrderItem                 TradeOrderItem                    @relation(fields: [tradeOrderItemId], references: [id])
   componentSeq                   Int
   componentType                  TradeOrderComponentType
   componentSourceType            TradeOrderItemComponentSourceType
@@ -1772,13 +1780,13 @@ model TradeOrderItemComponent {
   unitSnapshot                   String?
   exportDisplayNameSnapshot      String
   qty                            Int
-  allocatedListUnitPriceSnapshot Decimal                             @default(0) @db.Decimal(10, 2)
-  allocatedDealUnitPriceSnapshot Decimal                             @default(0) @db.Decimal(10, 2)
-  allocatedSubtotal              Decimal                             @default(0) @db.Decimal(10, 2)
-  allocatedDiscountAmount        Decimal                             @default(0) @db.Decimal(10, 2)
+  allocatedListUnitPriceSnapshot Decimal                           @default(0) @db.Decimal(10, 2)
+  allocatedDealUnitPriceSnapshot Decimal                           @default(0) @db.Decimal(10, 2)
+  allocatedSubtotal              Decimal                           @default(0) @db.Decimal(10, 2)
+  allocatedDiscountAmount        Decimal                           @default(0) @db.Decimal(10, 2)
   salesOrderItems                SalesOrderItem[]
-  createdAt                      DateTime                            @default(now())
-  updatedAt                      DateTime                            @updatedAt
+  createdAt                      DateTime                          @default(now())
+  updatedAt                      DateTime                          @updatedAt
 
   @@unique([tradeOrderItemId, componentSeq])
   @@index([tradeOrderId, supplierId, createdAt])
@@ -1788,59 +1796,60 @@ model TradeOrderItemComponent {
 /// Phase 1 keeps one supplier sub-order per trade order as a migration-safe rule.
 /// This staged rule does not guarantee the permanent future shape of supplier sub-orders.
 model SalesOrder {
-  id                     String                 @id @default(cuid())
-  orderNo                String                 @unique
-  tradeOrderId           String?
-  tradeOrder             TradeOrder?            @relation(fields: [tradeOrderId], references: [id])
-  subOrderNo             String?
-  supplierSequence       Int?
-  subOrderStatus         SalesSubOrderStatus?
-  customerId             String
-  customer               Customer               @relation(fields: [customerId], references: [id])
-  ownerId                String?
-  owner                  User?                  @relation("SalesOrderOwner", fields: [ownerId], references: [id])
-  supplierId             String
-  supplier               Supplier               @relation(fields: [supplierId], references: [id])
-  reviewStatus           SalesOrderReviewStatus @default(PENDING_REVIEW)
-  paymentScheme          SalesOrderPaymentScheme @default(FULL_PREPAID)
-  paymentMode            SalesOrderPaymentMode
-  listAmount             Decimal                @default(0) @db.Decimal(10, 2)
-  dealAmount             Decimal                @default(0) @db.Decimal(10, 2)
-  goodsAmount            Decimal                @default(0) @db.Decimal(10, 2)
-  discountAmount         Decimal                @default(0) @db.Decimal(10, 2)
-  finalAmount            Decimal                @default(0) @db.Decimal(10, 2)
-  depositAmount          Decimal                @default(0) @db.Decimal(10, 2)
-  collectedAmount        Decimal                @default(0) @db.Decimal(10, 2)
-  paidAmount             Decimal                @default(0) @db.Decimal(10, 2)
-  remainingAmount        Decimal                @default(0) @db.Decimal(10, 2)
-  codAmount              Decimal                @default(0) @db.Decimal(10, 2)
-  insuranceRequired      Boolean                @default(false)
-  insuranceAmount        Decimal                @default(0) @db.Decimal(10, 2)
-  discountReason         String?                @db.Text
-  receiverNameSnapshot   String
-  receiverPhoneSnapshot  String
-  receiverAddressSnapshot String                @db.Text
-  reviewerId             String?
-  reviewer               User?                  @relation("SalesOrderReviewer", fields: [reviewerId], references: [id])
-  reviewedAt             DateTime?
-  rejectReason           String?                @db.Text
-  remark                 String?                @db.Text
-  createdById            String?
-  createdBy              User?                  @relation("SalesOrderCreatedBy", fields: [createdById], references: [id])
-  updatedById            String?
-  updatedBy              User?                  @relation("SalesOrderUpdatedBy", fields: [updatedById], references: [id])
-  items                  SalesOrderItem[]
-  giftItems              SalesOrderGiftItem[]
-  shippingTask           ShippingTask?          @relation("ShippingTaskSalesOrder")
-  exportLines            ShippingExportLine[]
-  paymentPlans           PaymentPlan[]
-  paymentRecords         PaymentRecord[]
-  collectionTasks        CollectionTask[]
-  logisticsFollowUpTasks LogisticsFollowUpTask[]
-  codCollectionRecords   CodCollectionRecord[]
-  createdAt              DateTime               @default(now())
-  updatedAt              DateTime               @updatedAt
+  id                      String                  @id @default(cuid())
+  orderNo                 String                  @unique
+  tradeOrderId            String?
+  tradeOrder              TradeOrder?             @relation(fields: [tradeOrderId], references: [id])
+  subOrderNo              String?
+  supplierSequence        Int?
+  subOrderStatus          SalesSubOrderStatus?
+  customerId              String
+  customer                Customer                @relation(fields: [customerId], references: [id])
+  ownerId                 String?
+  owner                   User?                   @relation("SalesOrderOwner", fields: [ownerId], references: [id])
+  supplierId              String
+  supplier                Supplier                @relation(fields: [supplierId], references: [id])
+  reviewStatus            SalesOrderReviewStatus  @default(PENDING_REVIEW)
+  paymentScheme           SalesOrderPaymentScheme @default(FULL_PREPAID)
+  paymentMode             SalesOrderPaymentMode
+  listAmount              Decimal                 @default(0) @db.Decimal(10, 2)
+  dealAmount              Decimal                 @default(0) @db.Decimal(10, 2)
+  goodsAmount             Decimal                 @default(0) @db.Decimal(10, 2)
+  discountAmount          Decimal                 @default(0) @db.Decimal(10, 2)
+  finalAmount             Decimal                 @default(0) @db.Decimal(10, 2)
+  depositAmount           Decimal                 @default(0) @db.Decimal(10, 2)
+  collectedAmount         Decimal                 @default(0) @db.Decimal(10, 2)
+  paidAmount              Decimal                 @default(0) @db.Decimal(10, 2)
+  remainingAmount         Decimal                 @default(0) @db.Decimal(10, 2)
+  codAmount               Decimal                 @default(0) @db.Decimal(10, 2)
+  insuranceRequired       Boolean                 @default(false)
+  insuranceAmount         Decimal                 @default(0) @db.Decimal(10, 2)
+  discountReason          String?                 @db.Text
+  receiverNameSnapshot    String
+  receiverPhoneSnapshot   String
+  receiverAddressSnapshot String                  @db.Text
+  reviewerId              String?
+  reviewer                User?                   @relation("SalesOrderReviewer", fields: [reviewerId], references: [id])
+  reviewedAt              DateTime?
+  rejectReason            String?                 @db.Text
+  remark                  String?                 @db.Text
+  createdById             String?
+  createdBy               User?                   @relation("SalesOrderCreatedBy", fields: [createdById], references: [id])
+  updatedById             String?
+  updatedBy               User?                   @relation("SalesOrderUpdatedBy", fields: [updatedById], references: [id])
+  items                   SalesOrderItem[]
+  giftItems               SalesOrderGiftItem[]
+  shippingTask            ShippingTask?           @relation("ShippingTaskSalesOrder")
+  exportLines             ShippingExportLine[]
+  paymentPlans            PaymentPlan[]
+  paymentRecords          PaymentRecord[]
+  collectionTasks         CollectionTask[]
+  logisticsFollowUpTasks  LogisticsFollowUpTask[]
+  codCollectionRecords    CodCollectionRecord[]
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
 
+  @@unique([tradeOrderId, supplierId])
   @@index([customerId, createdAt])
   @@index([ownerId, reviewStatus, createdAt])
   @@index([supplierId, reviewStatus, createdAt])
@@ -1848,7 +1857,6 @@ model SalesOrder {
   @@index([paymentScheme, createdAt])
   @@index([paymentMode, createdAt])
   @@index([tradeOrderId, createdAt])
-  @@unique([tradeOrderId, supplierId])
   @@map("salesorder")
 }
 
@@ -1971,56 +1979,56 @@ model GiftRecord {
 }
 
 model ShippingTask {
-  id               String                     @id @default(cuid())
-  tradeOrderId     String?
-  tradeOrder       TradeOrder?                @relation(fields: [tradeOrderId], references: [id])
-  customerId       String
-  customer         Customer                   @relation(fields: [customerId], references: [id])
-  orderId          String?                    @unique
-  order            Order?                     @relation(fields: [orderId], references: [id])
-  salesOrderId     String?                    @unique
-  salesOrder       SalesOrder?                @relation("ShippingTaskSalesOrder", fields: [salesOrderId], references: [id])
-  giftRecordId     String?                    @unique
-  giftRecord       GiftRecord?                @relation(fields: [giftRecordId], references: [id])
-  supplierId       String?
-  supplier         Supplier?                  @relation("ShippingTaskSupplier", fields: [supplierId], references: [id])
-  exportBatchId    String?
-  exportBatch      ShippingExportBatch?       @relation(fields: [exportBatchId], references: [id])
-  assigneeId       String?
-  assignee         User?                      @relation("ShippingTaskAssignee", fields: [assigneeId], references: [id])
-  status           ShippingTaskStatus         @default(PENDING)
-  reportStatus     ShippingReportStatus       @default(PENDING)
-  shippingStatus   ShippingFulfillmentStatus  @default(PENDING)
-  carrier          String?
-  shippingProvider String?
-  trackingNumber   String?
-  codAmount        Decimal                    @default(0) @db.Decimal(10, 2)
-  insuranceRequired Boolean                   @default(false)
-  insuranceAmount  Decimal                    @default(0) @db.Decimal(10, 2)
-  receiverNameSnapshot String?
-  receiverPhoneSnapshot String?
-  receiverAddressSnapshot String?             @db.Text
-  content          String?                    @db.Text
-  screenshotUrl    String?
-  reportedAt       DateTime?
-  shippedAt        DateTime?
-  completedAt      DateTime?
+  id                           String                    @id @default(cuid())
+  tradeOrderId                 String?
+  tradeOrder                   TradeOrder?               @relation(fields: [tradeOrderId], references: [id])
+  customerId                   String
+  customer                     Customer                  @relation(fields: [customerId], references: [id])
+  orderId                      String?                   @unique
+  order                        Order?                    @relation(fields: [orderId], references: [id])
+  salesOrderId                 String?                   @unique
+  salesOrder                   SalesOrder?               @relation("ShippingTaskSalesOrder", fields: [salesOrderId], references: [id])
+  giftRecordId                 String?                   @unique
+  giftRecord                   GiftRecord?               @relation(fields: [giftRecordId], references: [id])
+  supplierId                   String?
+  supplier                     Supplier?                 @relation("ShippingTaskSupplier", fields: [supplierId], references: [id])
+  exportBatchId                String?
+  exportBatch                  ShippingExportBatch?      @relation(fields: [exportBatchId], references: [id])
+  assigneeId                   String?
+  assignee                     User?                     @relation("ShippingTaskAssignee", fields: [assigneeId], references: [id])
+  status                       ShippingTaskStatus        @default(PENDING)
+  reportStatus                 ShippingReportStatus      @default(PENDING)
+  shippingStatus               ShippingFulfillmentStatus @default(PENDING)
+  carrier                      String?
+  shippingProvider             String?
+  trackingNumber               String?
+  codAmount                    Decimal                   @default(0) @db.Decimal(10, 2)
+  insuranceRequired            Boolean                   @default(false)
+  insuranceAmount              Decimal                   @default(0) @db.Decimal(10, 2)
+  receiverNameSnapshot         String?
+  receiverPhoneSnapshot        String?
+  receiverAddressSnapshot      String?                   @db.Text
+  content                      String?                   @db.Text
+  screenshotUrl                String?
+  reportedAt                   DateTime?
+  shippedAt                    DateTime?
+  completedAt                  DateTime?
   logisticsLastCheckedAt       DateTime?
   logisticsLastStatusCode      String?
   logisticsLastStatusLabel     String?
   logisticsLastEventAt         DateTime?
   logisticsExceptionType       LogisticsExceptionType?
   logisticsExceptionDetectedAt DateTime?
-  logisticsExceptionMessage    String?                    @db.Text
-  remark           String?                    @db.Text
-  paymentPlans     PaymentPlan[]
-  paymentRecords   PaymentRecord[]
-  collectionTasks  CollectionTask[]
-  logisticsFollowUpTasks LogisticsFollowUpTask[]
-  codCollectionRecords   CodCollectionRecord[]
-  exportLines      ShippingExportLine[]
-  createdAt        DateTime                   @default(now())
-  updatedAt        DateTime                   @updatedAt
+  logisticsExceptionMessage    String?                   @db.Text
+  remark                       String?                   @db.Text
+  paymentPlans                 PaymentPlan[]
+  paymentRecords               PaymentRecord[]
+  collectionTasks              CollectionTask[]
+  logisticsFollowUpTasks       LogisticsFollowUpTask[]
+  codCollectionRecords         CodCollectionRecord[]
+  exportLines                  ShippingExportLine[]
+  createdAt                    DateTime                  @default(now())
+  updatedAt                    DateTime                  @updatedAt
 
   @@index([customerId, status, createdAt])
   @@index([assigneeId, status, createdAt])
@@ -2033,23 +2041,23 @@ model ShippingTask {
 }
 
 model ShippingExportBatch {
-  id         String         @id @default(cuid())
-  exportNo   String         @unique
-  supplierId String
-  supplier   Supplier       @relation(fields: [supplierId], references: [id])
-  exportedById String?
-  exportedBy User?          @relation("ShippingExportBatchExporter", fields: [exportedById], references: [id])
-  exportedAt DateTime       @default(now())
-  orderCount Int            @default(0)
-  subOrderCount Int         @default(0)
-  tradeOrderCount Int       @default(0)
-  fileName   String
-  fileUrl    String?
-  remark     String?        @db.Text
-  shippingTasks ShippingTask[]
-  lines      ShippingExportLine[]
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
+  id              String               @id @default(cuid())
+  exportNo        String               @unique
+  supplierId      String
+  supplier        Supplier             @relation(fields: [supplierId], references: [id])
+  exportedById    String?
+  exportedBy      User?                @relation("ShippingExportBatchExporter", fields: [exportedById], references: [id])
+  exportedAt      DateTime             @default(now())
+  orderCount      Int                  @default(0)
+  subOrderCount   Int                  @default(0)
+  tradeOrderCount Int                  @default(0)
+  fileName        String
+  fileUrl         String?
+  remark          String?              @db.Text
+  shippingTasks   ShippingTask[]
+  lines           ShippingExportLine[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
 
   @@index([supplierId, exportedAt])
   @@index([exportedById, exportedAt])
@@ -2153,40 +2161,40 @@ model CodCollectionRecord {
 }
 
 model PaymentPlan {
-  id                String                   @id @default(cuid())
-  sourceType        PaymentSourceType
-  tradeOrderId      String?
-  tradeOrder        TradeOrder?              @relation(fields: [tradeOrderId], references: [id])
-  salesOrderId      String?
-  salesOrder        SalesOrder?              @relation(fields: [salesOrderId], references: [id])
-  giftRecordId      String?
-  giftRecord        GiftRecord?              @relation(fields: [giftRecordId], references: [id])
-  shippingTaskId    String?
-  shippingTask      ShippingTask?            @relation(fields: [shippingTaskId], references: [id])
-  customerId        String?
-  customer          Customer?                @relation(fields: [customerId], references: [id])
-  ownerId           String?
-  owner             User?                    @relation("PaymentPlanOwner", fields: [ownerId], references: [id])
-  subjectType       PaymentPlanSubjectType
-  stageType         PaymentPlanStageType
-  collectionChannel PaymentCollectionChannel
-  plannedAmount     Decimal                  @db.Decimal(10, 2)
-  submittedAmount   Decimal                  @default(0) @db.Decimal(10, 2)
-  confirmedAmount   Decimal                  @default(0) @db.Decimal(10, 2)
-  remainingAmount   Decimal                  @db.Decimal(10, 2)
-  dueAt             DateTime?
-  status            PaymentPlanStatus        @default(PENDING)
-  sequence          Int                      @default(1)
-  remark            String?                  @db.Text
-  createdById       String?
-  createdBy         User?                    @relation("PaymentPlanCreatedBy", fields: [createdById], references: [id])
-  updatedById       String?
-  updatedBy         User?                    @relation("PaymentPlanUpdatedBy", fields: [updatedById], references: [id])
+  id                  String                   @id @default(cuid())
+  sourceType          PaymentSourceType
+  tradeOrderId        String?
+  tradeOrder          TradeOrder?              @relation(fields: [tradeOrderId], references: [id])
+  salesOrderId        String?
+  salesOrder          SalesOrder?              @relation(fields: [salesOrderId], references: [id])
+  giftRecordId        String?
+  giftRecord          GiftRecord?              @relation(fields: [giftRecordId], references: [id])
+  shippingTaskId      String?
+  shippingTask        ShippingTask?            @relation(fields: [shippingTaskId], references: [id])
+  customerId          String?
+  customer            Customer?                @relation(fields: [customerId], references: [id])
+  ownerId             String?
+  owner               User?                    @relation("PaymentPlanOwner", fields: [ownerId], references: [id])
+  subjectType         PaymentPlanSubjectType
+  stageType           PaymentPlanStageType
+  collectionChannel   PaymentCollectionChannel
+  plannedAmount       Decimal                  @db.Decimal(10, 2)
+  submittedAmount     Decimal                  @default(0) @db.Decimal(10, 2)
+  confirmedAmount     Decimal                  @default(0) @db.Decimal(10, 2)
+  remainingAmount     Decimal                  @db.Decimal(10, 2)
+  dueAt               DateTime?
+  status              PaymentPlanStatus        @default(PENDING)
+  sequence            Int                      @default(1)
+  remark              String?                  @db.Text
+  createdById         String?
+  createdBy           User?                    @relation("PaymentPlanCreatedBy", fields: [createdById], references: [id])
+  updatedById         String?
+  updatedBy           User?                    @relation("PaymentPlanUpdatedBy", fields: [updatedById], references: [id])
   codCollectionRecord CodCollectionRecord?
-  paymentRecords    PaymentRecord[]
-  collectionTasks   CollectionTask[]
-  createdAt         DateTime                 @default(now())
-  updatedAt         DateTime                 @updatedAt
+  paymentRecords      PaymentRecord[]
+  collectionTasks     CollectionTask[]
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
 
   @@index([sourceType, createdAt])
   @@index([salesOrderId, status, dueAt])
@@ -2200,36 +2208,36 @@ model PaymentPlan {
 }
 
 model PaymentRecord {
-  id            String              @id @default(cuid())
-  paymentPlanId String
-  paymentPlan   PaymentPlan         @relation(fields: [paymentPlanId], references: [id])
-  sourceType    PaymentSourceType
-  tradeOrderId  String?
-  tradeOrder    TradeOrder?         @relation(fields: [tradeOrderId], references: [id])
-  salesOrderId  String?
-  salesOrder    SalesOrder?         @relation(fields: [salesOrderId], references: [id])
-  giftRecordId  String?
-  giftRecord    GiftRecord?         @relation(fields: [giftRecordId], references: [id])
-  shippingTaskId String?
-  shippingTask  ShippingTask?       @relation(fields: [shippingTaskId], references: [id])
-  customerId    String?
-  customer      Customer?           @relation(fields: [customerId], references: [id])
-  ownerId       String?
-  owner         User?               @relation("PaymentRecordOwner", fields: [ownerId], references: [id])
-  amount        Decimal             @db.Decimal(10, 2)
-  channel       PaymentRecordChannel
-  status        PaymentRecordStatus @default(SUBMITTED)
-  occurredAt    DateTime
-  submittedById String
-  submittedBy   User                @relation("PaymentRecordSubmittedBy", fields: [submittedById], references: [id])
-  confirmedById String?
-  confirmedBy   User?               @relation("PaymentRecordConfirmedBy", fields: [confirmedById], references: [id])
+  id                  String               @id @default(cuid())
+  paymentPlanId       String
+  paymentPlan         PaymentPlan          @relation(fields: [paymentPlanId], references: [id])
+  sourceType          PaymentSourceType
+  tradeOrderId        String?
+  tradeOrder          TradeOrder?          @relation(fields: [tradeOrderId], references: [id])
+  salesOrderId        String?
+  salesOrder          SalesOrder?          @relation(fields: [salesOrderId], references: [id])
+  giftRecordId        String?
+  giftRecord          GiftRecord?          @relation(fields: [giftRecordId], references: [id])
+  shippingTaskId      String?
+  shippingTask        ShippingTask?        @relation(fields: [shippingTaskId], references: [id])
+  customerId          String?
+  customer            Customer?            @relation(fields: [customerId], references: [id])
+  ownerId             String?
+  owner               User?                @relation("PaymentRecordOwner", fields: [ownerId], references: [id])
+  amount              Decimal              @db.Decimal(10, 2)
+  channel             PaymentRecordChannel
+  status              PaymentRecordStatus  @default(SUBMITTED)
+  occurredAt          DateTime
+  submittedById       String
+  submittedBy         User                 @relation("PaymentRecordSubmittedBy", fields: [submittedById], references: [id])
+  confirmedById       String?
+  confirmedBy         User?                @relation("PaymentRecordConfirmedBy", fields: [confirmedById], references: [id])
   codCollectionRecord CodCollectionRecord?
-  confirmedAt   DateTime?
-  referenceNo   String?
-  remark        String?             @db.Text
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  confirmedAt         DateTime?
+  referenceNo         String?
+  remark              String?              @db.Text
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
 
   @@index([paymentPlanId, status, occurredAt])
   @@index([sourceType, occurredAt])
@@ -2378,39 +2386,40 @@ model LeadTag {
 }
 
 model LeadImportBatch {
-  id                String                @id @default(cuid())
-  createdById       String
-  createdBy         User                  @relation("LeadImportBatchCreator", fields: [createdById], references: [id])
-  templateId        String?
-  template          LeadImportTemplate?   @relation(fields: [templateId], references: [id])
-  fileName          String
-  fileType          LeadImportFileType
-  status            LeadImportBatchStatus @default(DRAFT)
-  stage             LeadImportBatchStage?
-  defaultLeadSource LeadSource            @default(INFO_FLOW)
-  mappingConfig     Json?
-  headers           Json?
-  sourceFilePath    String?               @db.Text
-  queueJobId        String?
-  processingStartedAt DateTime?
-  lastHeartbeatAt   DateTime?
-  totalRows         Int                   @default(0)
-  successRows       Int                   @default(0)
-  failedRows        Int                   @default(0)
-  duplicateRows     Int                   @default(0)
-  createdCustomerRows Int                 @default(0)
-  matchedCustomerRows Int                 @default(0)
-  report            Json?
-  importedAt        DateTime?
-  errorMessage      String?               @db.Text
-  rows              LeadImportRow[]
-  dedupLogs         LeadDedupLog[]
-  mergeLogs         LeadCustomerMergeLog[]
+  id                               String                            @id @default(cuid())
+  createdById                      String
+  createdBy                        User                              @relation("LeadImportBatchCreator", fields: [createdById], references: [id])
+  templateId                       String?
+  template                         LeadImportTemplate?               @relation(fields: [templateId], references: [id])
+  fileName                         String
+  fileType                         LeadImportFileType
+  status                           LeadImportBatchStatus             @default(DRAFT)
+  stage                            LeadImportBatchStage?
+  defaultLeadSource                LeadSource                        @default(INFO_FLOW)
+  mappingConfig                    Json?
+  headers                          Json?
+  sourceFilePath                   String?                           @db.Text
+  queueJobId                       String?
+  processingStartedAt              DateTime?
+  lastHeartbeatAt                  DateTime?
+  totalRows                        Int                               @default(0)
+  successRows                      Int                               @default(0)
+  failedRows                       Int                               @default(0)
+  duplicateRows                    Int                               @default(0)
+  createdCustomerRows              Int                               @default(0)
+  matchedCustomerRows              Int                               @default(0)
+  report                           Json?
+  importedAt                       DateTime?
+  errorMessage                     String?                           @db.Text
+  rows                             LeadImportRow[]
+  dedupLogs                        LeadDedupLog[]
+  mergeLogs                        LeadCustomerMergeLog[]
   importedCustomerDeletionRequests ImportedCustomerDeletionRequest[] @relation("ImportedCustomerDeletionRequestBatch")
-  rollback          LeadImportBatchRollback?
-  rolledBackLeads   Lead[]                 @relation("LeadRolledBackBatch")
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
+  customerHistoryArchives          CustomerHistoryArchive[]          @relation("CustomerHistoryArchiveLeadImportBatch")
+  rollback                         LeadImportBatchRollback?
+  rolledBackLeads                  Lead[]                            @relation("LeadRolledBackBatch")
+  createdAt                        DateTime                          @default(now())
+  updatedAt                        DateTime                          @updatedAt
 
   @@index([createdById, createdAt])
   @@index([status, createdAt])
@@ -2420,24 +2429,25 @@ model LeadImportBatch {
 }
 
 model LeadImportRow {
-  id              String              @id @default(cuid())
-  batchId         String
-  batch           LeadImportBatch     @relation(fields: [batchId], references: [id])
-  rowNumber       Int
-  status          LeadImportRowStatus @default(PENDING)
-  phoneRaw        String?
-  normalizedPhone String?
-  mappedName      String?
-  errorReason     String?             @db.Text
-  rawData         Json
-  mappedData      Json?
-  dedupType       LeadDedupType?
-  matchedLeadId   String?
-  importedLeadId  String?
-  dedupLogs       LeadDedupLog[]
-  mergeLogs       LeadCustomerMergeLog[]
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  id                      String                   @id @default(cuid())
+  batchId                 String
+  batch                   LeadImportBatch          @relation(fields: [batchId], references: [id])
+  rowNumber               Int
+  status                  LeadImportRowStatus      @default(PENDING)
+  phoneRaw                String?
+  normalizedPhone         String?
+  mappedName              String?
+  errorReason             String?                  @db.Text
+  rawData                 Json
+  mappedData              Json?
+  dedupType               LeadDedupType?
+  matchedLeadId           String?
+  importedLeadId          String?
+  dedupLogs               LeadDedupLog[]
+  mergeLogs               LeadCustomerMergeLog[]
+  customerHistoryArchives CustomerHistoryArchive[] @relation("CustomerHistoryArchiveLeadImportRow")
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
 
   @@unique([batchId, rowNumber])
   @@index([batchId, status])
@@ -2464,17 +2474,17 @@ model LeadImportTemplate {
 }
 
 model LeadDedupLog {
-  id            String         @id @default(cuid())
+  id            String          @id @default(cuid())
   batchId       String
   batch         LeadImportBatch @relation(fields: [batchId], references: [id])
   rowId         String?
-  row           LeadImportRow? @relation(fields: [rowId], references: [id])
+  row           LeadImportRow?  @relation(fields: [rowId], references: [id])
   phone         String
   dedupType     LeadDedupType
   matchedLeadId String?
-  reason        String?        @db.Text
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  reason        String?         @db.Text
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 
   @@index([batchId, createdAt])
   @@index([rowId])
@@ -2483,26 +2493,26 @@ model LeadDedupLog {
 }
 
 model LeadCustomerMergeLog {
-  id         String                  @id @default(cuid())
-  batchId    String
-  batch      LeadImportBatch         @relation(fields: [batchId], references: [id])
-  rowId      String?
-  row        LeadImportRow?          @relation(fields: [rowId], references: [id])
-  leadId     String?
-  lead       Lead?                   @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  leadIdSnapshot String?
-  leadNameSnapshot String?
+  id                String                  @id @default(cuid())
+  batchId           String
+  batch             LeadImportBatch         @relation(fields: [batchId], references: [id])
+  rowId             String?
+  row               LeadImportRow?          @relation(fields: [rowId], references: [id])
+  leadId            String?
+  lead              Lead?                   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  leadIdSnapshot    String?
+  leadNameSnapshot  String?
   leadPhoneSnapshot String?
-  customerId String?
-  customer   Customer?               @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  action     LeadCustomerMergeAction
-  source     LeadSource
-  phone      String
-  tagSynced  Boolean                 @default(false)
-  note       String?                 @db.Text
-  actorId    String?
-  createdAt  DateTime                @default(now())
-  updatedAt  DateTime                @updatedAt
+  customerId        String?
+  customer          Customer?               @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  action            LeadCustomerMergeAction
+  source            LeadSource
+  phone             String
+  tagSynced         Boolean                 @default(false)
+  note              String?                 @db.Text
+  actorId           String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
 
   @@index([batchId, action, createdAt])
   @@index([rowId])
@@ -2510,6 +2520,38 @@ model LeadCustomerMergeLog {
   @@index([customerId, createdAt])
   @@index([phone, createdAt])
   @@map("lead_customer_merge_logs")
+}
+
+model CustomerHistoryArchive {
+  id                   String                           @id @default(cuid())
+  sourceCustomerId     String
+  sourceCustomerName   String
+  sourceCustomerPhone  String
+  sourceOwnerLabel     String?
+  sourceExecutionClass String?
+  targetLeadId         String?
+  targetLead           Lead?                            @relation("CustomerHistoryArchiveLead", fields: [targetLeadId], references: [id], onDelete: SetNull)
+  targetCustomerId     String?
+  targetCustomer       Customer?                        @relation("CustomerHistoryArchiveTargetCustomer", fields: [targetCustomerId], references: [id], onDelete: SetNull)
+  sourceBatchId        String?
+  sourceBatch          LeadImportBatch?                 @relation("CustomerHistoryArchiveLeadImportBatch", fields: [sourceBatchId], references: [id], onDelete: SetNull)
+  sourceRowId          String?
+  sourceRow            LeadImportRow?                   @relation("CustomerHistoryArchiveLeadImportRow", fields: [sourceRowId], references: [id], onDelete: SetNull)
+  visibility           CustomerHistoryArchiveVisibility @default(SUPERVISOR_ONLY)
+  reason               String                           @db.Text
+  snapshot             Json
+  createdById          String?
+  createdBy            User?                            @relation("CustomerHistoryArchiveCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt            DateTime                         @default(now())
+  updatedAt            DateTime                         @updatedAt
+
+  @@index([targetCustomerId, createdAt], map: "cust_hist_archive_target_customer_created_idx")
+  @@index([targetLeadId, createdAt], map: "cust_hist_archive_target_lead_created_idx")
+  @@index([sourceBatchId, sourceRowId], map: "cust_hist_archive_batch_row_idx")
+  @@index([sourceCustomerPhone, createdAt], map: "cust_hist_archive_phone_created_idx")
+  @@index([visibility, createdAt], map: "cust_hist_archive_visibility_created_idx")
+  @@index([createdById, createdAt], map: "cust_hist_archive_created_by_idx")
+  @@map("customer_history_archives")
 }
 
 model LeadImportBatchRollback {

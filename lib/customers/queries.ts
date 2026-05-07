@@ -1,5 +1,6 @@
 import {
   CallResult,
+  CustomerHistoryArchiveVisibility,
   CustomerOwnershipMode,
   CustomerStatus,
   FollowUpTaskStatus,
@@ -3933,6 +3934,10 @@ export async function getCustomerDetailProfileData(
     return null;
   }
 
+  const historyArchiveVisibilityWhere: Prisma.CustomerHistoryArchiveWhereInput =
+    viewer.role === "ADMIN" || viewer.role === "SUPERVISOR"
+      ? {}
+      : { visibility: CustomerHistoryArchiveVisibility.ALL_ROLES };
   const [
     leads,
     mergeLogs,
@@ -3940,6 +3945,7 @@ export async function getCustomerDetailProfileData(
     availableTags,
     latestCustomerImportLog,
     importedCustomerDeletion,
+    historyArchives,
   ] = await Promise.all([
     prisma.lead.findMany({
       where: withVisibleLeadWhere({ customerId: detail.customer.id }),
@@ -4015,6 +4021,38 @@ export async function getCustomerDetailProfileData(
       },
     }),
     resolveImportedCustomerDeletionGuard(viewer, detail.customer.id),
+    prisma.customerHistoryArchive.findMany({
+      where: {
+        targetCustomerId: detail.customer.id,
+        ...historyArchiveVisibilityWhere,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        sourceCustomerId: true,
+        sourceCustomerName: true,
+        sourceCustomerPhone: true,
+        sourceOwnerLabel: true,
+        sourceExecutionClass: true,
+        visibility: true,
+        reason: true,
+        snapshot: true,
+        createdAt: true,
+        sourceBatch: {
+          select: {
+            id: true,
+            fileName: true,
+          },
+        },
+        createdBy: {
+          select: {
+            name: true,
+            username: true,
+          },
+        },
+      },
+    }),
   ]);
 
   return {
@@ -4023,6 +4061,7 @@ export async function getCustomerDetailProfileData(
     customerTags,
     availableTags,
     importedCustomerDeletion,
+    historyArchives,
     customerImportSummary: latestCustomerImportLog
       ? {
           createdAt: latestCustomerImportLog.createdAt,

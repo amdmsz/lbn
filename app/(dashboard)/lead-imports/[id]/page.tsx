@@ -40,6 +40,8 @@ type LeadImportDetailData = NonNullable<
   Awaited<ReturnType<typeof getLeadImportDetailData>>
 >;
 type LeadImportDetailRow = LeadImportDetailData["rows"][number];
+type DuplicateReplacementSalesOption =
+  LeadImportDetailData["duplicateReplacementSalesOptions"][number];
 
 function getHeaders(value: Prisma.JsonValue | null) {
   return Array.isArray(value)
@@ -258,6 +260,128 @@ function getRollbackExecutionMeta(
   }
 }
 
+function DuplicateReplacementControls({
+  rowId,
+  defaultReason,
+  eligible,
+  salesOptions,
+  action,
+  variant = "compact",
+}: Readonly<{
+  rowId: string;
+  defaultReason: string;
+  eligible: boolean;
+  salesOptions: DuplicateReplacementSalesOption[];
+  action: (formData: FormData) => Promise<void>;
+  variant?: "compact" | "full";
+}>) {
+  const disabled = !eligible || salesOptions.length === 0;
+
+  return (
+    <form
+      action={action}
+      className={
+        variant === "full"
+          ? "mt-3 space-y-3 border-t border-black/8 pt-3"
+          : "mt-2 space-y-2"
+      }
+    >
+      <input type="hidden" name="rowId" value={rowId} />
+      {variant === "full" ? (
+        <textarea
+          name="reason"
+          required
+          rows={2}
+          defaultValue={defaultReason}
+          className="crm-input min-h-[4.5rem] w-full resize-y text-sm"
+          disabled={disabled}
+        />
+      ) : (
+        <input type="hidden" name="reason" value={defaultReason} />
+      )}
+
+      <div
+        className={
+          variant === "full"
+            ? "grid gap-2 md:grid-cols-3"
+            : "grid min-w-[16rem] gap-2"
+        }
+      >
+        <label className="space-y-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black/45">
+            重新分配
+          </span>
+          <select
+            name="targetOwnerId"
+            required
+            disabled={disabled}
+            className="crm-select min-h-[2.25rem] text-xs"
+            defaultValue=""
+          >
+            <option value="">选择业务员</option>
+            {salesOptions.map((sales) => (
+              <option key={sales.id} value={sales.id}>
+                {sales.label} / {sales.teamLabel}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black/45">
+            历史处理
+          </span>
+          <select
+            name="historyPolicy"
+            disabled={disabled}
+            className="crm-select min-h-[2.25rem] text-xs"
+            defaultValue="ARCHIVE"
+          >
+            <option value="ARCHIVE">保留历史快照</option>
+            <option value="DISCARD">不保留历史</option>
+          </select>
+        </label>
+
+        <label className="space-y-1">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-black/45">
+            历史可见
+          </span>
+          <select
+            name="historyVisibility"
+            disabled={disabled}
+            className="crm-select min-h-[2.25rem] text-xs"
+            defaultValue="SUPERVISOR_ONLY"
+          >
+            <option value="SUPERVISOR_ONLY">仅主管以上</option>
+            <option value="ALL_ROLES">新负责人可见</option>
+          </select>
+        </label>
+      </div>
+
+      {salesOptions.length === 0 ? (
+        <p className="text-xs leading-5 text-[var(--color-warning)]">
+          当前没有可分配的业务员，请先检查团队与账号状态。
+        </p>
+      ) : null}
+
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <button
+          type="submit"
+          disabled={disabled}
+          className={
+            variant === "full"
+              ? "crm-button crm-button-primary disabled:cursor-not-allowed disabled:opacity-55"
+              : "crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-55"
+          }
+          title={eligible ? "剔除老客户并创建已分配的新线索" : "当前重复客户不满足替换条件"}
+        >
+          作为新线索并分配
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function CustomerContinuationRowsTable({
   rows,
 }: Readonly<{
@@ -471,9 +595,16 @@ export default async function LeadImportDetailPage({
     "use server";
     const rowId = formData.get("rowId");
     const reason = formData.get("reason");
+    const targetOwnerId = formData.get("targetOwnerId");
+    const historyPolicy = formData.get("historyPolicy");
+    const historyVisibility = formData.get("historyVisibility");
     const result = await replaceDuplicateCustomerWithNewLeadAction({
       batchId,
       rowId: typeof rowId === "string" ? rowId : "",
+      targetOwnerId: typeof targetOwnerId === "string" ? targetOwnerId : "",
+      historyPolicy: historyPolicy === "DISCARD" ? "DISCARD" : "ARCHIVE",
+      historyVisibility:
+        historyVisibility === "ALL_ROLES" ? "ALL_ROLES" : "SUPERVISOR_ONLY",
       reason: typeof reason === "string" ? reason : "",
     });
 
@@ -482,6 +613,7 @@ export default async function LeadImportDetailPage({
 
   const canReplaceDuplicateCustomer =
     session.user.role === "ADMIN" || session.user.role === "SUPERVISOR";
+  const duplicateReplacementSalesOptions = batch.duplicateReplacementSalesOptions;
 
   return (
     <div className="crm-page">
@@ -976,26 +1108,13 @@ export default async function LeadImportDetailPage({
                                   />
                                 </div>
                                 {canReplaceDuplicateCustomer ? (
-                                  <form action={replaceDuplicateCustomerFormAction}>
-                                    <input type="hidden" name="rowId" value={row.id} />
-                                    <input
-                                      type="hidden"
-                                      name="reason"
-                                      value={`原客户仍为${duplicateCustomer.executionClassLabel}，未接通且未加微信，作为新线索重新分配。`}
-                                    />
-                                    <button
-                                      type="submit"
-                                      disabled={!duplicateCustomer.replacementEligible}
-                                      className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-55"
-                                      title={
-                                        duplicateCustomer.replacementEligible
-                                          ? "剔除老客户并创建待分配新线索"
-                                          : duplicateCustomer.replacementReason
-                                      }
-                                    >
-                                      作为新线索
-                                    </button>
-                                  </form>
+                                  <DuplicateReplacementControls
+                                    rowId={row.id}
+                                    defaultReason={`原客户仍为${duplicateCustomer.executionClassLabel}，未接通且未加微信，作为新线索重新分配。`}
+                                    eligible={duplicateCustomer.replacementEligible}
+                                    salesOptions={duplicateReplacementSalesOptions}
+                                    action={replaceDuplicateCustomerFormAction}
+                                  />
                                 ) : null}
                               </div>
                             ) : null}
@@ -1177,34 +1296,14 @@ export default async function LeadImportDetailPage({
                         </p>
 
                         {canReplaceDuplicateCustomer ? (
-                          <form
+                          <DuplicateReplacementControls
+                            rowId={row.id}
+                            defaultReason={`原客户仍为${duplicateCustomer.executionClassLabel}，未接通且未加微信，作为新线索重新分配。`}
+                            eligible={duplicateCustomer.replacementEligible}
+                            salesOptions={duplicateReplacementSalesOptions}
                             action={replaceDuplicateCustomerFormAction}
-                            className="mt-3 space-y-2 border-t border-black/8 pt-3"
-                          >
-                            <input type="hidden" name="rowId" value={row.id} />
-                            <textarea
-                              name="reason"
-                              required
-                              rows={2}
-                              defaultValue={`原客户仍为${duplicateCustomer.executionClassLabel}，未接通且未加微信，作为新线索重新分配。`}
-                              className="crm-input min-h-[4.5rem] w-full resize-y text-sm"
-                              disabled={!duplicateCustomer.replacementEligible}
-                            />
-                            <div className="flex flex-wrap items-center justify-end gap-2">
-                              <button
-                                type="submit"
-                                disabled={!duplicateCustomer.replacementEligible}
-                                className="crm-button crm-button-primary disabled:cursor-not-allowed disabled:opacity-55"
-                                title={
-                                  duplicateCustomer.replacementEligible
-                                    ? "剔除老客户并创建待分配新线索"
-                                    : duplicateCustomer.replacementReason
-                                }
-                              >
-                                作为新线索
-                              </button>
-                            </div>
-                          </form>
+                            variant="full"
+                          />
                         ) : null}
                       </div>
                     ) : row.dedupType === "EXISTING_CUSTOMER" ? (

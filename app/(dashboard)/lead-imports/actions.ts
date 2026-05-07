@@ -61,6 +61,11 @@ const leadImportBatchRollbackSchema = z.object({
 const duplicateCustomerReplacementSchema = z.object({
   batchId: z.string().trim().min(1, "缺少批次 ID"),
   rowId: z.string().trim().min(1, "缺少导入行 ID"),
+  targetOwnerId: z.string().trim().min(1, "请选择重新分配的业务员"),
+  historyPolicy: z.enum(["ARCHIVE", "DISCARD"]).default("ARCHIVE"),
+  historyVisibility: z
+    .enum(["SUPERVISOR_ONLY", "ALL_ROLES"])
+    .default("SUPERVISOR_ONLY"),
   reason: z.string().trim().min(1, "请填写判断说明").max(500, "判断说明不能超过 500 字"),
 });
 
@@ -75,6 +80,7 @@ export type ReplaceDuplicateCustomerActionResult = {
   message: string;
   leadId: string | null;
   oldCustomerId: string | null;
+  customerId: string | null;
 };
 
 function getValue(formData: FormData, key: string) {
@@ -198,6 +204,7 @@ export async function replaceDuplicateCustomerWithNewLeadAction(
       message: parsed.error.issues[0]?.message ?? "提交数据不完整。",
       leadId: null,
       oldCustomerId: null,
+      customerId: null,
     };
   }
 
@@ -211,12 +218,14 @@ export async function replaceDuplicateCustomerWithNewLeadAction(
     revalidatePath("/customers/public-pool");
     revalidatePath("/dashboard");
     revalidatePath(`/customers/${result.oldCustomerId}`);
+    revalidatePath(`/customers/${result.customerId}`);
 
     return {
       status: "success",
       message: result.message,
       leadId: result.leadId,
       oldCustomerId: result.oldCustomerId,
+      customerId: result.customerId,
     };
   } catch (error) {
     return {
@@ -224,6 +233,7 @@ export async function replaceDuplicateCustomerWithNewLeadAction(
       message: error instanceof Error ? error.message : "作为新线索处理失败，请稍后重试。",
       leadId: null,
       oldCustomerId: null,
+      customerId: null,
     };
   }
 }

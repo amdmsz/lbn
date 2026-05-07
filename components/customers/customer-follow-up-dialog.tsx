@@ -7,7 +7,6 @@ import { ChevronRight, X } from "lucide-react";
 import { CustomerPhoneSpotlight } from "@/components/customers/customer-phone-spotlight";
 import type { StatusBadgeVariant } from "@/components/shared/status-badge";
 import type { MobileCallTriggerSource } from "@/lib/calls/mobile-call-followup";
-import type { CustomerExecutionClass } from "@/lib/customers/metadata";
 import {
   getCustomerExecutionDisplayLongLabel,
   getCustomerExecutionDisplayVariant,
@@ -19,14 +18,6 @@ import { CustomerCallRecordForm } from "@/components/customers/customer-call-rec
 import { CustomerCallRecordHistory } from "@/components/customers/customer-call-record-history";
 import type { CallResultOption } from "@/lib/calls/metadata";
 import { cn } from "@/lib/utils";
-
-const executionClassQuickResultMap: Partial<
-  Record<CustomerExecutionClass, string>
-> = {
-  B: "WECHAT_ADDED",
-  D: "NOT_CONNECTED",
-  E: "REFUSED_WECHAT",
-};
 
 const quietExecutionClassVariantClassNames: Record<StatusBadgeVariant, string> =
   {
@@ -91,12 +82,6 @@ function DialogMetaBlock({
       </p>
     </div>
   );
-}
-
-export function getCustomerExecutionClassQuickResult(
-  value: CustomerExecutionClass,
-) {
-  return executionClassQuickResultMap[value] ?? "";
 }
 
 export function CustomerFollowUpDialog({

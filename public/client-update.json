@@ -1,10 +1,10 @@
 {
-  "version": "0.1.4",
-  "notes": "升级外呼与本机通话稳定性，接入 Android 签名 release APK，并统一从 CRM 下载目录分发 Windows / Android 客户端。",
+  "version": "0.1.5",
+  "notes": "修复 Android 本机录音权限链路，稳定系统录音读取与上传，并同步更新 release APK。",
   "windows": {
     "downloadUrl": "https://crm.cclbn.com/downloads/Lbn-CRM-0.1.4-x64.zip"
   },
   "android": {
-    "downloadUrl": "https://crm.cclbn.com/downloads/Lbn-CRM-Android.apk"
+    "downloadUrl": "http://123.207.59.121/downloads/Lbn-CRM-Android.apk"
   }
 }

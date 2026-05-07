@@ -20,6 +20,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -44,10 +45,33 @@ import java.util.concurrent.Executors;
                 Manifest.permission.READ_PHONE_STATE,
                 Manifest.permission.RECORD_AUDIO
             }
+        ),
+        @Permission(
+            alias = "audioLibraryLegacy",
+            strings = {
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            }
+        ),
+        @Permission(
+            alias = "audioLibraryModern",
+            strings = {
+                Manifest.permission.READ_MEDIA_AUDIO
+            }
+        ),
+        @Permission(
+            alias = "notifications",
+            strings = {
+                Manifest.permission.POST_NOTIFICATIONS
+            }
         )
     }
 )
 public class LbnCallRecorderPlugin extends Plugin {
+    private static final String ALIAS_CALL_RECORDING = "callRecording";
+    private static final String ALIAS_AUDIO_LIBRARY_LEGACY = "audioLibraryLegacy";
+    private static final String ALIAS_AUDIO_LIBRARY_MODERN = "audioLibraryModern";
+    private static final String ALIAS_NOTIFICATIONS = "notifications";
+
     private BroadcastReceiver sessionReceiver;
     private final ExecutorService connectionExecutor = Executors.newSingleThreadExecutor();
 
@@ -97,8 +121,28 @@ public class LbnCallRecorderPlugin extends Plugin {
         result.put("deviceModel", Build.MANUFACTURER + " " + Build.MODEL);
         result.put("androidVersion", Build.VERSION.RELEASE + " (SDK " + Build.VERSION.SDK_INT + ")");
         result.put("appVersion", getAppVersionName());
-        result.put("recordingCapability", hasCoreRuntimePermissions() ? "SUPPORTED" : "UNKNOWN");
+        result.put("recordingCapability", hasRequiredRuntimePermissions() ? "SUPPORTED" : "UNKNOWN");
+        result.put("permissions", buildRecorderPermissionResult());
         call.resolve(result);
+    }
+
+    @PluginMethod
+    public void checkRecorderPermissions(PluginCall call) {
+        call.resolve(buildRecorderPermissionResult());
+    }
+
+    @PluginMethod
+    public void requestRecorderPermissions(PluginCall call) {
+        requestPermissionForAliases(
+            getRequiredPermissionAliases(),
+            call,
+            "recorderPermissionCallback"
+        );
+    }
+
+    @PermissionCallback
+    public void recorderPermissionCallback(PluginCall call) {
+        call.resolve(buildRecorderPermissionResult());
     }
 
     @PluginMethod
@@ -117,8 +161,8 @@ public class LbnCallRecorderPlugin extends Plugin {
             return;
         }
 
-        if (!hasCoreRuntimePermissions()) {
-            call.reject("缺少电话、录音或通话状态权限。");
+        if (!hasRequiredRuntimePermissions()) {
+            call.reject(describeMissingRecorderPermissions());
             return;
         }
 
@@ -335,6 +379,134 @@ public class LbnCallRecorderPlugin extends Plugin {
         return ContextCompat.checkSelfPermission(getContext(), Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED &&
             ContextCompat.checkSelfPermission(getContext(), Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED &&
             ContextCompat.checkSelfPermission(getContext(), Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private boolean hasRequiredRuntimePermissions() {
+        return hasCoreRuntimePermissions() &&
+            hasAudioLibraryPermission() &&
+            hasNotificationPermission();
+    }
+
+    private boolean hasAudioLibraryPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return ContextCompat.checkSelfPermission(getContext(), Manifest.permission.READ_MEDIA_AUDIO) == PackageManager.PERMISSION_GRANTED;
+        }
+
+        return ContextCompat.checkSelfPermission(getContext(), Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private boolean hasNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return true;
+        }
+
+        return ContextCompat.checkSelfPermission(getContext(), Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private String[] getRequiredPermissionAliases() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return new String[] {
+                ALIAS_CALL_RECORDING,
+                ALIAS_AUDIO_LIBRARY_MODERN,
+                ALIAS_NOTIFICATIONS
+            };
+        }
+
+        return new String[] {
+            ALIAS_CALL_RECORDING,
+            ALIAS_AUDIO_LIBRARY_LEGACY
+        };
+    }
+
+    private JSObject buildRecorderPermissionResult() {
+        JSObject result = new JSObject();
+        result.put(
+            ALIAS_CALL_RECORDING,
+            aggregatePermissionState(new String[] {
+                Manifest.permission.CALL_PHONE,
+                Manifest.permission.READ_PHONE_STATE,
+                Manifest.permission.RECORD_AUDIO
+            })
+        );
+        result.put(
+            "audioLibrary",
+            aggregatePermissionState(new String[] {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                    ? Manifest.permission.READ_MEDIA_AUDIO
+                    : Manifest.permission.READ_EXTERNAL_STORAGE
+            })
+        );
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            result.put(
+                ALIAS_NOTIFICATIONS,
+                aggregatePermissionState(new String[] {
+                    Manifest.permission.POST_NOTIFICATIONS
+                })
+            );
+        }
+
+        return result;
+    }
+
+    private String aggregatePermissionState(String[] permissions) {
+        boolean shouldShowRationale = false;
+
+        for (String permission : permissions) {
+            if (ContextCompat.checkSelfPermission(getContext(), permission) == PackageManager.PERMISSION_GRANTED) {
+                continue;
+            }
+
+            if (
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                getActivity() != null &&
+                getActivity().shouldShowRequestPermissionRationale(permission)
+            ) {
+                shouldShowRationale = true;
+            }
+        }
+
+        if (allPermissionsGranted(permissions)) {
+            return "granted";
+        }
+
+        return shouldShowRationale ? "prompt-with-rationale" : "prompt";
+    }
+
+    private boolean allPermissionsGranted(String[] permissions) {
+        for (String permission : permissions) {
+            if (ContextCompat.checkSelfPermission(getContext(), permission) != PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private String describeMissingRecorderPermissions() {
+        StringBuilder missing = new StringBuilder();
+
+        appendMissingPermission(missing, !hasCoreRuntimePermissions(), "电话、通话状态或麦克风");
+        appendMissingPermission(missing, !hasAudioLibraryPermission(), "系统录音读取");
+        appendMissingPermission(missing, !hasNotificationPermission(), "通知");
+
+        if (missing.length() == 0) {
+            return "缺少录音所需权限。";
+        }
+
+        return "缺少" + missing + "权限。";
+    }
+
+    private void appendMissingPermission(StringBuilder builder, boolean shouldAppend, String label) {
+        if (!shouldAppend) {
+            return;
+        }
+
+        if (builder.length() > 0) {
+            builder.append("、");
+        }
+
+        builder.append(label);
     }
 
     private String getDeviceFingerprint() {

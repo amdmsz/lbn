@@ -2392,7 +2392,7 @@ function ConnectionSettingsDrawer({
   onSaved: (profile: NativeConnectionProfile) => void;
 }>) {
   const [serverUrl, setServerUrl] = useState(
-    profile?.serverUrl ?? profile?.defaultServerUrl ?? "https://crm.cclbn.com/mobile",
+    profile?.serverUrl ?? profile?.defaultServerUrl ?? "https://123.207.59.121/mobile",
   );
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
