@@ -16,6 +16,7 @@ type FulfillmentTradeOrdersParams = {
   customerKeyword?: string;
   statusView?: "" | "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED";
   supplierId?: string;
+  salesId?: string;
 };
 
 type FulfillmentShippingParams = {

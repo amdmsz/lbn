@@ -727,6 +727,7 @@ export function TradeOrdersSection({
   baseSearchParams?: Record<string, string>;
 }>) {
   const activeFocusView = getActiveFocusView(filters);
+  const hasSalesFilter = salesOptions.length > 0;
   const currentPageHref = buildPageHref(
     filters,
     { page: pagination.page },
@@ -907,7 +908,14 @@ export function TradeOrdersSection({
             ))}
             <input type="hidden" name="focusView" value={activeFocusView} />
 
-            <div className="grid gap-2.5 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,0.9fr)_auto] lg:items-end">
+            <div
+              className={cn(
+                "grid gap-2.5 lg:items-end",
+                hasSalesFilter
+                  ? "lg:grid-cols-[minmax(0,1.35fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_auto]"
+                  : "lg:grid-cols-[minmax(0,1.45fr)_minmax(0,0.9fr)_auto]",
+              )}
+            >
               <label className="space-y-1.5">
                 <span className="crm-label">父单搜索</span>
                 <input
@@ -927,6 +935,24 @@ export function TradeOrdersSection({
                   placeholder="客户名 / 手机"
                 />
               </label>
+
+              {hasSalesFilter ? (
+                <label className="space-y-1.5">
+                  <span className="crm-label">业务员</span>
+                  <select
+                    name="salesId"
+                    defaultValue={filters.salesId}
+                    className={tradeOrderInputClassName}
+                  >
+                    <option value="">全部业务员</option>
+                    {salesOptions.map((sales) => (
+                      <option key={sales.id} value={sales.id}>
+                        {sales.label} / {sales.teamLabel}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
 
               <div className="crm-filter-actions lg:justify-end">
                 <button type="submit" className={tradeOrderPrimaryButtonClassName}>
@@ -966,7 +992,7 @@ export function TradeOrdersSection({
                 </span>
               </summary>
 
-              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <label className="space-y-1.5">
                   <span className="crm-label">审核状态</span>
                   <select
@@ -979,22 +1005,6 @@ export function TradeOrdersSection({
                     <option value="PENDING_REVIEW">待审核</option>
                     <option value="APPROVED">已审核</option>
                     <option value="REJECTED">已驳回</option>
-                  </select>
-                </label>
-
-                <label className="space-y-1.5">
-                  <span className="crm-label">业务员</span>
-                  <select
-                    name="salesId"
-                    defaultValue={filters.salesId}
-                    className={tradeOrderInputClassName}
-                  >
-                    <option value="">全部业务员</option>
-                    {salesOptions.map((sales) => (
-                      <option key={sales.id} value={sales.id}>
-                        {sales.label} / {sales.teamLabel}
-                      </option>
-                    ))}
                   </select>
                 </label>
 

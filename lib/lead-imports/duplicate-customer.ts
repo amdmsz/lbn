@@ -222,7 +222,6 @@ export function getLeadImportDuplicateReplacementEligibility(
   customer: LeadImportDuplicateCustomerRecord,
 ) {
   const blockers = getLeadImportDuplicateReplacementBlockerLabels(customer);
-  const latestCall = getLeadImportLatestCallSignal(customer.callRecords);
 
   if (blockers.length > 0) {
     return {
@@ -238,16 +237,9 @@ export function getLeadImportDuplicateReplacementEligibility(
     };
   }
 
-  if (latestCall && !isLeadImportDisconnectedCallSignal(latestCall)) {
-    return {
-      eligible: false,
-      reason: `不能作为新线索：最近通话结果为${getCallResultLabel(latestCall) ?? "非未接通"}。`,
-    };
-  }
-
   return {
     eligible: true,
-    reason: "符合未接通、未加微信、无交易/履约阻断，可由主管作为新线索重新分配。",
+    reason: "符合未加微信、未成交、无交易/履约阻断，可由主管作为新线索重新分配。",
   };
 }
 

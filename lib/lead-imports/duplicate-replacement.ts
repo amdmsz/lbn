@@ -882,7 +882,7 @@ export async function replaceDuplicateCustomerWithNewLead(
           action: "customer.duplicate_import_replaced",
           targetType: OperationTargetType.CUSTOMER,
           targetId: customer.id,
-          description: `剔除未接通未加微重复客户 ${customer.name}，导入行转为新客户 ${createdCustomer.name}`,
+          description: `剔除未加微信且未成交重复客户 ${customer.name}，导入行转为新客户 ${createdCustomer.name}`,
           beforeData: toJson(beforeCustomerSnapshot),
           afterData: toJson(replacementSummary),
         },

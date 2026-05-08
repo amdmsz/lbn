@@ -263,6 +263,7 @@ function getRollbackExecutionMeta(
 function DuplicateReplacementControls({
   rowId,
   defaultReason,
+  eligibilityReason,
   eligible,
   salesOptions,
   action,
@@ -270,6 +271,7 @@ function DuplicateReplacementControls({
 }: Readonly<{
   rowId: string;
   defaultReason: string;
+  eligibilityReason: string;
   eligible: boolean;
   salesOptions: DuplicateReplacementSalesOption[];
   action: (formData: FormData) => Promise<void>;
@@ -363,6 +365,11 @@ function DuplicateReplacementControls({
           当前没有可分配的业务员，请先检查团队与账号状态。
         </p>
       ) : null}
+      {!eligible ? (
+        <p className="text-xs leading-5 text-[var(--color-warning)]">
+          {eligibilityReason}
+        </p>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-end gap-2">
         <button
@@ -373,7 +380,7 @@ function DuplicateReplacementControls({
               ? "crm-button crm-button-primary disabled:cursor-not-allowed disabled:opacity-55"
               : "crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-55"
           }
-          title={eligible ? "剔除老客户并创建已分配的新线索" : "当前重复客户不满足替换条件"}
+          title={eligible ? "剔除老客户并创建已分配的新线索" : "当前重复客户不满足未加微信/未成交条件或存在业务阻断"}
         >
           作为新线索并分配
         </button>
@@ -1110,7 +1117,8 @@ export default async function LeadImportDetailPage({
                                 {canReplaceDuplicateCustomer ? (
                                   <DuplicateReplacementControls
                                     rowId={row.id}
-                                    defaultReason={`原客户仍为${duplicateCustomer.executionClassLabel}，未接通且未加微信，作为新线索重新分配。`}
+                                    defaultReason={`原客户仍为${duplicateCustomer.executionClassLabel}，未加微信且未成交，作为新线索重新分配。`}
+                                    eligibilityReason={duplicateCustomer.replacementReason}
                                     eligible={duplicateCustomer.replacementEligible}
                                     salesOptions={duplicateReplacementSalesOptions}
                                     action={replaceDuplicateCustomerFormAction}
@@ -1298,7 +1306,8 @@ export default async function LeadImportDetailPage({
                         {canReplaceDuplicateCustomer ? (
                           <DuplicateReplacementControls
                             rowId={row.id}
-                            defaultReason={`原客户仍为${duplicateCustomer.executionClassLabel}，未接通且未加微信，作为新线索重新分配。`}
+                            defaultReason={`原客户仍为${duplicateCustomer.executionClassLabel}，未加微信且未成交，作为新线索重新分配。`}
+                            eligibilityReason={duplicateCustomer.replacementReason}
                             eligible={duplicateCustomer.replacementEligible}
                             salesOptions={duplicateReplacementSalesOptions}
                             action={replaceDuplicateCustomerFormAction}
