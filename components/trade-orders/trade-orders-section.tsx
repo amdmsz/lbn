@@ -15,6 +15,7 @@ import {
 import { TradeOrderRecycleDialog } from "@/components/trade-orders/trade-order-recycle-dialog";
 import { TradeOrderLogisticsCell } from "@/components/trade-orders/trade-order-logistics-cell";
 import { formatDateTime } from "@/lib/customers/metadata";
+import { formatTradeOrderDateTimeRangeLabel } from "@/lib/trade-orders/date-filters";
 import {
   formatCurrency,
   getSalesOrderPaymentSchemeLabel,
@@ -114,6 +115,8 @@ function buildPageHref(
     ["customerKeyword", next.customerKeyword],
     ["supplierId", next.supplierId],
     ["salesId", next.salesId],
+    ["createdFrom", next.createdFrom],
+    ["createdTo", next.createdTo],
     ["statusView", next.statusView],
     ["focusView", next.focusView],
     ["supplierCount", next.supplierCount],
@@ -296,6 +299,14 @@ function getSortFilterLabel(value: TradeOrderFilters["sortBy"]) {
     default:
       return "最近更新";
   }
+}
+
+function getCreatedAtFilterLabel(filters: TradeOrderFilters) {
+  return formatTradeOrderDateTimeRangeLabel(
+    filters.createdFrom,
+    filters.createdTo,
+    formatDateTime,
+  );
 }
 
 function getSalesFilterLabel(
@@ -728,6 +739,7 @@ export function TradeOrdersSection({
 }>) {
   const activeFocusView = getActiveFocusView(filters);
   const hasSalesFilter = salesOptions.length > 0;
+  const createdAtFilterLabel = getCreatedAtFilterLabel(filters);
   const currentPageHref = buildPageHref(
     filters,
     { page: pagination.page },
@@ -968,6 +980,8 @@ export function TradeOrdersSection({
                       statusView: "",
                       focusView: "",
                       supplierCount: "",
+                      createdFrom: "",
+                      createdTo: "",
                       sortBy: "UPDATED_DESC",
                       page: 1,
                     },
@@ -988,7 +1002,7 @@ export function TradeOrdersSection({
                   高级筛选
                 </span>
                 <span className="text-muted-foreground/80">
-                  审核 {filters.statusView || "全部"} · {getSalesFilterLabel(filters.salesId, salesOptions)} · {getSupplierCountFilterLabel(filters.supplierCount)} · {getSortFilterLabel(filters.sortBy)}
+                  审核 {filters.statusView || "全部"} · {getSalesFilterLabel(filters.salesId, salesOptions)} · {getSupplierCountFilterLabel(filters.supplierCount)} · {getSortFilterLabel(filters.sortBy)} · {createdAtFilterLabel}
                 </span>
               </summary>
 
@@ -1050,6 +1064,28 @@ export function TradeOrdersSection({
                     ))}
                   </select>
                 </label>
+
+                <label className="space-y-1.5">
+                  <span className="crm-label">下单时间（起）</span>
+                  <input
+                    name="createdFrom"
+                    type="datetime-local"
+                    defaultValue={filters.createdFrom}
+                    step={60}
+                    className={tradeOrderInputClassName}
+                  />
+                </label>
+
+                <label className="space-y-1.5">
+                  <span className="crm-label">下单时间（止）</span>
+                  <input
+                    name="createdTo"
+                    type="datetime-local"
+                    defaultValue={filters.createdTo}
+                    step={60}
+                    className={tradeOrderInputClassName}
+                  />
+                </label>
               </div>
             </details>
           </form>
@@ -1070,6 +1106,7 @@ export function TradeOrdersSection({
               <span>{getSalesFilterLabel(filters.salesId, salesOptions)}</span>
               <span>{getSupplierCountFilterLabel(filters.supplierCount)}</span>
               <span>{getSortFilterLabel(filters.sortBy)}</span>
+              <span>{createdAtFilterLabel}</span>
             </div>
           }
         >

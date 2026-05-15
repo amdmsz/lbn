@@ -14,6 +14,8 @@ type SearchParamsValue = string | string[] | undefined;
 type FulfillmentTradeOrdersParams = {
   keyword?: string;
   customerKeyword?: string;
+  createdFrom?: string;
+  createdTo?: string;
   statusView?: "" | "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED";
   supplierId?: string;
   salesId?: string;

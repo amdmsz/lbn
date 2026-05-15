@@ -13,6 +13,10 @@ import { canAccessSalesOrderModule, canCreateSalesOrder } from "@/lib/auth/acces
 import { findActiveCustomerRecycleEntry } from "@/lib/customers/recycle";
 import { prisma } from "@/lib/db/prisma";
 import {
+  normalizeTradeOrderDateTimeInput,
+  parseTradeOrderDateTimeInput,
+} from "@/lib/trade-orders/date-filters";
+import {
   buildTradeOrderFinalizePreview,
   getTradeOrderRecycleTarget,
 } from "@/lib/recycle-bin/trade-order-adapter";
@@ -35,6 +39,8 @@ export type TradeOrderFilters = {
   customerKeyword: string;
   supplierId: string;
   salesId: string;
+  createdFrom: string;
+  createdTo: string;
   statusView: "" | "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED";
   focusView:
     | ""
@@ -54,6 +60,8 @@ const tradeOrderFiltersSchema = z.object({
   customerKeyword: z.string().trim().default(""),
   supplierId: z.string().trim().default(""),
   salesId: z.string().trim().default(""),
+  createdFrom: z.string().trim().default("").transform(normalizeTradeOrderDateTimeInput),
+  createdTo: z.string().trim().default("").transform(normalizeTradeOrderDateTimeInput),
   statusView: z
     .enum(["", "DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED"])
     .default(""),
@@ -340,6 +348,8 @@ export function parseTradeOrderFilters(
     customerKeyword: getParamValue(rawSearchParams?.customerKeyword),
     supplierId: getParamValue(rawSearchParams?.supplierId),
     salesId: getParamValue(rawSearchParams?.salesId),
+    createdFrom: getParamValue(rawSearchParams?.createdFrom),
+    createdTo: getParamValue(rawSearchParams?.createdTo),
     statusView:
       getParamValue(rawSearchParams?.statusView) ||
       getParamValue(rawSearchParams?.reviewStatus),
@@ -408,6 +418,25 @@ function buildTradeOrderCoreWhereInput(
         },
       },
     });
+  }
+
+  if (filters.createdFrom || filters.createdTo) {
+    const createdAt: Prisma.DateTimeFilter = {};
+
+    const createdFrom = parseTradeOrderDateTimeInput(filters.createdFrom);
+    const createdTo = parseTradeOrderDateTimeInput(filters.createdTo);
+
+    if (createdFrom) {
+      createdAt.gte = createdFrom;
+    }
+
+    if (createdTo) {
+      const createdToEnd = new Date(createdTo);
+      createdToEnd.setSeconds(59, 999);
+      createdAt.lte = createdToEnd;
+    }
+
+    andClauses.push({ createdAt });
   }
 
   return andClauses.length > 0 ? { AND: andClauses } : {};
