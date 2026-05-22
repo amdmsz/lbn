@@ -1,4 +1,18 @@
 import Link from "next/link";
+import type {
+  CodCollectionStatus,
+  LogisticsFollowUpTaskStatus,
+  PaymentCollectionChannel,
+  PaymentPlanStageType,
+  PaymentPlanStatus,
+  PaymentPlanSubjectType,
+  PaymentRecordChannel,
+  PaymentRecordStatus,
+  SalesOrderPaymentScheme,
+  SalesOrderReviewStatus,
+  ShippingFulfillmentStatus,
+  ShippingReportStatus,
+} from "@prisma/client";
 import { SalesOrderPaymentSection } from "@/components/payments/sales-order-payment-section";
 import { LogisticsTracePanel } from "@/components/shipping/logistics-trace-panel";
 import { SalesOrderForm } from "@/components/sales-orders/sales-order-form";
@@ -58,12 +72,8 @@ type OrderDetail = {
   orderNo: string;
   tradeOrderId: string | null;
   subOrderNo: string | null;
-  reviewStatus: "PENDING_REVIEW" | "APPROVED" | "REJECTED";
-  paymentScheme:
-    | "FULL_PREPAID"
-    | "DEPOSIT_PLUS_BALANCE"
-    | "FULL_COD"
-    | "DEPOSIT_PLUS_COD";
+  reviewStatus: SalesOrderReviewStatus;
+  paymentScheme: SalesOrderPaymentScheme;
   listAmount: string;
   dealAmount: string;
   discountAmount: string;
@@ -128,24 +138,19 @@ type OrderDetail = {
   paymentPlans: Array<{
     id: string;
     sourceType: "SALES_ORDER" | "GIFT_RECORD";
-    subjectType: "GOODS" | "FREIGHT";
-    stageType: "FULL" | "DEPOSIT" | "BALANCE";
-    collectionChannel: "PREPAID" | "COD";
+    subjectType: PaymentPlanSubjectType;
+    stageType: PaymentPlanStageType;
+    collectionChannel: PaymentCollectionChannel;
     plannedAmount: string;
     submittedAmount: string;
     confirmedAmount: string;
     remainingAmount: string;
     dueAt: Date | null;
-    status: "PENDING" | "SUBMITTED" | "PARTIALLY_COLLECTED" | "COLLECTED" | "CANCELED";
+    status: PaymentPlanStatus;
     remark: string | null;
     codCollectionRecord: {
       id: string;
-      status:
-        | "PENDING_COLLECTION"
-        | "COLLECTED"
-        | "EXCEPTION"
-        | "REJECTED"
-        | "UNCOLLECTED";
+      status: CodCollectionStatus;
       expectedAmount: string;
       collectedAmount: string;
       occurredAt: Date | null;
@@ -153,7 +158,7 @@ type OrderDetail = {
       paymentRecord: {
         id: string;
         amount: string;
-        status: "SUBMITTED" | "CONFIRMED" | "REJECTED";
+        status: PaymentRecordStatus;
         occurredAt: Date;
         remark: string | null;
       } | null;
@@ -161,15 +166,8 @@ type OrderDetail = {
     paymentRecords: Array<{
       id: string;
       amount: string;
-      channel:
-        | "ORDER_FORM_DECLARED"
-        | "BANK_TRANSFER"
-        | "WECHAT_TRANSFER"
-        | "ALIPAY_TRANSFER"
-        | "COD"
-        | "CASH"
-        | "OTHER";
-      status: "SUBMITTED" | "CONFIRMED" | "REJECTED";
+      channel: PaymentRecordChannel;
+      status: PaymentRecordStatus;
       occurredAt: Date;
       referenceNo: string | null;
       remark: string | null;
@@ -207,14 +205,8 @@ type OrderDetail = {
   }>;
   shippingTask: {
     id: string;
-    reportStatus: "PENDING" | "REPORTED";
-    shippingStatus:
-      | "PENDING"
-      | "READY_TO_SHIP"
-      | "SHIPPED"
-      | "DELIVERED"
-      | "COMPLETED"
-      | "CANCELED";
+    reportStatus: ShippingReportStatus;
+    shippingStatus: ShippingFulfillmentStatus;
     shippingProvider: string | null;
     trackingNumber: string | null;
     reportedAt: Date | null;
@@ -225,12 +217,7 @@ type OrderDetail = {
     } | null;
     codCollectionRecords: Array<{
       id: string;
-      status:
-        | "PENDING_COLLECTION"
-        | "COLLECTED"
-        | "EXCEPTION"
-        | "REJECTED"
-        | "UNCOLLECTED";
+      status: CodCollectionStatus;
       expectedAmount: string;
       collectedAmount: string;
       occurredAt: Date | null;
@@ -238,14 +225,14 @@ type OrderDetail = {
       paymentRecord: {
         id: string;
         amount: string;
-        status: "SUBMITTED" | "CONFIRMED" | "REJECTED";
+        status: PaymentRecordStatus;
         occurredAt: Date;
       } | null;
     }>;
   } | null;
   logisticsFollowUpTasks: Array<{
     id: string;
-    status: "PENDING" | "IN_PROGRESS" | "DONE" | "CANCELED";
+    status: LogisticsFollowUpTaskStatus;
     intervalDays: number;
     nextTriggerAt: Date;
     lastTriggeredAt: Date | null;

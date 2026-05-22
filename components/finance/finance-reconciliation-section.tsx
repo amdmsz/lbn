@@ -1,4 +1,7 @@
+import { Download } from "lucide-react";
+import type { ReactNode } from "react";
 import { EmptyState } from "@/components/shared/empty-state";
+import { FiltersPanel } from "@/components/shared/filters-panel";
 import {
   PageSummaryStrip,
   type PageSummaryStripItem,
@@ -24,6 +27,18 @@ type FinanceCard = {
 type FinanceMetricDefinition = {
   label: string;
   description: string;
+};
+
+type SalesOption = {
+  id: string;
+  name: string;
+  username: string;
+};
+
+type FinanceReconciliationExportDefaults = {
+  salesId: string;
+  assignedFrom: string;
+  assignedTo: string;
 };
 
 type FinanceSourceBreakdownItem = {
@@ -57,6 +72,60 @@ function toSummaryItems(cards: FinanceCard[]): PageSummaryStripItem[] {
   }));
 }
 
+const inlineFieldClassName =
+  "group flex h-9 min-w-0 items-center gap-2 rounded-[12px] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 transition-[border-color,background-color,box-shadow,transform] duration-150 motion-safe:hover:-translate-y-[1px] hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-sm)] focus-within:border-[var(--color-accent-soft)] focus-within:bg-[var(--color-shell-hover)] focus-within:shadow-[var(--color-shell-shadow-sm)]";
+
+function InlineSelectControl({
+  label,
+  name,
+  defaultValue,
+  children,
+}: Readonly<{
+  label: string;
+  name: string;
+  defaultValue: string;
+  children: ReactNode;
+}>) {
+  return (
+    <label className={inlineFieldClassName}>
+      <span className="shrink-0 text-[12px] font-medium text-[var(--color-sidebar-muted)]">
+        {label}
+      </span>
+      <select
+        name={name}
+        defaultValue={defaultValue}
+        className="crm-select h-full min-w-0 flex-1 border-0 bg-transparent px-0 py-0 pr-5 text-[13px] text-[var(--foreground)] shadow-none outline-none focus:ring-0"
+      >
+        {children}
+      </select>
+    </label>
+  );
+}
+
+function InlineDateControl({
+  label,
+  name,
+  defaultValue,
+}: Readonly<{
+  label: string;
+  name: string;
+  defaultValue: string;
+}>) {
+  return (
+    <label className={inlineFieldClassName}>
+      <span className="shrink-0 text-[12px] font-medium text-[var(--color-sidebar-muted)]">
+        {label}
+      </span>
+      <input
+        type="date"
+        name={name}
+        defaultValue={defaultValue}
+        className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-[13px] text-[var(--foreground)] outline-none focus:ring-0"
+      />
+    </label>
+  );
+}
+
 export function FinanceReconciliationSection({
   scopeLabel,
   summaryCards,
@@ -64,6 +133,8 @@ export function FinanceReconciliationSection({
   metricDefinitions,
   sourceBreakdown,
   collectionTaskBreakdown,
+  salesOptions,
+  exportDefaults,
 }: Readonly<{
   scopeLabel: string;
   summaryCards: FinanceCard[];
@@ -71,9 +142,61 @@ export function FinanceReconciliationSection({
   metricDefinitions: FinanceMetricDefinition[];
   sourceBreakdown: FinanceSourceBreakdownItem[];
   collectionTaskBreakdown: FinanceCollectionTaskBreakdownItem[];
+  salesOptions: SalesOption[];
+  exportDefaults: FinanceReconciliationExportDefaults;
 }>) {
   return (
     <div className="space-y-4">
+      <FiltersPanel
+        title="客户对账导出"
+        description="按销售员和客户分配日期导出客户、沟通、商品、订单、付款与物流摘要。"
+        density="compact"
+        className="rounded-[0.95rem] border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]"
+      >
+        <form
+          method="get"
+          action="/finance/reconciliation/export"
+          className="space-y-2.5"
+        >
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(220px,1fr)_repeat(2,minmax(0,0.82fr))_auto]">
+            <InlineSelectControl
+              label="销售员"
+              name="salesId"
+              defaultValue={exportDefaults.salesId}
+            >
+              <option value="">全部销售</option>
+              {salesOptions.map((sales) => (
+                <option key={sales.id} value={sales.id}>
+                  {sales.name || sales.username}
+                </option>
+              ))}
+            </InlineSelectControl>
+
+            <InlineDateControl
+              label="开始"
+              name="assignedFrom"
+              defaultValue={exportDefaults.assignedFrom}
+            />
+            <InlineDateControl
+              label="结束"
+              name="assignedTo"
+              defaultValue={exportDefaults.assignedTo}
+            />
+
+            <button
+              type="submit"
+              className="crm-button crm-button-primary inline-flex min-h-9 items-center justify-center gap-2 px-3 py-2 text-sm md:col-span-2 xl:col-span-1"
+            >
+              <Download className="h-4 w-4" />
+              导出 CSV
+            </button>
+          </div>
+          <p className="text-[12px] text-[var(--color-sidebar-muted)]">
+            {scopeLabel} · 日期口径：客户最新分配到当前销售的时间。
+          </p>
+        </form>
+      </FiltersPanel>
+
       <PageSummaryStrip
         items={toSummaryItems(summaryCards)}
         className="gap-2.5 xl:grid-cols-4"

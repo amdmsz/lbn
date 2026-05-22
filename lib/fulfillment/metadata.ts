@@ -137,6 +137,7 @@ const shippingFulfillmentStatusMeta: Record<
   SHIPPED: { label: "已发货", variant: "success" },
   DELIVERED: { label: "已签收", variant: "success" },
   COMPLETED: { label: "已完成", variant: "success" },
+  REFUNDED: { label: "已退款", variant: "neutral" },
   CANCELED: { label: "已取消", variant: "neutral" },
 };
 

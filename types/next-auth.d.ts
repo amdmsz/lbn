@@ -13,6 +13,7 @@ declare module "next-auth" {
       mustChangePassword: boolean;
       avatarPath: string | null;
       permissionCodes: ExtraPermissionCode[];
+      accountValid: boolean;
     };
   }
 
@@ -25,6 +26,7 @@ declare module "next-auth" {
     mustChangePassword: boolean;
     avatarPath: string | null;
     permissionCodes: ExtraPermissionCode[];
+    accountValid: boolean;
   }
 }
 
@@ -38,5 +40,6 @@ declare module "next-auth/jwt" {
     mustChangePassword: boolean;
     avatarPath: string | null;
     permissionCodes: ExtraPermissionCode[];
+    accountValid: boolean;
   }
 }

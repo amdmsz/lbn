@@ -8,6 +8,7 @@ import { getAccountActor } from "@/lib/account-management/access";
 import {
   changeOwnPassword,
   createManagedUser,
+  deleteManagedUser,
   resetManagedUserPassword,
   toggleManagedUserStatus,
   updateManagedUser,
@@ -21,6 +22,7 @@ export type AccountActionState = {
   status: "idle" | "success" | "error";
   message: string;
   temporaryPassword: string | null;
+  redirectTo?: string | null;
 };
 
 function getValue(formData: FormData, key: string) {
@@ -53,6 +55,14 @@ function formatActionError(error: unknown) {
 
       return "存在重复数据，请检查账号、手机号或团队编码。";
     }
+
+    if (error.code === "P2003") {
+      return "当前账号仍存在无法自动清理的关联记录，暂时不能永久删除，请先处理后再试。";
+    }
+
+    if (error.code === "P2025") {
+      return "目标账号已不存在或已被其他操作处理。";
+    }
   }
 
   return error instanceof Error ? error.message : "操作失败，请稍后重试。";
@@ -70,6 +80,7 @@ async function getActor() {
 
 function revalidateAccountPaths(userId?: string) {
   revalidatePath("/settings");
+  revalidatePath("/settings/audit");
   revalidatePath("/settings/users");
   revalidatePath("/settings/teams");
 
@@ -190,6 +201,39 @@ export async function toggleManagedUserStatusAction(
           ? "账号已禁用，历史业务数据会继续保留。"
           : "账号已重新启用。",
       temporaryPassword: null,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: formatActionError(error),
+      temporaryPassword: null,
+    };
+  }
+}
+
+export async function deleteManagedUserAction(
+  _previousState: AccountActionState,
+  formData: FormData,
+): Promise<AccountActionState> {
+  try {
+    const actor = await getActor();
+    const result = await deleteManagedUser(actor, {
+      userId: getValue(formData, "userId"),
+      confirmation: getValue(formData, "confirmation"),
+    });
+
+    revalidateAccountPaths(result.id);
+    revalidatePath("/customers");
+    revalidatePath("/customers/public-pool");
+    revalidatePath("/dashboard");
+
+    const message = `账号已永久删除，${result.transferredCustomerCount} 个客户已进入团队待分配池，关联历史记录已一并清理。`;
+
+    return {
+      status: "success",
+      message,
+      temporaryPassword: null,
+      redirectTo: buildRedirectTarget("/settings/users", "success", message),
     };
   } catch (error) {
     return {

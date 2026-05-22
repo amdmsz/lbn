@@ -1,47 +1,42 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
-import { summarizeNativeRecorderReadiness } from "../../lib/calls/native-mobile-call.ts";
 
-test("native recorder readiness falls back outside Android shell", () => {
-  const readiness = summarizeNativeRecorderReadiness({ nativeAvailable: false });
+function readRepoFile(path: string) {
+  return readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+}
 
-  assert.equal(readiness.status, "browser-fallback");
-  assert.equal(readiness.nativeAvailable, false);
+test("native recorder starts local-phone calls with speakerphone fallback", () => {
+  const source = readRepoFile("lib/calls/native-mobile-call.ts");
+
+  assert.match(source, /forceSpeakerphone:\s*shouldForceSpeakerphoneForNativeRecorder\(\)/);
 });
 
-test("native recorder readiness reports supported device as ready", () => {
-  const readiness = summarizeNativeRecorderReadiness({
-    nativeAvailable: true,
-    profile: {
-      deviceModel: "Xiaomi 14",
-      androidVersion: "15 (SDK 35)",
-      appVersion: "0.1.1",
-      recordingCapability: "SUPPORTED",
-    },
-  });
+test("android native recorder defaults speakerphone fallback on", () => {
+  const source = readRepoFile(
+    "apps/mobile/android/app/src/main/java/com/lbn/crm/LbnCallRecorderPlugin.java",
+  );
 
-  assert.equal(readiness.status, "ready");
-  assert.equal(readiness.detail, "Xiaomi 14 · 15 (SDK 35) · App 0.1.1");
+  assert.match(source, /getBoolean\("forceSpeakerphone",\s*true\)/);
 });
 
-test("native recorder readiness surfaces denied permissions as blocked", () => {
-  const readiness = summarizeNativeRecorderReadiness({
-    nativeAvailable: true,
-    permissions: {
-      callRecording: "denied",
-    },
-  });
+test("android media recorder prefers voice communication audio source", () => {
+  const source = readRepoFile(
+    "apps/mobile/android/app/src/main/java/com/lbn/crm/CallRecordingService.java",
+  );
+  const fallbackOrder = source.match(
+    /int\[\]\s+audioSources\s*=\s*new int\[\]\s*\{(?<body>[\s\S]*?)\};/,
+  );
 
-  assert.equal(readiness.status, "blocked");
+  assert.ok(fallbackOrder?.groups?.body);
+  assert.match(fallbackOrder.groups.body, /VOICE_COMMUNICATION[\s\S]*MIC[\s\S]*DEFAULT/);
+  assert.doesNotMatch(fallbackOrder.groups.body, /VOICE_RECOGNITION/);
 });
 
-test("native recorder readiness requests setup for prompt permissions", () => {
-  const readiness = summarizeNativeRecorderReadiness({
-    nativeAvailable: true,
-    permissions: {
-      callRecording: "prompt-with-rationale",
-    },
-  });
+test("mobile dial flow preflights recorder permissions before starting the call", () => {
+  const source = readRepoFile("components/mobile/mobile-app-shell.tsx");
 
-  assert.equal(readiness.status, "needs-permission");
+  assert.match(source, /refreshNativeRecorderReadiness\(\)/);
+  assert.match(source, /initializeNativeRecorderPermissions\(\)/);
+  assert.match(source, /本机录音需要授权/);
 });

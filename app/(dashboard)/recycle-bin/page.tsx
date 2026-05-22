@@ -169,7 +169,7 @@ export default async function RecycleBinPage({
                   : `当前筛选结果中，最终结果为 ${activeEntryStatusLabel} 的历史条目数量。`
                 : isFinalizeTab
                 ? "当前筛选结果中，按最新 finalize preview 判断，最终终态为 ARCHIVE 的对象数量。"
-                : "当前筛选结果中，包含清理阻断项未通过或仅管理员可执行的对象。"
+                : "当前筛选结果中，包含清理阻断项未通过或仅主管以上可执行的对象。"
             }
             density="strip"
           />

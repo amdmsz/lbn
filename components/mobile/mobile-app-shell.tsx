@@ -3669,7 +3669,9 @@ export function MobileAppShell({
     setNativeRecorderChecking(true);
 
     try {
-      setNativeRecorderReadiness(await readNativeRecorderReadiness());
+      const readiness = await readNativeRecorderReadiness();
+      setNativeRecorderReadiness(readiness);
+      return readiness;
     } finally {
       setNativeRecorderChecking(false);
     }
@@ -3680,7 +3682,9 @@ export function MobileAppShell({
     setNativeRecorderChecking(true);
 
     try {
-      setNativeRecorderReadiness(await requestNativeRecorderPermissions());
+      const readiness = await requestNativeRecorderPermissions();
+      setNativeRecorderReadiness(readiness);
+      return readiness;
     } finally {
       setNativeRecorderChecking(false);
       setNativeRecorderInitializing(false);
@@ -3951,10 +3955,26 @@ export function MobileAppShell({
         return;
       }
 
-      const recent = createRecentDialCustomer(
-        callableCustomer,
-        mode,
-      );
+      if (mode === "local-phone" && nativeRecorderReadiness.nativeAvailable) {
+        const currentReadiness = await refreshNativeRecorderReadiness();
+
+        if (currentReadiness.nativeAvailable && currentReadiness.status !== "ready") {
+          const nextReadiness = await initializeNativeRecorderPermissions();
+
+          if (nextReadiness.nativeAvailable && nextReadiness.status !== "ready") {
+            setOutboundNotice({
+              tone: "failed",
+              title: "本机录音需要授权",
+              description:
+                nextReadiness.description ||
+                "请先到系统权限中授权电话、通话状态、麦克风、系统录音读取和通知权限。",
+            });
+            return;
+          }
+        }
+      }
+
+      const recent = createRecentDialCustomer(callableCustomer, mode);
       setRecentDialCustomer(recent);
       writeRecentDialCustomer(recent);
 

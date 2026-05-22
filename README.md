@@ -6,6 +6,7 @@
 
 ## 文档入口
 
+- [CODEX_PROJECT_CONTEXT.md](./CODEX_PROJECT_CONTEXT.md)：账号切换 / 新 Codex 冷启动的项目全貌、运行方式、部署路径和最近交接注意点
 - [AGENTS.md](./AGENTS.md)：开发执行规则，改代码前先看
 - [DESIGN.md](./DESIGN.md)：视觉系统、页面层级、组件风格与 UI 重构约束
 - [PRD.md](./PRD.md)：产品真相、模型边界、角色边界和当前页面主视角
@@ -17,7 +18,7 @@
 
 建议阅读顺序：
 
-`README.md -> AGENTS.md -> PRD.md -> DESIGN.md -> PLANS.md -> UI_ENTRYPOINTS.md -> plans/2026-04-22-sitewide-ui-and-truth-cutover.md`
+`CODEX_PROJECT_CONTEXT.md -> README.md -> AGENTS.md -> PRD.md -> DESIGN.md -> PLANS.md -> UI_ENTRYPOINTS.md -> plans/2026-04-22-sitewide-ui-and-truth-cutover.md`
 
 按任务类型选读：
 
@@ -157,6 +158,7 @@ npm run build
 ## 部署与历史文档
 
 - 正式部署说明见 [docs/deployment-baseline.md](./docs/deployment-baseline.md)
+- 公网 FRP / 移动端公网入口说明见 [docs/public-frp-tunnel-runbook.md](./docs/public-frp-tunnel-runbook.md)
 - CTI 外呼接入说明见 [docs/cti-outbound-call-runbook.md](./docs/cti-outbound-call-runbook.md)
 - 录音 AI 生产 runbook 见 [docs/call-ai-production-runbook.md](./docs/call-ai-production-runbook.md)
 - 内网 ASR 服务 contract 见 [docs/call-ai-local-asr-runbook.md](./docs/call-ai-local-asr-runbook.md)

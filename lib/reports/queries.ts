@@ -34,6 +34,7 @@ import {
   buildPaymentRecordScope,
 } from "@/lib/payments/scope";
 import { getFinanceSummary } from "@/lib/finance/queries";
+import { ACTIVE_SALES_ORDER_SETTLEMENT_WHERE } from "@/lib/trade-orders/settlement";
 
 const REPORT_WINDOW_DAYS = 30;
 const CONNECTED_CALL_RESULTS: CallResult[] = [
@@ -632,6 +633,7 @@ async function getFulfillmentSummary(viewer: ReportViewer) {
             ShippingFulfillmentStatus.SHIPPED,
             ShippingFulfillmentStatus.DELIVERED,
             ShippingFulfillmentStatus.COMPLETED,
+            ShippingFulfillmentStatus.REFUNDED,
           ],
         },
         OR: [
@@ -939,8 +941,13 @@ async function getConversionMetrics(viewer: ReportViewer) {
               is: {
                 salesOrders: {
                   some: {
-                    ...salesOrderFilter,
-                    reviewStatus: SalesOrderReviewStatus.APPROVED,
+                    AND: [
+                      {
+                        ...salesOrderFilter,
+                        reviewStatus: SalesOrderReviewStatus.APPROVED,
+                      },
+                      ACTIVE_SALES_ORDER_SETTLEMENT_WHERE,
+                    ],
                   },
                 },
               },

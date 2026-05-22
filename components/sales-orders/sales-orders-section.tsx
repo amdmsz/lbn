@@ -1,4 +1,10 @@
 import Link from "next/link";
+import type {
+  SalesOrderPaymentScheme,
+  SalesOrderReviewStatus,
+  ShippingFulfillmentStatus,
+  ShippingReportStatus,
+} from "@prisma/client";
 import { SalesOrderForm } from "@/components/sales-orders/sales-order-form";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PaginationControls } from "@/components/shared/pagination-controls";
@@ -58,12 +64,8 @@ type SalesOrderItem = {
   orderNo: string;
   tradeOrderId: string | null;
   subOrderNo: string | null;
-  reviewStatus: "PENDING_REVIEW" | "APPROVED" | "REJECTED";
-  paymentScheme:
-    | "FULL_PREPAID"
-    | "DEPOSIT_PLUS_BALANCE"
-    | "FULL_COD"
-    | "DEPOSIT_PLUS_COD";
+  reviewStatus: SalesOrderReviewStatus;
+  paymentScheme: SalesOrderPaymentScheme;
   listAmount: string;
   dealAmount: string;
   discountAmount: string;
@@ -111,14 +113,8 @@ type SalesOrderItem = {
   }>;
   shippingTask: {
     id: string;
-    reportStatus: "PENDING" | "REPORTED";
-    shippingStatus:
-      | "PENDING"
-      | "READY_TO_SHIP"
-      | "SHIPPED"
-      | "DELIVERED"
-      | "COMPLETED"
-      | "CANCELED";
+    reportStatus: ShippingReportStatus;
+    shippingStatus: ShippingFulfillmentStatus;
     trackingNumber: string | null;
   } | null;
 };

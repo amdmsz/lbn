@@ -154,7 +154,7 @@ public class LbnCallRecorderPlugin extends Plugin {
         String deviceId = call.getString("deviceId", "");
         String apiBaseUrl = requiredString(call, "apiBaseUrl");
         Integer chunkSize = call.getInt("chunkSizeBytes", 1024 * 1024);
-        Boolean forceSpeakerphone = call.getBoolean("forceSpeakerphone", false);
+        Boolean forceSpeakerphone = call.getBoolean("forceSpeakerphone", true);
 
         if (phone == null || callRecordId == null || customerId == null || apiBaseUrl == null) {
             call.reject("缺少拨号参数。");

@@ -44,7 +44,7 @@ export async function proxy(request: NextRequest) {
   });
 
   if (pathname === "/login") {
-    if (token?.role) {
+    if (token?.role && token.accountValid !== false) {
       const redirectUrl = request.nextUrl.clone();
       assignInternalRoute(
         redirectUrl,
@@ -58,7 +58,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (!token?.role) {
+  if (!token?.role || token.accountValid === false) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     loginUrl.search = `?callbackUrl=${encodeURIComponent(`${pathname}${search}`)}`;

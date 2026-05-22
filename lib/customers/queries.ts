@@ -43,6 +43,10 @@ import { resolveImportedCustomerDeletionGuard } from "@/lib/customers/imported-c
 import { resolveCustomerAvatarSrc } from "@/lib/customers/avatar";
 import { prisma } from "@/lib/db/prisma";
 import {
+  ACTIVE_SALES_ORDER_SETTLEMENT_WHERE,
+  ACTIVE_TRADE_ORDER_SETTLEMENT_WHERE,
+} from "@/lib/trade-orders/settlement";
+import {
   customerContinuationImportOperationActions,
   type CustomerImportOperationLogData,
 } from "@/lib/lead-imports/metadata";
@@ -2087,10 +2091,15 @@ async function fetchCustomerListItems(
     prisma.tradeOrder.groupBy({
       by: ["customerId"],
       where: {
-        customerId: {
-          in: customerIds,
-        },
-        tradeStatus: TradeOrderStatus.APPROVED,
+        AND: [
+          {
+            customerId: {
+              in: customerIds,
+            },
+            tradeStatus: TradeOrderStatus.APPROVED,
+          },
+          ACTIVE_TRADE_ORDER_SETTLEMENT_WHERE,
+        ],
       },
       _sum: {
         finalAmount: true,
@@ -2670,14 +2679,19 @@ export async function getCustomerOperatingDashboardData(
       }),
       prisma.tradeOrder.findMany({
         where: {
-          ownerId: {
-            in: salesUserIds,
-          },
-          tradeStatus: TradeOrderStatus.APPROVED,
-          createdAt: {
-            gte: todayStart,
-            lte: todayEnd,
-          },
+          AND: [
+            {
+              ownerId: {
+                in: salesUserIds,
+              },
+              tradeStatus: TradeOrderStatus.APPROVED,
+              createdAt: {
+                gte: todayStart,
+                lte: todayEnd,
+              },
+            },
+            ACTIVE_TRADE_ORDER_SETTLEMENT_WHERE,
+          ],
         },
         select: {
           ownerId: true,
@@ -3810,8 +3824,13 @@ export async function getCustomerDetailShell(
       }),
       prisma.tradeOrder.aggregate({
         where: {
-          customerId: detail.customer.id,
-          tradeStatus: TradeOrderStatus.APPROVED,
+          AND: [
+            {
+              customerId: detail.customer.id,
+              tradeStatus: TradeOrderStatus.APPROVED,
+            },
+            ACTIVE_TRADE_ORDER_SETTLEMENT_WHERE,
+          ],
         },
         _sum: {
           finalAmount: true,
@@ -3822,14 +3841,24 @@ export async function getCustomerDetailShell(
       }),
       prisma.tradeOrder.count({
         where: {
-          customerId: detail.customer.id,
-          tradeStatus: TradeOrderStatus.APPROVED,
+          AND: [
+            {
+              customerId: detail.customer.id,
+              tradeStatus: TradeOrderStatus.APPROVED,
+            },
+            ACTIVE_TRADE_ORDER_SETTLEMENT_WHERE,
+          ],
         },
       }),
       prisma.salesOrder.count({
         where: {
-          customerId: detail.customer.id,
-          reviewStatus: SalesOrderReviewStatus.APPROVED,
+          AND: [
+            {
+              customerId: detail.customer.id,
+              reviewStatus: SalesOrderReviewStatus.APPROVED,
+            },
+            ACTIVE_SALES_ORDER_SETTLEMENT_WHERE,
+          ],
         },
       }),
     ]);

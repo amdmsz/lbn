@@ -9,7 +9,21 @@ import {
 import { auth } from "@/lib/auth/session";
 import { getFinanceReconciliationPageData } from "@/lib/finance/queries";
 
-export default async function FinanceReconciliationPage() {
+type SearchParamsValue = string | string[] | undefined;
+
+function getSearchParamValue(value: SearchParamsValue) {
+  if (Array.isArray(value)) {
+    return value[0] ?? "";
+  }
+
+  return value ?? "";
+}
+
+export default async function FinanceReconciliationPage({
+  searchParams,
+}: Readonly<{
+  searchParams?: Promise<Record<string, SearchParamsValue>>;
+}>) {
   const session = await auth();
 
   if (!session?.user) {
@@ -20,6 +34,7 @@ export default async function FinanceReconciliationPage() {
     redirect(getDefaultRouteForRole(session.user.role));
   }
 
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const data = await getFinanceReconciliationPageData({
     id: session.user.id,
     role: session.user.role,
@@ -50,6 +65,12 @@ export default async function FinanceReconciliationPage() {
         metricDefinitions={data.metricDefinitions}
         sourceBreakdown={data.sourceBreakdown}
         collectionTaskBreakdown={data.collectionTaskBreakdown}
+        salesOptions={data.salesOptions}
+        exportDefaults={{
+          salesId: getSearchParamValue(resolvedSearchParams?.salesId),
+          assignedFrom: getSearchParamValue(resolvedSearchParams?.assignedFrom),
+          assignedTo: getSearchParamValue(resolvedSearchParams?.assignedTo),
+        }}
       />
     </div>
   );

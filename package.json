@@ -94,5 +94,24 @@
     "prettier": "^3.8.1",
     "tailwindcss": "^4",
     "typescript": "^5"
-  }
+  },
+  "description": "酒水私域销售团队内部 CRM。",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "lib": "lib",
+    "test": "tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amdmsz/lbn.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/amdmsz/lbn/issues"
+  },
+  "homepage": "https://github.com/amdmsz/lbn#readme"
 }

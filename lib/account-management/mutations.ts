@@ -2,6 +2,7 @@ import {
   OperationModule,
   OperationTargetType,
   Prisma,
+  PublicPoolReason,
   RoleCode,
   UserStatus,
 } from "@prisma/client";
@@ -16,14 +17,21 @@ import {
   isMissingUserPermissionGrantTableError,
 } from "@/lib/auth/permission-grants-compat";
 import {
+  canDeleteManagedUser,
   canCreateRole,
   canManageTargetUser,
   canManageTeams,
   canSupervisorManageRole,
   type AccountActor,
 } from "@/lib/account-management/access";
+import {
+  cleanupManagedUserPrivateConfigTx,
+  deleteManagedUserHistoricalReferencesTx,
+  getManagedUserDeletionImpactTx,
+} from "@/lib/account-management/deletion-repository";
 import { generateTemporaryPassword, hashPassword, verifyPassword } from "@/lib/auth/password";
 import { prisma } from "@/lib/db/prisma";
+import { recycleCustomerToPublicPoolTx } from "@/lib/customers/ownership";
 
 const usernameSchema = z
   .string()
@@ -51,6 +59,11 @@ const userFormSchema = z.object({
 
 const userIdSchema = z.object({
   userId: z.string().trim().min(1, "缺少账号 ID"),
+});
+
+const deleteManagedUserSchema = z.object({
+  userId: z.string().trim().min(1, "缺少账号 ID"),
+  confirmation: z.string().trim().min(1, "请输入账号名确认"),
 });
 
 const userPermissionFormSchema = z.object({
@@ -346,6 +359,28 @@ function assertCanManageUser(actor: AccountActor, user: ManagedUserRecord) {
   ) {
     throw new Error("当前角色无权管理该账号。");
   }
+}
+
+function assertCanDeleteUser(actor: AccountActor, user: ManagedUserRecord) {
+  if (
+    !canDeleteManagedUser(actor, {
+      id: user.id,
+      name: user.name,
+      username: user.username,
+      teamId: user.teamId,
+      roleCode: user.role.code,
+    })
+  ) {
+    if (actor.id === user.id) {
+      throw new Error("不能永久删除自己的账号。");
+    }
+
+    throw new Error("当前角色无权永久删除该账号。");
+  }
+}
+
+function normalizeDeletionConfirmation(value: string) {
+  return normalizeUsername(value);
 }
 
 async function resolveRoleRecord(tx: TransactionClient, roleCode: RoleCode) {
@@ -1006,6 +1041,103 @@ export async function toggleManagedUserStatus(
     });
 
     return updated;
+  });
+}
+
+export async function deleteManagedUser(
+  actor: AccountActor,
+  rawInput: z.input<typeof deleteManagedUserSchema>,
+) {
+  const parsed = deleteManagedUserSchema.parse(rawInput);
+
+  return prisma.$transaction(async (tx) => {
+    const existing = await getManagedUserRecord(tx, parsed.userId);
+
+    if (!existing) {
+      throw new Error("账号不存在。");
+    }
+
+    assertCanDeleteUser(actor, existing);
+
+    if (normalizeDeletionConfirmation(parsed.confirmation) !== existing.username) {
+      throw new Error("请输入准确的账号名进行确认。");
+    }
+
+    const impact = await getManagedUserDeletionImpactTx(tx, existing.id);
+
+    const ownedCustomers = impact.transferableCustomerCount
+      ? await tx.customer.findMany({
+          where: {
+            ownerId: existing.id,
+          },
+          orderBy: {
+            createdAt: "asc",
+          },
+          select: {
+            id: true,
+            name: true,
+          },
+        })
+      : [];
+
+    let transferredCustomerCount = 0;
+
+    for (const customer of ownedCustomers) {
+      await recycleCustomerToPublicPoolTx(tx, {
+        actor,
+        customerId: customer.id,
+        reason: PublicPoolReason.OWNER_LEFT_TEAM,
+        note: `账号 ${existing.username} 被永久删除，客户回收至团队待分配池。`,
+        respectClaimProtection: false,
+        operationAction: "customer.public_pool.owner_left_team_recycled",
+        operationDescription: `账号删除后回收客户：${customer.name}`,
+      });
+      transferredCustomerCount += 1;
+    }
+
+    const historicalDeletionCounts = await deleteManagedUserHistoricalReferencesTx(
+      tx,
+      existing.id,
+    );
+    const cleanupCounts = await cleanupManagedUserPrivateConfigTx(tx, existing.id);
+    const beforeSnapshot = buildUserAuditSnapshot(existing);
+
+    await createOperationLog(tx, {
+      actor: { connect: { id: actor.id } },
+      module: OperationModule.USER,
+      action: "user.hard_deleted",
+      targetType: OperationTargetType.USER,
+      targetId: existing.id,
+      description: `永久删除账号：${buildUserDisplayName(existing)}`,
+      beforeData: {
+        ...beforeSnapshot,
+        deletionImpact: impact,
+        transferredCustomerCount,
+        historicalDeletionCounts,
+        cleanupCounts,
+      },
+      afterData: {
+        deleted: true,
+        deletionImpact: impact,
+        transferredCustomerCount,
+        historicalDeletionCounts,
+        cleanupCounts,
+      },
+    });
+
+    await tx.user.delete({
+      where: {
+        id: existing.id,
+      },
+    });
+
+    return {
+      id: existing.id,
+      impact,
+      transferredCustomerCount,
+      historicalDeletionCounts,
+      cleanupCounts,
+    };
   });
 }
 

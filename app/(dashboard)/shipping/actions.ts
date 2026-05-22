@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { CodCollectionStatus, ShippingFulfillmentStatus } from "@prisma/client";
 import { ZodError } from "zod";
 import {
   appendRedirectSearchParams,
@@ -162,20 +163,12 @@ export async function updateSalesOrderShippingAction(formData: FormData) {
         shippingTaskId: getFormValue(formData, "shippingTaskId"),
         shippingProvider: getFormValue(formData, "shippingProvider"),
         trackingNumber: getFormValue(formData, "trackingNumber"),
-        shippingStatus: getFormValue(formData, "shippingStatus") as
-          | "PENDING"
-          | "READY_TO_SHIP"
-          | "SHIPPED"
-          | "DELIVERED"
-          | "COMPLETED"
-          | "CANCELED",
+        shippingPackagesJson: getFormValue(formData, "shippingPackagesJson"),
+        shippingStatus: getFormValue(formData, "shippingStatus") as ShippingFulfillmentStatus,
+        settlementRemark: getFormValue(formData, "settlementRemark"),
         codCollectionStatus: getFormValue(formData, "codCollectionStatus") as
           | ""
-          | "PENDING_COLLECTION"
-          | "COLLECTED"
-          | "EXCEPTION"
-          | "REJECTED"
-          | "UNCOLLECTED",
+          | CodCollectionStatus,
         codCollectedAmount: getFormValue(formData, "codCollectedAmount"),
         codRemark: getFormValue(formData, "codRemark"),
       },
@@ -246,10 +239,12 @@ export async function bulkUpdateSalesOrderShippingAction(formData: FormData) {
           shippingTaskId,
           shippingProvider: shippingProviders[index] ?? "",
           trackingNumber,
+          shippingPackagesJson: "",
           shippingStatus: "SHIPPED",
           codCollectionStatus: "",
           codCollectedAmount: "",
           codRemark: "",
+          settlementRemark: "",
         },
       );
 

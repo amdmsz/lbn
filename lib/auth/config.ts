@@ -70,6 +70,7 @@ async function findLatestAccessByUserId(userId: string) {
         },
         teamId: true,
         mustChangePassword: true,
+        userStatus: true,
         permissionGrants: {
           select: {
             permissionCode: true,
@@ -78,12 +79,14 @@ async function findLatestAccessByUserId(userId: string) {
       },
     });
 
-    return user
-      ? {
-          ...user,
-          permissionGrants: user.permissionGrants,
-        }
-      : null;
+    if (!user || user.userStatus !== UserStatus.ACTIVE) {
+      return null;
+    }
+
+    return {
+      ...user,
+      permissionGrants: user.permissionGrants,
+    };
   } catch (error) {
     if (!isMissingUserPermissionGrantTableError(error)) {
       throw error;
@@ -99,15 +102,18 @@ async function findLatestAccessByUserId(userId: string) {
         },
         teamId: true,
         mustChangePassword: true,
+        userStatus: true,
       },
     });
 
-    return user
-      ? {
-          ...user,
-          permissionGrants: [],
-        }
-      : null;
+    if (!user || user.userStatus !== UserStatus.ACTIVE) {
+      return null;
+    }
+
+    return {
+      ...user,
+      permissionGrants: [],
+    };
   }
 }
 
@@ -209,6 +215,7 @@ export const authOptions: NextAuthOptions = {
           permissionCodes: normalizeExtraPermissionCodes(
             user.permissionGrants.map((item) => item.permissionCode),
           ),
+          accountValid: true,
         };
       },
     }),
@@ -224,6 +231,7 @@ export const authOptions: NextAuthOptions = {
         token.mustChangePassword = user.mustChangePassword;
         token.avatarPath = user.avatarPath;
         token.permissionCodes = user.permissionCodes;
+        token.accountValid = true;
       } else if (token.id) {
         const latestAccess = await findLatestAccessByUserId(token.id);
 
@@ -235,6 +243,10 @@ export const authOptions: NextAuthOptions = {
           token.permissionCodes = normalizeExtraPermissionCodes(
             latestAccess.permissionGrants.map((item) => item.permissionCode),
           );
+          token.accountValid = true;
+        } else {
+          token.accountValid = false;
+          token.permissionCodes = [];
         }
       }
 
@@ -258,6 +270,7 @@ export const authOptions: NextAuthOptions = {
                 latestProfile.permissionGrants.map((item) => item.permissionCode),
               )
             : token.permissionCodes ?? [];
+        session.user.accountValid = token.accountValid !== false;
       }
 
       return session;

@@ -21,6 +21,7 @@ import {
   getSalesOrderPaymentSchemeLabel,
   getSalesOrderPaymentSchemeVariant,
 } from "@/lib/fulfillment/metadata";
+import { normalizeShippingPackageSnapshots } from "@/lib/shipping/package-snapshots";
 import {
   buildFulfillmentBatchesHref,
   buildFulfillmentShippingHref,
@@ -59,7 +60,7 @@ type RecycleDialogState = {
 } | null;
 
 const DESKTOP_COLUMNS =
-  "xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1.05fr)_minmax(0,1.1fr)]";
+  "xl:grid-cols-[minmax(0,1.25fr)_minmax(12rem,0.82fr)_minmax(0,1.08fr)_minmax(0,1.08fr)]";
 
 const tradeOrderCardClassName =
   "overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm";
@@ -78,9 +79,6 @@ const tradeOrderQuietActionClassName =
 
 const tradeOrderMenuItemClassName =
   "block rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary";
-
-const tradeOrderMetricTileClassName =
-  "flex flex-col items-center justify-center p-2 text-center";
 
 const tradeOrderPrimaryButtonClassName =
   "inline-flex min-h-0 items-center justify-center rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60";
@@ -249,6 +247,17 @@ function getSupplierNames(item: TradeOrderItem) {
 
 function getShippingTaskCount(item: TradeOrderItem) {
   return item.salesOrders.filter((salesOrder) => salesOrder.shippingTask).length;
+}
+
+function getShippingPackageCount(item: TradeOrderItem) {
+  const packageCount = item.salesOrders.reduce((sum, salesOrder) => {
+    const snapshots = normalizeShippingPackageSnapshots(
+      salesOrder.shippingTask?.shippingPackages,
+    );
+    return sum + (snapshots.length > 0 ? snapshots.length : 0);
+  }, 0);
+
+  return packageCount;
 }
 
 function getExecutionPriority(item: TradeOrderItem) {
@@ -426,6 +435,7 @@ function TradeOrderExecutionStrip({
   supplierNames,
   latestBatchLabel,
   shippingTaskCount,
+  shippingPackageCount,
   fulfillmentSummary,
   traceTarget,
 }: Readonly<{
@@ -435,6 +445,7 @@ function TradeOrderExecutionStrip({
   supplierNames: string[];
   latestBatchLabel: string;
   shippingTaskCount: number;
+  shippingPackageCount: number;
   fulfillmentSummary: Array<{
     label: string;
     count: number;
@@ -445,7 +456,7 @@ function TradeOrderExecutionStrip({
   return (
     <div
       className={cn(
-        "grid divide-y divide-border/40 md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-none xl:grid",
+        "grid divide-y divide-border/40 md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid xl:grid-cols-none",
         DESKTOP_COLUMNS,
       )}
     >
@@ -491,42 +502,66 @@ function TradeOrderExecutionStrip({
       </div>
 
       <div className="bg-transparent px-4 py-3.5">
-        <div className="flex flex-wrap gap-2">
-          <StatusBadge
-            label={getSalesOrderPaymentSchemeLabel(item.paymentScheme)}
-            variant={getSalesOrderPaymentSchemeVariant(item.paymentScheme)}
-          />
-          <span className="rounded-full border border-border/50 bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-            已收 {formatCurrency(item.collectedAmount)}
-          </span>
-          <span className="rounded-full border border-border/50 bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-            物流任务 {shippingTaskCount}
-          </span>
-        </div>
-        <div className="mt-3 grid grid-cols-4 divide-x divide-border/40">
-          {fulfillmentSummary.map((entry) => (
-            <div key={entry.label} className={tradeOrderMetricTileClassName}>
-              <div className="text-xs text-muted-foreground">
-                {entry.label}
-              </div>
-              <div className="mt-1 text-lg font-semibold text-foreground">
-                {entry.count}
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <StatusBadge
+              label={getSalesOrderPaymentSchemeLabel(item.paymentScheme)}
+              variant={getSalesOrderPaymentSchemeVariant(item.paymentScheme)}
+            />
+            <span className="rounded-full border border-border/50 bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+              已收 {formatCurrency(item.collectedAmount)}
+            </span>
+            <span className="rounded-full border border-border/50 bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+              待收 {formatCurrency(item.remainingAmount)}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+            <div className="rounded-xl border border-border/50 bg-background px-3 py-2">
+              <div className="uppercase tracking-widest">子单</div>
+              <div className="mt-1 text-base font-semibold text-foreground">{item.executionSummary?.totalSubOrderCount ?? item.salesOrders.length}</div>
+            </div>
+            <div className="rounded-xl border border-border/50 bg-background px-3 py-2">
+              <div className="uppercase tracking-widest">物流任务</div>
+              <div className="mt-1 text-base font-semibold text-foreground">{shippingTaskCount}</div>
+            </div>
+            <div className="rounded-xl border border-border/50 bg-background px-3 py-2">
+              <div className="uppercase tracking-widest">包裹</div>
+              <div className="mt-1 text-base font-semibold text-foreground">{shippingPackageCount}</div>
+            </div>
+            <div className="rounded-xl border border-border/50 bg-background px-3 py-2">
+              <div className="uppercase tracking-widest">异常</div>
+              <div className="mt-1 text-base font-semibold text-foreground">
+                {item.executionSummary?.exceptionSubOrderCount ?? 0}
               </div>
             </div>
-          ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {fulfillmentSummary.map((entry) => (
+              <StatusBadge key={entry.label} label={`${entry.label} ${entry.count}`} variant={entry.variant} />
+            ))}
+          </div>
         </div>
       </div>
 
       <div className="bg-transparent px-4 py-3.5">
-        <TradeOrderLogisticsCell
-          receiverName={item.receiverNameSnapshot}
-          receiverPhone={item.receiverPhoneSnapshot}
-          receiverAddress={item.receiverAddressSnapshot}
-          shippingTaskId={traceTarget?.id}
-          shippingProvider={traceTarget?.shippingProvider}
-          trackingNumber={traceTarget?.trackingNumber}
-          shippingStatus={traceTarget?.shippingStatus}
-        />
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+            <span>收件人 {item.receiverNameSnapshot || "未填写"}</span>
+            <span>电话 {item.receiverPhoneSnapshot || "未填写"}</span>
+          </div>
+          <div className="line-clamp-2 text-sm text-muted-foreground">
+            {item.receiverAddressSnapshot || "未填写收件地址"}
+          </div>
+          <TradeOrderLogisticsCell
+            receiverName={item.receiverNameSnapshot}
+            receiverPhone={item.receiverPhoneSnapshot}
+            receiverAddress={item.receiverAddressSnapshot}
+            shippingTaskId={traceTarget?.id}
+            shippingProvider={traceTarget?.shippingProvider}
+            trackingNumber={traceTarget?.trackingNumber}
+            shippingStatus={traceTarget?.shippingStatus}
+          />
+        </div>
       </div>
     </div>
   );
@@ -631,6 +666,7 @@ function TradeOrderRow({
   const batchHref = getBatchHref(item);
   const supplierNames = getSupplierNames(item);
   const shippingTaskCount = getShippingTaskCount(item);
+  const shippingPackageCount = getShippingPackageCount(item);
   const priorityMeta = getExecutionPriority(item);
   const totalQty = item.items.reduce(
     (sum, tradeItem) => sum + tradeItem.qty,
@@ -693,6 +729,7 @@ function TradeOrderRow({
         supplierNames={supplierNames}
         latestBatchLabel={latestBatchLabel}
         shippingTaskCount={shippingTaskCount}
+        shippingPackageCount={shippingPackageCount}
         fulfillmentSummary={fulfillmentSummary}
         traceTarget={traceTarget}
       />

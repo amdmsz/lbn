@@ -6,7 +6,7 @@ import {
   ShippingFulfillmentStatus,
   ShippingReportStatus,
   ShippingTaskStatus,
-  type Prisma,
+  Prisma,
   type RoleCode,
 } from "@prisma/client";
 import { z } from "zod";
@@ -17,6 +17,11 @@ import {
 import { prisma } from "@/lib/db/prisma";
 import { syncShippingCollectionTasks } from "@/lib/payments/mutations";
 import { generateShippingExportCsvForBatch } from "@/lib/shipping/export";
+import {
+  buildShippingPackageSnapshots,
+  normalizeShippingPackageSnapshots,
+  type ShippingPackageSnapshot,
+} from "@/lib/shipping/package-snapshots";
 import { buildShippingProductSummary } from "@/lib/shipping/product-summary";
 
 export type ShippingActor = {
@@ -54,7 +59,9 @@ export type UpdateSalesOrderShippingInput = {
   shippingTaskId: string;
   shippingProvider: string;
   trackingNumber: string;
+  shippingPackagesJson?: string;
   shippingStatus: ShippingFulfillmentStatus;
+  settlementRemark: string;
   codCollectionStatus: "" | CodCollectionStatus;
   codCollectedAmount: string;
   codRemark: string;
@@ -102,7 +109,9 @@ const updateSalesOrderShippingSchema = z.object({
   shippingTaskId: z.string().trim().min(1, "缺少发货任务。"),
   shippingProvider: z.string().trim().max(120).default(""),
   trackingNumber: z.string().trim().max(100).default(""),
+  shippingPackagesJson: z.string().trim().max(20000).default(""),
   shippingStatus: z.nativeEnum(ShippingFulfillmentStatus),
+  settlementRemark: z.string().trim().max(1000).default(""),
   codCollectionStatus: z
     .enum(["", "PENDING_COLLECTION", "COLLECTED", "EXCEPTION", "REJECTED", "UNCOLLECTED"])
     .default(""),
@@ -215,6 +224,18 @@ function compareShippingExportLineDraft(a: ShippingExportLineDraft, b: ShippingE
 
 function getDistinctCount(values: string[]) {
   return new Set(values).size;
+}
+
+function parseShippingPackagesJson(value: string) {
+  if (!value.trim()) {
+    return [] as ShippingPackageSnapshot[];
+  }
+
+  try {
+    return normalizeShippingPackageSnapshots(JSON.parse(value));
+  } catch {
+    throw new Error("包裹信息格式无效。");
+  }
 }
 
 /*
@@ -758,6 +779,7 @@ function mapFulfillmentStatusToLegacyTaskStatus(status: ShippingFulfillmentStatu
       return ShippingTaskStatus.SHIPPED;
     case "DELIVERED":
     case "COMPLETED":
+    case "REFUNDED":
       return ShippingTaskStatus.COMPLETED;
     case "CANCELED":
       return ShippingTaskStatus.CANCELED;
@@ -768,7 +790,12 @@ function mapFulfillmentStatusToLegacyTaskStatus(status: ShippingFulfillmentStatu
 }
 
 function isShippingReadyForCod(status: ShippingFulfillmentStatus) {
-  return status === "SHIPPED" || status === "DELIVERED" || status === "COMPLETED";
+  return (
+    status === "SHIPPED" ||
+    status === "DELIVERED" ||
+    status === "COMPLETED" ||
+    status === "REFUNDED"
+  );
 }
 
 function resolveShippingStageOutcome(input: {
@@ -785,7 +812,8 @@ function resolveShippingStageOutcome(input: {
   if (
     input.shippingStatus === ShippingFulfillmentStatus.SHIPPED ||
     input.shippingStatus === ShippingFulfillmentStatus.DELIVERED ||
-    input.shippingStatus === ShippingFulfillmentStatus.COMPLETED
+    input.shippingStatus === ShippingFulfillmentStatus.COMPLETED ||
+    input.shippingStatus === ShippingFulfillmentStatus.REFUNDED
   ) {
     return "SHIPPED";
   }
@@ -1057,8 +1085,10 @@ export async function updateSalesOrderShipping(
       salesOrderId: true,
       reportStatus: true,
       trackingNumber: true,
+      shippingPackages: true,
       shippingStatus: true,
       shippingProvider: true,
+      remark: true,
       codAmount: true,
       shippedAt: true,
       completedAt: true,
@@ -1083,14 +1113,47 @@ export async function updateSalesOrderShipping(
   }
 
   const salesOrder = existing.salesOrder;
+  const parsedPackages = parseShippingPackagesJson(
+    input.shippingPackagesJson || "",
+  );
+  const fallbackPackages = buildShippingPackageSnapshots({
+    labels: ["主包裹"],
+    shippingProviders: [input.shippingProvider || existing.shippingProvider || ""],
+    trackingNumbers: [input.trackingNumber || existing.trackingNumber || ""],
+    remarks: [input.settlementRemark || existing.remark || ""],
+  });
+  const existingPackages = normalizeShippingPackageSnapshots(
+    existing.shippingPackages,
+  );
+  const shippingPackages =
+    parsedPackages.length > 0
+      ? parsedPackages
+      : existingPackages.length > 0
+        ? existingPackages
+        : fallbackPackages.length > 0
+        ? fallbackPackages
+        : null;
+  const primaryPackage =
+    shippingPackages?.find((pkg) => pkg.trackingNumber || pkg.shippingProvider || pkg.remark) ??
+    shippingPackages?.[0] ??
+    null;
+  const shippingPackagesData =
+    shippingPackages && shippingPackages.length > 0
+      ? (shippingPackages as Prisma.InputJsonValue)
+      : Prisma.DbNull;
+  const normalizedShippingProvider =
+    input.shippingProvider.trim() || primaryPackage?.shippingProvider || existing.shippingProvider || "";
   const normalizedTrackingNumber =
-    input.trackingNumber.trim() || existing.trackingNumber?.trim() || "";
+    input.trackingNumber.trim() ||
+    primaryPackage?.trackingNumber ||
+    existing.trackingNumber?.trim() ||
+    "";
   const trackingNumberChanged =
-    Boolean(input.trackingNumber.trim()) &&
-    input.trackingNumber.trim() !== existing.trackingNumber?.trim();
+    normalizedTrackingNumber !== (existing.trackingNumber?.trim() ?? "");
   const isCodTask = Number(existing.codAmount) > 0;
   const normalizedCodStatus = input.codCollectionStatus || "";
   const normalizedCodRemark = input.codRemark.trim();
+  const settlementRemark = input.settlementRemark.trim();
   const enteringShippedState = isShippingReadyForCod(input.shippingStatus);
   const previousStage = resolveShippingStageOutcome({
     reportStatus: existing.reportStatus,
@@ -1117,20 +1180,27 @@ export async function updateSalesOrderShipping(
     throw new Error("只有在已发货、已签收或已完成阶段，才能登记 COD 回款状态。");
   }
 
+  if (input.shippingStatus === ShippingFulfillmentStatus.REFUNDED && !settlementRemark) {
+    throw new Error("标记退款时必须填写退款说明。");
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.shippingTask.update({
       where: { id: existing.id },
       data: {
-        shippingProvider: input.shippingProvider || null,
+        shippingProvider: normalizedShippingProvider || null,
         trackingNumber: normalizedTrackingNumber || null,
+        shippingPackages: shippingPackagesData,
         shippingStatus: input.shippingStatus,
         status: mapFulfillmentStatusToLegacyTaskStatus(input.shippingStatus),
         shippedAt: enteringShippedState ? existing.shippedAt ?? new Date() : existing.shippedAt,
         completedAt:
           input.shippingStatus === ShippingFulfillmentStatus.COMPLETED ||
+          input.shippingStatus === ShippingFulfillmentStatus.REFUNDED ||
           input.shippingStatus === ShippingFulfillmentStatus.CANCELED
             ? existing.completedAt ?? new Date()
             : existing.completedAt,
+        remark: settlementRemark || existing.remark,
         ...(trackingNumberChanged
           ? {
               logisticsLastCheckedAt: null,
@@ -1205,6 +1275,7 @@ export async function updateSalesOrderShipping(
     if (
       input.shippingStatus === ShippingFulfillmentStatus.DELIVERED ||
       input.shippingStatus === ShippingFulfillmentStatus.COMPLETED ||
+      input.shippingStatus === ShippingFulfillmentStatus.REFUNDED ||
       input.shippingStatus === ShippingFulfillmentStatus.CANCELED
     ) {
       await tx.logisticsFollowUpTask.updateMany({
@@ -1253,11 +1324,13 @@ export async function updateSalesOrderShipping(
         },
         afterData: {
           reportStatus: existing.reportStatus,
-          shippingProvider: input.shippingProvider || null,
+          shippingProvider: normalizedShippingProvider || null,
           trackingNumber: normalizedTrackingNumber || null,
+          shippingPackages,
           shippingStatus: input.shippingStatus,
           codCollectionStatus: normalizedCodStatus || null,
           codRemark: normalizedCodRemark || null,
+          settlementRemark: settlementRemark || null,
         },
       },
     });

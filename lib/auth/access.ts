@@ -111,6 +111,10 @@ export function canAccessPath(
   }
 
   if (pathname === "/customers" || pathname.startsWith("/customers/")) {
+    if (pathname === "/customers/export" || pathname.startsWith("/customers/export/")) {
+      return canExportCustomers(role);
+    }
+
     return canAccessCustomerModule(role);
   }
 
@@ -193,6 +197,10 @@ export function canAccessLeadModule(role: RoleCode) {
 
 export function canAccessCustomerModule(role: RoleCode) {
   return role === "ADMIN" || role === "SUPERVISOR" || role === "SALES";
+}
+
+export function canExportCustomers(role: RoleCode) {
+  return role === "ADMIN" || role === "SUPERVISOR";
 }
 
 export function canAccessMobileApp(role: RoleCode) {
@@ -502,6 +510,10 @@ export function canBatchManageCustomerTags(role: RoleCode) {
 }
 
 export function canBatchMoveCustomersToRecycleBin(role: RoleCode) {
+  return role === "ADMIN" || role === "SUPERVISOR";
+}
+
+export function canFinalizeRecycleBinTargets(role: RoleCode) {
   return role === "ADMIN" || role === "SUPERVISOR";
 }
 

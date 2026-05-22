@@ -18,6 +18,10 @@ import {
   resolveShippingExportFileStatus,
   type ShippingExportFileState,
 } from "@/lib/shipping/file-state";
+import {
+  normalizeShippingPackageSnapshots,
+  type ShippingPackageSnapshot,
+} from "@/lib/shipping/package-snapshots";
 
 type SearchParamsValue = string | string[] | undefined;
 
@@ -224,6 +228,7 @@ export async function getShippingPageData(
       content: true,
       screenshotUrl: true,
       trackingNumber: true,
+      shippingPackages: true,
       status: true,
       shippedAt: true,
       remark: true,
@@ -336,16 +341,11 @@ export type ShippingSupplierSummary = {
 
 export type ShippingOperationsItem = {
   id: string;
-  reportStatus: "PENDING" | "REPORTED";
-  shippingStatus:
-    | "PENDING"
-    | "READY_TO_SHIP"
-    | "SHIPPED"
-    | "DELIVERED"
-    | "COMPLETED"
-    | "CANCELED";
+  reportStatus: ShippingReportStatus;
+  shippingStatus: ShippingFulfillmentStatus;
   shippingProvider: string | null;
   trackingNumber: string | null;
+  shippingPackages: ShippingPackageSnapshot[];
   codAmount: string;
   insuranceRequired: boolean;
   insuranceAmount: string;
@@ -565,7 +565,16 @@ const shippingOperationsFiltersSchema = z.object({
   stageView: z.string().trim().default(""),
   reportStatus: z.enum(["", "PENDING", "REPORTED"]).default(""),
   shippingStatus: z
-    .enum(["", "PENDING", "READY_TO_SHIP", "SHIPPED", "DELIVERED", "COMPLETED", "CANCELED"])
+    .enum([
+      "",
+      "PENDING",
+      "READY_TO_SHIP",
+      "SHIPPED",
+      "DELIVERED",
+      "COMPLETED",
+      "REFUNDED",
+      "CANCELED",
+    ])
     .default(""),
   shippingStage: z.enum(["", "SHIPPED_PLUS"]).default(""),
   isCod: z.enum(["", "true", "false"]).default(""),
@@ -627,7 +636,8 @@ function resolveShippingStageView(
     shippingStage === "SHIPPED_PLUS" ||
     shippingStatus === "SHIPPED" ||
     shippingStatus === "DELIVERED" ||
-    shippingStatus === "COMPLETED"
+    shippingStatus === "COMPLETED" ||
+    shippingStatus === "REFUNDED"
   ) {
     return "SHIPPED";
   }
@@ -758,6 +768,7 @@ function buildShippingOperationsBaseWhere(
           ShippingFulfillmentStatus.SHIPPED,
           ShippingFulfillmentStatus.DELIVERED,
           ShippingFulfillmentStatus.COMPLETED,
+          ShippingFulfillmentStatus.REFUNDED,
         ],
       },
     });
@@ -830,6 +841,7 @@ function buildShippingStageWhere(stageView: ShippingStageView): Prisma.ShippingT
                 ShippingFulfillmentStatus.SHIPPED,
                 ShippingFulfillmentStatus.DELIVERED,
                 ShippingFulfillmentStatus.COMPLETED,
+                ShippingFulfillmentStatus.REFUNDED,
               ],
             },
           },
@@ -992,16 +1004,12 @@ function buildSupplierSummaries(
 }
 
 function isShippedFulfillmentStatus(
-  status:
-    | "PENDING"
-    | "READY_TO_SHIP"
-    | "SHIPPED"
-    | "DELIVERED"
-    | "COMPLETED"
-    | "CANCELED",
+  status: ShippingFulfillmentStatus,
 ) {
   return (
-    status === "SHIPPED" || status === "DELIVERED" || status === "COMPLETED"
+    status === ShippingFulfillmentStatus.SHIPPED ||
+    status === ShippingFulfillmentStatus.DELIVERED ||
+    status === ShippingFulfillmentStatus.COMPLETED
   );
 }
 
@@ -1040,13 +1048,15 @@ async function serializeShippingExportBatchItems(
                 line.shippingTask.reportStatus === "REPORTED" &&
                 !isShippedFulfillmentStatus(line.shippingTask.shippingStatus) &&
                 line.shippingTask.shippingStatus !== "CANCELED" &&
+                line.shippingTask.shippingStatus !== "REFUNDED" &&
                 !line.shippingTask.trackingNumber?.trim(),
             ).length
           : 0;
       const shippedCount = item.lines.filter(
         (line) =>
           line.shippingTask &&
-          isShippedFulfillmentStatus(line.shippingTask.shippingStatus),
+          (isShippedFulfillmentStatus(line.shippingTask.shippingStatus) ||
+            line.shippingTask.shippingStatus === "REFUNDED"),
       ).length;
 
       return {
@@ -1370,6 +1380,7 @@ export async function getShippingOperationsPageData(
           shippingStatus: true,
           shippingProvider: true,
           trackingNumber: true,
+          shippingPackages: true,
           codAmount: true,
           insuranceRequired: true,
           insuranceAmount: true,
@@ -1484,6 +1495,7 @@ export async function getShippingOperationsPageData(
             shippingStatus: true,
             shippingProvider: true,
             trackingNumber: true,
+            shippingPackages: true,
             codAmount: true,
             insuranceRequired: true,
             insuranceAmount: true,
@@ -1605,6 +1617,7 @@ export async function getShippingOperationsPageData(
       ...item,
       codAmount: item.codAmount.toString(),
       insuranceAmount: item.insuranceAmount.toString(),
+      shippingPackages: normalizeShippingPackageSnapshots(item.shippingPackages),
       codCollectionRecords: item.codCollectionRecords.map((record) => ({
         ...record,
         expectedAmount: record.expectedAmount.toString(),
@@ -1621,6 +1634,7 @@ export async function getShippingOperationsPageData(
       ...item,
       codAmount: item.codAmount.toString(),
       insuranceAmount: item.insuranceAmount.toString(),
+      shippingPackages: normalizeShippingPackageSnapshots(item.shippingPackages),
       codCollectionRecords: item.codCollectionRecords.map((record) => ({
         ...record,
         expectedAmount: record.expectedAmount.toString(),

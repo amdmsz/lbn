@@ -560,6 +560,48 @@ Decommissioned entrypoints:
 
 ---
 
+### 8A. Export Customer Reconciliation Data
+
+**唯一主链（当前真实主入口）**
+
+- Finance reconciliation page export control at `/finance/reconciliation`
+
+**主入口列表**
+
+- `app/(dashboard)/finance/reconciliation/page.tsx`
+- `components/finance/finance-reconciliation-section.tsx`
+
+**兼容入口列表**
+
+- `/finance/reconciliation/export` is the finance-facing CSV download endpoint
+- `/customers/export` remains a compatibility CSV endpoint for direct access
+
+**已废弃 / 应废弃入口**
+
+- `/customers` no longer surfaces this export button in the customer workbench
+
+**涉及的关键文件**
+
+- `app/(dashboard)/finance/reconciliation/page.tsx`
+- `app/(dashboard)/finance/reconciliation/export/route.ts`
+- `app/(dashboard)/customers/export/route.ts`
+- `lib/customers/export.ts`
+- `lib/customers/queries.ts`
+
+**每次改该能力时必须同步检查的入口**
+
+- Finance reconciliation page export controls
+- Finance reconciliation export route permission guard
+- Customer export route permission guard
+- CSV column shape and future XLSX migration path
+
+**当前风险说明**
+
+- Export is still CSV for now and uses customer assignment date as the date filter
+- The next refinement should split the reconciliation fields more clearly or move to XLSX, but that is a separate step
+
+---
+
 ### 9. View Collection Tasks
 
 **唯一主链（当前真实主入口）**

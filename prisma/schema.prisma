@@ -433,6 +433,7 @@ enum ShippingFulfillmentStatus {
   SHIPPED
   DELIVERED
   COMPLETED
+  REFUNDED
   CANCELED
 }
 
@@ -2002,6 +2003,7 @@ model ShippingTask {
   carrier                      String?
   shippingProvider             String?
   trackingNumber               String?
+  shippingPackages             Json?
   codAmount                    Decimal                   @default(0) @db.Decimal(10, 2)
   insuranceRequired            Boolean                   @default(false)
   insuranceAmount              Decimal                   @default(0) @db.Decimal(10, 2)

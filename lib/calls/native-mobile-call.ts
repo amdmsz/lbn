@@ -81,6 +81,10 @@ const CALL_RECORDING_PERMISSION_ALIAS = "callRecording";
 const NATIVE_RECORDER_PERMISSION_MESSAGE =
   "缺少电话、通话状态、麦克风、系统录音读取或通知权限。";
 
+export function shouldForceSpeakerphoneForNativeRecorder() {
+  return true;
+}
+
 type CapacitorGlobal = {
   getPlatform?: () => string;
   isNativePlatform?: () => boolean;
@@ -585,7 +589,7 @@ export async function startNativeRecordedSimCall(input: {
       deviceId,
       apiBaseUrl: window.location.origin,
       chunkSizeBytes: 1024 * 1024,
-      forceSpeakerphone: false,
+      forceSpeakerphone: shouldForceSpeakerphoneForNativeRecorder(),
     });
 
     await recordNativeCallEventBestEffort({

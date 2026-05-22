@@ -35,6 +35,7 @@ const SHIPPED_LIKE_STATUSES: ShippingFulfillmentStatus[] = [
   ShippingFulfillmentStatus.SHIPPED,
   ShippingFulfillmentStatus.DELIVERED,
   ShippingFulfillmentStatus.COMPLETED,
+  ShippingFulfillmentStatus.REFUNDED,
 ];
 const COD_COMPLETED_STATUSES: ShippingFulfillmentStatus[] = [
   ShippingFulfillmentStatus.DELIVERED,
@@ -697,6 +698,7 @@ export async function getFinanceReconciliationPageData(viewer: FinanceViewer) {
     overdueCollectionTaskCount,
     sourceBreakdown,
     collectionTaskBreakdown,
+    salesOptions,
   ] = await Promise.all([
     prisma.paymentPlan.aggregate({
       where: activePlanWhere,
@@ -757,10 +759,12 @@ export async function getFinanceReconciliationPageData(viewer: FinanceViewer) {
         _all: true,
       },
     }),
+    getFinanceSalesOptions(viewer, teamId),
   ]);
 
   return {
     scopeLabel: getFinanceScopeLabel(viewer),
+    salesOptions,
     summaryCards: [
       {
         label: "应收金额",

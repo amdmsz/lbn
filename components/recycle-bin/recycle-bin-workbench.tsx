@@ -127,7 +127,7 @@ function getDialogMeta(state: RecycleBinDialogState): RecycleBinDialogMeta | nul
     badgeVariant: "danger" as const,
     description:
       state.item.finalActionPreview !== null
-        ? "这会直接执行永久删除。仅 light 对象开放，且仅管理员可执行。"
+        ? "这会直接执行永久删除。仅 light 对象开放，且仅主管以上可执行。"
         : "永久删除后会物理移除源对象，且无法恢复。",
     primaryLabel: state.item.finalActionPreview !== null ? "确认永久删除" : "确认永久删除",
     impactLabel: "最终处理说明",
@@ -303,7 +303,7 @@ function renderFinalizeActionButtons({
           title={
             item.canFinalizeNow
               ? "执行最终处理"
-              : `最终处理仅管理员可执行：${item.finalActionPreview?.finalAction ?? "PURGE"}`
+              : `最终处理仅主管以上可执行：${item.finalActionPreview?.finalAction ?? "PURGE"}`
           }
         >
           执行最终处理
@@ -361,7 +361,7 @@ function renderDefaultActionButtons({
           item.canPurge
             ? "永久删除对象"
             : item.purgeRequiresAdmin
-              ? "永久删除仅管理员可执行"
+              ? "永久删除仅主管以上可执行"
               : item.purgeSummary
         }
       >
@@ -816,7 +816,7 @@ export function RecycleBinWorkbench({
                                 <p className="text-xs leading-5 text-[var(--color-sidebar-muted)]">
                                   {item.canFinalizeNow
                                     ? "当前可执行最终处理"
-                                    : "最终处理仅管理员可执行"}
+                                    : "最终处理仅主管以上可执行"}
                                 </p>
                               </>
                             ) : (
@@ -830,7 +830,7 @@ export function RecycleBinWorkbench({
                                     item.canPurge
                                       ? "可永久删除"
                                       : item.purgeRequiresAdmin
-                                        ? "仅管理员可删除"
+                                        ? "仅主管以上可删除"
                                         : "清理受阻"
                                   }
                                   variant={item.canPurge ? "danger" : "neutral"}
@@ -1091,7 +1091,7 @@ export function RecycleBinWorkbench({
                           value={
                             selectedItem.canFinalizeNow
                               ? "当前可执行最终处理"
-                              : "最终处理仅管理员可执行"
+                              : "最终处理仅主管以上可执行"
                           }
                         />
                         <DetailRow
@@ -1134,7 +1134,7 @@ export function RecycleBinWorkbench({
                         selectedItem.canPurge
                           ? "当前可执行永久删除"
                           : selectedItem.purgeRequiresAdmin
-                            ? "当前无结构性阻断，但仅管理员可永久删除"
+                            ? "当前无结构性阻断，但仅主管以上可永久删除"
                             : "当前清理阻断项已清零"
                       }
                       summary={selectedItem.purgeSummary}

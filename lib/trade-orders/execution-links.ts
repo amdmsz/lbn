@@ -1,6 +1,14 @@
 type ShippingLinkOptions = {
   reportStatus?: "" | "PENDING" | "REPORTED";
-  shippingStatus?: "" | "PENDING" | "READY_TO_SHIP" | "SHIPPED" | "DELIVERED" | "COMPLETED" | "CANCELED";
+  shippingStatus?:
+    | ""
+    | "PENDING"
+    | "READY_TO_SHIP"
+    | "SHIPPED"
+    | "DELIVERED"
+    | "COMPLETED"
+    | "REFUNDED"
+    | "CANCELED";
   shippingStage?: "" | "SHIPPED_PLUS";
   hasTrackingNumber?: "" | "true" | "false";
 };

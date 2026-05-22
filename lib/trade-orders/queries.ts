@@ -28,6 +28,7 @@ import type { TradeOrderRecycleGuard } from "@/lib/trade-orders/recycle-guards";
 import type { RecycleFinalizePreview } from "@/lib/recycle-bin/types";
 import { getSalesOrderCreateFormOptions } from "@/lib/sales-orders/queries";
 import { getTradeOrderExecutionSummaryMap } from "@/lib/trade-orders/execution-summary";
+import { ACTIVE_TRADE_ORDER_SETTLEMENT_WHERE } from "@/lib/trade-orders/settlement";
 
 export type TradeOrderViewer = {
   id: string;
@@ -530,6 +531,7 @@ function buildTradeOrderFocusWhereInput(
                   ShippingFulfillmentStatus.SHIPPED,
                   ShippingFulfillmentStatus.DELIVERED,
                   ShippingFulfillmentStatus.COMPLETED,
+                  ShippingFulfillmentStatus.REFUNDED,
                 ],
               },
             },
@@ -748,7 +750,7 @@ export async function getTradeOrdersPageData(
       },
     }),
     prisma.tradeOrder.aggregate({
-      where,
+      where: { AND: [where, ACTIVE_TRADE_ORDER_SETTLEMENT_WHERE] },
       _sum: {
         finalAmount: true,
         remainingAmount: true,
@@ -886,6 +888,7 @@ export async function getTradeOrdersPageData(
               shippingStatus: true,
               shippingProvider: true,
               trackingNumber: true,
+              shippingPackages: true,
             },
           },
         },
@@ -1220,6 +1223,7 @@ export async function getTradeOrderDetail(
               shippingStatus: true,
               shippingProvider: true,
               trackingNumber: true,
+              shippingPackages: true,
               reportedAt: true,
               shippedAt: true,
               exportBatch: {

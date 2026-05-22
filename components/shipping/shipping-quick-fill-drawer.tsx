@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Plus, Trash2, X } from "lucide-react";
 
 export function ShippingQuickFillDrawer({
   shippingTaskId,
@@ -10,6 +10,7 @@ export function ShippingQuickFillDrawer({
   receiverName,
   shippingProvider,
   trackingNumber,
+  shippingPackages,
   redirectTo,
   updateShippingAction,
 }: Readonly<{
@@ -19,10 +20,75 @@ export function ShippingQuickFillDrawer({
   receiverName: string;
   shippingProvider: string | null;
   trackingNumber: string | null;
+  shippingPackages: Array<{
+    label: string;
+    shippingProvider: string;
+    trackingNumber: string;
+    remark: string;
+  }>;
   redirectTo: string;
   updateShippingAction: (formData: FormData) => Promise<void>;
 }>) {
   const [open, setOpen] = useState(false);
+  const [packages, setPackages] = useState(() => {
+    const initialPackages =
+      shippingPackages.length > 0
+        ? shippingPackages
+        : [
+            {
+              label: "主包裹",
+              shippingProvider: shippingProvider ?? "",
+              trackingNumber: trackingNumber ?? "",
+              remark: "",
+            },
+          ];
+
+    return initialPackages.map((item, index) => ({
+      id: `pkg-${index}-${Math.random().toString(36).slice(2, 8)}`,
+      label: item.label || `包裹 ${index + 1}`,
+      shippingProvider: item.shippingProvider || "",
+      trackingNumber: item.trackingNumber || "",
+      remark: item.remark || "",
+    }));
+  });
+
+  const shippingPackagesJson = useMemo(
+    () =>
+      JSON.stringify(
+        packages.map((item, index) => ({
+          label: item.label || `包裹 ${index + 1}`,
+          shippingProvider: item.shippingProvider,
+          trackingNumber: item.trackingNumber,
+          remark: item.remark,
+        })),
+      ),
+    [packages],
+  );
+
+  function updatePackage(id: string, patch: Partial<(typeof packages)[number]>) {
+    setPackages((current) =>
+      current.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    );
+  }
+
+  function addPackage() {
+    setPackages((current) => [
+      ...current,
+      {
+        id: `pkg-${Math.random().toString(36).slice(2, 10)}`,
+        label: `包裹 ${current.length + 1}`,
+        shippingProvider: "",
+        trackingNumber: "",
+        remark: "",
+      },
+    ]);
+  }
+
+  function removePackage(id: string) {
+    setPackages((current) =>
+      current.length > 1 ? current.filter((item) => item.id !== id) : current,
+    );
+  }
 
   return (
     <>
@@ -71,28 +137,78 @@ export function ShippingQuickFillDrawer({
               <input type="hidden" name="codCollectionStatus" value="" />
               <input type="hidden" name="codCollectedAmount" value="" />
               <input type="hidden" name="codRemark" value="" />
+              <input type="hidden" name="shippingPackagesJson" value={shippingPackagesJson} />
 
               <div className="flex-1 overflow-y-auto px-6 py-5">
-                <div className="space-y-5">
-                  <label className="space-y-2">
-                    <span className="crm-label">承运商</span>
-                    <input
-                      name="shippingProvider"
-                      defaultValue={shippingProvider ?? ""}
-                      placeholder="例如：顺丰 / 京东"
-                      className="crm-input"
-                    />
-                  </label>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium text-black/82">包裹信息</div>
+                      <div className="text-xs text-black/52">一个订单可录多个箱子 / 物流单号。</div>
+                    </div>
+                    <button type="button" onClick={addPackage} className="crm-button crm-button-secondary">
+                      <Plus className="h-4 w-4" />
+                      新增包裹
+                    </button>
+                  </div>
 
-                  <label className="space-y-2">
-                    <span className="crm-label">物流单号</span>
-                    <input
-                      name="trackingNumber"
-                      defaultValue={trackingNumber ?? ""}
-                      placeholder="填写后将推进到已发货"
-                      className="crm-input"
-                    />
-                  </label>
+                  <div className="space-y-3">
+                    {packages.map((item, index) => (
+                      <div key={item.id} className="rounded-2xl border border-black/8 bg-white/76 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="font-medium text-black/82">{item.label || `包裹 ${index + 1}`}</div>
+                          <button
+                            type="button"
+                            onClick={() => removePackage(item.id)}
+                            className="inline-flex items-center gap-1 rounded-full border border-black/8 px-2.5 py-1 text-xs text-black/55"
+                            disabled={packages.length === 1}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            删除
+                          </button>
+                        </div>
+
+                        <div className="mt-3 grid gap-3">
+                          <label className="space-y-2">
+                            <span className="crm-label">包裹名称</span>
+                            <input
+                              value={item.label}
+                              onChange={(event) => updatePackage(item.id, { label: event.target.value })}
+                              className="crm-input"
+                              placeholder={`包裹 ${index + 1}`}
+                            />
+                          </label>
+                          <label className="space-y-2">
+                            <span className="crm-label">承运商</span>
+                            <input
+                              value={item.shippingProvider}
+                              onChange={(event) => updatePackage(item.id, { shippingProvider: event.target.value })}
+                              placeholder="例如：顺丰 / 京东"
+                              className="crm-input"
+                            />
+                          </label>
+                          <label className="space-y-2">
+                            <span className="crm-label">物流单号</span>
+                            <input
+                              value={item.trackingNumber}
+                              onChange={(event) => updatePackage(item.id, { trackingNumber: event.target.value })}
+                              placeholder="填写后将推进到已发货"
+                              className="crm-input"
+                            />
+                          </label>
+                          <label className="space-y-2">
+                            <span className="crm-label">备注</span>
+                            <input
+                              value={item.remark}
+                              onChange={(event) => updatePackage(item.id, { remark: event.target.value })}
+                              placeholder="箱号 / 发货备注"
+                              className="crm-input"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
 
                   <div className="rounded-2xl border border-black/8 bg-white/72 px-4 py-3 text-sm text-black/58">
                     保存后，这个子单会从已报单待物流移入已发货。

@@ -2,6 +2,7 @@ import { RoleCode, UserStatus, type Prisma, type Role } from "@prisma/client";
 import { z } from "zod";
 import {
   canAccessAccountManagement,
+  canDeleteManagedUser,
   canManageTargetUser,
   canManageTeams,
   getAccountActor,
@@ -9,6 +10,7 @@ import {
   getVisibleTeamWhereInput,
   getVisibleUserWhereInput,
 } from "@/lib/account-management/access";
+import { getManagedUserDeletionImpact } from "@/lib/account-management/deletion-repository";
 import { parseAccountManagementNotice } from "@/lib/account-management/metadata";
 import {
   extraPermissionOptions,
@@ -458,7 +460,16 @@ export async function getUserDetailData(viewer: AccountViewer, targetUserId: str
     return null;
   }
 
-  const [teams, activeSupervisors, operationLogs] = await Promise.all([
+  const targetSnapshot = {
+    id: user.id,
+    name: user.name,
+    username: user.username,
+    teamId: user.teamId,
+    roleCode: user.role.code,
+  } satisfies Parameters<typeof canDeleteManagedUser>[1];
+  const canDelete = canDeleteManagedUser(actor, targetSnapshot);
+
+  const [teams, activeSupervisors, operationLogs, deletionImpact] = await Promise.all([
     prisma.team.findMany({
       where:
         actor.role === "ADMIN"
@@ -527,8 +538,9 @@ export async function getUserDetailData(viewer: AccountViewer, targetUserId: str
             username: true,
           },
         },
-      },
-    }),
+        },
+      }),
+    canDelete ? getManagedUserDeletionImpact(user.id) : Promise.resolve(null),
   ]);
 
   return {
@@ -551,6 +563,8 @@ export async function getUserDetailData(viewer: AccountViewer, targetUserId: str
         teamId: user.teamId,
         roleCode: user.role.code,
       }),
+    canDelete,
+    deletionImpact,
     permissionOptions: extraPermissionOptions,
     grantedPermissionCodes: normalizeExtraPermissionCodes(
       user.permissionGrants.map((item) => item.permissionCode),

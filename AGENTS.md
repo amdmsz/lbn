@@ -10,6 +10,8 @@
 
 ## 2. 开发前必读
 
+账号切换、新 Codex 会话冷启动或长期离开后重新接手时，先看 [CODEX_PROJECT_CONTEXT.md](./CODEX_PROJECT_CONTEXT.md)，它负责当前项目全貌、运行方式、部署路径和最近交接注意点。
+
 先看 [README.md](./README.md)，它负责仓库入口、本地启动和常用命令。
 
 大改前看 [PRD.md](./PRD.md)，它负责产品真相、角色边界和主线模型。
@@ -117,6 +119,8 @@ npm run build
 Done 标准是：与 [PRD.md](./PRD.md) 和 [PLANS.md](./PLANS.md) 对齐；不破坏 `Customer` 主线和 `TradeOrder` 主单基线；不把 payment / fulfillment 真相重新混用；重要动作仍可追踪。
 
 ## 7. 文档分工
+
+[CODEX_PROJECT_CONTEXT.md](./CODEX_PROJECT_CONTEXT.md) 负责账号切换 / 新 Codex 冷启动的项目全貌、当前真相、运行时和部署交接。
 
 [README.md](./README.md) 负责仓库入口、启动方式、常用命令。
 

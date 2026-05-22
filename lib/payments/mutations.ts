@@ -968,7 +968,8 @@ function isShippingCollectionReady(status: ShippingFulfillmentStatus) {
   return (
     status === ShippingFulfillmentStatus.SHIPPED ||
     status === ShippingFulfillmentStatus.DELIVERED ||
-    status === ShippingFulfillmentStatus.COMPLETED
+    status === ShippingFulfillmentStatus.COMPLETED ||
+    status === ShippingFulfillmentStatus.REFUNDED
   );
 }
 
@@ -1191,7 +1192,10 @@ export async function syncShippingCollectionTasks(
       }
     }
 
-    if (input.shippingStatus === ShippingFulfillmentStatus.CANCELED) {
+    if (
+      input.shippingStatus === ShippingFulfillmentStatus.CANCELED ||
+      input.shippingStatus === ShippingFulfillmentStatus.REFUNDED
+    ) {
       await completeCollectionTasksForPlan(
         tx,
         plan.id,
@@ -1202,9 +1206,11 @@ export async function syncShippingCollectionTasks(
         codCollectionRecord &&
         codCollectionRecord.status === CodCollectionStatus.PENDING_COLLECTION
       ) {
-        const nextRemark = input.codRemark?.trim()
-          ? input.codRemark.trim()
-          : "Shipment canceled before COD was collected.";
+        const nextRemark =
+          input.codRemark?.trim() ||
+          (input.shippingStatus === ShippingFulfillmentStatus.REFUNDED
+            ? "Shipment was finalized as refunded before COD was collected."
+            : "Shipment canceled before COD was collected.");
 
         await tx.codCollectionRecord.update({
           where: { id: codCollectionRecord.id },
@@ -1223,7 +1229,10 @@ export async function syncShippingCollectionTasks(
             action: "cod_collection_record.updated",
             targetType: OperationTargetType.COD_COLLECTION_RECORD,
             targetId: codCollectionRecord.id,
-            description: "Mark COD collection as uncollected after shipment cancellation.",
+            description:
+              input.shippingStatus === ShippingFulfillmentStatus.REFUNDED
+                ? "Mark COD collection as uncollected after shipment refund."
+                : "Mark COD collection as uncollected after shipment cancellation.",
             beforeData: buildCodCollectionAfterData({
               paymentPlanId: plan.id,
               salesOrderId: plan.salesOrderId ?? input.salesOrderId,

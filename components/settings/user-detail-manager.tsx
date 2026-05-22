@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import type { RoleCode, UserStatus } from "@prisma/client";
 import { useRouter } from "next/navigation";
 import {
+  deleteManagedUserAction,
   resetManagedUserPasswordAction,
   toggleManagedUserStatusAction,
   updateManagedUserAction,
@@ -11,6 +12,7 @@ import {
   type AccountActionState,
 } from "@/lib/account-management/actions";
 import { getExtraPermissionBadgeConfig } from "@/lib/account-management/metadata";
+import type { ManagedUserDeletionImpact } from "@/lib/account-management/deletion-impact";
 import { roleLabels } from "@/lib/auth/access";
 import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import { ActionBanner } from "@/components/shared/action-banner";
@@ -62,6 +64,8 @@ export function UserDetailManager({
   actorRole,
   canManage,
   canManagePermissions,
+  canDelete,
+  deletionImpact,
   user,
   roleOptions,
   teamOptions,
@@ -72,6 +76,8 @@ export function UserDetailManager({
   actorRole: RoleCode;
   canManage: boolean;
   canManagePermissions: boolean;
+  canDelete: boolean;
+  deletionImpact: ManagedUserDeletionImpact | null;
   user: {
     id: string;
     username: string;
@@ -102,7 +108,11 @@ export function UserDetailManager({
   const [permissionState, setPermissionState] = useState<AccountActionState>(initialActionState);
   const [resetState, setResetState] = useState<AccountActionState>(initialActionState);
   const [toggleState, setToggleState] = useState<AccountActionState>(initialActionState);
+  const [deleteState, setDeleteState] = useState<AccountActionState>(initialActionState);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [pending, startTransition] = useTransition();
+  const deleteConfirmationMatches =
+    deleteConfirmation.trim().toLowerCase() === user.username;
 
   const filteredSupervisors = useMemo(
     () =>
@@ -155,7 +165,22 @@ export function UserDetailManager({
       if (nextState.status === "success") {
         router.refresh();
       }
-      });
+    });
+  }
+
+  function handleDelete(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+
+    startTransition(async () => {
+      const nextState = await deleteManagedUserAction(initialActionState, formData);
+      setDeleteState(nextState);
+
+      if (nextState.status === "success") {
+        router.replace(nextState.redirectTo ?? "/settings/users");
+      }
+    });
   }
 
   function handlePermissionUpdate(event: React.FormEvent<HTMLFormElement>) {
@@ -449,6 +474,126 @@ export function UserDetailManager({
                     : "启用账号"}
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {canDelete && deletionImpact ? (
+        <div className="crm-card-muted p-4">
+          <div className="space-y-4">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-black/80">永久删除账号</p>
+                <p className="text-sm leading-6 text-black/58">
+                  删除前会先把该账号名下客户回收到团队待分配池，并清理该账号的个人权限、坐席绑定、移动设备和个人视图。
+                  通话、支付、导入等历史记录也会一并删除。这个动作不可恢复。
+                </p>
+              </div>
+              <StatusBadge label="永久删除" variant="warning" />
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-2xl border border-black/8 bg-white/72 px-3.5 py-3">
+                <p className="text-xs font-medium uppercase tracking-[0.08em] text-black/45">
+                  客户待分配
+                </p>
+                <p className="mt-1.5 text-sm font-medium text-black/78">
+                  {deletionImpact.transferableCustomerCount} 个客户会进入团队待分配池
+                </p>
+              </div>
+              <div className="rounded-2xl border border-black/8 bg-white/72 px-3.5 py-3">
+                <p className="text-xs font-medium uppercase tracking-[0.08em] text-black/45">
+                  可清理配置
+                </p>
+                <p className="mt-1.5 text-sm font-medium text-black/78">
+                  {deletionImpact.cleanupConfigCount} 项个人配置会被清理
+                </p>
+              </div>
+              <div className="rounded-2xl border border-black/8 bg-white/72 px-3.5 py-3">
+                <p className="text-xs font-medium uppercase tracking-[0.08em] text-black/45">
+                  历史记录
+                </p>
+                <p className="mt-1.5 text-sm font-medium text-black/78">
+                  {deletionImpact.historyItems.length > 0
+                    ? `${deletionImpact.historyItems.length} 类历史记录会一并删除`
+                    : "当前没有需要一并删除的历史记录"}
+                </p>
+              </div>
+            </div>
+
+            {deletionImpact.cleanupItems.length > 0 ? (
+              <div className="space-y-2.5">
+                <p className="text-sm font-medium text-black/78">将清理的个人配置</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {deletionImpact.cleanupItems.map((item) => (
+                    <StatusBadge
+                      key={item.code}
+                      label={`${item.label} ${item.count} 项`}
+                      variant="neutral"
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <ActionBanner tone="danger">
+              <div className="space-y-2">
+                <p>{deletionImpact.historySummary}</p>
+                <p>提交后会先回收客户，再永久删除账号和关联历史记录。</p>
+              </div>
+            </ActionBanner>
+
+            {deletionImpact.historyItems.length > 0 ? (
+              <div className="space-y-2.5">
+                <p className="text-sm font-medium text-black/78">将删除的历史记录</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {deletionImpact.historyItems.map((item) => (
+                    <StatusBadge
+                      key={item.code}
+                      label={`${item.label} ${item.count} 条`}
+                      variant="neutral"
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {deleteState.message ? (
+              <ActionBanner tone={deleteState.status === "success" ? "success" : "danger"}>
+                {deleteState.message}
+              </ActionBanner>
+            ) : null}
+
+            <form onSubmit={handleDelete} className="space-y-4">
+              <input type="hidden" name="userId" value={user.id} />
+
+              <label className="space-y-1.5">
+                <span className="crm-label">输入账号名确认</span>
+                <input
+                  name="confirmation"
+                  value={deleteConfirmation}
+                  onChange={(event) => setDeleteConfirmation(event.target.value)}
+                  className="crm-input"
+                  placeholder={user.username}
+                  autoComplete="off"
+                  disabled={pending}
+                  required
+                />
+              </label>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm leading-6 text-black/55">
+                  输入完整账号名后才能提交。提交后会先回收客户，再永久删除账号与关联历史记录。
+                </p>
+                <button
+                  type="submit"
+                  disabled={pending || !deleteConfirmationMatches}
+                  className="crm-button crm-button-secondary text-[var(--color-danger)] hover:border-[rgba(255,148,175,0.24)] hover:bg-[rgba(255,148,175,0.12)] disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  {pending ? "删除中..." : "永久删除账号"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       ) : null}

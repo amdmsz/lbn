@@ -115,6 +115,26 @@ export function canManageTargetUser(actor: AccountActor, target: ManagedUserSnap
   );
 }
 
+export function canDeleteManagedUser(actor: AccountActor, target: ManagedUserSnapshot) {
+  if (actor.id === target.id) {
+    return false;
+  }
+
+  if (actor.role === "ADMIN") {
+    return true;
+  }
+
+  if (actor.role !== "SUPERVISOR") {
+    return false;
+  }
+
+  return (
+    actor.teamId !== null &&
+    target.teamId === actor.teamId &&
+    canSupervisorManageRole(target.roleCode)
+  );
+}
+
 export async function getAccountActor(userId: string): Promise<AccountActor> {
   const user = await prisma.user.findUnique({
     where: { id: userId },

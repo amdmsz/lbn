@@ -9,6 +9,10 @@ import { StatusBadge, type StatusBadgeVariant } from "@/components/shared/status
 import { TradeOrderRecycleDialog } from "@/components/trade-orders/trade-order-recycle-dialog";
 import { formatDateTime } from "@/lib/customers/metadata";
 import {
+  normalizeShippingPackageSnapshots,
+  summarizeShippingPackageSnapshots,
+} from "@/lib/shipping/package-snapshots";
+import {
   buildFulfillmentBatchesHref,
   buildFulfillmentShippingHref,
   buildFulfillmentTradeOrdersHref,
@@ -187,9 +191,22 @@ function getCollectionTaskStatusSummaryLabel(
 }
 
 function isShippingCompletedLike(
-  value: "PENDING" | "READY_TO_SHIP" | "SHIPPED" | "DELIVERED" | "COMPLETED" | "CANCELED" | null,
+  value:
+    | "PENDING"
+    | "READY_TO_SHIP"
+    | "SHIPPED"
+    | "DELIVERED"
+    | "COMPLETED"
+    | "REFUNDED"
+    | "CANCELED"
+    | null,
 ) {
-  return value === "SHIPPED" || value === "DELIVERED" || value === "COMPLETED";
+  return (
+    value === "SHIPPED" ||
+    value === "DELIVERED" ||
+    value === "COMPLETED" ||
+    value === "REFUNDED"
+  );
 }
 
 function sumCurrency(values: string[]) {
@@ -335,6 +352,13 @@ function getShippingSummaryText(salesOrder: SalesOrderItem, executionSummary?: S
         salesOrder.shippingTask.trackingNumber || "物流单号待回填",
       ].join(" / "),
     );
+  }
+
+  const packageSummary = summarizeShippingPackageSnapshots(
+    normalizeShippingPackageSnapshots(salesOrder.shippingTask.shippingPackages),
+  );
+  if (packageSummary) {
+    segments.push(packageSummary);
   }
 
   if (executionSummary?.hasException) {

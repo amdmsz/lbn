@@ -48,7 +48,7 @@ export default async function SettingsUserDetailPage({
         activeValue="users"
         viewerRole={session.user.role}
         title={data.user.name}
-        description="查看账号的团队归属、直属主管、启停状态和审计记录，并在允许范围内完成信息维护、临时密码重置与启停。"
+        description="查看账号的团队归属、直属主管、启停状态和审计记录，并在允许范围内完成信息维护、临时密码重置、启停和永久删除与历史清理。"
         backHref="/settings/users"
         backLabel="返回账号列表"
         trail={["设置中心", "账号管理", data.user.name]}
@@ -121,7 +121,7 @@ export default async function SettingsUserDetailPage({
         title={data.canManage ? "编辑与安全操作" : "只读详情"}
         description={
           data.canManage
-            ? "保存时会根据变更内容分别写入基础信息、角色、团队或直属主管的 OperationLog。"
+            ? "保存时会根据变更内容分别写入基础信息、角色、团队、直属主管与删除前置回收 / 历史清理的 OperationLog。"
             : "当前账号不在你的可管理范围内，因此这里只展示只读信息。"
         }
       >
@@ -129,6 +129,8 @@ export default async function SettingsUserDetailPage({
           actorRole={session.user.role}
           canManage={data.canManage}
           canManagePermissions={data.canManagePermissions}
+          canDelete={data.canDelete}
+          deletionImpact={data.deletionImpact}
           user={{
             id: data.user.id,
             username: data.user.username,
@@ -150,7 +152,7 @@ export default async function SettingsUserDetailPage({
       <SectionCard
         className="mt-5"
         title="最近审计记录"
-        description="新建账号、编辑账号、角色调整、团队调整、直属主管调整、重置密码和启停操作都会写入 OperationLog。"
+        description="新建账号、编辑账号、角色调整、团队调整、直属主管调整、重置密码、启停、客户回收和永久删除都会写入 OperationLog。"
       >
         {data.operationLogs.length > 0 ? (
           <div className="space-y-3">

@@ -7,6 +7,7 @@ import {
 import {
   canAccessLeadModule,
   canAccessCustomerModule,
+  canFinalizeRecycleBinTargets,
   canManageLiveSessions,
   canManageProducts,
   canManageSuppliers,
@@ -178,14 +179,14 @@ function ensureRestorePermission(
 }
 
 function ensurePurgePermission(actor: RecycleLifecycleActor) {
-  if (actor.role !== "ADMIN") {
-    throw new Error("Only ADMIN can permanently delete recycle-bin targets.");
+  if (!canFinalizeRecycleBinTargets(actor.role)) {
+    throw new Error("Only supervisor and above can permanently delete recycle-bin targets.");
   }
 }
 
 function ensureFinalizePermission(actor: RecycleLifecycleActor) {
-  if (actor.role !== "ADMIN") {
-    throw new Error("Only ADMIN can finalize recycle-bin targets.");
+  if (!canFinalizeRecycleBinTargets(actor.role)) {
+    throw new Error("Only supervisor and above can finalize recycle-bin targets.");
   }
 }
 

@@ -9,6 +9,7 @@ import {
   canAccessCustomerModule,
   canAccessSalesOrderModule,
   canAccessLeadModule,
+  canFinalizeRecycleBinTargets,
   canManageLiveSessions,
   canManageProducts,
   canManageSuppliers,
@@ -905,14 +906,14 @@ function buildBlockerSummary(input: {
   if (!input.restoreGuard.canRestore) {
     return input.canActorPurge
       ? `恢复受阻：${input.restoreGuard.blockerSummary}；当前可执行永久删除`
-      : `恢复受阻：${input.restoreGuard.blockerSummary}；当前清理动作仅管理员可执行`;
+      : `恢复受阻：${input.restoreGuard.blockerSummary}；当前清理动作仅主管以上可执行`;
   }
 
   if (!input.purgeGuard.canPurge) {
     return `可恢复；清理受阻：${input.purgeGuard.blockerSummary}`;
   }
 
-  return input.canActorPurge ? "可恢复，且可执行永久删除" : "可恢复；清理动作仅管理员可执行";
+  return input.canActorPurge ? "可恢复，且可执行永久删除" : "可恢复；清理动作仅主管以上可执行";
 }
 
 function buildCustomerRecycleBlockerSummary(input: {
@@ -927,7 +928,7 @@ function buildCustomerRecycleBlockerSummary(input: {
   return `${restoreSummary}；${
     input.canFinalizeNow
       ? `当前可执行最终处理：${input.preview.finalAction}`
-      : `最终处理仅管理员可执行：${input.preview.finalAction}`
+      : `最终处理仅主管以上可执行：${input.preview.finalAction}`
   }`;
 }
 
@@ -939,10 +940,10 @@ function buildCustomerEarlyPurgeSummary(input: {
   if (input.preview.finalAction === "ARCHIVE") {
     return input.canFinalizeNow
       ? "当前可直接执行最终处理：ARCHIVE。"
-      : "最终处理仅管理员可执行：ARCHIVE。";
+      : "最终处理仅主管以上可执行：ARCHIVE。";
   }
 
-  return input.canEarlyPurge ? "当前可直接永久删除。" : "仅管理员可永久删除。";
+  return input.canEarlyPurge ? "当前可直接永久删除。" : "仅主管以上可永久删除。";
 }
 
 function supportsFinalizePreview(targetType: RecycleBinListEntry["targetType"]) {
@@ -966,7 +967,7 @@ function buildTradeOrderRecycleBlockerSummary(input: {
   return `${restoreSummary}；${
     input.canFinalizeNow
       ? `当前可执行最终处理：${input.preview.finalAction}`
-      : `最终处理仅管理员可执行：${input.preview.finalAction}`
+      : `最终处理仅主管以上可执行：${input.preview.finalAction}`
   }`;
 }
 
@@ -978,10 +979,10 @@ function buildTradeOrderEarlyPurgeSummary(input: {
   if (input.preview.finalAction === "ARCHIVE") {
     return input.canFinalizeNow
       ? "当前可直接执行最终处理：ARCHIVE。"
-      : "最终处理仅管理员可执行：ARCHIVE。";
+      : "最终处理仅主管以上可执行：ARCHIVE。";
   }
 
-  return input.canEarlyPurge ? "当前可直接永久删除。" : "仅管理员可永久删除。";
+  return input.canEarlyPurge ? "当前可直接永久删除。" : "仅主管以上可永久删除。";
 }
 
 function parseArchivePayload(
@@ -1902,7 +1903,7 @@ async function buildListItems(
   entries: RecycleBinListEntry[],
   viewer: RecycleLifecycleActor,
 ) {
-  const canActorPurge = viewer.role === "ADMIN";
+  const canActorPurge = canFinalizeRecycleBinTargets(viewer.role);
   const leadRuntimeMetadata = await loadLeadRuntimeMetadata(entries);
 
   return Promise.all(

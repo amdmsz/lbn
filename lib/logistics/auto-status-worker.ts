@@ -49,7 +49,7 @@ type DueLogisticsTask = Awaited<ReturnType<typeof loadDueLogisticsTasks>>[number
 
 type ProcessOutcome =
   | "CHECKED"
-  | "AUTO_COMPLETED"
+  | "AUTO_DELIVERED"
   | "EXCEPTION"
   | "QUERY_FAILED"
   | "SKIPPED";
@@ -82,6 +82,7 @@ function mapFulfillmentStatusToLegacyTaskStatus(status: ShippingFulfillmentStatu
       return ShippingTaskStatus.SHIPPED;
     case ShippingFulfillmentStatus.DELIVERED:
     case ShippingFulfillmentStatus.COMPLETED:
+    case ShippingFulfillmentStatus.REFUNDED:
       return ShippingTaskStatus.COMPLETED;
     case ShippingFulfillmentStatus.CANCELED:
       return ShippingTaskStatus.CANCELED;
@@ -160,8 +161,8 @@ function buildTraceSnapshot(trace: LogisticsTraceResult) {
 
 function getOutcomeAction(outcome: ProcessOutcome) {
   switch (outcome) {
-    case "AUTO_COMPLETED":
-      return "logistics_auto_status.auto_completed";
+    case "AUTO_DELIVERED":
+      return "logistics_auto_status.auto_delivered";
     case "EXCEPTION":
       return "logistics_auto_status.exception_detected";
     case "QUERY_FAILED":
@@ -179,8 +180,8 @@ function getOutcomeDescription(input: {
   signal: LogisticsTraceSignal;
 }) {
   switch (input.outcome) {
-    case "AUTO_COMPLETED":
-      return "物流智能检查：轨迹已签收，履约状态更新为已完成并关闭后续检查。";
+    case "AUTO_DELIVERED":
+      return "物流智能检查：轨迹已签收，履约状态更新为已签收并等待业务确认完成或退款。";
     case "EXCEPTION":
       return "物流智能检查：检测到物流异常。";
     case "QUERY_FAILED":
@@ -289,9 +290,9 @@ async function applyTraceDecision(input: {
     exceptionType = LogisticsExceptionType.RETURN_OR_REJECTED;
     exceptionMessage = trace.latestEvent?.description || trace.currentStatusLabel || "物流轨迹显示退回、拒收或问题件。";
   } else if (signal === "DELIVERED") {
-    outcome = "AUTO_COMPLETED";
-    nextShippingStatus = ShippingFulfillmentStatus.COMPLETED;
-    nextCompletedAt = shippingTask.completedAt ?? now;
+    outcome = "AUTO_DELIVERED";
+    nextShippingStatus = ShippingFulfillmentStatus.DELIVERED;
+    nextCompletedAt = shippingTask.completedAt;
     nextTaskStatus = LogisticsFollowUpTaskStatus.DONE;
     nextTriggerAt = now;
   } else if (isOverdueUnsigned) {
@@ -499,7 +500,7 @@ export async function runLogisticsAutoStatusBatch(
       });
 
       processedCount += 1;
-      if (outcome === "AUTO_COMPLETED") completedCount += 1;
+      if (outcome === "AUTO_DELIVERED") completedCount += 1;
       if (outcome === "EXCEPTION") exceptionCount += 1;
       if (outcome === "QUERY_FAILED") queryFailedCount += 1;
       if (outcome === "SKIPPED") skippedCount += 1;

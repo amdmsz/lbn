@@ -1,5 +1,5 @@
 # HANDOFF
-更新时间：2026-04-28
+更新时间：2026-05-09
 
 ## 当前交接结论
 
@@ -18,6 +18,7 @@
 
 当前真实基线应以：
 
+- `CODEX_PROJECT_CONTEXT.md`
 - `AGENTS.md`
 - `DESIGN.md`
 - `PRD.md`
@@ -31,6 +32,22 @@
 为准。
 
 历史 freeze / 旧阶段交接记录已经移入 `docs/archive/`，只用于追溯，不再作为当前第一真相。
+
+---
+
+## 0. 2026-05-09 Codex 账号切换入口
+
+新账号 / 新 Codex 会话接手时，先读 `CODEX_PROJECT_CONTEXT.md`。该文件已经把当前项目全貌、运行命令、线上服务名、部署路径差异、最近 5 月发布经验和常见坑收口到一个入口。
+
+当前交接重点：
+
+- 本地仓库：`C:\Users\amdmsz\Documents\LbnCrm`
+- 当前主分支：`main -> origin/main`
+- 线上真实路径最近使用过 `/var/www/jiuzhuang-crm`；部署文档模板路径仍是 `/srv/jiuzhuang-crm/current`，接手时必须先在服务器确认真实路径。
+- Web service 是 `jiuzhuang-crm.service`，异步导入 worker 是 `jiuzhuang-crm-import-worker.service`。
+- 公网 / 移动端稳定入口看 `docs/public-frp-tunnel-runbook.md`，不要只靠内网 IP 或旧公网 IP 记忆。
+- 最近成功发布过的修复包括：trade-order 业务员筛选显露、duplicate-customer 新线索转化、TradeOrder 赠品行恢复、lead import 备注可见性。
+- 如果用户说“帮我提交 GitHub”或“更新服务器”，默认交付是 commit / push / deploy / verification，而不只是本地 patch。
 
 ---
 

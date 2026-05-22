@@ -90,7 +90,7 @@ public class CallRecordingService extends Service {
     private String deviceId;
     private String apiBaseUrl;
     private int chunkSizeBytes = DEFAULT_CHUNK_SIZE_BYTES;
-    private boolean forceSpeakerphone = false;
+    private boolean forceSpeakerphone = true;
     private boolean seenOffhook;
     private boolean finishing;
     private long callConnectedAtMs;
@@ -529,9 +529,8 @@ public class CallRecordingService extends Service {
 
     private RecorderStartResult startRecorderWithFallback(File directory) throws Exception {
         int[] audioSources = new int[] {
-            MediaRecorder.AudioSource.MIC,
-            MediaRecorder.AudioSource.VOICE_RECOGNITION,
             MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+            MediaRecorder.AudioSource.MIC,
             MediaRecorder.AudioSource.DEFAULT
         };
         Exception latestError = null;

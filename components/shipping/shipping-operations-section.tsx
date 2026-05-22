@@ -28,6 +28,10 @@ import {
 import { COMMON_LOGISTICS_PROVIDERS } from "@/lib/logistics/metadata";
 import { buildShippingExportBatchDownloadHref } from "@/lib/shipping/download";
 import { buildShippingProductSummary } from "@/lib/shipping/product-summary";
+import {
+  getPrimaryShippingPackageSnapshot,
+  summarizeShippingPackageSnapshots,
+} from "@/lib/shipping/package-snapshots";
 import type {
   ShippingOperationsFilters,
   ShippingOperationsItem,
@@ -175,6 +179,10 @@ function getProductSummary(item: ShippingOperationsItem) {
   );
 }
 
+function getShippingPackagesSummary(item: ShippingOperationsItem) {
+  return summarizeShippingPackageSnapshots(item.shippingPackages);
+}
+
 function getPieceCount(item: ShippingOperationsItem) {
   return (
     item.salesOrder?.items.reduce(
@@ -287,6 +295,13 @@ function getCollectionFocusMeta(item: ShippingOperationsItem) {
   const codRecord = getLatestCodRecord(item);
   const isCod = Number(item.codAmount) > 0;
 
+  if (item.shippingStatus === "REFUNDED") {
+    return {
+      label: "退款结束",
+      variant: "neutral" as const,
+    };
+  }
+
   if (codRecord) {
     return {
       label: getCodCollectionStatusLabel(codRecord.status),
@@ -309,6 +324,10 @@ function getCollectionFocusMeta(item: ShippingOperationsItem) {
 
 function buildDefaultExportFileName() {
   return `shipping-export-${new Date().toISOString().slice(0, 10)}.csv`;
+}
+
+function canFinalizeShippingOutcome(item: ShippingOperationsItem) {
+  return item.shippingStatus === "DELIVERED" || item.shippingStatus === "COMPLETED";
 }
 
 function StageWorkspaceHeader({
@@ -1039,6 +1058,7 @@ function PendingLogisticsWorkspace({
                               receiverName={receiverName}
                               shippingProvider={item.shippingProvider}
                               trackingNumber={item.trackingNumber}
+                              shippingPackages={item.shippingPackages}
                               redirectTo={currentHref}
                               updateShippingAction={updateShippingAction}
                             />
@@ -1173,6 +1193,7 @@ function ShippedAndExceptionWorkspace({
               const exceptionLabels = getExceptionLabels(item);
               const receiverName =
                 item.salesOrder?.receiverNameSnapshot || item.customer.name;
+              const canFinalizeOutcome = canFinalizeShippingOutcome(item);
 
               return (
                 <div
@@ -1232,6 +1253,9 @@ function ShippedAndExceptionWorkspace({
                       <div className="grid gap-3 text-sm text-[var(--color-sidebar-muted)] md:grid-cols-3">
                         <div>承运商：{item.shippingProvider || "未填写"}</div>
                         <div>物流单号：{item.trackingNumber || "未填写"}</div>
+                        <div className="md:col-span-3 text-xs text-[var(--color-sidebar-muted)]">
+                          {getShippingPackagesSummary(item)}
+                        </div>
                         <div>
                           发货时间：
                           {item.shippedAt
@@ -1254,10 +1278,85 @@ function ShippedAndExceptionWorkspace({
                     <div className="space-y-3">
                       <LogisticsTracePanel
                         shippingTaskId={item.id}
-                        shippingProvider={item.shippingProvider}
-                        trackingNumber={item.trackingNumber}
+                        shippingProvider={
+                          getPrimaryShippingPackageSnapshot(item.shippingPackages)?.shippingProvider ??
+                          item.shippingProvider
+                        }
+                        trackingNumber={
+                          getPrimaryShippingPackageSnapshot(item.shippingPackages)?.trackingNumber ??
+                          item.trackingNumber
+                        }
                         title="查看物流轨迹"
                       />
+                      {canFinalizeOutcome ? (
+                        <div className="rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <div className="text-sm font-medium text-[var(--foreground)]">
+                                物流后确认
+                              </div>
+                              <div className="text-xs text-[var(--color-sidebar-muted)]">
+                                选择本单最终计入完成或退款。
+                              </div>
+                            </div>
+                            <form action={updateShippingAction}>
+                              <input type="hidden" name="shippingTaskId" value={item.id} />
+                              <input type="hidden" name="redirectTo" value={currentHref} />
+                              <input
+                                type="hidden"
+                                name="shippingProvider"
+                                value={item.shippingProvider ?? ""}
+                              />
+                              <input
+                                type="hidden"
+                                name="trackingNumber"
+                                value={item.trackingNumber ?? ""}
+                              />
+                              <input type="hidden" name="shippingStatus" value="COMPLETED" />
+                              <input type="hidden" name="settlementRemark" value="物流后确认完成。" />
+                              <input type="hidden" name="codCollectionStatus" value="" />
+                              <input type="hidden" name="codCollectedAmount" value="" />
+                              <input type="hidden" name="codRemark" value="" />
+                              <button
+                                type="submit"
+                                className="crm-button crm-button-primary px-3 py-1.5 text-xs"
+                              >
+                                完成
+                              </button>
+                            </form>
+                          </div>
+                          <form action={updateShippingAction} className="mt-3 space-y-2">
+                            <input type="hidden" name="shippingTaskId" value={item.id} />
+                            <input type="hidden" name="redirectTo" value={currentHref} />
+                            <input
+                              type="hidden"
+                              name="shippingProvider"
+                              value={item.shippingProvider ?? ""}
+                            />
+                            <input
+                              type="hidden"
+                              name="trackingNumber"
+                              value={item.trackingNumber ?? ""}
+                            />
+                            <input type="hidden" name="shippingStatus" value="REFUNDED" />
+                            <input type="hidden" name="codCollectionStatus" value="" />
+                            <input type="hidden" name="codCollectedAmount" value="" />
+                            <input type="hidden" name="codRemark" value="" />
+                            <input
+                              name="settlementRemark"
+                              placeholder="退款原因 / 处理说明"
+                              className="crm-input h-9 text-xs"
+                              required
+                            />
+                            <button
+                              type="submit"
+                              className="crm-button crm-button-secondary w-full justify-center px-3 py-1.5 text-xs"
+                            >
+                              标记退款
+                            </button>
+                          </form>
+                        </div>
+                      ) : null}
                       <Link
                         href={`/orders/${item.salesOrder?.id || item.tradeOrder?.id || item.id}`}
                         className="crm-button crm-button-secondary w-full justify-center"
@@ -1284,6 +1383,7 @@ function ShippedAndExceptionWorkspace({
                           name="redirectTo"
                           value={currentHref}
                         />
+                        <input type="hidden" name="settlementRemark" value="" />
 
                         <label className="space-y-2">
                           <span className="crm-label">承运商</span>
