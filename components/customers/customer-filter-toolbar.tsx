@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Download,
   Search,
   SlidersHorizontal,
   X,
@@ -465,12 +466,14 @@ function FilterSection({
 
 export function CustomerFilterToolbar({
   filters,
+  exportHref,
   productOptions,
   tagOptions,
   teamOptions = [],
   salesOptions = [],
 }: Readonly<{
   filters: CustomerFilters;
+  exportHref?: string | null;
   productOptions: ProductOption[];
   tagOptions: TagOption[];
   teamOptions?: TeamOption[];
@@ -690,6 +693,15 @@ export function CustomerFilterToolbar({
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
+            {exportHref ? (
+              <a
+                href={exportHref}
+                className="inline-flex h-9 items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 text-sm font-semibold text-primary shadow-sm transition hover:border-primary/30 hover:bg-primary/15"
+              >
+                <Download className="h-4 w-4" />
+                导出客户
+              </a>
+            ) : null}
             {activeFilterCount > 0 ? (
               <button
                 type="button"

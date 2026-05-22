@@ -6,6 +6,7 @@ import {
   canCreateCallRecord,
   canCreateCustomer,
   canCreateSalesOrder,
+  canExportCustomers,
   canTransferCustomerOwner,
 } from "@/lib/auth/access";
 import { CustomerCreateEntry } from "@/components/customers/customer-create-entry";
@@ -14,6 +15,7 @@ import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { CustomerFilterToolbar } from "@/components/customers/customer-filter-toolbar";
 import { CustomerPageSizeSelect } from "@/components/customers/customer-page-size-select";
 import { CustomersTable } from "@/components/customers/customers-table";
+import { buildCustomersExportHref } from "@/lib/customers/export-url";
 import type { CustomerCenterData } from "@/lib/customers/queries";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +47,9 @@ export function CustomerCenterWorkbench({
         <div className={cn(workspaceShellClassName, "relative z-20 mb-3")}>
           <CustomerFilterToolbar
             filters={data.filters}
+            exportHref={
+              canExportCustomers(role) ? buildCustomersExportHref(data.filters) : null
+            }
             productOptions={data.productOptions}
             tagOptions={data.tagOptions}
             teamOptions={role === "ADMIN" ? data.teamOverview : []}
