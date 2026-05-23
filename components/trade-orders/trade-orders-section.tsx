@@ -17,6 +17,9 @@ import { TradeOrderLogisticsCell } from "@/components/trade-orders/trade-order-l
 import { formatDateTime } from "@/lib/customers/metadata";
 import { formatTradeOrderDateTimeRangeLabel } from "@/lib/trade-orders/date-filters";
 import {
+  formatTradeOrderLineSummary,
+} from "@/lib/trade-orders/display";
+import {
   formatCurrency,
   getSalesOrderPaymentSchemeLabel,
   getSalesOrderPaymentSchemeVariant,
@@ -222,11 +225,14 @@ function getProductSummary(item: TradeOrderItem) {
     lines: shown.map((tradeItem) => ({
       id: tradeItem.id,
       label:
-        tradeItem.titleSnapshot ||
-        tradeItem.productNameSnapshot ||
-        tradeItem.skuNameSnapshot ||
-        "未命名商品",
-      qty: tradeItem.qty,
+        formatTradeOrderLineSummary({
+          titleSnapshot: tradeItem.titleSnapshot,
+          productNameSnapshot: tradeItem.productNameSnapshot,
+          skuNameSnapshot: tradeItem.skuNameSnapshot,
+          specSnapshot: tradeItem.specSnapshot,
+          unitSnapshot: tradeItem.unitSnapshot,
+          qty: tradeItem.qty,
+        }),
       type: tradeItem.itemType,
     })),
     rest,
@@ -474,9 +480,6 @@ function TradeOrderExecutionStrip({
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium text-foreground">
                   {line.label}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  x {line.qty}
                 </div>
               </div>
             </div>

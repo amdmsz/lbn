@@ -47,6 +47,7 @@ const tradeOrderLineSchema = z.object({
   qty: z.coerce.number().int().min(1, "Quantity must be at least 1."),
   dealPrice: z.coerce.number().min(0, "Deal price cannot be negative."),
   discountReason: z.string().trim().max(500).default(""),
+  unitSnapshot: z.string().trim().max(30).default(""),
 });
 
 const tradeOrderGiftLineSchema = z.object({
@@ -54,6 +55,7 @@ const tradeOrderGiftLineSchema = z.object({
   skuId: z.string().trim().min(1, "Gift SKU is required."),
   qty: z.coerce.number().int().min(1, "Gift quantity must be at least 1."),
   remark: z.string().trim().max(500).default(""),
+  unitSnapshot: z.string().trim().max(30).default(""),
 });
 
 const tradeOrderBundleLineSchema = z.object({
@@ -62,6 +64,7 @@ const tradeOrderBundleLineSchema = z.object({
   qty: z.coerce.number().int().min(1, "Bundle quantity must be at least 1."),
   dealPrice: z.coerce.number().min(0, "Bundle deal price cannot be negative."),
   remark: z.string().trim().max(500).default(""),
+  unitSnapshot: z.string().trim().max(30).default(""),
 });
 
 const tradeOrderDraftSchema = z.object({
@@ -202,6 +205,7 @@ function extractLinesSummary(lines: TradeOrderLineInput[]) {
     skuId: line.skuId,
     qty: line.qty,
     dealPrice: line.dealPrice,
+    unitSnapshot: line.unitSnapshot ?? "",
   }));
 }
 
@@ -210,6 +214,7 @@ function extractGiftLinesSummary(lines: TradeOrderGiftLineInput[]) {
     skuId: line.skuId,
     qty: line.qty,
     remark: line.remark,
+    unitSnapshot: line.unitSnapshot ?? "",
   }));
 }
 
@@ -219,6 +224,7 @@ function extractBundleLinesSummary(lines: TradeOrderBundleLineInput[]) {
     qty: line.qty,
     dealPrice: line.dealPrice,
     remark: line.remark,
+    unitSnapshot: line.unitSnapshot ?? "",
   }));
 }
 
@@ -625,7 +631,7 @@ async function replaceTradeOrderItems(
         productNameSnapshot: parentItem.productName ?? null,
         skuNameSnapshot: parentItem.skuName ?? null,
         specSnapshot: parentItem.skuName ?? null,
-        unitSnapshot: "",
+        unitSnapshot: parentItem.unitSnapshot || "",
         bundleCodeSnapshot: parentItem.bundleCode ?? null,
         bundleNameSnapshot: parentItem.bundleName ?? null,
         bundleVersionSnapshot: parentItem.bundleVersion ?? null,
@@ -664,7 +670,7 @@ async function replaceTradeOrderItems(
           productNameSnapshot: component.productName,
           skuNameSnapshot: component.skuName,
           specSnapshot: component.skuName ?? null,
-          unitSnapshot: "",
+          unitSnapshot: component.unitSnapshot || "",
           exportDisplayNameSnapshot: component.exportDisplayName,
           qty: component.qty,
           allocatedListUnitPriceSnapshot: component.listUnitPrice,
@@ -1081,7 +1087,7 @@ export async function submitTradeOrderForReview(
             productNameSnapshot: component.productName,
             skuNameSnapshot: component.skuName,
             specSnapshot: component.skuName,
-            unitSnapshot: "",
+            unitSnapshot: component.unitSnapshot || "",
             listPriceSnapshot: component.listUnitPrice,
             dealPriceSnapshot: component.dealUnitPrice,
             qty: component.qty,

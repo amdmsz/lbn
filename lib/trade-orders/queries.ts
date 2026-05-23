@@ -304,6 +304,7 @@ export async function getCustomerTradeOrderComposerData(
               qty: true,
               dealUnitPriceSnapshot: true,
               remark: true,
+              unitSnapshot: true,
             },
           },
         },
@@ -327,6 +328,7 @@ export async function getCustomerTradeOrderComposerData(
               qty: item.qty,
               dealUnitPriceSnapshot: item.dealUnitPriceSnapshot.toString(),
               remark: item.remark,
+              unitSnapshot: item.unitSnapshot,
             })),
           giftItems: draft.items
             .filter((item) => item.itemType === "GIFT")
@@ -335,6 +337,7 @@ export async function getCustomerTradeOrderComposerData(
               skuId: item.skuId,
               qty: item.qty,
               remark: item.remark,
+              unitSnapshot: item.unitSnapshot,
             })),
         }
       : null,
@@ -852,6 +855,8 @@ export async function getTradeOrdersPageData(
           titleSnapshot: true,
           productNameSnapshot: true,
           skuNameSnapshot: true,
+          specSnapshot: true,
+          unitSnapshot: true,
           qty: true,
           subtotal: true,
         },
@@ -1212,6 +1217,7 @@ export async function getTradeOrderDetail(
               productNameSnapshot: true,
               skuNameSnapshot: true,
               specSnapshot: true,
+              unitSnapshot: true,
               qty: true,
               subtotal: true,
             },

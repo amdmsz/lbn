@@ -33,6 +33,10 @@ import {
   buildTradeOrderCollectionHref,
   buildTradeOrderPaymentHref,
 } from "@/lib/trade-orders/execution-links";
+import {
+  formatTradeOrderLineSummary,
+  formatTradeOrderQuantity,
+} from "@/lib/trade-orders/display";
 import type { getTradeOrderDetail } from "@/lib/trade-orders/queries";
 import type {
   TradeOrderRecycleGuard,
@@ -232,10 +236,16 @@ function getSalesOrderProductSummary(items: SalesOrderItem["items"]) {
     return "暂无执行商品";
   }
 
-  const heads = items
-    .slice(0, 2)
-    .map((item) => item.titleSnapshot || item.productNameSnapshot || item.skuNameSnapshot)
-    .filter(Boolean);
+  const heads = items.slice(0, 2).map((item) =>
+    formatTradeOrderLineSummary({
+      titleSnapshot: item.titleSnapshot,
+      productNameSnapshot: item.productNameSnapshot,
+      skuNameSnapshot: item.skuNameSnapshot,
+      specSnapshot: item.specSnapshot,
+      unitSnapshot: item.unitSnapshot,
+      qty: item.qty,
+    }),
+  );
 
   if (items.length <= 2) {
     return heads.join(" / ");
@@ -245,13 +255,15 @@ function getSalesOrderProductSummary(items: SalesOrderItem["items"]) {
 }
 
 function getTradeItemHeadline(item: TradeOrderDetail["items"][number]) {
-  return (
-    item.titleSnapshot ||
-    item.bundleNameSnapshot ||
-    item.productNameSnapshot ||
-    item.skuNameSnapshot ||
-    `成交行 ${item.lineNo}`
-  );
+  return formatTradeOrderLineSummary({
+    exportDisplayNameSnapshot: item.bundleNameSnapshot || item.productNameSnapshot,
+    titleSnapshot: item.titleSnapshot,
+    productNameSnapshot: item.productNameSnapshot,
+    skuNameSnapshot: item.skuNameSnapshot,
+    specSnapshot: item.specSnapshot,
+    qty: item.qty,
+    unitSnapshot: item.unitSnapshot,
+  });
 }
 
 function getTradeItemSubline(item: TradeOrderDetail["items"][number]) {
@@ -538,8 +550,7 @@ function TradeOrderItemsSection({
 
             <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <DetailPair label="商品数量">
-                {item.qty}
-                {item.unitSnapshot || ""}
+                {formatTradeOrderQuantity(item.qty, item.unitSnapshot)}
               </DetailPair>
               <DetailPair label="折扣金额" valueClassName="font-mono text-sm font-medium text-foreground">
                 {formatCurrency(item.discountAmount)}
@@ -582,8 +593,7 @@ function TradeOrderItemsSection({
                         </div>
                         <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
                           <span>
-                            数量：{component.qty}
-                            {component.unitSnapshot || ""}
+                            数量：{formatTradeOrderQuantity(component.qty, component.unitSnapshot)}
                           </span>
                           <span className="font-mono font-medium text-foreground">
                             {formatCurrency(component.allocatedSubtotal)}

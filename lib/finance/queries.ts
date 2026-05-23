@@ -92,6 +92,7 @@ export type FinancePaymentsExportItem = {
       productNameSnapshot: string;
       skuNameSnapshot: string;
       specSnapshot: string;
+      unitSnapshot: string;
       qty: number;
     }>;
   } | null;
@@ -555,6 +556,7 @@ export async function getFinancePaymentsExportData(
               productNameSnapshot: true,
               skuNameSnapshot: true,
               specSnapshot: true,
+              unitSnapshot: true,
               qty: true,
             },
           },

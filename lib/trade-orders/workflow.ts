@@ -12,6 +12,7 @@ export type TradeOrderLineInput = {
   qty: number;
   dealPrice: number;
   discountReason: string;
+  unitSnapshot?: string;
 };
 
 export type TradeOrderGiftLineInput = {
@@ -19,6 +20,7 @@ export type TradeOrderGiftLineInput = {
   skuId: string;
   qty: number;
   remark: string;
+  unitSnapshot?: string;
 };
 
 export type TradeOrderBundleLineInput = {
@@ -27,6 +29,7 @@ export type TradeOrderBundleLineInput = {
   qty: number;
   dealPrice: number;
   remark: string;
+  unitSnapshot?: string;
 };
 
 export type TradeOrderSkuOption = {
@@ -134,6 +137,7 @@ export type TradeOrderResolvedComponent = {
   title: string;
   exportDisplayName: string;
   parentTitle: string;
+  unitSnapshot: string;
   parentBundleId?: string;
   parentBundleCode?: string;
   parentBundleName?: string;
@@ -165,6 +169,7 @@ export type TradeOrderResolvedItem = {
   discountReason: string;
   remark: string;
   exportDisplayName: string;
+  unitSnapshot: string;
   components: TradeOrderResolvedComponent[];
 };
 
@@ -232,6 +237,10 @@ function toNumber(value: string | number | undefined | null) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function normalizeUnitSnapshot(value: string | undefined | null) {
+  return value?.trim().replace(/\s+/g, " ") ?? "";
+}
+
 function allocateAmountByWeight(total: number, weights: number[]) {
   if (weights.length === 0 || total <= 0) {
     return weights.map(() => 0);
@@ -289,6 +298,7 @@ function buildDirectSkuItem(line: TradeOrderLineInput, sku: TradeOrderSkuOption)
 
   const discountReason = line.discountReason.trim();
   const title = `${sku.product.name} / ${sku.skuName}`;
+  const unitSnapshot = normalizeUnitSnapshot(line.unitSnapshot);
 
   const component: TradeOrderResolvedComponent = {
     componentKey: createComponentKey(line.lineId, 1),
@@ -319,6 +329,7 @@ function buildDirectSkuItem(line: TradeOrderLineInput, sku: TradeOrderSkuOption)
     title,
     exportDisplayName: sku.product.name,
     parentTitle: title,
+    unitSnapshot,
   };
 
   const item: DraftResolvedItem = {
@@ -341,6 +352,7 @@ function buildDirectSkuItem(line: TradeOrderLineInput, sku: TradeOrderSkuOption)
     discountReason,
     remark: discountReason,
     exportDisplayName: sku.product.name,
+    unitSnapshot,
     components: [component],
   };
 
@@ -349,6 +361,7 @@ function buildDirectSkuItem(line: TradeOrderLineInput, sku: TradeOrderSkuOption)
 
 function buildGiftItem(line: TradeOrderGiftLineInput, sku: TradeOrderSkuOption) {
   const title = `${sku.product.name} / ${sku.skuName}`;
+  const unitSnapshot = normalizeUnitSnapshot(line.unitSnapshot);
 
   const component: TradeOrderResolvedComponent = {
     componentKey: createComponentKey(line.lineId, 1),
@@ -379,6 +392,7 @@ function buildGiftItem(line: TradeOrderGiftLineInput, sku: TradeOrderSkuOption) 
     title,
     exportDisplayName: sku.product.name,
     parentTitle: title,
+    unitSnapshot,
   };
 
   const item: DraftResolvedItem = {
@@ -401,6 +415,7 @@ function buildGiftItem(line: TradeOrderGiftLineInput, sku: TradeOrderSkuOption) 
     discountReason: "",
     remark: line.remark.trim(),
     exportDisplayName: sku.product.name,
+    unitSnapshot,
     components: [component],
   };
 
@@ -427,6 +442,7 @@ function buildBundleItem(
   });
 
   const parentTitle = `${bundle.name}（套餐）`;
+  const unitSnapshot = normalizeUnitSnapshot(line.unitSnapshot);
   const baseWeights = bundle.items.map((item) =>
     roundCurrency(toNumber(item.defaultUnitPrice) * item.qty * qty),
   );
@@ -472,6 +488,7 @@ function buildBundleItem(
       title: `${bundle.name} / ${item.productName} / ${item.skuName}`,
       exportDisplayName: item.productName,
       parentTitle,
+      unitSnapshot,
       parentBundleId: bundle.id,
       parentBundleCode: bundle.code,
       parentBundleName: bundle.name,
@@ -499,6 +516,7 @@ function buildBundleItem(
     discountReason: "",
     remark: line.remark.trim(),
     exportDisplayName: bundle.name,
+    unitSnapshot,
     components,
   };
 

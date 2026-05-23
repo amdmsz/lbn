@@ -8,6 +8,7 @@ import {
   ReceiptText,
   Truck,
 } from "lucide-react";
+import { formatTradeOrderLineSummary } from "@/lib/trade-orders/display";
 import type { TradeOrderDraftComputation } from "@/lib/trade-orders/workflow";
 import { cn } from "@/lib/utils";
 
@@ -133,10 +134,14 @@ export function TradeOrderSplitPreview({
                           </span>
                         </div>
                         <p className="mt-2 truncate text-sm font-semibold text-foreground">
-                          {item.title}
+                          {formatTradeOrderLineSummary({
+                            titleSnapshot: item.title,
+                            qty: item.qty,
+                            unitSnapshot: item.unitSnapshot,
+                          })}
                         </p>
                         <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-                          数量 {item.qty} / 成交单价 {formatCurrency(item.dealUnitPrice)}
+                          成交单价 {formatCurrency(item.dealUnitPrice)}
                         </p>
                       </div>
                       <div className="shrink-0 text-right">

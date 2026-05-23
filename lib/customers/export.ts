@@ -20,6 +20,9 @@ import {
 } from "@/lib/fulfillment/metadata";
 import { formatCurrency } from "@/lib/fulfillment/metadata";
 import { getPaymentRecordChannelLabel } from "@/lib/payments/metadata";
+import {
+  formatTradeOrderLineSummary,
+} from "@/lib/trade-orders/display";
 import { buildCustomersExportHref } from "@/lib/customers/export-url";
 
 export { buildCustomersExportHref };
@@ -153,6 +156,7 @@ const customerExportSelect = {
           productNameSnapshot: true,
           skuNameSnapshot: true,
           specSnapshot: true,
+          unitSnapshot: true,
           qty: true,
           subtotal: true,
         },
@@ -401,13 +405,14 @@ function getTradeStatusLabel(value: TradeOrderStatus) {
 function buildProductSummary(item: CustomerExportItem) {
   const tradeProducts = item.tradeOrders.flatMap((order) =>
     order.items.map((line) => {
-      const title =
-        line.titleSnapshot?.trim() ||
-        line.productNameSnapshot?.trim() ||
-        line.skuNameSnapshot?.trim() ||
-        "未命名商品";
-      const spec = line.specSnapshot?.trim();
-      return `${title}${spec ? ` / ${spec}` : ""} x ${line.qty}`;
+      return formatTradeOrderLineSummary({
+        titleSnapshot: line.titleSnapshot,
+        productNameSnapshot: line.productNameSnapshot,
+        skuNameSnapshot: line.skuNameSnapshot,
+        specSnapshot: line.specSnapshot,
+        unitSnapshot: line.unitSnapshot,
+        qty: line.qty,
+      });
     }),
   );
   const interestedProducts = item.leads

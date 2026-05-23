@@ -57,6 +57,7 @@ type DraftLine = {
   qty: number;
   dealUnitPriceSnapshot: string;
   remark: string | null;
+  unitSnapshot: string | null;
 };
 
 type DraftGiftLine = {
@@ -64,6 +65,7 @@ type DraftGiftLine = {
   skuId: string | null;
   qty: number;
   remark: string | null;
+  unitSnapshot: string | null;
 };
 
 type TradeOrderDraft = {
@@ -92,6 +94,7 @@ type DraftLineState = {
   qty: string;
   dealPrice: string;
   discountReason: string;
+  unitSnapshot: string;
 };
 
 type DraftGiftLineState = {
@@ -99,6 +102,7 @@ type DraftGiftLineState = {
   skuId: string;
   qty: string;
   remark: string;
+  unitSnapshot: string;
 };
 
 type Tone = "default" | "info" | "success" | "warning" | "danger";
@@ -143,12 +147,13 @@ function isDepositScheme(value: PaymentSchemeOption["value"]) {
 
 function buildInitialLines(draft: TradeOrderDraft | null) {
   if (draft?.items.length) {
-    return draft.items.map((item) => ({
+      return draft.items.map((item) => ({
       lineId: item.id || createLineId(),
       skuId: item.skuId ?? "",
       qty: String(item.qty),
       dealPrice: item.dealUnitPriceSnapshot,
       discountReason: item.remark ?? "",
+      unitSnapshot: item.unitSnapshot ?? "",
     }));
   }
 
@@ -157,7 +162,14 @@ function buildInitialLines(draft: TradeOrderDraft | null) {
   }
 
   return [
-    { lineId: createLineId(), skuId: "", qty: "1", dealPrice: "", discountReason: "" },
+    {
+      lineId: createLineId(),
+      skuId: "",
+      qty: "1",
+      dealPrice: "",
+      discountReason: "",
+      unitSnapshot: "",
+    },
   ];
 }
 
@@ -167,6 +179,7 @@ function buildInitialGiftLines(draft: TradeOrderDraft | null) {
     skuId: item.skuId ?? "",
     qty: String(item.qty),
     remark: item.remark ?? "",
+    unitSnapshot: item.unitSnapshot ?? "",
   }));
 }
 
@@ -392,12 +405,14 @@ export function TradeOrderForm({
       qty: Math.max(0, toNumber(line.qty)),
       dealPrice: toNumber(line.dealPrice),
       discountReason: line.discountReason,
+      unitSnapshot: line.unitSnapshot.trim(),
     })),
     giftLines: giftLines.map((line) => ({
       lineId: line.lineId,
       skuId: line.skuId,
       qty: Math.max(0, toNumber(line.qty)),
       remark: line.remark,
+      unitSnapshot: line.unitSnapshot.trim(),
     })),
     bundleLines: [],
     skuOptions: availableSkuOptions,
@@ -458,6 +473,7 @@ export function TradeOrderForm({
         qty: "1",
         dealPrice: "",
         discountReason: "",
+        unitSnapshot: "",
       },
     ]);
   }
@@ -465,7 +481,13 @@ export function TradeOrderForm({
   function addGiftLine() {
     setGiftLines((current) => [
       ...current,
-      { lineId: createLineId("gift"), skuId: "", qty: "1", remark: "" },
+      {
+        lineId: createLineId("gift"),
+        skuId: "",
+        qty: "1",
+        remark: "",
+        unitSnapshot: "",
+      },
     ]);
   }
 
@@ -538,6 +560,7 @@ export function TradeOrderForm({
             qty: Math.max(0, toNumber(line.qty)),
             dealPrice: toNumber(line.dealPrice),
             discountReason: line.discountReason,
+            unitSnapshot: line.unitSnapshot,
           })),
         )}
       />
@@ -550,6 +573,7 @@ export function TradeOrderForm({
             skuId: line.skuId,
             qty: Math.max(0, toNumber(line.qty)),
             remark: line.remark,
+            unitSnapshot: line.unitSnapshot,
           })),
         )}
       />
@@ -906,7 +930,7 @@ export function TradeOrderForm({
                       </button>
                     </div>
 
-                    <div className="mt-3 grid gap-3 md:grid-cols-[8rem_10rem_minmax(0,1fr)]">
+                    <div className="mt-3 grid gap-3 md:grid-cols-[8rem_7rem_10rem_minmax(0,1fr)]">
                       <label className="block">
                         <span className="crm-label">数量</span>
                         <input
@@ -918,6 +942,19 @@ export function TradeOrderForm({
                             updateLine(line.lineId, { qty: event.target.value })
                           }
                           className="crm-input text-right tabular-nums"
+                        />
+                      </label>
+
+                      <label className="block">
+                        <span className="crm-label">数量规格</span>
+                        <input
+                          type="text"
+                          value={line.unitSnapshot}
+                          onChange={(event) =>
+                            updateLine(line.lineId, { unitSnapshot: event.target.value })
+                          }
+                          className="crm-input"
+                          placeholder="盒 / 瓶 / 箱"
                         />
                       </label>
 
@@ -1098,24 +1135,37 @@ export function TradeOrderForm({
                             </button>
                           </div>
 
-                          <div className="mt-3 grid gap-3 md:grid-cols-[8rem_minmax(0,1fr)]">
-                            <label className="block">
-                              <span className="crm-label">数量</span>
-                              <input
-                                type="number"
-                                min="1"
+                    <div className="mt-3 grid gap-3 md:grid-cols-[8rem_7rem_minmax(0,1fr)]">
+                      <label className="block">
+                        <span className="crm-label">数量</span>
+                        <input
+                          type="number"
+                          min="1"
                                 step="1"
                                 value={line.qty}
                                 onChange={(event) =>
                                   updateGiftLine(line.lineId, { qty: event.target.value })
                                 }
-                                className="crm-input text-right tabular-nums"
-                              />
-                            </label>
+                          className="crm-input text-right tabular-nums"
+                        />
+                      </label>
 
-                            <div className="rounded-2xl border border-border/55 bg-muted/20 px-3.5 py-2.5 md:text-right">
-                              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                                行金额
+                      <label className="block">
+                        <span className="crm-label">数量规格</span>
+                        <input
+                          type="text"
+                          value={line.unitSnapshot}
+                          onChange={(event) =>
+                            updateGiftLine(line.lineId, { unitSnapshot: event.target.value })
+                          }
+                          className="crm-input"
+                          placeholder="盒 / 瓶 / 箱"
+                        />
+                      </label>
+
+                      <div className="rounded-2xl border border-border/55 bg-muted/20 px-3.5 py-2.5 md:text-right">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                          行金额
                               </p>
                               <p className="mt-1 text-base font-semibold tabular-nums text-foreground">
                                 ¥0.00

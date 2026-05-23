@@ -6,6 +6,7 @@ import {
   getPaymentRecordStatusLabel,
   getPaymentSourceLabel,
 } from "@/lib/payments/metadata";
+import { formatTradeOrderLineSummary } from "@/lib/trade-orders/display";
 
 function escapeCsvValue(value: string) {
   if (!/[",\n]/.test(value)) {
@@ -22,14 +23,16 @@ function toCsvLine(values: Array<string | null | undefined>) {
 function buildProductSpecSummary(item: FinancePaymentsExportItem) {
   if (item.salesOrder?.items.length) {
     return item.salesOrder.items
-      .map((salesOrderItem) => {
-        const title =
-          salesOrderItem.titleSnapshot?.trim() ||
-          salesOrderItem.productNameSnapshot.trim() ||
-          salesOrderItem.skuNameSnapshot.trim();
-        const spec = salesOrderItem.specSnapshot.trim();
-        return `${title}${spec ? ` / ${spec}` : ""} x ${salesOrderItem.qty}`;
-      })
+      .map((salesOrderItem) =>
+        formatTradeOrderLineSummary({
+          titleSnapshot: salesOrderItem.titleSnapshot,
+          productNameSnapshot: salesOrderItem.productNameSnapshot,
+          skuNameSnapshot: salesOrderItem.skuNameSnapshot,
+          specSnapshot: salesOrderItem.specSnapshot,
+          unitSnapshot: salesOrderItem.unitSnapshot,
+          qty: salesOrderItem.qty,
+        }),
+      )
       .join("；");
   }
 
