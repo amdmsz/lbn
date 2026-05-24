@@ -87,8 +87,8 @@ fi
 info "Running release preflight gate."
 ENV_FILE="$ENV_FILE" bash "$PROJECT_ROOT/scripts/release-preflight.sh"
 
-if [[ ! -f "$PROJECT_ROOT/.next/BUILD_ID" ]]; then
-  fail "Build completed without .next/BUILD_ID."
+if [[ ! -f "$PROJECT_ROOT/.next-crm/BUILD_ID" ]]; then
+  fail "Build completed without .next-crm/BUILD_ID."
 fi
 
 info "Build gate passed. Running mandatory safe Prisma deploy sequence."

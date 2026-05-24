@@ -143,8 +143,8 @@ run_step npx prisma generate
 run_step npm run lint
 run_step npm run build
 
-if [[ ! -f "$PROJECT_ROOT/.next/BUILD_ID" ]]; then
-  fail "Build completed without .next/BUILD_ID."
+if [[ ! -f "$PROJECT_ROOT/.next-crm/BUILD_ID" ]]; then
+  fail "Build completed without .next-crm/BUILD_ID."
 fi
 
 info "Running explicit Prisma migration status gate."

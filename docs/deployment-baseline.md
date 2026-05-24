@@ -427,11 +427,11 @@ CRM 进程必须能读取录音文件
 录音目录必须纳入独立容量监控和备份策略
 
 E. Next.js 构建产物与 runtime
-物理目录：`.next`、`runtime`
+物理目录：`.next-crm`、`runtime`
 
 要求：
 
-`npm run build` 后，运行 `next start` 的系统用户必须拥有 `.next`。否则 Next.js 运行时更新 prerender cache 时可能出现 `EACCES: permission denied, open '.next/server/app/...'`。
+`npm run build` 后，运行 `next start` 的系统用户必须拥有 `.next-crm`。否则 Next.js 运行时更新 prerender cache 时可能出现 `EACCES: permission denied, open '.next-crm/server/app/...'`。
 `runtime` 用于导入临时文件、本地任务输出和部分运行时产物，也应归属应用用户。
 
 推荐初始化：
@@ -447,12 +447,12 @@ sudo chown -R crm:crm \
   /srv/jiuzhuang-crm/current/public/exports \
   /srv/jiuzhuang-crm/current/public/uploads \
   /srv/jiuzhuang-crm/current/runtime
-if [ -d /srv/jiuzhuang-crm/current/.next ]; then
-  sudo chown -R crm:crm /srv/jiuzhuang-crm/current/.next
+if [ -d /srv/jiuzhuang-crm/current/.next-crm ]; then
+  sudo chown -R crm:crm /srv/jiuzhuang-crm/current/.next-crm
 fi
 ```
 
-如果通过单机更新脚本执行发布，脚本也会先确保常见 runtime 目录存在；但首次上线仍建议在 systemd 启动前手动创建并校验权限，尤其是外部录音挂载盘和 `.next` 所有权。
+如果通过单机更新脚本执行发布，脚本也会先确保常见 runtime 目录存在；但首次上线仍建议在 systemd 启动前手动创建并校验权限，尤其是外部录音挂载盘和 `.next-crm` 所有权。
 
 11. 备份最低方案
 
