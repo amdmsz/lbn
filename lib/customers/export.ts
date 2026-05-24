@@ -7,6 +7,7 @@ import {
   type Prisma,
   type RoleCode,
 } from "@prisma/client";
+import ExcelJS from "exceljs";
 import { canExportCustomers } from "@/lib/auth/access";
 import {
   customerManualCreateOperationAction,
@@ -43,6 +44,174 @@ export type CustomerExportFilters = {
   productKeyword: string;
 };
 
+const customerExportXlsxMimeType =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+export const customersExportContentType = customerExportXlsxMimeType;
+
+const customerExportColumns = [
+  {
+    key: "customerId",
+    header: "客户ID",
+    width: 22,
+    text: true,
+    description: "CRM 客户主键，用于回查和审计。",
+  },
+  {
+    key: "customerName",
+    header: "客户姓名",
+    width: 14,
+    description: "客户当前姓名。",
+  },
+  {
+    key: "phone",
+    header: "电话",
+    width: 16,
+    text: true,
+    description: "客户手机号，按文本保存，避免 Excel 自动转科学计数。",
+  },
+  {
+    key: "province",
+    header: "省份",
+    width: 12,
+    description: "客户地址省份。",
+  },
+  {
+    key: "city",
+    header: "城市",
+    width: 12,
+    description: "客户地址城市。",
+  },
+  {
+    key: "district",
+    header: "区县",
+    width: 12,
+    description: "客户地址区县。",
+  },
+  {
+    key: "detailAddress",
+    header: "详细地址",
+    width: 34,
+    wrap: true,
+    description: "客户详细收货地址。",
+  },
+  {
+    key: "fullAddress",
+    header: "完整地址",
+    width: 44,
+    wrap: true,
+    description: "省市区和详细地址合并后的地址，方便财务直接核对。",
+  },
+  {
+    key: "salesperson",
+    header: "销售员",
+    width: 18,
+    description: "当前承接客户的销售员。",
+  },
+  {
+    key: "team",
+    header: "团队",
+    width: 16,
+    description: "销售员所属团队。",
+  },
+  {
+    key: "assignedAt",
+    header: "分配时间",
+    width: 20,
+    date: true,
+    description: "客户最近一次进入当前销售私海的时间。",
+  },
+  {
+    key: "createdAt",
+    header: "建档时间",
+    width: 20,
+    date: true,
+    description: "客户记录创建时间。",
+  },
+  {
+    key: "latestOrderAt",
+    header: "最近下单时间",
+    width: 20,
+    date: true,
+    description: "最近一笔成交主单创建时间。",
+  },
+  {
+    key: "orderCount",
+    header: "订单数",
+    width: 10,
+    center: true,
+    description: "客户名下成交主单总数。",
+  },
+  {
+    key: "productSummary",
+    header: "商品明细",
+    width: 58,
+    wrap: true,
+    description: "最近订单商品、规格、单位和数量，以及线索意向商品摘要。",
+  },
+  {
+    key: "orderSummary",
+    header: "最近订单摘要",
+    width: 58,
+    wrap: true,
+    description: "最近成交主单的订单号、状态、成交金额、已收和待收。",
+  },
+  {
+    key: "totalFinalAmount",
+    header: "成交金额合计",
+    width: 16,
+    money: true,
+    description: "本次导出中已读取订单的成交金额合计。",
+  },
+  {
+    key: "totalPaidAmount",
+    header: "已收金额合计",
+    width: 16,
+    money: true,
+    description: "本次导出中已读取订单的已收金额合计。",
+  },
+  {
+    key: "totalRemainingAmount",
+    header: "待收金额合计",
+    width: 16,
+    money: true,
+    description: "本次导出中已读取订单的待收金额合计。",
+  },
+  {
+    key: "paymentScheme",
+    header: "付款方式",
+    width: 18,
+    wrap: true,
+    description: "订单付款方案汇总。",
+  },
+  {
+    key: "paymentRecords",
+    header: "最近收款记录",
+    width: 58,
+    wrap: true,
+    description: "最近收款时间、渠道、金额、确认状态和流水号。",
+  },
+  {
+    key: "trackingNumbers",
+    header: "物流单号",
+    width: 42,
+    wrap: true,
+    description: "订单物流公司和物流单号汇总。",
+  },
+  {
+    key: "communicationSummary",
+    header: "沟通记录",
+    width: 64,
+    wrap: true,
+    description: "最近电话、微信、直播邀约等沟通记录摘要。",
+  },
+] as const;
+
+type CustomerExportColumn = (typeof customerExportColumns)[number];
+type CustomerExportColumnKey = CustomerExportColumn["key"];
+type CustomerExportCellValue = string | number | Date | null;
+type CustomerExportRow = Record<CustomerExportColumnKey, CustomerExportCellValue>;
+
 const customerExportSelect = {
   id: true,
   name: true,
@@ -64,6 +233,11 @@ const customerExportSelect = {
           name: true,
         },
       },
+    },
+  },
+  _count: {
+    select: {
+      tradeOrders: true,
     },
   },
   ownershipEvents: {
@@ -192,6 +366,11 @@ export type CustomerExportItem = Prisma.CustomerGetPayload<{
   select: typeof customerExportSelect;
 }> & {
   assignedAt: Date | null;
+  orderTotals: {
+    finalAmount: number;
+    paidAmount: number;
+    remainingAmount: number;
+  };
 };
 
 function getParamValue(value: SearchParamsValue) {
@@ -327,22 +506,6 @@ async function getLatestCustomerAssignmentMap(
   }
 
   return latestMap;
-}
-
-function escapeCsvValue(value: string) {
-  if (!/[",\r\n]/.test(value)) {
-    return value;
-  }
-
-  return `"${value.replace(/"/g, '""')}"`;
-}
-
-function toCsvLine(values: Array<string | null | undefined>) {
-  return values.map((value) => escapeCsvValue(value ?? "")).join(",");
-}
-
-function formatOptionalDateTime(value: Date | null | undefined) {
-  return value ? formatDateTime(value) : "";
 }
 
 function buildAddress(item: CustomerExportItem) {
@@ -497,6 +660,229 @@ function buildTrackingSummary(item: CustomerExportItem) {
     .join("；");
 }
 
+function toNumberAmount(value: Prisma.Decimal | number | string | null | undefined) {
+  const numberValue = Number(value ?? 0);
+  return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
+function buildCustomersExportRows(items: CustomerExportItem[]): CustomerExportRow[] {
+  return items.map((item) => ({
+    customerId: item.id,
+    customerName: item.name,
+    phone: item.phone,
+    province: item.province ?? "",
+    city: item.city ?? "",
+    district: item.district ?? "",
+    detailAddress: item.address ?? "",
+    fullAddress: buildAddress(item),
+    salesperson: buildOwnerLabel(item),
+    team: item.owner?.team?.name ?? "",
+    assignedAt: item.assignedAt,
+    createdAt: item.createdAt,
+    latestOrderAt: item.tradeOrders[0]?.createdAt ?? null,
+    orderCount: item._count.tradeOrders,
+    productSummary: buildProductSummary(item),
+    orderSummary: buildOrderSummary(item),
+    totalFinalAmount: item.orderTotals.finalAmount,
+    totalPaidAmount: item.orderTotals.paidAmount,
+    totalRemainingAmount: item.orderTotals.remainingAmount,
+    paymentScheme: buildPaymentSchemeSummary(item),
+    paymentRecords: buildPaymentSummary(item),
+    trackingNumbers: buildTrackingSummary(item),
+    communicationSummary: buildCommunicationSummary(item),
+  }));
+}
+
+const thinBorder: Partial<ExcelJS.Borders> = {
+  top: { style: "thin", color: { argb: "FFE5E7EB" } },
+  left: { style: "thin", color: { argb: "FFE5E7EB" } },
+  bottom: { style: "thin", color: { argb: "FFE5E7EB" } },
+  right: { style: "thin", color: { argb: "FFE5E7EB" } },
+};
+
+function applyDetailWorksheetStyle(worksheet: ExcelJS.Worksheet, rowCount: number) {
+  worksheet.views = [{ state: "frozen", ySplit: 4 }];
+  worksheet.properties.defaultRowHeight = 22;
+  worksheet.pageSetup = {
+    orientation: "landscape",
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0,
+    horizontalCentered: true,
+    margins: {
+      left: 0.35,
+      right: 0.35,
+      top: 0.45,
+      bottom: 0.45,
+      header: 0.2,
+      footer: 0.2,
+    },
+  };
+
+  customerExportColumns.forEach((column, index) => {
+    const excelColumn = worksheet.getColumn(index + 1);
+    excelColumn.width = column.width;
+
+    if ("text" in column && column.text) {
+      excelColumn.numFmt = "@";
+    }
+
+    if ("money" in column && column.money) {
+      excelColumn.numFmt = "¥#,##0.00;[Red]-¥#,##0.00";
+    }
+
+    if ("date" in column && column.date) {
+      excelColumn.numFmt = "yyyy/mm/dd hh:mm";
+    }
+  });
+
+  const lastColumnIndex = customerExportColumns.length;
+  worksheet.mergeCells(1, 1, 1, lastColumnIndex);
+  worksheet.mergeCells(2, 1, 2, lastColumnIndex);
+
+  const titleCell = worksheet.getCell(1, 1);
+  titleCell.value = "客户对账导出";
+  titleCell.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
+  titleCell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF111827" },
+  };
+  titleCell.alignment = { vertical: "middle", horizontal: "left" };
+  worksheet.getRow(1).height = 30;
+
+  const subtitleCell = worksheet.getCell(2, 1);
+  subtitleCell.value = `导出时间：${formatDateTime(new Date())}    客户数：${rowCount}    来源：JIUZHUANG CRM`;
+  subtitleCell.font = { size: 11, color: { argb: "FF6B7280" } };
+  subtitleCell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFF9FAFB" },
+  };
+  subtitleCell.alignment = { vertical: "middle", horizontal: "left" };
+  worksheet.getRow(2).height = 24;
+  worksheet.getRow(3).height = 8;
+
+  const headerRow = worksheet.getRow(4);
+  headerRow.height = 26;
+  headerRow.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFEA580C" },
+    };
+    cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    cell.border = thinBorder;
+  });
+
+  for (let rowNumber = 5; rowNumber <= rowCount + 4; rowNumber += 1) {
+    const row = worksheet.getRow(rowNumber);
+    row.height = 42;
+    row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
+      const column = customerExportColumns[columnNumber - 1];
+
+      cell.border = thinBorder;
+      cell.alignment = {
+        vertical: "top",
+        horizontal:
+          "center" in column && column.center
+            ? "center"
+            : "money" in column && column.money
+              ? "right"
+              : "left",
+        wrapText: "wrap" in column ? Boolean(column.wrap) : false,
+      };
+
+      if (rowNumber % 2 === 1) {
+        cell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFFFFBF7" },
+        };
+      }
+    });
+  }
+}
+
+function addDetailWorksheet(workbook: ExcelJS.Workbook, rows: CustomerExportRow[]) {
+  const worksheet = workbook.addWorksheet("客户对账明细");
+  const tableRows = rows.map((row) =>
+    customerExportColumns.map((column) => row[column.key] ?? ""),
+  );
+
+  worksheet.addTable({
+    name: "CustomerExportTable",
+    ref: "A4",
+    headerRow: true,
+    totalsRow: false,
+    style: {
+      theme: "TableStyleMedium2",
+      showRowStripes: true,
+    },
+    columns: customerExportColumns.map((column) => ({
+      name: column.header,
+      filterButton: true,
+    })),
+    rows: tableRows,
+  });
+
+  applyDetailWorksheetStyle(worksheet, rows.length);
+
+  return worksheet;
+}
+
+function addGuideWorksheet(workbook: ExcelJS.Workbook) {
+  const worksheet = workbook.addWorksheet("字段说明");
+
+  worksheet.columns = [
+    { key: "field", width: 24 },
+    { key: "description", width: 82 },
+  ];
+  worksheet.addTable({
+    name: "CustomerExportGuideTable",
+    ref: "A1",
+    headerRow: true,
+    totalsRow: false,
+    style: {
+      theme: "TableStyleMedium4",
+      showRowStripes: true,
+    },
+    columns: [
+      { name: "字段", filterButton: true },
+      { name: "说明", filterButton: false },
+    ],
+    rows: customerExportColumns.map((column) => [column.header, column.description]),
+  });
+  worksheet.views = [{ state: "frozen", ySplit: 1 }];
+  worksheet.getRow(1).height = 26;
+  worksheet.getRow(1).eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF374151" },
+    };
+    cell.alignment = { vertical: "middle", horizontal: "center" };
+    cell.border = thinBorder;
+  });
+
+  for (let rowNumber = 2; rowNumber <= customerExportColumns.length + 1; rowNumber += 1) {
+    const row = worksheet.getRow(rowNumber);
+    row.height = 28;
+    row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
+      cell.border = thinBorder;
+      cell.alignment = {
+        vertical: "top",
+        horizontal: columnNumber === 1 ? "center" : "left",
+        wrapText: columnNumber !== 1,
+      };
+    });
+  }
+
+  return worksheet;
+}
+
 export function parseCustomerExportFilters(
   rawSearchParams?: Record<string, SearchParamsValue>,
 ): CustomerExportFilters {
@@ -518,7 +904,7 @@ export function parseCustomerExportFilters(
 
 export function buildCustomersExportFileName() {
   const datePart = new Date().toISOString().slice(0, 10);
-  return `customers-${datePart}.csv`;
+  return `customers-${datePart}.xlsx`;
 }
 
 export async function getCustomersExportData(
@@ -555,6 +941,31 @@ export async function getCustomersExportData(
       })),
     })),
   );
+  const tradeOrderAmountGroups = customerIds.length
+    ? await prisma.tradeOrder.groupBy({
+        by: ["customerId"],
+        where: {
+          customerId: {
+            in: customerIds,
+          },
+        },
+        _sum: {
+          finalAmount: true,
+          paidAmount: true,
+          remainingAmount: true,
+        },
+      })
+    : [];
+  const orderTotalsByCustomerId = new Map(
+    tradeOrderAmountGroups.map((group) => [
+      group.customerId,
+      {
+        finalAmount: toNumberAmount(group._sum.finalAmount),
+        paidAmount: toNumberAmount(group._sum.paidAmount),
+        remainingAmount: toNumberAmount(group._sum.remainingAmount),
+      },
+    ]),
+  );
   const itemMap = new Map(items.map((item) => [item.id, item]));
 
   return {
@@ -565,45 +976,28 @@ export async function getCustomersExportData(
       .map((item) => ({
         ...item,
         assignedAt: assignedAtMap.get(item.id) ?? item.ownershipEvents[0]?.createdAt ?? null,
+        orderTotals: orderTotalsByCustomerId.get(item.id) ?? {
+          finalAmount: 0,
+          paidAmount: 0,
+          remainingAmount: 0,
+        },
       })),
   };
 }
 
-export function buildCustomersExportCsv(items: CustomerExportItem[]) {
-  const header = [
-    "客户ID",
-    "客户姓名",
-    "电话",
-    "地址",
-    "销售员",
-    "团队",
-    "分配时间",
-    "建档时间",
-    "商品信息",
-    "订单金额/状态",
-    "付款方案",
-    "付款记录",
-    "物流单号",
-    "沟通记录",
-  ];
-  const rows = items.map((item) =>
-    toCsvLine([
-      item.id,
-      item.name,
-      item.phone,
-      buildAddress(item),
-      buildOwnerLabel(item),
-      item.owner?.team?.name ?? "",
-      formatOptionalDateTime(item.assignedAt),
-      formatDateTime(item.createdAt),
-      buildProductSummary(item),
-      buildOrderSummary(item),
-      buildPaymentSchemeSummary(item),
-      buildPaymentSummary(item),
-      buildTrackingSummary(item),
-      buildCommunicationSummary(item),
-    ]),
-  );
+export async function buildCustomersExportXlsx(items: CustomerExportItem[]) {
+  const workbook = new ExcelJS.Workbook();
+  const rows = buildCustomersExportRows(items);
 
-  return `\uFEFF${toCsvLine(header)}\n${rows.join("\n")}\n`;
+  workbook.creator = "JIUZHUANG CRM";
+  workbook.lastModifiedBy = "JIUZHUANG CRM";
+  workbook.created = new Date();
+  workbook.modified = new Date();
+  workbook.calcProperties.fullCalcOnLoad = true;
+
+  addDetailWorksheet(workbook, rows);
+  addGuideWorksheet(workbook);
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
 }

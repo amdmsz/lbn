@@ -5,7 +5,8 @@ import {
 } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
 import {
-  buildCustomersExportCsv,
+  buildCustomersExportXlsx,
+  customersExportContentType,
   getCustomersExportData,
 } from "@/lib/customers/export";
 import { prisma } from "@/lib/db/prisma";
@@ -31,7 +32,7 @@ function getSearchParamsRecord(url: URL) {
 
 function buildFinanceCustomerReconciliationExportFileName() {
   const datePart = new Date().toISOString().slice(0, 10);
-  return `finance-reconciliation-customers-${datePart}.csv`;
+  return `finance-reconciliation-customers-${datePart}.xlsx`;
 }
 
 export async function GET(request: Request) {
@@ -58,7 +59,7 @@ export async function GET(request: Request) {
     },
     searchParams,
   );
-  const csv = buildCustomersExportCsv(data.items);
+  const xlsx = await buildCustomersExportXlsx(data.items);
   const fileName = buildFinanceCustomerReconciliationExportFileName();
 
   await prisma.operationLog.create({
@@ -76,10 +77,10 @@ export async function GET(request: Request) {
     },
   });
 
-  return new NextResponse(csv, {
+  return new NextResponse(new Uint8Array(xlsx), {
     status: 200,
     headers: {
-      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Type": customersExportContentType,
       "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
       "Cache-Control": "no-store",
     },
