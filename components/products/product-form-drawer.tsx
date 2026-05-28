@@ -136,6 +136,8 @@ export function ProductFormDrawer({
   );
   const [createSkuName, setCreateSkuName] = useState("");
   const [createDefaultUnitPrice, setCreateDefaultUnitPrice] = useState("");
+  const [createDefaultOrderQuantity, setCreateDefaultOrderQuantity] =
+    useState("1");
   const [selectedCreateSupplier, setSelectedCreateSupplier] =
     useState<SupplierOption | null>(() => {
       if (!product?.supplierId) {
@@ -157,6 +159,7 @@ export function ProductFormDrawer({
     { label: "商品编码", done: createProductCode.trim().length > 0 },
     { label: "首个规格", done: createSkuName.trim().length > 0 },
     { label: "默认售价", done: createDefaultUnitPrice.trim().length > 0 },
+    { label: "默认件数", done: Number(createDefaultOrderQuantity) >= 1 },
     { label: "供应商", done: Boolean(selectedCreateSupplier) },
   ];
   const createCompletedCount = createChecklist.filter((item) => item.done).length;
@@ -170,6 +173,10 @@ export function ProductFormDrawer({
   const createPreviewUnitPrice = createDefaultUnitPrice.trim()
     ? `¥${createDefaultUnitPrice.trim()}`
     : "待填写售价";
+  const createPreviewOrderQuantity =
+    Number(createDefaultOrderQuantity) >= 1
+      ? `${Math.trunc(Number(createDefaultOrderQuantity))} 件`
+      : "待填写件数";
 
   const footerHint = pending
     ? isCreateMode
@@ -325,7 +332,7 @@ export function ProductFormDrawer({
                         </p>
                       </div>
 
-                      <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_12rem]">
+                      <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_9rem]">
                         <label className="space-y-2">
                           <span className="crm-label">规格名称</span>
                           <input
@@ -354,6 +361,23 @@ export function ProductFormDrawer({
                             required
                             className="crm-input"
                             placeholder="例如：1299"
+                          />
+                        </label>
+
+                        <label className="space-y-2">
+                          <span className="crm-label">默认下单件数</span>
+                          <input
+                            type="number"
+                            name="defaultOrderQuantity"
+                            min="1"
+                            step="1"
+                            value={createDefaultOrderQuantity}
+                            onChange={(event) =>
+                              setCreateDefaultOrderQuantity(event.target.value)
+                            }
+                            required
+                            className="crm-input"
+                            placeholder="1"
                           />
                         </label>
                       </div>
@@ -607,7 +631,7 @@ export function ProductFormDrawer({
                       </div>
 
                       <div className="mt-4 rounded-[0.85rem] border border-dashed border-[rgba(37,99,235,0.16)] bg-[rgba(37,99,235,0.04)] px-3 py-2.5 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
-                        当前预览：{createPreviewSkuName} / {createPreviewUnitPrice} / {createPreviewSupplier}
+                        当前预览：{createPreviewSkuName} / {createPreviewUnitPrice} / 默认 {createPreviewOrderQuantity} / {createPreviewSupplier}
                       </div>
                     </section>
                   </aside>

@@ -78,6 +78,7 @@ type ProductWorkspaceDetail = {
     id: string;
     skuName: string;
     defaultUnitPrice: DecimalLike;
+    defaultOrderQuantity: number;
     codSupported: boolean;
     insuranceSupported: boolean;
     defaultInsuranceAmount: DecimalLike;
@@ -220,6 +221,7 @@ export function ProductWorkspaceDetailDrawer({
       id: source.id,
       skuName: source.skuName,
       defaultUnitPrice: source.defaultUnitPrice.toString(),
+      defaultOrderQuantity: String(source.defaultOrderQuantity),
       codSupported: source.codSupported,
       insuranceSupported: source.insuranceSupported,
       defaultInsuranceAmount: source.defaultInsuranceAmount.toString(),

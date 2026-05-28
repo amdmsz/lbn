@@ -186,6 +186,7 @@ export function ProductSkuSearchField({
               <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
                 <span>{selectedOption.product.supplier.name}</span>
                 <span>默认售价 ¥{formatPrice(selectedOption.defaultUnitPrice)}</span>
+                <span>默认件数 {selectedOption.defaultOrderQuantity}</span>
               </div>
             </div>
             <button
@@ -262,7 +263,8 @@ export function ProductSkuSearchField({
                           {item.skuName}
                         </div>
                         <div className="mt-1 text-[12px] text-muted-foreground">
-                          默认售价 ¥{formatPrice(item.defaultUnitPrice)}
+                          默认售价 ¥{formatPrice(item.defaultUnitPrice)} · 默认件数{" "}
+                          {item.defaultOrderQuantity}
                         </div>
                       </div>
                       {active ? (

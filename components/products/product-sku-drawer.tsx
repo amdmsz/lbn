@@ -15,6 +15,7 @@ export type ProductSkuDraft = {
   id: string;
   skuName: string;
   defaultUnitPrice: string;
+  defaultOrderQuantity: string;
   codSupported: boolean;
   insuranceSupported: boolean;
   defaultInsuranceAmount: string;
@@ -214,6 +215,20 @@ export function ProductSkuDrawer({
                       defaultValue={baseDraft?.defaultUnitPrice ?? ""}
                       className="crm-input"
                       placeholder="例如：1299"
+                    />
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="crm-label">默认下单件数</span>
+                    <input
+                      type="number"
+                      name="defaultOrderQuantity"
+                      min="1"
+                      step="1"
+                      required
+                      defaultValue={baseDraft?.defaultOrderQuantity ?? "1"}
+                      className="crm-input"
+                      placeholder="例如：1"
                     />
                   </label>
                 </div>

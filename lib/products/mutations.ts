@@ -40,6 +40,11 @@ const upsertProductSkuSchema = z.object({
   productId: z.string().trim().min(1, "Product is required."),
   skuName: z.string().trim().min(1, "SKU name is required.").max(120),
   defaultUnitPrice: z.coerce.number().min(0, "Default unit price cannot be negative."),
+  defaultOrderQuantity: z.coerce
+    .number()
+    .int("Default order quantity must be an integer.")
+    .min(1, "Default order quantity must be at least 1.")
+    .default(1),
   codSupported: z.enum(["true", "false"]).transform((value) => value === "true"),
   insuranceSupported: z.enum(["true", "false"]).transform((value) => value === "true"),
   defaultInsuranceAmount: z.coerce
@@ -356,6 +361,7 @@ export async function createProductWithInitialSku(
         productId: product.id,
         skuName: input.initialSku.skuName,
         defaultUnitPrice: input.initialSku.defaultUnitPrice,
+        defaultOrderQuantity: input.initialSku.defaultOrderQuantity,
         codSupported: input.initialSku.codSupported,
         insuranceSupported: input.initialSku.insuranceSupported,
         defaultInsuranceAmount: input.initialSku.defaultInsuranceAmount,
@@ -476,6 +482,7 @@ export async function upsertProductSku(
             id: true,
             skuName: true,
             defaultUnitPrice: true,
+            defaultOrderQuantity: true,
             codSupported: true,
             insuranceSupported: true,
             defaultInsuranceAmount: true,
@@ -495,6 +502,7 @@ export async function upsertProductSku(
         data: {
           skuName: input.skuName,
           defaultUnitPrice: input.defaultUnitPrice,
+          defaultOrderQuantity: input.defaultOrderQuantity,
           codSupported: input.codSupported,
           insuranceSupported: input.insuranceSupported,
           defaultInsuranceAmount: input.defaultInsuranceAmount,
@@ -506,6 +514,7 @@ export async function upsertProductSku(
           productId: input.productId,
           skuName: input.skuName,
           defaultUnitPrice: input.defaultUnitPrice,
+          defaultOrderQuantity: input.defaultOrderQuantity,
           codSupported: input.codSupported,
           insuranceSupported: input.insuranceSupported,
           defaultInsuranceAmount: input.defaultInsuranceAmount,

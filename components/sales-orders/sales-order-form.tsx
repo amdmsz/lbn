@@ -56,6 +56,11 @@ function toNumber(value: string | number | undefined) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function getDefaultOrderQuantity(option: { defaultOrderQuantity?: number }) {
+  const quantity = Number(option.defaultOrderQuantity);
+  return Number.isInteger(quantity) && quantity >= 1 ? quantity : 1;
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("zh-CN", {
     style: "currency",
@@ -410,11 +415,16 @@ export function SalesOrderForm({
 
             upsertSkuOption(option);
             setSkuId(option.id);
+            if (!skuId || toNumber(qty) <= 1) {
+              setQty(String(getDefaultOrderQuantity(option)));
+            }
           }}
           helper={
             <div className="text-xs text-black/50">
               {selectedSku
-                ? `${selectedSku.product.name} / ${selectedSku.skuName} / 列表价 ${formatCurrency(listUnitPrice)}`
+                ? `${selectedSku.product.name} / ${selectedSku.skuName} / 列表价 ${formatCurrency(
+                    listUnitPrice,
+                  )} / 默认 ${selectedSku.defaultOrderQuantity} 件`
                 : "输入关键词后远程搜索 SKU。"}
             </div>
           }

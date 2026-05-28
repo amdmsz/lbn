@@ -40,6 +40,7 @@ export async function GET(request: Request) {
           id: item.id,
           skuName: item.skuName,
           defaultUnitPrice: item.defaultUnitPrice,
+          defaultOrderQuantity: item.defaultOrderQuantity,
           codSupported: item.codSupported,
           insuranceSupported: item.insuranceSupported,
           defaultInsuranceAmount: item.defaultInsuranceAmount,

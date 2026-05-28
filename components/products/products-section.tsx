@@ -59,6 +59,7 @@ type ProductItem = {
     id: string;
     skuName: string;
     defaultUnitPrice: string;
+    defaultOrderQuantity: number;
     enabled: boolean;
     updatedAt: Date;
     _count: {
@@ -99,6 +100,7 @@ type ProductDetail = {
     id: string;
     skuName: string;
     defaultUnitPrice: DecimalLike;
+    defaultOrderQuantity: number;
     codSupported: boolean;
     insuranceSupported: boolean;
     defaultInsuranceAmount: DecimalLike;
@@ -998,6 +1000,10 @@ export function ProductsSection({
                                                     {formatCurrency(
                                                       sku.defaultUnitPrice,
                                                     )}
+                                                  </span>
+                                                  <span>
+                                                    默认件数{" "}
+                                                    {sku.defaultOrderQuantity}
                                                   </span>
                                                   <span>
                                                     订单引用{" "}

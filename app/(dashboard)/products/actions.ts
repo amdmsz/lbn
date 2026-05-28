@@ -295,6 +295,7 @@ export async function createProductWithInitialSkuInlineAction(
         initialSku: {
           skuName: getFormValue(formData, "skuName"),
           defaultUnitPrice: getFormValue(formData, "defaultUnitPrice"),
+          defaultOrderQuantity: getFormValue(formData, "defaultOrderQuantity") || "1",
           codSupported: (getFormValue(formData, "codSupported") || "false") as
             | "true"
             | "false",
@@ -363,6 +364,7 @@ export async function upsertProductSkuAction(formData: FormData) {
       productId: getFormValue(formData, "productId"),
       skuName: getFormValue(formData, "skuName"),
       defaultUnitPrice: getFormValue(formData, "defaultUnitPrice"),
+      defaultOrderQuantity: getFormValue(formData, "defaultOrderQuantity") || "1",
       codSupported: (getFormValue(formData, "codSupported") || "false") as "true" | "false",
       insuranceSupported: (getFormValue(formData, "insuranceSupported") || "false") as
         | "true"
@@ -381,6 +383,7 @@ export async function upsertProductSkuInlineAction(
       productId: getFormValue(formData, "productId"),
       skuName: getFormValue(formData, "skuName"),
       defaultUnitPrice: getFormValue(formData, "defaultUnitPrice"),
+      defaultOrderQuantity: getFormValue(formData, "defaultOrderQuantity") || "1",
       codSupported: (getFormValue(formData, "codSupported") || "false") as "true" | "false",
       insuranceSupported: (getFormValue(formData, "insuranceSupported") || "false") as
         | "true"

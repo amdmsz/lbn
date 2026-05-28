@@ -16,6 +16,7 @@ export type ProductWorkbenchSkuRecord = {
   id: string;
   skuName: string;
   defaultUnitPrice: string | DecimalLike;
+  defaultOrderQuantity: number;
   codSupported: boolean;
   insuranceSupported: boolean;
   defaultInsuranceAmount: string | DecimalLike;
@@ -242,6 +243,9 @@ export function ProductWorkbenchHero({
                         asCurrencyNumber(focusSku.defaultUnitPrice),
                       )}
                     </span>
+                    <span className="rounded-full bg-muted/30 px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                      默认 {focusSku.defaultOrderQuantity} 件
+                    </span>
                   </div>
                 </div>
               ) : null}
@@ -354,6 +358,7 @@ export function ProductSkuWorkspaceSection({
                             asCurrencyNumber(sku.defaultUnitPrice),
                           )}
                         </span>
+                        <span>默认件数 {sku.defaultOrderQuantity}</span>
                         {sku.codSupported ? <span>COD</span> : null}
                         {sku.insuranceSupported ? (
                           <span>保价 {formatCurrency(insuranceAmount)}</span>

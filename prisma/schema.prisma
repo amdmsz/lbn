@@ -1610,6 +1610,7 @@ model ProductSku {
   product                Product          @relation(fields: [productId], references: [id])
   skuName                String
   defaultUnitPrice       Decimal          @db.Decimal(10, 2)
+  defaultOrderQuantity   Int              @default(1)
   codSupported           Boolean          @default(false)
   insuranceSupported     Boolean          @default(false)
   defaultInsuranceAmount Decimal          @default(0) @db.Decimal(10, 2)

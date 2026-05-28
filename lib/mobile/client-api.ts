@@ -231,6 +231,7 @@ export type MobileSkuOption = {
   id: string;
   skuName: string;
   defaultUnitPrice: string;
+  defaultOrderQuantity: number;
   codSupported: boolean;
   insuranceSupported: boolean;
   defaultInsuranceAmount: string;

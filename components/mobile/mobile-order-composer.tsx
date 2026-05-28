@@ -85,6 +85,11 @@ function toNumber(value: string | number | null | undefined) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function getDefaultOrderQuantity(sku: MobileSkuOption | null) {
+  const quantity = Number(sku?.defaultOrderQuantity);
+  return Number.isInteger(quantity) && quantity >= 1 ? quantity : 1;
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("zh-CN", {
     style: "currency",
@@ -279,6 +284,7 @@ function MobileSkuSearch({
               </div>
               <div className="mt-0.5 truncate text-[12px] text-[#667085]">
                 {selectedSku.skuName} · 默认价 ¥{formatAmount(selectedSku.defaultUnitPrice)}
+                {" · "}默认 {selectedSku.defaultOrderQuantity} 件
               </div>
             </div>
             <CheckCircle2 className="h-4 w-4 shrink-0 text-[#1677ff]" aria-hidden />
@@ -339,6 +345,9 @@ function MobileSkuSearch({
                 </span>
                 <span className="mt-0.5 block truncate text-[12px] text-[#667085]">
                   {item.skuName}
+                </span>
+                <span className="mt-0.5 block text-[11px] text-[#98a1af]">
+                  默认 {item.defaultOrderQuantity} 件
                 </span>
               </span>
               <span className="shrink-0 text-[13px] font-semibold text-[#20242c]">
@@ -548,6 +557,7 @@ export function MobileOrderComposer({
     updateLine(lineId, {
       skuId: sku?.id ?? "",
       selectedSku: sku,
+      qty: sku ? String(getDefaultOrderQuantity(sku)) : "1",
       dealPrice: sku ? String(sku.defaultUnitPrice) : "",
       discountReason: "",
     });

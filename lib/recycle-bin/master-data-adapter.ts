@@ -167,6 +167,7 @@ function buildProductSkuPreDeleteSnapshot(sku: {
   productId: string;
   skuName: string;
   defaultUnitPrice: Prisma.Decimal;
+  defaultOrderQuantity: number;
   codSupported: boolean;
   insuranceSupported: boolean;
   defaultInsuranceAmount: Prisma.Decimal;
@@ -177,6 +178,7 @@ function buildProductSkuPreDeleteSnapshot(sku: {
     productId: sku.productId,
     skuName: sku.skuName,
     defaultUnitPrice: sku.defaultUnitPrice.toString(),
+    defaultOrderQuantity: sku.defaultOrderQuantity,
     codSupported: sku.codSupported,
     insuranceSupported: sku.insuranceSupported,
     defaultInsuranceAmount: sku.defaultInsuranceAmount.toString(),
@@ -315,6 +317,7 @@ async function getProductSkuTarget(
       productId: true,
       skuName: true,
       defaultUnitPrice: true,
+      defaultOrderQuantity: true,
       codSupported: true,
       insuranceSupported: true,
       defaultInsuranceAmount: true,

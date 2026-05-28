@@ -46,6 +46,7 @@ type SkuOption = {
   id: string;
   skuName: string;
   defaultUnitPrice: string;
+  defaultOrderQuantity: number;
   codSupported: boolean;
   insuranceSupported: boolean;
   defaultInsuranceAmount: string;

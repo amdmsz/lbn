@@ -126,6 +126,11 @@ function toNumber(value: string | number | undefined) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function getDefaultOrderQuantity(option: { defaultOrderQuantity?: number }) {
+  const quantity = Number(option.defaultOrderQuantity);
+  return Number.isInteger(quantity) && quantity >= 1 ? quantity : 1;
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("zh-CN", {
     style: "currency",
@@ -877,6 +882,10 @@ export function TradeOrderForm({
                             upsertSkuOption(option);
                             updateLine(line.lineId, {
                               skuId: option.id,
+                              qty:
+                                !line.skuId || toNumber(line.qty) <= 1
+                                  ? String(getDefaultOrderQuantity(option))
+                                  : line.qty,
                               dealPrice: line.dealPrice
                                 ? line.dealPrice
                                 : String(option.defaultUnitPrice),
@@ -899,6 +908,9 @@ export function TradeOrderForm({
                                     label={`列表价 ${formatCurrency(
                                       toNumber(selectedSku.defaultUnitPrice),
                                     )}`}
+                                  />
+                                  <StatusPill
+                                    label={`默认 ${selectedSku.defaultOrderQuantity} 件`}
                                   />
                                   <StatusPill
                                     label={selectedSku.codSupported ? "支持到付" : "不可到付"}
@@ -1104,7 +1116,13 @@ export function TradeOrderForm({
                                   }
 
                                   upsertSkuOption(option);
-                                  updateGiftLine(line.lineId, { skuId: option.id });
+                                  updateGiftLine(line.lineId, {
+                                    skuId: option.id,
+                                    qty:
+                                      !line.skuId || toNumber(line.qty) <= 1
+                                        ? String(getDefaultOrderQuantity(option))
+                                        : line.qty,
+                                  });
                                 }}
                                 helper={
                                   <div className="flex flex-wrap items-center gap-2">
@@ -1112,6 +1130,9 @@ export function TradeOrderForm({
                                       <>
                                         <StatusPill label={selectedSku.product.supplier.name} />
                                         <StatusPill label={`${selectedSku.product.name}`} />
+                                        <StatusPill
+                                          label={`默认 ${selectedSku.defaultOrderQuantity} 件`}
+                                        />
                                         <StatusPill label="金额 0" tone="success" />
                                       </>
                                     ) : (

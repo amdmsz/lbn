@@ -40,6 +40,7 @@ type ProductSkuItem = {
   id: string;
   skuName: string;
   defaultUnitPrice: DecimalLike;
+  defaultOrderQuantity: number;
   codSupported: boolean;
   insuranceSupported: boolean;
   defaultInsuranceAmount: DecimalLike;
@@ -93,6 +94,7 @@ type ProductDetail = {
     id: string;
     skuName: string;
     defaultUnitPrice: DecimalLike;
+    defaultOrderQuantity: number;
     codSupported: boolean;
     insuranceSupported: boolean;
     defaultInsuranceAmount: DecimalLike;
@@ -697,6 +699,9 @@ export function ProductSkusSection({
                             </p>
                             <p className="text-[12px] leading-5 text-muted-foreground">
                               当前规格默认销售价
+                            </p>
+                            <p className="text-[12px] leading-5 text-muted-foreground">
+                              默认下单 {item.defaultOrderQuantity} 件
                             </p>
                           </div>
                         </td>

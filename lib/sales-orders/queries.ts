@@ -45,6 +45,7 @@ export type VisibleSkuOption = {
   id: string;
   skuName: string;
   defaultUnitPrice: Prisma.Decimal;
+  defaultOrderQuantity: number;
   codSupported: boolean;
   insuranceSupported: boolean;
   defaultInsuranceAmount: Prisma.Decimal;
@@ -247,6 +248,7 @@ async function getVisibleSkuOptions(limit = 200) {
       id: true,
       skuName: true,
       defaultUnitPrice: true,
+      defaultOrderQuantity: true,
       codSupported: true,
       insuranceSupported: true,
       defaultInsuranceAmount: true,
@@ -342,6 +344,7 @@ export async function searchVisibleSkuOptions(
       id: true,
       skuName: true,
       defaultUnitPrice: true,
+      defaultOrderQuantity: true,
       codSupported: true,
       insuranceSupported: true,
       defaultInsuranceAmount: true,
