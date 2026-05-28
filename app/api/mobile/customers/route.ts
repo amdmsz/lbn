@@ -456,6 +456,7 @@ function mapCustomerListItem(
   return {
     id: customer.id,
     name: customer.name,
+    phone: customer.phone,
     phoneMasked: maskMobilePhone(customer.phone),
     level: deriveCustomerLevel(customer),
     status: customer.status,

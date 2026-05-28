@@ -453,7 +453,7 @@ function createMobileApiCustomerListItem(
   return {
     id: item.id,
     name: item.name,
-    phone: item.phoneMasked,
+    phone: item.phone || item.phoneMasked,
     province: item.region || fallback?.province || null,
     city: fallback?.city ?? null,
     district: fallback?.district ?? null,
@@ -1558,7 +1558,6 @@ function CustomersTab({
   data,
   mobileCustomersState,
   mobileCustomersApiEnabled,
-  searchText,
   callMode,
   canCreateCallRecord,
   onRefreshCustomers,
@@ -1569,7 +1568,6 @@ function CustomersTab({
   data: CustomerCenterData;
   mobileCustomersState: MobileCustomersApiState;
   mobileCustomersApiEnabled: boolean;
-  searchText: string;
   callMode: MobileCallMode;
   canCreateCallRecord: boolean;
   onRefreshCustomers: () => void;
@@ -1593,7 +1591,6 @@ function CustomersTab({
     [fallbackItemMap, mobileCustomersState.items],
   );
   const sourceItems = apiItems ?? data.queueItems;
-  const localQuery = normalizeSearchValue(searchText);
   const [filterOpen, setFilterOpen] = useState(false);
   const [classFilter, setClassFilter] = useState<CustomerExecutionClassValue | "all">("all");
   const [assignedTimeFilter, setAssignedTimeFilter] = useState<PhoneTimeFilterKey>("all");
@@ -1607,18 +1604,9 @@ function CustomersTab({
         return false;
       }
 
-      if (!localQuery) {
-        return true;
-      }
-
-      return (
-        normalizeSearchValue(item.name).includes(localQuery) ||
-        normalizeSearchValue(getCustomerPrimaryProduct(item)).includes(localQuery) ||
-        normalizeDialValue(item.phone).includes(normalizeDialValue(searchText)) ||
-        normalizeSearchValue(getContactAddressLabel(item)).includes(localQuery)
-      );
+      return true;
     });
-  }, [assignedTimeFilter, classFilter, sourceItems, localQuery, searchText]);
+  }, [assignedTimeFilter, classFilter, sourceItems]);
   const totalCount =
     mobileCustomersState.pagination?.total ??
     (apiItems ? filteredItems.length : data.pagination.totalCount);
@@ -1883,6 +1871,9 @@ function DialpadTab({
   setDialNumber,
   callMode,
   canCreateCallRecord,
+  canResolveDialCustomer,
+  resolvingDialCustomer,
+  onResolveDialCustomer,
   onSelectCustomer,
   onStartCall,
 }: Readonly<{
@@ -1891,6 +1882,11 @@ function DialpadTab({
   setDialNumber: (value: string) => void;
   callMode: MobileCallMode;
   canCreateCallRecord: boolean;
+  canResolveDialCustomer: boolean;
+  resolvingDialCustomer: boolean;
+  onResolveDialCustomer: (
+    dialNumber: string,
+  ) => Promise<CustomerListItem | null>;
   onSelectCustomer: (customer: CustomerListItem) => void;
   onStartCall: (
     customer: CustomerListItem,
@@ -1917,31 +1913,36 @@ function DialpadTab({
     hasMatchedCustomer: Boolean(matchedCustomer),
     canCreateCallRecord,
   });
+  const canAttemptDial = Boolean(matchedCustomer) || canResolveDialCustomer;
+  const dialActionMessage =
+    normalizedNumber && dialAction.kind === "blocked"
+      ? canResolveDialCustomer && canCreateCallRecord
+        ? resolvingDialCustomer
+          ? "正在匹配通讯录客户..."
+          : "点击拨号后会先匹配通讯录客户，匹配成功后发起本机电话。"
+        : dialAction.reason
+      : null;
   function appendDialValue(value: string) {
     setDialNumber(`${dialNumber}${value}`);
   }
 
-  function startDial(mode: MobileCallMode) {
-    const action = resolveMobileDialpadCallAction({
-      callMode: mode,
-      normalizedNumber,
-      hasMatchedCustomer: Boolean(matchedCustomer),
-      canCreateCallRecord,
-    });
-
-    if (action.kind === "blocked") {
+  async function startDial(mode: MobileCallMode) {
+    if (!normalizedNumber || !canCreateCallRecord) {
       return;
     }
 
-    if (!matchedCustomer) {
+    const resolvedCustomer =
+      matchedCustomer ?? (await onResolveDialCustomer(dialNumber));
+
+    if (!resolvedCustomer) {
       return;
     }
 
-    onStartCall(matchedCustomer, "card", mode);
+    onStartCall(resolvedCustomer, "card", mode);
   }
 
   function startPrimaryDial() {
-    startDial(callMode);
+    void startDial(callMode);
   }
 
   return (
@@ -1993,9 +1994,9 @@ function DialpadTab({
           </div>
         ) : null}
 
-        {normalizedNumber && dialAction.kind === "blocked" ? (
+        {dialActionMessage ? (
           <div className="mt-3 text-[15px] leading-6 text-[#8e8e93]">
-            {dialAction.reason}
+            {dialActionMessage}
           </div>
         ) : null}
       </div>
@@ -2030,9 +2031,14 @@ function DialpadTab({
         <button
           type="button"
           onClick={startPrimaryDial}
-          disabled={dialAction.kind === "blocked"}
+          disabled={
+            !normalizedNumber ||
+            !canCreateCallRecord ||
+            !canAttemptDial ||
+            resolvingDialCustomer
+          }
           className="lbn-mobile-ios-call-button lbn-phone-press mx-auto inline-flex items-center justify-center rounded-full bg-[#34c759] text-white disabled:bg-[#d1d5db] disabled:shadow-none"
-          aria-label="拨打电话"
+          aria-label={resolvingDialCustomer ? "正在匹配客户" : "拨打电话"}
         >
           <IoCall className="h-10 w-10" aria-hidden />
         </button>
@@ -3654,6 +3660,7 @@ export function MobileAppShell({
     );
   const [nativeRecorderChecking, setNativeRecorderChecking] = useState(true);
   const [nativeRecorderInitializing, setNativeRecorderInitializing] = useState(false);
+  const [dialCustomerResolving, setDialCustomerResolving] = useState(false);
   const mobileLevelFilters = useMemo(
     () => normalizeExecutionClasses(data.filters.executionClasses),
     [data.filters.executionClasses],
@@ -3664,6 +3671,21 @@ export function MobileAppShell({
     data.filters.productKeys.length === 0 &&
     !data.filters.productKeyword &&
     data.filters.tagIds.length === 0;
+  const mobileCustomersFallbackMap = useMemo(
+    () => new Map(data.queueItems.map((item) => [item.id, item])),
+    [data.queueItems],
+  );
+  const mobileCustomerApiItems = useMemo(
+    () =>
+      mobileCustomersState.items?.map((item) =>
+        createMobileApiCustomerListItem(
+          item,
+          mobileCustomersFallbackMap.get(item.id),
+        ),
+      ) ?? null,
+    [mobileCustomersFallbackMap, mobileCustomersState.items],
+  );
+  const dialpadCustomerItems = mobileCustomerApiItems ?? data.queueItems;
 
   const refreshNativeRecorderReadiness = useCallback(async () => {
     setNativeRecorderChecking(true);
@@ -3883,6 +3905,72 @@ export function MobileAppShell({
     });
   }
 
+  async function resolveDialCustomerFromApi(dialInput: string) {
+    const normalizedDialNumber = normalizeDialValue(dialInput);
+    const localMatch = findDialCustomer(dialpadCustomerItems, dialInput);
+
+    if (localMatch) {
+      return localMatch;
+    }
+
+    if (!normalizedDialNumber || !mobileCustomersApiEnabled) {
+      return null;
+    }
+
+    setDialCustomerResolving(true);
+
+    try {
+      const payload = await fetchMobileCustomers({
+        page: 1,
+        limit: 10,
+        search: normalizedDialNumber,
+      });
+      const candidateItems = payload.customers.map((item) =>
+        createMobileApiCustomerListItem(
+          item,
+          mobileCustomersFallbackMap.get(item.id),
+        ),
+      );
+      const matchedCustomer = findDialCustomer(candidateItems, dialInput);
+
+      if (payload.customers.length > 0) {
+        setMobileCustomersState((current) =>
+          current.items
+            ? {
+                ...current,
+                items: mergeMobileApiCustomerItems(
+                  current.items,
+                  payload.customers,
+                ),
+              }
+            : current,
+        );
+      }
+
+      if (!matchedCustomer) {
+        setOutboundNotice({
+          tone: "failed",
+          title: "未匹配客户号码",
+          description: "该号码不在当前可见客户通讯录中，录音上传需要先关联客户。",
+        });
+      }
+
+      return matchedCustomer ?? null;
+    } catch (error) {
+      setOutboundNotice({
+        tone: "failed",
+        title: "客户号码匹配失败",
+        description:
+          error instanceof Error
+            ? error.message
+            : "移动端通讯录同步失败，请重新同步后再拨打。",
+      });
+      return null;
+    } finally {
+      setDialCustomerResolving(false);
+    }
+  }
+
   function openModule(module: MobileModuleView) {
     setActiveModule(module);
   }
@@ -4005,7 +4093,6 @@ export function MobileAppShell({
             data={data}
             mobileCustomersState={mobileCustomersState}
             mobileCustomersApiEnabled={mobileCustomersApiEnabled}
-            searchText={searchText}
             callMode={callMode}
             canCreateCallRecord={canCreateCallRecord}
             onRefreshCustomers={refreshMobileCustomers}
@@ -4016,11 +4103,14 @@ export function MobileAppShell({
         ) : null}
         {activeTab === "dialpad" ? (
           <DialpadTab
-            items={data.queueItems}
+            items={dialpadCustomerItems}
             dialNumber={dialNumber}
             setDialNumber={setDialNumber}
             callMode={callMode}
             canCreateCallRecord={canCreateCallRecord}
+            canResolveDialCustomer={mobileCustomersApiEnabled}
+            resolvingDialCustomer={dialCustomerResolving}
+            onResolveDialCustomer={resolveDialCustomerFromApi}
             onSelectCustomer={setSelectedCustomer}
             onStartCall={startCustomerCall}
           />

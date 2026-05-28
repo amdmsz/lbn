@@ -31,6 +31,7 @@ export type MobileCallActionEvent = {
 export type MobileApiCustomerListItem = {
   id: string;
   name: string;
+  phone: string;
   phoneMasked: string;
   level: "A" | "B" | "C" | "D" | "E";
   status: string;
