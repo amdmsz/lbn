@@ -172,6 +172,90 @@ function getExecutionIdentity(item: ShippingOperationsItem) {
     supplierName,
   };
 }
+
+function normalizeOrderRemark(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : null;
+}
+
+function isSameCurrencyAmount(left: string, right: string) {
+  const leftValue = Number(left);
+  const rightValue = Number(right);
+
+  if (!Number.isFinite(leftValue) || !Number.isFinite(rightValue)) {
+    return left === right;
+  }
+
+  return Math.abs(leftValue - rightValue) < 0.005;
+}
+
+function getOrderCommercialContext(item: ShippingOperationsItem) {
+  const parentTradeOrder = item.tradeOrder ?? item.salesOrder?.tradeOrder ?? null;
+  const orderAmount = item.salesOrder?.finalAmount ?? parentTradeOrder?.finalAmount ?? "0";
+  const parentAmount =
+    parentTradeOrder?.finalAmount &&
+    !isSameCurrencyAmount(parentTradeOrder.finalAmount, orderAmount)
+      ? parentTradeOrder.finalAmount
+      : null;
+  const salesOrderRemark = normalizeOrderRemark(item.salesOrder?.remark);
+  const parentRemark = normalizeOrderRemark(parentTradeOrder?.remark);
+  const remarkLines: Array<{ label: string; value: string }> = [];
+
+  if (salesOrderRemark) {
+    remarkLines.push({ label: "订单备注", value: salesOrderRemark });
+  }
+
+  if (parentRemark && parentRemark !== salesOrderRemark) {
+    remarkLines.push({
+      label: salesOrderRemark ? "父单备注" : "订单备注",
+      value: parentRemark,
+    });
+  }
+
+  return {
+    orderAmount,
+    parentAmount,
+    remarkLines,
+  };
+}
+
+function OrderCommercialCell({ item }: Readonly<{ item: ShippingOperationsItem }>) {
+  const commercialContext = getOrderCommercialContext(item);
+
+  return (
+    <div className="max-w-[16rem]">
+      <div className="font-medium text-[var(--foreground)]">
+        {formatCurrency(commercialContext.orderAmount)}
+      </div>
+      {commercialContext.parentAmount ? (
+        <div className="mt-1 text-xs text-[var(--color-sidebar-muted)]">
+          父单成交 {formatCurrency(commercialContext.parentAmount)}
+        </div>
+      ) : null}
+      <div className="mt-1 text-xs text-[var(--color-sidebar-muted)]">
+        COD {formatCurrency(item.codAmount)} / 保价{" "}
+        {item.insuranceRequired ? formatCurrency(item.insuranceAmount) : "否"}
+      </div>
+      <div className="mt-1 space-y-0.5">
+        {commercialContext.remarkLines.length > 0 ? (
+          commercialContext.remarkLines.map((remark) => (
+            <div
+              key={`${remark.label}:${remark.value}`}
+              className="line-clamp-2 text-xs leading-5 text-[var(--color-sidebar-muted)]"
+            >
+              {remark.label}：{remark.value}
+            </div>
+          ))
+        ) : (
+          <div className="text-xs text-[var(--color-sidebar-muted)]">
+            订单备注：暂无
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function getProductSummary(item: ShippingOperationsItem) {
   return (
     buildShippingProductSummary(item.salesOrder?.items ?? []).replace(/\+/g, " + ") ||
@@ -553,7 +637,7 @@ function CurrentReportWorkspace({
                     <th className="px-4 py-3">电话</th>
                     <th className="px-4 py-3">地址摘要</th>
                     <th className="px-4 py-3">品名 / 件数</th>
-                    <th className="px-4 py-3">代收 / 保价</th>
+                    <th className="px-4 py-3">金额 / 备注</th>
                     <th className="px-4 py-3">审核 / 履约</th>
                   </tr>
                 </thead>
@@ -614,13 +698,7 @@ function CurrentReportWorkspace({
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <div>{formatCurrency(item.codAmount)}</div>
-                          <div className="mt-1 text-xs text-[var(--color-sidebar-muted)]">
-                            保价{" "}
-                            {item.insuranceRequired
-                              ? formatCurrency(item.insuranceAmount)
-                              : "否"}
-                          </div>
+                          <OrderCommercialCell item={item} />
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
@@ -957,6 +1035,7 @@ function PendingLogisticsWorkspace({
                     <th className="px-4 py-3">收件人 / 电话</th>
                     <th className="px-4 py-3">地址</th>
                     <th className="px-4 py-3">品名 / 件数</th>
+                    <th className="px-4 py-3">金额 / 备注</th>
                     <th className="px-4 py-3">最近导出批次</th>
                     <th className="px-4 py-3">最近导出时间</th>
                     <th className="px-4 py-3">承运商</th>
@@ -1023,6 +1102,9 @@ function PendingLogisticsWorkspace({
                           <div className="mt-1 text-xs text-[var(--color-sidebar-muted)]">
                             {getPieceCount(item)} 件
                           </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <OrderCommercialCell item={item} />
                         </td>
                         <td className="px-4 py-3">
                           {item.exportBatch?.exportNo || "-"}
@@ -1194,6 +1276,7 @@ function ShippedAndExceptionWorkspace({
               const receiverName =
                 item.salesOrder?.receiverNameSnapshot || item.customer.name;
               const canFinalizeOutcome = canFinalizeShippingOutcome(item);
+              const commercialContext = getOrderCommercialContext(item);
 
               return (
                 <div
@@ -1265,12 +1348,36 @@ function ShippedAndExceptionWorkspace({
                         <div>代收金额：{formatCurrency(item.codAmount)}</div>
                         <div>当前回款关注：{focusMeta.label}</div>
                         <div>
+                          订单金额：
+                          {formatCurrency(commercialContext.orderAmount)}
+                        </div>
+                        {commercialContext.parentAmount ? (
+                          <div>
+                            父单成交：
+                            {formatCurrency(commercialContext.parentAmount)}
+                          </div>
+                        ) : null}
+                        <div>
                           支付方案：
                           {item.salesOrder
                             ? getSalesOrderPaymentSchemeLabel(
                                 item.salesOrder.paymentScheme,
                               )
                             : "未知"}
+                        </div>
+                        <div className="space-y-1 md:col-span-3">
+                          {commercialContext.remarkLines.length > 0 ? (
+                            commercialContext.remarkLines.map((remark) => (
+                              <div
+                                key={`${remark.label}:${remark.value}`}
+                                className="line-clamp-2"
+                              >
+                                {remark.label}：{remark.value}
+                              </div>
+                            ))
+                          ) : (
+                            <div>订单备注：暂无</div>
+                          )}
                         </div>
                       </div>
                     </div>

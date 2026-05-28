@@ -372,6 +372,8 @@ export type ShippingOperationsItem = {
   tradeOrder: {
     id: string;
     tradeNo: string;
+    finalAmount: string;
+    remark: string | null;
   } | null;
   supplier: {
     id: string;
@@ -394,7 +396,11 @@ export type ShippingOperationsItem = {
     tradeOrder: {
       id: string;
       tradeNo: string;
+      finalAmount: string;
+      remark: string | null;
     } | null;
+    finalAmount: string;
+    remark: string | null;
     reviewStatus: "PENDING_REVIEW" | "APPROVED" | "REJECTED";
     paymentScheme:
       | "FULL_PREPAID"
@@ -1405,6 +1411,8 @@ export async function getShippingOperationsPageData(
             select: {
               id: true,
               tradeNo: true,
+              finalAmount: true,
+              remark: true,
             },
           },
           supplier: {
@@ -1436,8 +1444,12 @@ export async function getShippingOperationsPageData(
                 select: {
                   id: true,
                   tradeNo: true,
+                  finalAmount: true,
+                  remark: true,
                 },
               },
+              finalAmount: true,
+              remark: true,
               reviewStatus: true,
               paymentScheme: true,
               receiverNameSnapshot: true,
@@ -1520,6 +1532,8 @@ export async function getShippingOperationsPageData(
               select: {
                 id: true,
                 tradeNo: true,
+                finalAmount: true,
+                remark: true,
               },
             },
             supplier: {
@@ -1551,8 +1565,12 @@ export async function getShippingOperationsPageData(
                   select: {
                     id: true,
                     tradeNo: true,
+                    finalAmount: true,
+                    remark: true,
                   },
                 },
+                finalAmount: true,
+                remark: true,
                 reviewStatus: true,
                 paymentScheme: true,
                 receiverNameSnapshot: true,
@@ -1615,6 +1633,24 @@ export async function getShippingOperationsPageData(
     activeBatch,
     items: itemRows.map((item) => ({
       ...item,
+      tradeOrder: item.tradeOrder
+        ? {
+            ...item.tradeOrder,
+            finalAmount: item.tradeOrder.finalAmount.toString(),
+          }
+        : null,
+      salesOrder: item.salesOrder
+        ? {
+            ...item.salesOrder,
+            finalAmount: item.salesOrder.finalAmount.toString(),
+            tradeOrder: item.salesOrder.tradeOrder
+              ? {
+                  ...item.salesOrder.tradeOrder,
+                  finalAmount: item.salesOrder.tradeOrder.finalAmount.toString(),
+                }
+              : null,
+          }
+        : null,
       codAmount: item.codAmount.toString(),
       insuranceAmount: item.insuranceAmount.toString(),
       shippingPackages: normalizeShippingPackageSnapshots(item.shippingPackages),
@@ -1632,6 +1668,24 @@ export async function getShippingOperationsPageData(
     })) satisfies ShippingOperationsItem[],
     activeBatchItems: activeBatchItems.map((item) => ({
       ...item,
+      tradeOrder: item.tradeOrder
+        ? {
+            ...item.tradeOrder,
+            finalAmount: item.tradeOrder.finalAmount.toString(),
+          }
+        : null,
+      salesOrder: item.salesOrder
+        ? {
+            ...item.salesOrder,
+            finalAmount: item.salesOrder.finalAmount.toString(),
+            tradeOrder: item.salesOrder.tradeOrder
+              ? {
+                  ...item.salesOrder.tradeOrder,
+                  finalAmount: item.salesOrder.tradeOrder.finalAmount.toString(),
+                }
+              : null,
+          }
+        : null,
       codAmount: item.codAmount.toString(),
       insuranceAmount: item.insuranceAmount.toString(),
       shippingPackages: normalizeShippingPackageSnapshots(item.shippingPackages),
