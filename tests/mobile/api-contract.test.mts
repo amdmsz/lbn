@@ -37,7 +37,7 @@ test("mobile customer level keeps CRM priority order", () => {
       hasSuccessfulWechatSignal: true,
       latestCall: latestRefusedCall,
     }),
-    "E",
+    "A",
   );
   assert.equal(
     deriveMobileCustomerLevelFromSignals({

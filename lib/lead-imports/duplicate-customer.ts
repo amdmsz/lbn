@@ -2,6 +2,7 @@ import {
   CallResult,
   CustomerOwnershipMode,
   SalesOrderReviewStatus,
+  TradeOrderStatus,
   WechatAddStatus,
   type Prisma,
 } from "@prisma/client";
@@ -69,7 +70,16 @@ export const leadImportDuplicateCustomerSelect = {
     where: {
       reviewStatus: SalesOrderReviewStatus.APPROVED,
     },
-    take: 2,
+    take: 1,
+    select: {
+      id: true,
+    },
+  },
+  tradeOrders: {
+    where: {
+      tradeStatus: TradeOrderStatus.APPROVED,
+    },
+    take: 1,
     select: {
       id: true,
     },
@@ -199,7 +209,7 @@ export function deriveLeadImportDuplicateCustomerExecutionClass(
 ): CustomerExecutionClass {
   const latestCall = getLeadImportLatestCallSignal(customer.callRecords);
 
-  if (customer.salesOrders.length >= 2) {
+  if (customer.tradeOrders.length > 0 || customer.salesOrders.length > 0) {
     return "A";
   }
 

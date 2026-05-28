@@ -32,8 +32,8 @@ export const customerExecutionClassOptions = [
   {
     value: "A",
     label: "A",
-    longLabel: "A 已复购",
-    description: "已形成复购结果。",
+    longLabel: "A 已成交",
+    description: "已形成成交结果。",
   },
   {
     value: "B",
@@ -80,8 +80,8 @@ const customerExecutionClassMeta: Record<
 > = {
   A: {
     label: "A",
-    longLabel: "A 已复购",
-    description: "已形成复购结果。",
+    longLabel: "A 已成交",
+    description: "已形成成交结果。",
     variant: "success",
   },
   B: {

@@ -160,7 +160,7 @@ const customerExecutionClassOptions: Array<{
   value: CustomerExecutionClassValue;
   label: string;
 }> = [
-  { value: "A", label: "A 已复购" },
+  { value: "A", label: "A 已成交" },
   { value: "B", label: "B 已加微" },
   { value: "C", label: "C 已邀约" },
   { value: "D", label: "D 未接通" },

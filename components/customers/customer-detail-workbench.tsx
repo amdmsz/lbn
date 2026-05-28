@@ -58,6 +58,7 @@ import {
 } from "@/lib/customers/public-pool-filter-url";
 import {
   getCustomerOwnershipModeLabel,
+  ownershipEventReasonLabels,
   publicPoolReasonLabels,
 } from "@/lib/customers/public-pool-metadata";
 import { getCustomerTradeOrderComposerData } from "@/lib/trade-orders/queries";
@@ -248,6 +249,27 @@ function formatDateTimeSummary(
   emptyLabel = "暂无",
 ) {
   return value ? formatDateTime(value) : emptyLabel;
+}
+
+function formatOwnershipEventOwner(
+  owner: { name: string; username: string } | null | undefined,
+  mode: CustomerDetailShellData["ownershipEvents"][number]["toOwnershipMode"] | null,
+) {
+  if (owner) {
+    return `${owner.name} (@${owner.username})`;
+  }
+
+  if (mode) {
+    return getCustomerOwnershipModeLabel(mode);
+  }
+
+  return "未分配";
+}
+
+function formatOwnershipEventActor(
+  actor: { name: string; username: string } | null | undefined,
+) {
+  return actor ? `${actor.name} (@${actor.username})` : "系统";
 }
 
 function getDaysSince(value: Date | null | undefined) {
@@ -1879,6 +1901,13 @@ export function CustomerDetailWorkbench({
     },
   ];
   const isTradeOrderComposerMode = activeTab === "orders" && Boolean(tradeOrderComposer);
+  const archivedOwnershipEventCount = shell.ownershipHistoryArchives.reduce(
+    (total, archive) =>
+      total + Math.max(1, getHistoryArchiveCounts(archive.snapshot).ownershipEvents),
+    0,
+  );
+  const totalOwnershipHistoryCount =
+    shell._count.ownershipEvents + archivedOwnershipEventCount;
 
   return (
     <WorkbenchLayout
@@ -2200,6 +2229,103 @@ export function CustomerDetailWorkbench({
                   className="mt-3 border-t border-border/40 pt-3"
                 />
               ) : null}
+
+              <div className="mt-4 border-t border-border/40 pt-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      Owner History
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      历史负责人
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-medium text-muted-foreground">
+                    {totalOwnershipHistoryCount} 条
+                  </span>
+                </div>
+
+                {shell.ownershipEvents.length > 0 ? (
+                  <div className="mt-3 space-y-2">
+                    {shell.ownershipEvents.map((event) => (
+                      <div
+                        key={event.id}
+                        className="rounded-xl border border-border/40 bg-muted/25 px-3 py-2"
+                      >
+                        <div className="flex flex-wrap items-center gap-1.5 text-[12px] font-medium text-foreground">
+                          <span>
+                            {formatOwnershipEventOwner(
+                              event.fromOwner,
+                              event.fromOwnershipMode,
+                            )}
+                          </span>
+                          <span className="text-muted-foreground">-&gt;</span>
+                          <span>
+                            {formatOwnershipEventOwner(
+                              event.toOwner,
+                              event.toOwnershipMode,
+                            )}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                          {ownershipEventReasonLabels[event.reason]} / {formatDateTime(event.createdAt)}
+                        </p>
+                        <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                          操作人 {formatOwnershipEventActor(event.actor)}
+                          {event.team ? ` / ${event.team.name}` : ""}
+                        </p>
+                        {event.note ? (
+                          <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
+                            {event.note}
+                          </p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {shell.ownershipHistoryArchives.length > 0 ? (
+                  <div className="mt-3 space-y-2">
+                    {shell.ownershipHistoryArchives.map((archive) => {
+                      const counts = getHistoryArchiveCounts(archive.snapshot);
+
+                      return (
+                        <div
+                          key={archive.id}
+                          className="rounded-xl border border-border/40 bg-muted/25 px-3 py-2"
+                        >
+                          <div className="flex flex-wrap items-center gap-1.5 text-[12px] font-medium text-foreground">
+                            <span>历史客户档案</span>
+                            <span className="text-muted-foreground">/</span>
+                            <span>{archive.sourceOwnerLabel ?? "原负责人暂无"}</span>
+                          </div>
+                          <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                            {archive.sourceCustomerName} / {archive.sourceCustomerPhone}
+                          </p>
+                          <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                            {archive.reason} / {formatDateTime(archive.createdAt)}
+                          </p>
+                          <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                            {counts.ownershipEvents > 0
+                              ? `保留 ${counts.ownershipEvents} 条旧归属事件`
+                              : "保留原负责人快照"}
+                            {archive.createdBy
+                              ? ` / 操作人 ${formatOwnershipEventActor(archive.createdBy)}`
+                              : ""}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                {shell.ownershipEvents.length === 0 &&
+                shell.ownershipHistoryArchives.length === 0 ? (
+                  <p className="mt-3 rounded-xl border border-border/40 bg-muted/25 px-3 py-2 text-[12px] leading-5 text-muted-foreground">
+                    暂无负责人流转记录，后续分配、回收、认领和移交都会沉淀在这里。
+                  </p>
+                ) : null}
+              </div>
             </section>
 
             <div className="grid gap-2">

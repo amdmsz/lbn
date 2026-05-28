@@ -143,6 +143,9 @@ type CustomerStateSource = {
   salesOrders: Array<{
     reviewStatus: SalesOrderReviewStatus;
   }>;
+  tradeOrders: Array<{
+    tradeStatus: TradeOrderStatus;
+  }>;
 };
 
 type CustomerProductFilterSource = "interested" | "purchased";
@@ -303,6 +306,56 @@ export type CustomerListItem = {
   }>;
 };
 
+export type CustomerPhoneSearchDisclosure = {
+  id: string;
+  name: string;
+  phoneMasked: string;
+  ownershipMode: CustomerOwnershipMode;
+  owner: {
+    id: string;
+    name: string;
+    username: string;
+    team: {
+      id: string;
+      name: string;
+      code: string;
+    } | null;
+  } | null;
+  lastOwner: {
+    id: string;
+    name: string;
+    username: string;
+    team: {
+      id: string;
+      name: string;
+      code: string;
+    } | null;
+  } | null;
+  publicPoolTeam: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
+  updatedAt: Date;
+};
+
+export type CustomerOwnershipHistoryArchive = {
+  id: string;
+  sourceCustomerId: string;
+  sourceCustomerName: string;
+  sourceCustomerPhone: string;
+  sourceOwnerLabel: string | null;
+  sourceExecutionClass: string | null;
+  visibility: CustomerHistoryArchiveVisibility;
+  reason: string;
+  snapshot: Prisma.JsonValue;
+  createdAt: Date;
+  createdBy: {
+    name: string;
+    username: string;
+  } | null;
+};
+
 export type CustomerCenterData = {
   actor: CustomerCenterActor;
   filters: CustomerCenterFilters;
@@ -317,6 +370,7 @@ export type CustomerCenterData = {
   tagOptions: CustomerTagFilterOption[];
   callResultOptions: CallResultOption[];
   queueItems: CustomerListItem[];
+  phoneSearchDisclosures: CustomerPhoneSearchDisclosure[];
   pagination: {
     page: number;
     pageSize: number;
@@ -565,6 +619,11 @@ const customerSnapshotSelect = {
       },
     },
   },
+  tradeOrders: {
+    select: {
+      tradeStatus: true,
+    },
+  },
   customerTags: {
     select: {
       tagId: true,
@@ -619,6 +678,11 @@ const customerDashboardSnapshotSelect = {
   salesOrders: {
     select: {
       reviewStatus: true,
+    },
+  },
+  tradeOrders: {
+    select: {
+      tradeStatus: true,
     },
   },
 } satisfies Prisma.CustomerSelect;
@@ -1118,6 +1182,179 @@ function parseCustomerCenterFilters(
   });
 }
 
+function getCustomerHistoryArchiveVisibilityWhere(
+  viewer: Pick<CustomerViewer, "role">,
+): Prisma.CustomerHistoryArchiveWhereInput {
+  return viewer.role === "ADMIN" || viewer.role === "SUPERVISOR"
+    ? {}
+    : { visibility: CustomerHistoryArchiveVisibility.ALL_ROLES };
+}
+
+function normalizePhoneSearchDigits(value: string) {
+  const digits = value.replace(/\D/g, "");
+
+  if (digits.length === 13 && digits.startsWith("86")) {
+    return digits.slice(2);
+  }
+
+  if (digits.length === 14 && digits.startsWith("086")) {
+    return digits.slice(3);
+  }
+
+  return digits;
+}
+
+function getPhoneOwnershipSearchDigits(value: string) {
+  const digits = normalizePhoneSearchDigits(value);
+
+  return digits.length >= 7 ? digits : "";
+}
+
+function maskPhoneForOwnershipDisclosure(value: string) {
+  const digits = normalizePhoneSearchDigits(value);
+
+  if (digits.length >= 7) {
+    return `${digits.slice(0, 3)}****${digits.slice(-4)}`;
+  }
+
+  return value ? "已登记手机号" : "未登记手机号";
+}
+
+async function getPhoneSearchOwnershipDisclosures(input: {
+  actor: CustomerCenterActor;
+  search: string;
+  visibleCustomerIds: string[];
+  recycledCustomerIds: string[];
+}): Promise<CustomerPhoneSearchDisclosure[]> {
+  if (input.actor.role !== "SALES") {
+    return [];
+  }
+
+  const phoneDigits = getPhoneOwnershipSearchDigits(input.search);
+
+  if (!phoneDigits) {
+    return [];
+  }
+
+  const excludedIds = [
+    ...new Set([...input.visibleCustomerIds, ...input.recycledCustomerIds]),
+  ];
+  const notInExcludedWhere =
+    excludedIds.length > 0
+      ? ({
+          id: {
+            notIn: excludedIds,
+          },
+        } satisfies Prisma.CustomerWhereInput)
+      : {};
+
+  const rows = await prisma.customer.findMany({
+    where: {
+      AND: [
+        notInExcludedWhere,
+        {
+          phone: {
+            contains: phoneDigits,
+          },
+        },
+      ],
+    },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    take: 5,
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      ownershipMode: true,
+      updatedAt: true,
+      owner: {
+        select: {
+          id: true,
+          name: true,
+          username: true,
+          team: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+            },
+          },
+        },
+      },
+      lastOwner: {
+        select: {
+          id: true,
+          name: true,
+          username: true,
+          team: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+            },
+          },
+        },
+      },
+      publicPoolTeam: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+        },
+      },
+    },
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    phoneMasked: maskPhoneForOwnershipDisclosure(row.phone),
+    ownershipMode: row.ownershipMode,
+    owner: row.owner,
+    lastOwner: row.lastOwner,
+    publicPoolTeam: row.publicPoolTeam,
+    updatedAt: row.updatedAt,
+  }));
+}
+
+async function getCustomerOwnershipHistoryArchives(
+  viewer: CustomerViewer,
+  customer: Pick<CustomerListItem, "id" | "phone">,
+): Promise<CustomerOwnershipHistoryArchive[]> {
+  return prisma.customerHistoryArchive.findMany({
+    where: {
+      ...getCustomerHistoryArchiveVisibilityWhere(viewer),
+      OR: [
+        { targetCustomerId: customer.id },
+        {
+          sourceCustomerPhone: customer.phone,
+          targetCustomerId: null,
+        },
+      ],
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: 12,
+    select: {
+      id: true,
+      sourceCustomerId: true,
+      sourceCustomerName: true,
+      sourceCustomerPhone: true,
+      sourceOwnerLabel: true,
+      sourceExecutionClass: true,
+      visibility: true,
+      reason: true,
+      snapshot: true,
+      createdAt: true,
+      createdBy: {
+        select: {
+          name: true,
+          username: true,
+        },
+      },
+    },
+  });
+}
+
 async function getCustomerCenterWorkspaceBase(
   viewer: CustomerViewer,
   rawSearchParams: Record<string, SearchParamsValue> | undefined,
@@ -1294,6 +1531,7 @@ async function getCustomerCenterWorkspaceBase(
     teams,
     salesUsers,
     customerSnapshots,
+    recycledCustomerIds,
     stateMap,
     scopeSnapshots,
     todayStart,
@@ -1465,13 +1703,13 @@ function getLatestCallSignal(snapshot: CustomerStateSource) {
   return latestRecord;
 }
 
-function deriveCustomerExecutionClassFromSignals(input: {
-  approvedSalesOrderCount: number;
+export function deriveCustomerExecutionClassFromSignals(input: {
+  approvedTradeOrderCount: number;
   hasLiveInvitation: boolean;
   hasSuccessfulWechatSignal: boolean;
   latestCall: CustomerCallExecutionSignal | null;
 }): CustomerExecutionClass {
-  if (input.approvedSalesOrderCount >= 2) {
+  if (input.approvedTradeOrderCount >= 1) {
     return "A";
   }
 
@@ -1495,10 +1733,16 @@ function deriveCustomerExecutionClassFromSignals(input: {
 }
 
 function deriveCustomerExecutionClass(snapshot: CustomerStateSource): CustomerExecutionClass {
+  const approvedLegacySalesOrderCount = snapshot.salesOrders.filter(
+    (record) => record.reviewStatus === SalesOrderReviewStatus.APPROVED,
+  ).length;
+  const approvedTradeOrderCount = snapshot.tradeOrders.filter(
+    (record) => record.tradeStatus === TradeOrderStatus.APPROVED,
+  ).length;
+
   return deriveCustomerExecutionClassFromSignals({
-    approvedSalesOrderCount: snapshot.salesOrders.filter(
-      (record) => record.reviewStatus === SalesOrderReviewStatus.APPROVED,
-    ).length,
+    approvedTradeOrderCount:
+      approvedTradeOrderCount > 0 ? approvedTradeOrderCount : approvedLegacySalesOrderCount,
     hasLiveInvitation: snapshot.liveInvitations.length > 0,
     hasSuccessfulWechatSignal: buildSuccessfulWechatMatcher(snapshot),
     latestCall: getLatestCallSignal(snapshot),
@@ -2329,6 +2573,7 @@ export async function getCustomerCenterData(
     teams,
     salesUsers,
     customerSnapshots,
+    recycledCustomerIds,
     stateMap,
     scopeSnapshots,
     todayStart,
@@ -2423,6 +2668,12 @@ export async function getCustomerCenterData(
     fetchCustomerListItems(pageCustomerIds, stateMap),
     getEnabledCallResultOptions(),
   ]);
+  const phoneSearchDisclosures = await getPhoneSearchOwnershipDisclosures({
+    actor,
+    search: filters.search,
+    visibleCustomerIds: customerSnapshots.map((item) => item.id),
+    recycledCustomerIds,
+  });
 
   return {
     actor,
@@ -2454,6 +2705,7 @@ export async function getCustomerCenterData(
     tagOptions,
     callResultOptions,
     queueItems,
+    phoneSearchDisclosures,
     pagination: {
       page: currentPage,
       pageSize: filters.pageSize,
@@ -3555,6 +3807,45 @@ async function getVisibleCustomerDetailBase(viewer: CustomerViewer, customerId: 
           code: true,
         },
       },
+      ownershipEvents: {
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: 12,
+        select: {
+          id: true,
+          fromOwnershipMode: true,
+          toOwnershipMode: true,
+          reason: true,
+          note: true,
+          createdAt: true,
+          fromOwner: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+            },
+          },
+          toOwner: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+            },
+          },
+          actor: {
+            select: {
+              name: true,
+              username: true,
+            },
+          },
+          team: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+            },
+          },
+        },
+      },
       _count: {
         select: {
           leads: true,
@@ -3564,6 +3855,7 @@ async function getVisibleCustomerDetailBase(viewer: CustomerViewer, customerId: 
           salesOrders: true,
           giftRecords: true,
           mergeLogs: true,
+          ownershipEvents: true,
         },
       },
     },
@@ -3770,6 +4062,7 @@ export async function getCustomerDetailShell(
     approvedTradeOrderSummary,
     approvedTradeOrderCount,
     approvedSalesOrderCount,
+    ownershipHistoryArchives,
   ] =
     await Promise.all([
       prisma.lead.findFirst({
@@ -3861,10 +4154,12 @@ export async function getCustomerDetailShell(
           ],
         },
       }),
+      getCustomerOwnershipHistoryArchives(viewer, detail.customer),
     ]);
 
   const executionClass = deriveCustomerExecutionClassFromSignals({
-    approvedSalesOrderCount,
+    approvedTradeOrderCount:
+      approvedTradeOrderCount > 0 ? approvedTradeOrderCount : approvedSalesOrderCount,
     hasLiveInvitation: Boolean(latestLive),
     hasSuccessfulWechatSignal: Boolean(successfulWechatRecord || successfulWechatCall),
     latestCall,
@@ -3902,6 +4197,7 @@ export async function getCustomerDetailShell(
       lifetimeAmount: approvedTradeOrderSummary._sum.finalAmount?.toString() ?? "0",
       latestTradeAt: approvedTradeOrderSummary._max.createdAt ?? null,
     },
+    ownershipHistoryArchives,
   };
 }
 
@@ -3963,10 +4259,6 @@ export async function getCustomerDetailProfileData(
     return null;
   }
 
-  const historyArchiveVisibilityWhere: Prisma.CustomerHistoryArchiveWhereInput =
-    viewer.role === "ADMIN" || viewer.role === "SUPERVISOR"
-      ? {}
-      : { visibility: CustomerHistoryArchiveVisibility.ALL_ROLES };
   const [
     leads,
     mergeLogs,
@@ -4053,7 +4345,7 @@ export async function getCustomerDetailProfileData(
     prisma.customerHistoryArchive.findMany({
       where: {
         targetCustomerId: detail.customer.id,
-        ...historyArchiveVisibilityWhere,
+        ...getCustomerHistoryArchiveVisibilityWhere(viewer),
       },
       orderBy: { createdAt: "desc" },
       take: 10,

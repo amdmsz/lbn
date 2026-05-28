@@ -1,4 +1,5 @@
 import {
+  CustomerHistoryArchiveVisibility,
   LeadCustomerMergeAction,
   OperationModule,
   OperationTargetType,
@@ -108,6 +109,7 @@ const importedCustomerDeletionCustomerSelect = {
       shippingTasks: true,
       logisticsFollowUpTasks: true,
       codCollectionRecords: true,
+      ownershipEvents: true,
     },
   },
 } satisfies Prisma.CustomerSelect;
@@ -155,6 +157,24 @@ const importedCustomerDeletionRequestSummarySelect = {
 export type ImportedCustomerDeletionCustomerRecord = Prisma.CustomerGetPayload<{
   select: typeof importedCustomerDeletionCustomerSelect;
 }>;
+
+function toImportedCustomerDeletionArchiveJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
+function buildImportedCustomerDeletionOwnerLabel(
+  customer: ImportedCustomerDeletionCustomerRecord,
+) {
+  if (customer.owner) {
+    return `${customer.owner.name} (@${customer.owner.username})`;
+  }
+
+  if (customer.lastOwner) {
+    return `上一负责人 ${customer.lastOwner.name} (@${customer.lastOwner.username})`;
+  }
+
+  return null;
+}
 
 type ImportedCustomerDeletionRequestRecord =
   Prisma.ImportedCustomerDeletionRequestGetPayload<{
@@ -861,6 +881,104 @@ export async function resolveImportedCustomerDeletionGuardTx(
   });
 }
 
+async function createImportedCustomerDeletionHistoryArchiveTx(
+  tx: Prisma.TransactionClient,
+  input: {
+    actor: DeletionActor;
+    customer: ImportedCustomerDeletionCustomerRecord;
+    guard: ImportedCustomerDeletionGuard;
+    reason: string;
+  },
+) {
+  const ownershipEvents = await tx.customerOwnershipEvent.findMany({
+    where: {
+      customerId: input.customer.id,
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: 50,
+    select: {
+      id: true,
+      fromOwnershipMode: true,
+      toOwnershipMode: true,
+      reason: true,
+      note: true,
+      effectiveFollowUpAt: true,
+      claimLockedUntil: true,
+      createdAt: true,
+      fromOwner: {
+        select: {
+          name: true,
+          username: true,
+        },
+      },
+      toOwner: {
+        select: {
+          name: true,
+          username: true,
+        },
+      },
+      actor: {
+        select: {
+          name: true,
+          username: true,
+        },
+      },
+      team: {
+        select: {
+          name: true,
+          code: true,
+        },
+      },
+    },
+  });
+  const sourceOwnerLabel = buildImportedCustomerDeletionOwnerLabel(input.customer);
+  const snapshot = {
+    archivedAt: new Date().toISOString(),
+    reason: input.reason,
+    source: input.guard.source,
+    sourceCustomer: {
+      id: input.customer.id,
+      name: input.customer.name,
+      phone: input.customer.phone,
+      ownerId: input.customer.ownerId,
+      ownerLabel: sourceOwnerLabel,
+      lastOwnerId: input.customer.lastOwnerId,
+      ownershipMode: input.customer.ownershipMode,
+      publicPoolTeamId: input.customer.publicPoolTeamId,
+    },
+    deletion: {
+      actorId: input.actor.id,
+      actorName: input.actor.name,
+      actorUsername: input.actor.username,
+    },
+    counts: {
+      ownershipEvents: Math.max(
+        ownershipEvents.length,
+        input.customer._count.ownershipEvents,
+      ),
+    },
+    ownershipEvents,
+  };
+
+  return tx.customerHistoryArchive.create({
+    data: {
+      sourceCustomerId: input.customer.id,
+      sourceCustomerName: input.customer.name,
+      sourceCustomerPhone: input.customer.phone,
+      sourceOwnerLabel,
+      sourceExecutionClass: null,
+      sourceBatchId: input.guard.source?.batchId ?? null,
+      visibility: CustomerHistoryArchiveVisibility.ALL_ROLES,
+      reason: `导入客户删除：${input.reason}`,
+      snapshot: toImportedCustomerDeletionArchiveJson(snapshot),
+      createdById: input.actor.id,
+    },
+    select: {
+      id: true,
+    },
+  });
+}
+
 export async function executeImportedCustomerDeletionTx(
   tx: Prisma.TransactionClient,
   input: {
@@ -877,6 +995,13 @@ export async function executeImportedCustomerDeletionTx(
   } & ImportedCustomerDeletionExecutionContext,
 ) {
   await assertImportedCustomerDeletionCustomerNotRecycled(tx, input.customer.id);
+
+  const historyArchive = await createImportedCustomerDeletionHistoryArchiveTx(tx, {
+    actor: input.actor,
+    customer: input.customer,
+    guard: input.guard,
+    reason: input.reason,
+  });
 
   const detachedLeads = await tx.lead.updateMany({
     where: {
@@ -946,6 +1071,7 @@ export async function executeImportedCustomerDeletionTx(
     deletedWechatRecordCount: deletedWechatRecords.count,
     deletedLiveInvitationCount: deletedLiveInvitations.count,
     deletedOwnershipEventCount: deletedOwnershipEvents.count,
+    historyArchiveId: historyArchive.id,
     operationContext: input.operationContext ?? null,
   } satisfies Prisma.InputJsonValue;
 

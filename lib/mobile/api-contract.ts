@@ -97,7 +97,7 @@ export function deriveMobileCustomerLevelFromSignals(input: {
   hasSuccessfulWechatSignal: boolean;
   latestCall: MobileCallSignal | null;
 }): MobileCustomerLevel {
-  if (input.approvedTradeOrderCount >= 2) {
+  if (input.approvedTradeOrderCount >= 1) {
     return "A";
   }
 
