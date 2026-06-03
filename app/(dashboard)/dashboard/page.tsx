@@ -48,7 +48,7 @@ export default async function DashboardPage({
       teamId: session.user.teamId,
     }, resolvedSearchParams);
 
-    return <SalesDashboardWorkbench data={data} />;
+    return <SalesDashboardWorkbench data={data} currentUserId={session.user.id} />;
   }
 
   const data = await getDashboardData({

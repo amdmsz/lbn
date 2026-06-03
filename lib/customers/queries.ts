@@ -1088,6 +1088,32 @@ function getCustomerVisibilityWhereInput(actor: CustomerCenterActor): Prisma.Cus
   };
 }
 
+function getCustomerDashboardVisibilityWhereInput(
+  actor: CustomerCenterActor,
+): Prisma.CustomerWhereInput {
+  if (actor.role === "SALES") {
+    if (!actor.teamId) {
+      return getCustomerVisibilityWhereInput(actor);
+    }
+
+    return {
+      ownerId: {
+        not: null,
+      },
+      ownershipMode: {
+        in: [...activeCustomerOwnershipModes],
+      },
+      owner: {
+        is: {
+          teamId: actor.teamId,
+        },
+      },
+    };
+  }
+
+  return getCustomerVisibilityWhereInput(actor);
+}
+
 function getCustomerPublicPoolDetailWhereInput(
   actor: CustomerCenterActor,
 ): Prisma.CustomerWhereInput {
@@ -1364,7 +1390,7 @@ async function getCustomerCenterWorkspaceBase(
   }
 
   const actor = await getCustomerCenterActor(viewer.id);
-  const visibleWhere = getCustomerVisibilityWhereInput(actor);
+  const visibleWhere = getCustomerDashboardVisibilityWhereInput(actor);
   const recycledCustomerIds = await listActiveCustomerIds(prisma);
   const [teams, salesUsers, customerSnapshots] = await Promise.all([
     actor.role === "ADMIN"
@@ -2772,7 +2798,9 @@ export async function getCustomerOperatingDashboardData(
           ? {}
           : actor.teamId
             ? { teamId: actor.teamId }
-            : { id: "__missing_team_scope__" }),
+            : actor.role === "SALES"
+              ? { id: actor.id }
+              : { id: "__missing_team_scope__" }),
       },
       orderBy: [{ name: "asc" }, { username: "asc" }],
       select: {
@@ -2834,7 +2862,7 @@ export async function getCustomerOperatingDashboardData(
       ? "组织范围"
       : actor.role === "SUPERVISOR"
         ? teams[0]?.name ?? "团队范围"
-        : "个人范围";
+        : teams[0]?.name ?? "个人范围";
   const asOfDateLabel = dashboardRange.periodLabel;
   const metricPeriodLabel = dashboardRange.from === dashboardRange.to ? "当日" : "期间";
   const metricPeriodNote = dashboardRange.from === dashboardRange.to ? "当日" : "筛选期内";

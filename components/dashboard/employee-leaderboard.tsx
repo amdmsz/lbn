@@ -171,11 +171,13 @@ function LeaderboardRow({
   rank,
   isTop,
   leaderRevenueAmount,
+  canDrillDown,
 }: Readonly<{
   row: CustomerOperatingDashboardEmployeeRow;
   rank: number;
   isTop: boolean;
   leaderRevenueAmount: number;
+  canDrillDown: boolean;
 }>) {
   const revenueGap = Math.max(0, leaderRevenueAmount - row.todayRevenueAmount);
   const chaseLabel =
@@ -184,17 +186,15 @@ function LeaderboardRow({
       : revenueGap > 0
         ? `距榜首 ${formatCurrency(revenueGap)}`
         : "并列冲刺";
-
-  return (
-    <Link
-      href={buildEmployeePoolHref(row)}
-      className={cn(
-        "group grid gap-3 rounded-xl border px-3 py-3 transition hover:-translate-y-px hover:border-primary/30 hover:bg-muted/30 sm:grid-cols-[auto_minmax(8rem,1fr)_minmax(24rem,2fr)_auto] sm:items-center sm:px-4",
-        isTop
-          ? "border-primary/20 bg-primary/[0.03]"
-          : "border-border bg-card",
-      )}
-    >
+  const className = cn(
+    "group grid gap-3 rounded-xl border px-3 py-3 transition sm:grid-cols-[auto_minmax(8rem,1fr)_minmax(24rem,2fr)_auto] sm:items-center sm:px-4",
+    canDrillDown ? "hover:-translate-y-px hover:border-primary/30 hover:bg-muted/30" : "",
+    isTop
+      ? "border-primary/20 bg-primary/[0.03]"
+      : "border-border bg-card",
+  );
+  const content = (
+    <>
       <div className="flex items-center justify-between gap-3 sm:contents">
         <RankBadge rank={rank} />
 
@@ -237,19 +237,37 @@ function LeaderboardRow({
         <MetricCell label="邀约" value={row.todayInvitationCount} />
       </div>
 
-      <ArrowUpRight className="hidden h-4 w-4 text-muted-foreground transition group-hover:text-primary sm:block" />
-    </Link>
+      {canDrillDown ? (
+        <ArrowUpRight className="hidden h-4 w-4 text-muted-foreground transition group-hover:text-primary sm:block" />
+      ) : (
+        <div className="hidden w-4 sm:block" />
+      )}
+    </>
   );
+
+  if (canDrillDown) {
+    return (
+      <Link href={buildEmployeePoolHref(row)} className={className}>
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
 }
 
 export function EmployeeLeaderboard({
   employees,
   currentFrom,
   currentTo,
+  canDrillDown = true,
+  description,
 }: Readonly<{
   employees: CustomerOperatingDashboardEmployeeRow[];
   currentFrom: string;
   currentTo: string;
+  canDrillDown?: boolean;
+  description?: string;
 }>) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -316,7 +334,8 @@ export function EmployeeLeaderboard({
             </span>
           </div>
           <p className="text-sm leading-6 text-muted-foreground">
-            {activePeriodLabel}按业绩优先排名，同分看出单、加微和邀约进场。
+            {description ??
+              `${activePeriodLabel}按业绩优先排名，同分看出单、加微和邀约进场。`}
           </p>
         </div>
 
@@ -396,6 +415,7 @@ export function EmployeeLeaderboard({
               rank={index + 1}
               isTop={index < 3}
               leaderRevenueAmount={leaderRevenueAmount}
+              canDrillDown={canDrillDown}
             />
           ))
         )}

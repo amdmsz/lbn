@@ -9,6 +9,7 @@ import {
   Target,
   UsersRound,
 } from "lucide-react";
+import { EmployeeLeaderboard } from "@/components/dashboard/employee-leaderboard";
 import {
   BentoActionLink,
   BentoCard,
@@ -32,6 +33,13 @@ type SalesMetric = {
 };
 
 const workspaceShellClassName = "crm-workspace-shell";
+const emptyExecutionClassCounts = {
+  A: 0,
+  B: 0,
+  C: 0,
+  D: 0,
+  E: 0,
+} as const;
 
 function toPercent(numerator: number, denominator: number) {
   if (denominator <= 0) return 0;
@@ -181,8 +189,15 @@ function PoolStat({
 
 export function SalesDashboardWorkbench({
   data,
-}: Readonly<{ data: CustomerOperatingDashboardData }>) {
-  const self = data.employees[0] ?? null;
+  currentUserId,
+}: Readonly<{
+  data: CustomerOperatingDashboardData;
+  currentUserId: string;
+}>) {
+  const self =
+    data.employees.find((employee) => employee.userId === currentUserId) ??
+    data.employees[0] ??
+    null;
   const isToday = data.filters.from === data.filters.to && isTodayDateInput(data.filters.from);
   const metricPrefix = isToday ? "今日" : "期间";
   const maxActivity = Math.max(
@@ -239,6 +254,17 @@ export function SalesDashboardWorkbench({
         },
       ]
     : [];
+  const publicLeaderboardEmployees = data.employees.map((employee) => ({
+    ...employee,
+    customerCount: employee.userId === currentUserId ? employee.customerCount : 0,
+    todayCallCount: 0,
+    historicalWechatAddedCount: 0,
+    historicalWechatAddedRate: "0%",
+    todayAssignedWechatCount: 0,
+    todayAssignedWechatRate: "0%",
+    executionClassCounts: { ...emptyExecutionClassCounts },
+    latestFollowUpAt: null,
+  }));
 
   return (
     <WorkbenchLayout
@@ -248,12 +274,13 @@ export function SalesDashboardWorkbench({
         <div className={workspaceShellClassName}>
           <PageHeader
             eyebrow="个人销售驾驶舱"
-            title="今日作战看板"
-            description="只展示你自己的资源、接听、加微、邀约和成交数据；客户执行仍回到客户中心。"
+            title="个人作战与团队进度"
+            description="先看自己的资源推进，再看团队公开榜，保持节奏感和竞争氛围；客户执行仍回到客户中心。"
             meta={
               <>
                 <StatusBadge label={data.periodLabel} variant="info" />
                 <StatusBadge label="本人数据" variant="success" />
+                <StatusBadge label="团队公开榜" variant="neutral" />
               </>
             }
             actions={
@@ -344,6 +371,14 @@ export function SalesDashboardWorkbench({
                 tone={metric.tone}
               />
             ))}
+
+            <EmployeeLeaderboard
+              employees={publicLeaderboardEmployees}
+              currentFrom={data.filters.from}
+              currentTo={data.filters.to}
+              canDrillDown={false}
+              description="团队公开进度只展示聚合指标；客户池明细和员工下钻保留给管理员与主管。"
+            />
 
             <BentoCard
               eyebrow="当前客户池"
