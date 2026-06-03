@@ -2836,6 +2836,8 @@ export async function getCustomerOperatingDashboardData(
         ? teams[0]?.name ?? "团队范围"
         : "个人范围";
   const asOfDateLabel = dashboardRange.periodLabel;
+  const metricPeriodLabel = dashboardRange.from === dashboardRange.to ? "当日" : "期间";
+  const metricPeriodNote = dashboardRange.from === dashboardRange.to ? "当日" : "筛选期内";
 
   if (scopeSalesUsers.length === 0) {
     return {
@@ -2848,7 +2850,7 @@ export async function getCustomerOperatingDashboardData(
       },
       summary: [
         {
-          label: "今日分配",
+          label: `${metricPeriodLabel}分配`,
           value: "0",
           note: `${asOfDateLabel} 暂无在岗销售进入驾驶舱统计口径。`,
           emphasis: "info",
@@ -3149,7 +3151,7 @@ export async function getCustomerOperatingDashboardData(
     },
     summary: [
       {
-        label: "今日分配",
+        label: `${metricPeriodLabel}分配`,
         value: String(totals.todayAssignedCount),
         note: `${asOfDateLabel} 分配到当前统计范围销售名下`,
         emphasis: "info",
@@ -3165,7 +3167,7 @@ export async function getCustomerOperatingDashboardData(
       {
         label: "加微数",
         value: String(totals.todayWechatAddedCount),
-        note: `${asOfDateLabel} 今日形成 ADDED`,
+        note: `${asOfDateLabel} ${metricPeriodNote}形成 ADDED`,
       },
       {
         label: "历史加微率",
@@ -3173,7 +3175,7 @@ export async function getCustomerOperatingDashboardData(
           totals.historicalWechatAddedCount,
           totals.todayWechatAddedCount,
         ),
-        note: `非当日分配但今日加微 ${totals.historicalWechatAddedCount} / ${totals.todayWechatAddedCount}`,
+        note: `非${metricPeriodNote}分配但${metricPeriodNote}加微 ${totals.historicalWechatAddedCount} / ${totals.todayWechatAddedCount}`,
       },
       {
         label: "邀约进场",
@@ -3184,21 +3186,21 @@ export async function getCustomerOperatingDashboardData(
       {
         label: "出单",
         value: String(totals.todayDealCount),
-        note: "今日审批通过主单",
+        note: `${metricPeriodNote}审批通过主单`,
         emphasis: "success",
       },
       {
         label: "销售额",
         value: formatCurrencyValue(totals.todayRevenue),
-        note: "今日审批通过主单金额",
+        note: `${metricPeriodNote}审批通过主单金额`,
       },
       {
-        label: "当日线索加微率",
+        label: "分配资源加微率",
         value: formatPercentValue(
           totals.todayAssignedWechatCount,
           totals.todayAssignedCount,
         ),
-        note: `今日分配客户中已加微 ${totals.todayAssignedWechatCount} / ${totals.todayAssignedCount}`,
+        note: `${metricPeriodNote}分配客户中已加微 ${totals.todayAssignedWechatCount} / ${totals.todayAssignedCount}`,
         emphasis: "warning",
       },
     ],

@@ -13,6 +13,7 @@ import {
   TrendingUp,
   UsersRound,
 } from "lucide-react";
+import { EmployeeLeaderboard } from "@/components/dashboard/employee-leaderboard";
 import {
   BentoActionLink,
   BentoCard,
@@ -196,60 +197,6 @@ function ExecutionClassStrip({
   );
 }
 
-function EmployeePerformanceCard({
-  row,
-  rank,
-  maxRevenue,
-}: Readonly<{
-  row: CustomerOperatingDashboardEmployeeRow;
-  rank: number;
-  maxRevenue: number;
-}>) {
-  const revenuePercent = toPercent(row.todayRevenueAmount, maxRevenue);
-
-  return (
-    <Link
-      href={buildEmployeePoolHref(row)}
-      className="group block rounded-2xl border border-border bg-muted/25 p-4 transition hover:-translate-y-px hover:border-primary/30 hover:bg-muted/40"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-primary/10 px-2 font-mono text-xs font-semibold text-primary">
-              {rank}
-            </span>
-            <div className="truncate text-sm font-semibold text-foreground">{row.name}</div>
-          </div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            {row.teamName ?? "未分组"} · @{row.username}
-          </div>
-        </div>
-        <ArrowUpRight className="h-4 w-4 text-muted-foreground transition group-hover:text-primary" />
-      </div>
-      <div className="mt-5 flex items-end justify-between gap-3">
-        <div>
-          <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            成交金额
-          </div>
-          <div className="mt-1 font-mono text-2xl font-semibold tracking-tight text-foreground">
-            {row.todayRevenue}
-          </div>
-        </div>
-        <div className="text-right text-xs leading-5 text-muted-foreground">
-          <div>出单 {row.todayDealCount}</div>
-          <div>邀约 {row.todayInvitationCount}</div>
-        </div>
-      </div>
-      <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-primary"
-          style={{ width: `${Math.max(8, revenuePercent)}%` }}
-        />
-      </div>
-    </Link>
-  );
-}
-
 function EmployeeRowCard({
   row,
   metricPrefix,
@@ -429,7 +376,6 @@ export function ManagementDashboardWorkbench({
       result.invitation += row.todayInvitationCount;
       result.deal += row.todayDealCount;
       result.call += row.todayCallCount;
-      result.revenue = Math.max(result.revenue, row.todayRevenueAmount);
       return result;
     },
     {
@@ -440,7 +386,6 @@ export function ManagementDashboardWorkbench({
       invitation: 0,
       deal: 0,
       call: 0,
-      revenue: 0,
     },
   );
   const maxActivity = Math.max(
@@ -588,22 +533,11 @@ export function ManagementDashboardWorkbench({
               />
             ))}
 
-            <BentoCard
-              eyebrow="员工排行"
-              title={`${metricPrefix}成交先锋`}
-              className="md:col-span-3 lg:col-span-2"
-            >
-              <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-1">
-                {topEmployees.map((row, index) => (
-                  <EmployeePerformanceCard
-                    key={row.userId}
-                    row={row}
-                    rank={index + 1}
-                    maxRevenue={totals.revenue || 1}
-                  />
-                ))}
-              </div>
-            </BentoCard>
+            <EmployeeLeaderboard
+              employees={data.employees}
+              currentFrom={data.filters.from}
+              currentTo={data.filters.to}
+            />
 
             <BentoCard
               eyebrow="质量观察"
