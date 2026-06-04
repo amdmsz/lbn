@@ -79,7 +79,7 @@ function getFinalizePreviewHint(preview: RecycleFinalizePreview | null) {
 
   if (preview.finalAction === "PURGE") {
     return preview.canEarlyPurge
-      ? "move 只代表进入 3 天冷静期；冷静期内仅 ADMIN 可在回收站提前永久删除。"
+      ? "move 只代表进入 3 天冷静期；冷静期内仅主管以上可在回收站执行永久删除。"
       : "move 只代表进入 3 天冷静期；最终仍以到期时的最新服务端真相为准。";
   }
 

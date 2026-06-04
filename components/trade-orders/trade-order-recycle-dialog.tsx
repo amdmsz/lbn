@@ -83,7 +83,7 @@ function getFinalizePreviewHint(preview: RecycleFinalizePreview | null) {
 
   if (preview.finalAction === "PURGE") {
     return preview.canEarlyPurge
-      ? "当前最新服务端真相仍指向 light 对象。进入回收站后，冷静期内仅 ADMIN 可见“提前永久删除”。"
+      ? "当前最新服务端真相仍指向轻对象。进入回收站后，冷静期内仅主管以上可执行永久删除。"
       : "当前真相仍指向 PURGE，但最终处理仍以 3 天到期时重新计算的最新服务端真相为准。";
   }
 

@@ -10,6 +10,7 @@ import {
   canAccessSalesOrderModule,
   canAccessLeadModule,
   canFinalizeRecycleBinTargets,
+  canPermanentlyDeleteCustomers,
   canManageLiveSessions,
   canManageProducts,
   canManageSuppliers,
@@ -1930,11 +1931,15 @@ async function buildListItems(
   entries: RecycleBinListEntry[],
   viewer: RecycleLifecycleActor,
 ) {
-  const canActorPurge = canFinalizeRecycleBinTargets(viewer.role);
+  const canActorFinalizeGenericTargets = canFinalizeRecycleBinTargets(viewer.role);
   const leadRuntimeMetadata = await loadLeadRuntimeMetadata(entries);
 
   return Promise.all(
     entries.map(async (entry) => {
+      const canActorPurge =
+        entry.targetType === "CUSTOMER"
+          ? canPermanentlyDeleteCustomers(viewer.role)
+          : canActorFinalizeGenericTargets;
       const isActiveEntry = entry.status === RecycleEntryStatus.ACTIVE;
       const restoreGuard = isActiveEntry ? await buildRestoreGuard(entry) : null;
       const purgeGuard = isActiveEntry ? await buildPurgeGuard(entry) : null;

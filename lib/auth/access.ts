@@ -224,6 +224,10 @@ export function canReviewImportedCustomerDeletion(role: RoleCode) {
 }
 
 export function canForceDeleteImportedCustomer(role: RoleCode) {
+  return canPermanentlyDeleteCustomers(role);
+}
+
+export function canPermanentlyDeleteCustomers(role: RoleCode) {
   return role === "ADMIN" || role === "SUPERVISOR";
 }
 

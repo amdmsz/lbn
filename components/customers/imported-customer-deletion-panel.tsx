@@ -80,7 +80,7 @@ function getAvailabilityContent(guard: ImportedCustomerDeletionGuard) {
   if (guard.canDirectDelete) {
     return (
       <span className="text-emerald-600 dark:text-emerald-400">
-        当前角色可以直接删除这位导入新建客户。
+        当前主管以上权限可以直接删除这位导入新建客户。
       </span>
     );
   }
@@ -266,7 +266,7 @@ export function ImportedCustomerDeletionPanel({
               </div>
             ) : (
               <p className="text-sm leading-6 text-muted-foreground">
-                当前还没有删除申请记录。满足条件时，管理员或主管可以直接删除，销售可以发起审批。
+                当前还没有删除申请记录。满足条件时，管理员或主管可以直接删除自己可管理范围内的导入客户，销售可以发起审批。
               </p>
             )}
           </div>
@@ -287,7 +287,7 @@ export function ImportedCustomerDeletionPanel({
             <div className="space-y-1">
               <p className="text-sm font-semibold text-foreground">直接删除客户</p>
               <p className="text-[13px] leading-6 text-muted-foreground">
-                当前角色可以直接执行硬删除。删除后会回到客户列表或公海列表，同时保留导入与审计记录。
+                主管以上可直接执行硬删除。删除后会回到客户列表或公海列表，同时保留导入与审计记录。
               </p>
             </div>
             <div className="mt-3 space-y-3">

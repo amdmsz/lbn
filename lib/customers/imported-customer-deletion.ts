@@ -10,6 +10,7 @@ import {
 } from "@prisma/client";
 import {
   canForceDeleteImportedCustomer,
+  canPermanentlyDeleteCustomers,
   canRequestImportedCustomerDeletion,
   canReviewImportedCustomerDeletion,
 } from "@/lib/auth/access";
@@ -477,8 +478,8 @@ function buildGuardBlockedReason(input: {
     return `当前客户已进入交易或履约真相链路：${input.blockerLabels.join("、")}。`;
   }
 
-  if (input.role !== "ADMIN" && input.ownerId) {
-    return "当前客户已有负责人，只有管理员可跳过负责人限制直接删除。";
+  if (!canPermanentlyDeleteCustomers(input.role) && input.ownerId) {
+    return "当前客户已有负责人，只有主管以上可直接删除。";
   }
 
   if (input.role === "SALES") {
@@ -498,7 +499,8 @@ function buildGuard(input: {
 }): ImportedCustomerDeletionGuard {
   const blockerKeys = getImportedCustomerDeletionBlockerKeys(input.customer);
   const blockerLabels = blockerKeys.map((key) => importedCustomerDeletionBlockerLabels[key]);
-  const ownerRestricted = input.actor.role !== "ADMIN" && input.customer.ownerId !== null;
+  const ownerRestricted =
+    !canPermanentlyDeleteCustomers(input.actor.role) && input.customer.ownerId !== null;
   const hasPendingRequest = Boolean(input.pendingRequest);
   const canDirectDelete =
     canForceDeleteImportedCustomer(input.actor.role) &&

@@ -8,6 +8,7 @@ import {
   canAccessLeadModule,
   canAccessCustomerModule,
   canFinalizeRecycleBinTargets,
+  canPermanentlyDeleteCustomers,
   canManageLiveSessions,
   canManageProducts,
   canManageSuppliers,
@@ -178,15 +179,31 @@ function ensureRestorePermission(
   ensureMoveToRecycleBinPermission(actor, targetType);
 }
 
-function ensurePurgePermission(actor: RecycleLifecycleActor) {
-  if (!canFinalizeRecycleBinTargets(actor.role)) {
-    throw new Error("Only supervisor and above can permanently delete recycle-bin targets.");
+function ensurePurgePermission(
+  actor: RecycleLifecycleActor,
+  targetType: RecycleTargetType,
+) {
+  const canPurge =
+    targetType === "CUSTOMER"
+      ? canPermanentlyDeleteCustomers(actor.role)
+      : canFinalizeRecycleBinTargets(actor.role);
+
+  if (!canPurge) {
+    throw new Error("仅主管以上可执行回收站永久删除。");
   }
 }
 
-function ensureFinalizePermission(actor: RecycleLifecycleActor) {
-  if (!canFinalizeRecycleBinTargets(actor.role)) {
-    throw new Error("Only supervisor and above can finalize recycle-bin targets.");
+function ensureFinalizePermission(
+  actor: RecycleLifecycleActor,
+  targetType: RecycleTargetType,
+) {
+  const canFinalize =
+    targetType === "CUSTOMER"
+      ? canPermanentlyDeleteCustomers(actor.role)
+      : canFinalizeRecycleBinTargets(actor.role);
+
+  if (!canFinalize) {
+    throw new Error("仅主管以上可执行回收站最终处理。");
   }
 }
 
@@ -1251,7 +1268,7 @@ export async function purgeFromRecycleBin(
       throw new Error("Only active recycle-bin entries can be permanently deleted.");
     }
 
-    ensurePurgePermission(actor);
+    ensurePurgePermission(actor, entry.targetType);
     await ensureActorCanAccessRecycleEntry(tx, actor, entry);
 
     const preview = await buildFinalizePreview(tx, {
@@ -1330,7 +1347,7 @@ export async function finalizeRecycleBinEntry(
       throw new Error("Only active recycle-bin entries can be finalized.");
     }
 
-    ensureFinalizePermission(actor);
+    ensureFinalizePermission(actor, entry.targetType);
     await ensureActorCanAccessRecycleEntry(tx, actor, entry);
 
     const preview = await buildFinalizePreview(tx, {

@@ -75,6 +75,28 @@ function getTargetVariant(item: RecycleBinListItem) {
   return "neutral" as const;
 }
 
+function getFinalizeCommandLabel(item: RecycleBinListItem) {
+  const finalAction = item.finalActionPreview?.finalAction;
+
+  if (item.targetType === "CUSTOMER" && finalAction === "PURGE") {
+    return "永久删除客户";
+  }
+
+  if (item.targetType === "CUSTOMER" && finalAction === "ARCHIVE") {
+    return "封存客户";
+  }
+
+  if (finalAction === "PURGE") {
+    return "永久删除";
+  }
+
+  if (finalAction === "ARCHIVE") {
+    return "封存";
+  }
+
+  return "执行最终处理";
+}
+
 const recyclePanelClassName =
   "space-y-3 rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
 
@@ -102,21 +124,35 @@ function getDialogMeta(state: RecycleBinDialogState): RecycleBinDialogMeta | nul
 
   if (state.mode === "finalize") {
     const finalAction = state.item.finalActionPreview?.finalAction ?? "PURGE";
+    const commandLabel = getFinalizeCommandLabel(state.item);
+    const isCustomer = state.item.targetType === "CUSTOMER";
 
     return {
-      title: "执行最终处理",
-      badgeLabel: finalAction === "PURGE" ? "最终处理 / PURGE" : "最终处理 / ARCHIVE",
+      title: isCustomer ? commandLabel : "执行最终处理",
+      badgeLabel: isCustomer
+        ? commandLabel
+        : finalAction === "PURGE"
+          ? "最终处理 / PURGE"
+          : "最终处理 / ARCHIVE",
       badgeVariant: finalAction === "PURGE" ? "danger" : "info" as const,
       description:
-        finalAction === "PURGE"
-          ? "将按最新服务端真相执行 PURGE。"
-          : "将按最新服务端真相执行 ARCHIVE。",
-      primaryLabel: finalAction === "PURGE" ? "确认 PURGE" : "确认 ARCHIVE",
-      impactLabel: "Finalize preview",
+        isCustomer && finalAction === "PURGE"
+          ? "主管以上可执行。提交时会再次重算服务端真相，确认仍是轻客户后才会物理删除。"
+          : isCustomer
+            ? "主管以上可执行。客户会封存并脱敏归档，从客户中心隐藏，同时保留业务与审计锚点。"
+            : finalAction === "PURGE"
+              ? "将按最新服务端真相执行 PURGE。"
+              : "将按最新服务端真相执行 ARCHIVE。",
+      primaryLabel: `确认${commandLabel}`,
+      impactLabel: isCustomer ? "处理影响" : "Finalize preview",
       impactHint:
-        finalAction === "PURGE"
-          ? "最终处理会物理删除对象，且不会再保留该对象本体。"
-          : "最终处理会将对象按 ARCHIVE 终态封存/脱敏归档，不会伪装成 PURGED。",
+        isCustomer && finalAction === "PURGE"
+          ? "物理删除后客户本体不可恢复；操作日志会记录本次处理。"
+          : isCustomer
+            ? "封存不会伪装成已删除；它会保留审计链，避免破坏订单、支付、履约等真实记录。"
+            : finalAction === "PURGE"
+              ? "最终处理会物理删除对象，且不会再保留该对象本体。"
+              : "最终处理会将对象按 ARCHIVE 终态封存/脱敏归档，不会伪装成 PURGED。",
     };
   }
 
@@ -302,11 +338,11 @@ function renderFinalizeActionButtons({
           className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-55"
           title={
             item.canFinalizeNow
-              ? "执行最终处理"
+              ? getFinalizeCommandLabel(item)
               : `最终处理仅主管以上可执行：${item.finalActionPreview?.finalAction ?? "PURGE"}`
           }
         >
-          执行最终处理
+          {getFinalizeCommandLabel(item)}
         </button>
       ) : (
         <button
@@ -815,7 +851,7 @@ export function RecycleBinWorkbench({
                                 {getFinalizeActionBadges(item)}
                                 <p className="text-xs leading-5 text-[var(--color-sidebar-muted)]">
                                   {item.canFinalizeNow
-                                    ? "当前可执行最终处理"
+                                    ? `当前可执行${getFinalizeCommandLabel(item)}`
                                     : "最终处理仅主管以上可执行"}
                                 </p>
                               </>
@@ -1090,7 +1126,7 @@ export function RecycleBinWorkbench({
                           label="执行窗口"
                           value={
                             selectedItem.canFinalizeNow
-                              ? "当前可执行最终处理"
+                              ? `当前可执行${getFinalizeCommandLabel(selectedItem)}`
                               : "最终处理仅主管以上可执行"
                           }
                         />
@@ -1289,7 +1325,9 @@ function RecycleBinConfirmDialog({
             {state.mode === "restore"
               ? "恢复成功后，对象会按原业务入口重新可见。"
               : state.mode === "finalize"
-                ? "最终处理成功后会按 PURGE 或 ARCHIVE 收口；ARCHIVE 不会伪装成 PURGED。"
+                ? state.item.targetType === "CUSTOMER"
+                  ? "处理成功后客户会按永久删除或封存收口；封存不会伪装成已删除。"
+                  : "最终处理成功后会按 PURGE 或 ARCHIVE 收口；ARCHIVE 不会伪装成 PURGED。"
                 : state.item.finalActionPreview
                   ? "永久删除会立即执行物理删除。"
                   : "永久删除成功后，该对象会从系统中彻底移除。"}
