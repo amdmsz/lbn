@@ -88,7 +88,7 @@ import {
 
 export const RECYCLE_RETENTION_DAYS = 3;
 
-type RecycleTx = Prisma.TransactionClient;
+type RecycleTx = typeof prisma | Prisma.TransactionClient;
 
 type RecycleEntryForRestore = Pick<
   RecycleBinEntry,
@@ -997,32 +997,30 @@ export async function previewRecycleBinFinalize(
   actor: RecycleLifecycleActor,
   input: PreviewRecycleBinFinalizeInput,
 ): Promise<PreviewRecycleBinFinalizeResult> {
-  return prisma.$transaction(async (tx) => {
-    const entry = await findRecycleEntryById(tx, input.entryId);
+  const entry = await findRecycleEntryById(prisma, input.entryId);
 
-    if (!entry) {
-      throw new Error("The recycle-bin entry does not exist.");
-    }
+  if (!entry) {
+    throw new Error("The recycle-bin entry does not exist.");
+  }
 
-    if (entry.status !== RecycleEntryStatus.ACTIVE) {
-      throw new Error("Only active recycle-bin entries can preview finalization.");
-    }
+  if (entry.status !== RecycleEntryStatus.ACTIVE) {
+    throw new Error("Only active recycle-bin entries can preview finalization.");
+  }
 
-    await ensureActorCanAccessRecycleEntry(tx, actor, entry);
+  await ensureActorCanAccessRecycleEntry(prisma, actor, entry);
 
-    return {
-      entryId: entry.id,
+  return {
+    entryId: entry.id,
+    targetType: entry.targetType,
+    targetId: entry.targetId,
+    isExpired: isRecycleEntryExpired(entry),
+    expiresAt: entry.recycleExpiresAt.toISOString(),
+    preview: await buildFinalizePreview(prisma, {
       targetType: entry.targetType,
       targetId: entry.targetId,
-      isExpired: isRecycleEntryExpired(entry),
-      expiresAt: entry.recycleExpiresAt.toISOString(),
-      preview: await buildFinalizePreview(tx, {
-        targetType: entry.targetType,
-        targetId: entry.targetId,
-        domain: entry.domain,
-      }),
-    };
-  });
+      domain: entry.domain,
+    }),
+  };
 }
 
 export async function moveToRecycleBin(
