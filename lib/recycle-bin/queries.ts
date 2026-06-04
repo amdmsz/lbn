@@ -1899,6 +1899,33 @@ async function loadLeadRuntimeMetadata(entries: RecycleBinListEntry[]) {
   );
 }
 
+const skippableFinalizePreviewRaceMessages = new Set([
+  "The recycle-bin entry does not exist.",
+  "Only active recycle-bin entries can preview finalization.",
+]);
+
+function isSkippableFinalizePreviewRace(error: unknown) {
+  return (
+    error instanceof Error &&
+    skippableFinalizePreviewRaceMessages.has(error.message)
+  );
+}
+
+async function safePreviewRecycleBinFinalize(
+  viewer: RecycleLifecycleActor,
+  entryId: string,
+) {
+  try {
+    return await previewRecycleBinFinalize(viewer, { entryId });
+  } catch (error) {
+    if (isSkippableFinalizePreviewRace(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
 async function buildListItems(
   entries: RecycleBinListEntry[],
   viewer: RecycleLifecycleActor,
@@ -1913,9 +1940,7 @@ async function buildListItems(
       const purgeGuard = isActiveEntry ? await buildPurgeGuard(entry) : null;
       const finalizePreviewResult =
         isActiveEntry && supportsFinalizePreview(entry.targetType)
-          ? await previewRecycleBinFinalize(viewer, {
-              entryId: entry.id,
-            })
+          ? await safePreviewRecycleBinFinalize(viewer, entry.id)
           : null;
       const finalActionPreview = finalizePreviewResult?.preview ?? null;
       const isExpired = finalizePreviewResult?.isExpired ?? false;
