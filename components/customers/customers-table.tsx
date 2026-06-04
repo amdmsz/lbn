@@ -672,6 +672,7 @@ function BatchOwnerTransferDialog({
 function BatchRecycleDialog({
   open,
   selectedCount,
+  manualRecycleEligibleCount,
   selectionMode,
   filters,
   pending,
@@ -681,6 +682,7 @@ function BatchRecycleDialog({
 }: Readonly<{
   open: boolean;
   selectedCount: number;
+  manualRecycleEligibleCount: number | null;
   selectionMode: SelectionMode;
   filters: CustomerCenterFilters;
   pending: boolean;
@@ -691,6 +693,20 @@ function BatchRecycleDialog({
   if (!open) {
     return null;
   }
+
+  const submitDisabled =
+    pending ||
+    (selectionMode === "manual" &&
+      selectedCount > 0 &&
+      manualRecycleEligibleCount === 0);
+  const scopeNotice =
+    selectionMode === "filtered"
+      ? `这次会按当前筛选结果检查 ${selectedCount} 位客户。已有归属历史、跟进、订单、支付或履约链的客户不会被移入回收站，会返回阻断原因。`
+      : manualRecycleEligibleCount === 0
+        ? "当前已选客户都不满足回收条件，请改走客户状态、公海、移交或归档治理。"
+        : manualRecycleEligibleCount !== null && manualRecycleEligibleCount < selectedCount
+          ? `当前已选客户中 ${manualRecycleEligibleCount} 位可尝试移入回收站，其余会返回阻断原因。`
+          : "这次会按当前页手选客户逐条检查，只处理满足误建轻客户条件的对象。";
 
   return (
     <div
@@ -709,8 +725,7 @@ function BatchRecycleDialog({
             <div className="space-y-1.5">
               <h3 className="text-lg font-semibold text-[var(--foreground)]">批量移入回收站</h3>
               <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
-                本次会把已选 {selectedCount} 位客户按“误建轻客户”语义逐条提交到现有 recycle move
-                guard。服务端会继续阻断 public-pool、状态治理、merge 以及订单 / 支付 / 履约链客户。
+                回收站只用于误建、未形成归属和业务链的轻客户。已进入归属、跟进、交易或履约链的客户会保留在客户中心，并给出治理建议。
               </p>
             </div>
             <button
@@ -735,9 +750,7 @@ function BatchRecycleDialog({
           <input type="hidden" name="reasonCode" value="mistaken_creation" />
 
           <div className="rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-[13px] leading-6 text-[var(--color-sidebar-muted)]">
-            {selectionMode === "filtered"
-              ? `这次会按当前筛选结果检查 ${selectedCount} 位客户，并逐条复用现有 recycle move guard。`
-              : "这次会按当前页手选客户逐条复用现有 recycle move guard，不做批量恢复、批量永久删除或批量最终封存。"}
+            {scopeNotice}
           </div>
 
           <div className="flex flex-wrap justify-end gap-3">
@@ -750,10 +763,14 @@ function BatchRecycleDialog({
             </button>
             <button
               type="submit"
-              disabled={pending}
+              disabled={submitDisabled}
               className="crm-button crm-button-primary disabled:cursor-not-allowed disabled:opacity-55"
             >
-              {pending ? "提交中..." : "确认移入回收站"}
+              {pending
+                ? "提交中..."
+                : submitDisabled
+                  ? "没有可回收客户"
+                  : "确认移入回收站"}
             </button>
           </div>
         </form>
@@ -838,6 +855,11 @@ export function CustomersTable({
     pageSelection.pageKey === currentPageSelectionKey ? pageSelection.ids : [];
   const selectedCount =
     selectionMode === "filtered" ? pagination.totalCount : manualSelectedIds.length;
+  const selectedIdSet = new Set(manualSelectedIds);
+  const manualSelectedItems = items.filter((item) => selectedIdSet.has(item.id));
+  const manualRecycleEligibleCount = manualSelectedItems.filter(
+    (item) => item.recycleGuard.canMoveToRecycleBin,
+  ).length;
   const allCurrentPageSelected =
     items.length > 0 &&
     (selectionMode === "filtered" || manualSelectedIds.length === items.length);
@@ -851,6 +873,12 @@ export function CustomersTable({
     !filteredSelectionExceedsLimit;
   const batchExecutionBlockedByLimit =
     selectionMode === "filtered" && filteredSelectionExceedsLimit;
+  const manualRecycleUnavailable =
+    selectionMode === "manual" &&
+    manualSelectedIds.length > 0 &&
+    manualRecycleEligibleCount === 0;
+  const batchRecycleDisabled =
+    batchExecutionBlockedByLimit || manualRecycleUnavailable;
   const showBatchQuickSelect = canBatchSelect && selectedCount === 0;
   const showBatchActiveBar = canBatchSelect && selectedCount > 0;
   const hasBatchOwnerTransferOptions = batchOwnerTransferOptions.length > 0;
@@ -1164,7 +1192,11 @@ export function CustomersTable({
         countUnitLabel: "位",
       });
 
-      if (nextState.summary.successCount > 0 || nextState.summary.skippedCount > 0) {
+      if (
+        nextState.summary.successCount > 0 ||
+        nextState.summary.skippedCount > 0 ||
+        nextState.summary.blockedCount > 0
+      ) {
         resetSelection();
         router.refresh();
       }
@@ -1670,8 +1702,10 @@ export function CustomersTable({
                     >
                       {batchExecutionBlockedByLimit
                         ? `超过单次 ${MAX_BATCH_CUSTOMER_ACTION_SIZE} 位上限，请缩小范围。`
-                        : selectionMode === "filtered"
-                          ? "动作将应用到整个筛选结果。"
+                        : manualRecycleUnavailable && canBatchMoveToRecycleBin
+                          ? "已选客户均不满足回收条件，可继续添加标签或移交负责人。"
+                          : selectionMode === "filtered"
+                            ? "动作将应用到整个筛选结果，回收会逐条校验误建轻客户条件。"
                           : allCurrentPageSelected && canSelectFiltered
                             ? `可扩展到 ${pagination.totalCount} 位筛选结果。`
                             : "可添加标签、移交负责人或移入回收站。"}
@@ -1752,7 +1786,12 @@ export function CustomersTable({
                       <button
                         type="button"
                         onClick={openBatchRecycleDialog}
-                        disabled={batchExecutionBlockedByLimit}
+                        disabled={batchRecycleDisabled}
+                        title={
+                          manualRecycleUnavailable
+                            ? "已选客户均不满足回收条件"
+                            : "批量移入回收站"
+                        }
                         className="inline-flex h-8 items-center gap-1.5 rounded-full border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -1886,6 +1925,9 @@ export function CustomersTable({
       <BatchRecycleDialog
         open={batchRecycleDialogOpen}
         selectedCount={selectedCount}
+        manualRecycleEligibleCount={
+          selectionMode === "manual" ? manualRecycleEligibleCount : null
+        }
         selectionMode={selectionMode}
         filters={filters}
         pending={batchRecyclePending}

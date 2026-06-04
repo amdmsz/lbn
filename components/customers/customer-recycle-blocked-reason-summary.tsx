@@ -27,7 +27,7 @@ export function CustomerRecycleBlockedReasonSummary({
           阻断解释
         </p>
         <p className="text-[13px] leading-5 text-[rgba(84,49,45,0.82)]">
-          下面继续使用 customer-adapter 返回的 blocker 分组与建议动作，帮助主管判断这批客户该改走哪条治理链。
+          这些客户不属于可直接回收的误建轻客户，请按分组原因改走对应治理流程。
         </p>
       </div>
 

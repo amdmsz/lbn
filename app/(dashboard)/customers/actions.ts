@@ -411,11 +411,14 @@ function buildBatchTagMessage(summary: {
   return "所选客户均未添加标签。";
 }
 
-function buildBatchRecycleMessage(summary: {
-  successCount: number;
-  skippedCount: number;
-  blockedCount: number;
-}) {
+function buildBatchRecycleMessage(
+  summary: {
+    successCount: number;
+    skippedCount: number;
+    blockedCount: number;
+  },
+  blockedReasonSummary: CustomerBatchBlockedReasonSummary[] = [],
+) {
   if (summary.successCount > 0 && (summary.skippedCount > 0 || summary.blockedCount > 0)) {
     return "已部分完成批量移入回收站。";
   }
@@ -430,6 +433,16 @@ function buildBatchRecycleMessage(summary: {
 
   if (summary.skippedCount > 0) {
     return "所选客户已在回收站中，无需重复处理。";
+  }
+
+  if (summary.blockedCount > 0) {
+    const primaryReason = blockedReasonSummary[0];
+
+    if (primaryReason) {
+      return `未移入回收站：${primaryReason.label} ${primaryReason.count} 位，请按阻断建议处理。`;
+    }
+
+    return "未移入回收站：所选客户均不满足回收条件。";
   }
 
   return "所选客户均未移入回收站。";
@@ -975,13 +988,15 @@ export async function batchMoveCustomersToRecycleBinAction(
       revalidatePath("/recycle-bin");
     }
 
+    const blockedReasonSummary = buildCustomerRecycleBlockedReasonSummaryList(blockedReasons);
+
     return buildBatchCustomerActionResult({
       status: successCount > 0 || skippedCount > 0 ? "success" : "error",
       message: buildBatchRecycleMessage({
         successCount,
         skippedCount,
         blockedCount,
-      }),
+      }, blockedReasonSummary),
       selection,
       skippedLabel: CUSTOMER_BATCH_ALREADY_LABELS.recycle,
       summary: {
@@ -990,7 +1005,7 @@ export async function batchMoveCustomersToRecycleBinAction(
         skippedCount,
         blockedCount,
       },
-      blockedReasonSummary: buildCustomerRecycleBlockedReasonSummaryList(blockedReasons),
+      blockedReasonSummary,
     });
   } catch (error) {
     if (
