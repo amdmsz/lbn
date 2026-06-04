@@ -485,6 +485,8 @@ const nonConnectedCallResultCodes = [
   "HUNG_UP",
 ] as const;
 
+const hiddenDashboardSalesUsernames = ["z002"] as const;
+
 const activeCustomerOwnershipModes = [
   CustomerOwnershipMode.PRIVATE,
   CustomerOwnershipMode.LOCKED,
@@ -2792,6 +2794,9 @@ export async function getCustomerOperatingDashboardData(
       where: {
         role: {
           code: "SALES",
+        },
+        username: {
+          notIn: [...hiddenDashboardSalesUsernames],
         },
         userStatus: "ACTIVE",
         ...(actor.role === "ADMIN"

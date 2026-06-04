@@ -194,10 +194,7 @@ export function SalesDashboardWorkbench({
   data: CustomerOperatingDashboardData;
   currentUserId: string;
 }>) {
-  const self =
-    data.employees.find((employee) => employee.userId === currentUserId) ??
-    data.employees[0] ??
-    null;
+  const self = data.employees.find((employee) => employee.userId === currentUserId) ?? null;
   const isToday = data.filters.from === data.filters.to && isTodayDateInput(data.filters.from);
   const metricPrefix = isToday ? "今日" : "期间";
   const maxActivity = Math.max(
