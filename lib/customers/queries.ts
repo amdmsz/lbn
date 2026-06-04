@@ -1392,7 +1392,7 @@ async function getCustomerCenterWorkspaceBase(
   }
 
   const actor = await getCustomerCenterActor(viewer.id);
-  const visibleWhere = getCustomerDashboardVisibilityWhereInput(actor);
+  const visibleWhere = getCustomerVisibilityWhereInput(actor);
   const recycledCustomerIds = await listActiveCustomerIds(prisma);
   const [teams, salesUsers, customerSnapshots] = await Promise.all([
     actor.role === "ADMIN"
@@ -2752,7 +2752,7 @@ export async function getCustomerOperatingDashboardData(
   }
 
   const actor = await getCustomerCenterActor(viewer.id);
-  const visibleWhere = getCustomerVisibilityWhereInput(actor);
+  const visibleWhere = getCustomerDashboardVisibilityWhereInput(actor);
   const recycledCustomerIds = await listActiveCustomerIds(prisma);
   const [teams, salesUsers, customerSnapshots] = await Promise.all([
     actor.role === "ADMIN"
