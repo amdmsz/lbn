@@ -463,6 +463,13 @@ export function ManagementDashboardWorkbench({
       ) : (
         <div className={workspaceShellClassName}>
           <BentoGrid>
+            <EmployeeLeaderboard
+              employees={data.employees}
+              currentFrom={data.filters.from}
+              currentTo={data.filters.to}
+              description="按当前时间范围实时展示每位员工的加微、出单、业绩、接通率和邀约进场；点击员工可进入客户池查看明细。"
+            />
+
             {metrics.slice(0, 4).map((metric) => (
               <BentoMetricCard
                 key={metric.key}
@@ -532,12 +539,6 @@ export function ManagementDashboardWorkbench({
                 tone={metric.tone}
               />
             ))}
-
-            <EmployeeLeaderboard
-              employees={data.employees}
-              currentFrom={data.filters.from}
-              currentTo={data.filters.to}
-            />
 
             <BentoCard
               eyebrow="质量观察"

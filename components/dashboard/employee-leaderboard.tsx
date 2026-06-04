@@ -322,20 +322,20 @@ export function EmployeeLeaderboard({
       <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0 space-y-1.5">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            员工排行
+            团队进度
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-base font-semibold text-foreground">
-              员工竞争排行榜
+              实时进度
             </h2>
             <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-orange-700">
               <Flame className="h-3.5 w-3.5" />
-              {employees.length} 人竞争中
+              {employees.length} 人推进中
             </span>
           </div>
           <p className="text-sm leading-6 text-muted-foreground">
             {description ??
-              `${activePeriodLabel}按业绩优先排名，同分看出单、加微和邀约进场。`}
+              `${activePeriodLabel}实时展示加微、出单、业绩、接通率和邀约进场，按业绩优先排序。`}
           </p>
         </div>
 

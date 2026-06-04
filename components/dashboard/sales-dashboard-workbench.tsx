@@ -272,7 +272,7 @@ export function SalesDashboardWorkbench({
           <PageHeader
             eyebrow="个人销售驾驶舱"
             title="个人作战与团队进度"
-            description="先看自己的资源推进，再看团队公开榜，保持节奏感和竞争氛围；客户执行仍回到客户中心。"
+            description="先看团队实时进度，再回到自己的资源推进；客户执行仍回到客户中心。"
             meta={
               <>
                 <StatusBadge label={data.periodLabel} variant="info" />
@@ -299,6 +299,14 @@ export function SalesDashboardWorkbench({
       {self ? (
         <div className={workspaceShellClassName}>
           <BentoGrid>
+            <EmployeeLeaderboard
+              employees={publicLeaderboardEmployees}
+              currentFrom={data.filters.from}
+              currentTo={data.filters.to}
+              canDrillDown={false}
+              description="按当前时间范围展示团队公开进度；销售只看聚合指标，客户池明细保留给管理员与主管。"
+            />
+
             {metrics.slice(0, 4).map((metric) => (
               <BentoMetricCard
                 key={metric.key}
@@ -368,14 +376,6 @@ export function SalesDashboardWorkbench({
                 tone={metric.tone}
               />
             ))}
-
-            <EmployeeLeaderboard
-              employees={publicLeaderboardEmployees}
-              currentFrom={data.filters.from}
-              currentTo={data.filters.to}
-              canDrillDown={false}
-              description="团队公开进度只展示聚合指标；客户池明细和员工下钻保留给管理员与主管。"
-            />
 
             <BentoCard
               eyebrow="当前客户池"
