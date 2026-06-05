@@ -7,6 +7,7 @@ import {
   canCreateCustomer,
   canCreateSalesOrder,
   canExportCustomers,
+  canPermanentlyDeleteCustomers,
   canTransferCustomerOwner,
 } from "@/lib/auth/access";
 import { CustomerCreateEntry } from "@/components/customers/customer-create-entry";
@@ -151,6 +152,7 @@ export function CustomerCenterWorkbench({
           canBatchAddTags={canBatchManageCustomerTags(role)}
           canBatchTransferOwner={canTransferCustomerOwner(role)}
           canBatchMoveToRecycleBin={canBatchMoveCustomersToRecycleBin(role)}
+          canBatchForceHardDelete={canPermanentlyDeleteCustomers(role)}
           batchTagOptions={data.tagOptions}
           batchOwnerTransferOptions={data.salesBoard}
           emptyTitle="当前筛选条件下没有客户"

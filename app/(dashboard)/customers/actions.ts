@@ -6,6 +6,7 @@ import {
   canBatchManageCustomerTags,
   canBatchMoveCustomersToRecycleBin,
   canCreateCustomer,
+  canPermanentlyDeleteCustomers,
   canTransferCustomerOwner,
 } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
@@ -41,6 +42,10 @@ import {
   transferCustomerOwner,
   updateCustomerRemark,
 } from "@/lib/customers/mutations";
+import {
+  CUSTOMER_BATCH_FORCE_HARD_DELETE_CONFIRMATION,
+  forceHardDeleteCustomer,
+} from "@/lib/customers/force-delete";
 import { assignCustomerTag } from "@/lib/master-data/mutations";
 import { moveToRecycleBin } from "@/lib/recycle-bin/lifecycle";
 import type { MoveToRecycleBinResult } from "@/lib/recycle-bin/types";
@@ -62,6 +67,13 @@ const batchTransferCustomerOwnerSchema = z.object({
   customerIds: z.array(z.string().trim().min(1)).default([]),
   targetOwnerId: z.string().trim().min(1, "请选择新的负责人。"),
   note: z.string().trim().max(500, "移交备注不能超过 500 个字符。").default(""),
+});
+
+const batchForceHardDeleteCustomersSchema = z.object({
+  selectionMode: z.enum(["manual", "filtered"]).default("manual"),
+  customerIds: z.array(z.string().trim().min(1)).default([]),
+  confirmation: z.string().trim().min(1, "请输入确认内容。"),
+  reason: z.string().trim().min(1, "请填写强制硬删除原因。").max(500, "原因不能超过 500 字。"),
 });
 
 const createOwnedCustomerActionSchema = z.object({
@@ -92,6 +104,7 @@ const CUSTOMER_BATCH_ALREADY_LABELS = {
   tag: "已有标签",
   recycle: "已在回收站",
   transfer: "无需移交",
+  forceDelete: "跳过",
 } as const;
 
 export type BatchAddCustomerTagBlockedReason = CustomerBatchBlockedReasonSummary;
@@ -100,6 +113,7 @@ export type BatchMoveCustomersToRecycleBinBlockedReason =
 export type BatchAddCustomerTagActionResult = CustomerBatchActionResult;
 export type BatchMoveCustomersToRecycleBinActionResult = CustomerBatchActionResult;
 export type BatchTransferCustomerOwnerActionResult = CustomerBatchActionResult;
+export type BatchForceHardDeleteCustomersActionResult = CustomerBatchActionResult;
 export type CreateOwnedCustomerField = keyof z.output<typeof createOwnedCustomerActionSchema>;
 export type CreateOwnedCustomerActionResult = {
   status: "success" | "error";
@@ -295,6 +309,37 @@ function buildBatchTransferLimitExceededResult(input: {
   });
 }
 
+function buildBatchForceHardDeleteEmptyResult(
+  message: string,
+  code: CustomerBatchActionErrorCode = "unknown",
+): BatchForceHardDeleteCustomersActionResult {
+  return buildBatchCustomerActionResult({
+    status: "error",
+    message,
+    error: { code, message },
+    skippedLabel: CUSTOMER_BATCH_ALREADY_LABELS.forceDelete,
+  });
+}
+
+function buildBatchForceHardDeleteLimitExceededResult(input: {
+  selection: CustomerBatchSelection;
+  limitExceeded: CustomerBatchLimitExceeded;
+}): BatchForceHardDeleteCustomersActionResult {
+  const message = `当前筛选结果共 ${input.limitExceeded.actualCount} 位客户，超过单次 ${input.limitExceeded.maxCount} 位上限，请先缩小筛选范围后再批量硬删除。`;
+
+  return buildBatchCustomerActionResult({
+    status: "error",
+    message,
+    error: {
+      code: "limit_exceeded",
+      message,
+    },
+    selection: input.selection,
+    limitExceeded: input.limitExceeded,
+    skippedLabel: CUSTOMER_BATCH_ALREADY_LABELS.forceDelete,
+  });
+}
+
 function getCustomerRecycleReasonCode(rawValue: string): CustomerRecycleReasonCode {
   return CUSTOMER_RECYCLE_REASON_OPTIONS.some((option) => option.value === rawValue)
     ? (rawValue as CustomerRecycleReasonCode)
@@ -470,6 +515,25 @@ function buildBatchTransferMessage(summary: {
   }
 
   return "所选客户均未移交负责人。";
+}
+
+function buildBatchForceHardDeleteMessage(summary: {
+  successCount: number;
+  blockedCount: number;
+}) {
+  if (summary.successCount > 0 && summary.blockedCount > 0) {
+    return "已部分完成批量硬删除。";
+  }
+
+  if (summary.successCount > 0) {
+    return "已完成批量硬删除。";
+  }
+
+  if (summary.blockedCount > 0) {
+    return "所选客户均未删除，请查看阻断原因。";
+  }
+
+  return "所选客户均未删除。";
 }
 
 function isAlreadyAssignedToTargetOwnerError(error: unknown) {
@@ -1023,5 +1087,142 @@ export async function batchMoveCustomersToRecycleBinAction(
     }
 
     return buildBatchRecycleEmptyResult(getBatchRecycleErrorReason(error));
+  }
+}
+
+export async function batchForceHardDeleteCustomersAction(
+  formData: FormData,
+): Promise<BatchForceHardDeleteCustomersActionResult> {
+  try {
+    const actor = await getBatchCustomerActor();
+
+    if (!canPermanentlyDeleteCustomers(actor.role)) {
+      return buildBatchForceHardDeleteEmptyResult(
+        "当前角色没有批量硬删除客户的权限。",
+        "forbidden",
+      );
+    }
+
+    const parsed = batchForceHardDeleteCustomersSchema.safeParse({
+      selectionMode: String(formData.get("selectionMode") ?? "manual"),
+      customerIds: formData.getAll("customerIds").map((value) => String(value).trim()),
+      confirmation: String(formData.get("confirmation") ?? "").trim(),
+      reason: String(formData.get("reason") ?? "").trim(),
+    });
+
+    if (!parsed.success) {
+      return buildBatchForceHardDeleteEmptyResult(
+        parsed.error.issues[0]?.message ?? "提交数据不完整，无法执行批量硬删除。",
+        "validation_error",
+      );
+    }
+
+    if (parsed.data.confirmation !== CUSTOMER_BATCH_FORCE_HARD_DELETE_CONFIRMATION) {
+      return buildBatchForceHardDeleteEmptyResult(
+        `确认内容不匹配，请输入“${CUSTOMER_BATCH_FORCE_HARD_DELETE_CONFIRMATION}”。`,
+        "validation_error",
+      );
+    }
+
+    const resolvedSelection = await resolveBatchCustomerSelection({
+      actor,
+      selectionMode: parsed.data.selectionMode,
+      formData,
+      customerIds: parsed.data.customerIds,
+      filteredEmptyMessage: "当前筛选结果下没有可硬删除的客户。",
+      staleSelectionMessage: "部分客户已不在当前客户工作台范围，请刷新后重试。",
+    });
+
+    if (resolvedSelection.status === "limit_exceeded") {
+      return buildBatchForceHardDeleteLimitExceededResult(resolvedSelection);
+    }
+
+    const { customerIds, selection } = resolvedSelection;
+    let successCount = 0;
+    let blockedCount = 0;
+    let deletedBusinessRecordCount = 0;
+    const blockedReasonMap = new Map<string, number>();
+
+    for (const customerId of customerIds) {
+      try {
+        const result = await forceHardDeleteCustomer(
+          {
+            id: actor.id,
+            role: actor.role,
+          },
+          {
+            customerId,
+            confirmation: parsed.data.confirmation,
+            confirmationMode: "batch_phrase",
+            reason: parsed.data.reason,
+          },
+        );
+
+        successCount += 1;
+        deletedBusinessRecordCount +=
+          (result.deletedCounts.tradeOrders ?? 0) +
+          (result.deletedCounts.salesOrders ?? 0) +
+          (result.deletedCounts.paymentPlans ?? 0) +
+          (result.deletedCounts.paymentRecords ?? 0) +
+          (result.deletedCounts.shippingTasks ?? 0);
+      } catch (error) {
+        blockedCount += 1;
+        const reason =
+          error instanceof Error ? error.message : "批量硬删除失败，请稍后重试。";
+        blockedReasonMap.set(reason, (blockedReasonMap.get(reason) ?? 0) + 1);
+      }
+    }
+
+    if (successCount > 0) {
+      revalidatePath("/customers");
+      revalidatePath("/customers/public-pool");
+      revalidatePath("/dashboard");
+      revalidatePath("/recycle-bin");
+      revalidatePath("/orders");
+      revalidatePath("/fulfillment");
+      revalidatePath("/finance");
+      revalidatePath("/reports");
+    }
+
+    const message = buildBatchForceHardDeleteMessage({
+      successCount,
+      blockedCount,
+    });
+    const businessRecordNote =
+      deletedBusinessRecordCount > 0
+        ? `已清理关联交易 / 支付 / 履约记录 ${deletedBusinessRecordCount} 项。`
+        : "";
+
+    return buildBatchCustomerActionResult({
+      status: successCount > 0 ? "success" : "error",
+      message: businessRecordNote ? `${message}${businessRecordNote}` : message,
+      selection,
+      skippedLabel: CUSTOMER_BATCH_ALREADY_LABELS.forceDelete,
+      summary: {
+        totalCount: customerIds.length,
+        successCount,
+        skippedCount: 0,
+        blockedCount,
+      },
+      blockedReasonSummary: buildSimpleBlockedReasons(blockedReasonMap),
+    });
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      "message" in error &&
+      typeof error.code === "string" &&
+      typeof error.message === "string"
+    ) {
+      return buildBatchForceHardDeleteEmptyResult(
+        error.message,
+        error.code as CustomerBatchActionErrorCode,
+      );
+    }
+
+    return buildBatchForceHardDeleteEmptyResult(
+      error instanceof Error ? error.message : "批量硬删除失败，请稍后重试。",
+    );
   }
 }

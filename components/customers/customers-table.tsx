@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import {
   batchAddCustomerTagAction,
+  batchForceHardDeleteCustomersAction,
   batchMoveCustomersToRecycleBinAction,
   batchTransferCustomerOwnerAction,
 } from "@/app/(dashboard)/customers/actions";
@@ -140,6 +141,9 @@ const initialBatchRecycleNoticeState =
   createInitialCustomerBatchActionNoticeState("已在回收站");
 const initialBatchTransferNoticeState =
   createInitialCustomerBatchActionNoticeState("无需移交");
+const initialBatchForceDeleteNoticeState =
+  createInitialCustomerBatchActionNoticeState("跳过");
+const batchForceDeleteConfirmationPhrase = "永久删除";
 const MOTIVATIONAL_QUOTES = [
   { text: "我们在想象中受的苦多于现实。", author: "塞内加 (Seneca)" },
   {
@@ -779,6 +783,143 @@ function BatchRecycleDialog({
   );
 }
 
+function BatchForceDeleteDialog({
+  open,
+  selectedCount,
+  selectionMode,
+  filters,
+  pending,
+  confirmation,
+  reason,
+  onClose,
+  onSubmit,
+  onConfirmationChange,
+  onReasonChange,
+  selectedCustomerIds,
+}: Readonly<{
+  open: boolean;
+  selectedCount: number;
+  selectionMode: SelectionMode;
+  filters: CustomerCenterFilters;
+  pending: boolean;
+  confirmation: string;
+  reason: string;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onConfirmationChange: (nextValue: string) => void;
+  onReasonChange: (nextValue: string) => void;
+  selectedCustomerIds: string[];
+}>) {
+  if (!open) {
+    return null;
+  }
+
+  const confirmationMatched =
+    confirmation.trim() === batchForceDeleteConfirmationPhrase;
+  const submitDisabled = pending || !confirmationMatched || !reason.trim();
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/32 px-4 py-8 lg:pl-[var(--dashboard-sidebar-width,0px)]"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="批量硬删除客户"
+        className="crm-card w-full max-w-lg overflow-hidden"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="border-b border-[rgba(255,148,175,0.22)] bg-[rgba(255,247,246,0.78)] px-5 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-semibold text-[var(--color-danger)]">
+                批量硬删除客户
+              </h3>
+              <p className="text-sm leading-6 text-[rgba(84,49,45,0.78)]">
+                本次会直接删除 {selectedCount} 位客户及其关联记录，不进入回收站，删除后只能依赖数据库备份恢复。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="crm-button crm-button-ghost min-h-0 px-3 py-2 text-sm"
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-4 px-5 py-4">
+          <input type="hidden" name="selectionMode" value={selectionMode} />
+          {selectionMode === "filtered" ? (
+            <FilterHiddenInputs filters={filters} />
+          ) : (
+            selectedCustomerIds.map((customerId) => (
+              <input key={customerId} type="hidden" name="customerIds" value={customerId} />
+            ))
+          )}
+
+          <div className="rounded-[0.9rem] border border-[rgba(255,148,175,0.2)] bg-[rgba(255,247,246,0.72)] px-4 py-3 text-[13px] leading-6 text-[rgba(84,49,45,0.78)]">
+            {selectionMode === "filtered"
+              ? "这次会按当前筛选结果逐条硬删除，服务端仍会校验当前账号可见范围和主管团队范围。"
+              : "这次会按当前页手选客户逐条硬删除，服务端仍会校验当前账号可见范围和主管团队范围。"}
+          </div>
+
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-[var(--foreground)]">
+              确认内容
+            </span>
+            <input
+              name="confirmation"
+              value={confirmation}
+              onChange={(event) => onConfirmationChange(event.currentTarget.value)}
+              placeholder={`输入 ${batchForceDeleteConfirmationPhrase}`}
+              disabled={pending}
+              className="crm-input h-11 w-full"
+            />
+          </label>
+
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-[var(--foreground)]">
+              删除原因
+            </span>
+            <textarea
+              name="reason"
+              value={reason}
+              onChange={(event) => onReasonChange(event.currentTarget.value)}
+              rows={3}
+              maxLength={500}
+              placeholder="填写本次批量硬删除原因"
+              disabled={pending}
+              className="crm-textarea"
+            />
+          </label>
+
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={pending}
+              className="crm-button crm-button-secondary"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              disabled={submitDisabled}
+              className="inline-flex min-h-0 items-center justify-center gap-2 rounded-lg bg-destructive px-3.5 py-2 text-sm font-medium text-destructive-foreground shadow-sm transition-all hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-55"
+            >
+              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+              {pending ? "删除中..." : "确认硬删除"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export function CustomersTable({
   items,
   pagination,
@@ -790,6 +931,7 @@ export function CustomersTable({
   canBatchAddTags = false,
   canBatchTransferOwner = false,
   canBatchMoveToRecycleBin = false,
+  canBatchForceHardDelete = false,
   batchTagOptions = [],
   batchOwnerTransferOptions = [],
   emptyTitle,
@@ -809,6 +951,7 @@ export function CustomersTable({
   canBatchAddTags?: boolean;
   canBatchTransferOwner?: boolean;
   canBatchMoveToRecycleBin?: boolean;
+  canBatchForceHardDelete?: boolean;
   batchTagOptions?: BatchTagOption[];
   batchOwnerTransferOptions?: SalesRepBoardItem[];
   emptyTitle: string;
@@ -828,14 +971,19 @@ export function CustomersTable({
   const [batchTagDialogOpen, setBatchTagDialogOpen] = useState(false);
   const [batchOwnerTransferDialogOpen, setBatchOwnerTransferDialogOpen] = useState(false);
   const [batchRecycleDialogOpen, setBatchRecycleDialogOpen] = useState(false);
+  const [batchForceDeleteDialogOpen, setBatchForceDeleteDialogOpen] = useState(false);
   const [selectedTagId, setSelectedTagId] = useState("");
   const [selectedTargetOwnerId, setSelectedTargetOwnerId] = useState("");
+  const [batchForceDeleteConfirmation, setBatchForceDeleteConfirmation] = useState("");
+  const [batchForceDeleteReason, setBatchForceDeleteReason] = useState("");
   const [batchTransferNotice, setBatchTransferNotice] = useState<CustomerBatchActionNoticeState>(
     initialBatchTransferNoticeState,
   );
   const [batchRecycleNotice, setBatchRecycleNotice] = useState<CustomerBatchActionNoticeState>(
     initialBatchRecycleNoticeState,
   );
+  const [batchForceDeleteNotice, setBatchForceDeleteNotice] =
+    useState<CustomerBatchActionNoticeState>(initialBatchForceDeleteNoticeState);
   const [followUpDialogState, setFollowUpDialogState] = useState<FollowUpDialogState>({
     item: null,
     initialResult: "",
@@ -846,6 +994,7 @@ export function CustomersTable({
   const [batchTagPending, startBatchTagTransition] = useTransition();
   const [batchOwnerTransferPending, startBatchOwnerTransferTransition] = useTransition();
   const [batchRecyclePending, startBatchRecycleTransition] = useTransition();
+  const [batchForceDeletePending, startBatchForceDeleteTransition] = useTransition();
   const router = useRouter();
   const pathname = usePathname() || "/customers";
   const searchParams = useSearchParams();
@@ -864,7 +1013,10 @@ export function CustomersTable({
     items.length > 0 &&
     (selectionMode === "filtered" || manualSelectedIds.length === items.length);
   const canBatchSelect =
-    canBatchAddTags || canBatchTransferOwner || canBatchMoveToRecycleBin;
+    canBatchAddTags ||
+    canBatchTransferOwner ||
+    canBatchMoveToRecycleBin ||
+    canBatchForceHardDelete;
   const filteredSelectionExceedsLimit =
     canBatchSelect && pagination.totalCount > MAX_BATCH_CUSTOMER_ACTION_SIZE;
   const canSelectFiltered =
@@ -1057,6 +1209,7 @@ export function CustomersTable({
   function openBatchTagDialog() {
     setBatchRecycleNotice(initialBatchRecycleNoticeState);
     setBatchTransferNotice(initialBatchTransferNoticeState);
+    setBatchForceDeleteNotice(initialBatchForceDeleteNoticeState);
     setSelectedTagId("");
     setBatchTagDialogOpen(true);
   }
@@ -1069,6 +1222,7 @@ export function CustomersTable({
   function openBatchOwnerTransferDialog() {
     setBatchRecycleNotice(initialBatchRecycleNoticeState);
     setBatchTransferNotice(initialBatchTransferNoticeState);
+    setBatchForceDeleteNotice(initialBatchForceDeleteNoticeState);
     setSelectedTargetOwnerId("");
     setBatchOwnerTransferDialogOpen(true);
   }
@@ -1081,11 +1235,25 @@ export function CustomersTable({
   function openBatchRecycleDialog() {
     setBatchRecycleNotice(initialBatchRecycleNoticeState);
     setBatchTransferNotice(initialBatchTransferNoticeState);
+    setBatchForceDeleteNotice(initialBatchForceDeleteNoticeState);
     setBatchRecycleDialogOpen(true);
   }
 
   function closeBatchRecycleDialog() {
     setBatchRecycleDialogOpen(false);
+  }
+
+  function openBatchForceDeleteDialog() {
+    setBatchRecycleNotice(initialBatchRecycleNoticeState);
+    setBatchTransferNotice(initialBatchTransferNoticeState);
+    setBatchForceDeleteNotice(initialBatchForceDeleteNoticeState);
+    setBatchForceDeleteConfirmation("");
+    setBatchForceDeleteReason("");
+    setBatchForceDeleteDialogOpen(true);
+  }
+
+  function closeBatchForceDeleteDialog() {
+    setBatchForceDeleteDialogOpen(false);
   }
 
   function openFollowUpDialog(
@@ -1197,6 +1365,28 @@ export function CustomersTable({
         nextState.summary.skippedCount > 0 ||
         nextState.summary.blockedCount > 0
       ) {
+        resetSelection();
+        router.refresh();
+      }
+    });
+  }
+
+  function handleBatchForceDeleteSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+
+    startBatchForceDeleteTransition(async () => {
+      const nextState = await batchForceHardDeleteCustomersAction(formData);
+      setBatchForceDeleteNotice(nextState);
+      closeBatchForceDeleteDialog();
+      notifyCustomerBatchActionResult(nextState, {
+        defaultTitle: "批量硬删除已处理",
+        successLabel: "成功硬删除",
+        countUnitLabel: "位",
+      });
+
+      if (nextState.summary.successCount > 0) {
         resetSelection();
         router.refresh();
       }
@@ -1665,6 +1855,23 @@ export function CustomersTable({
                 />
               ) : null}
 
+              {batchForceDeleteNotice.blockedReasonSummary.length > 0 ? (
+                <div className="rounded-[0.95rem] border border-rose-200 bg-rose-50/75 px-4 py-3.5">
+                  <p className="text-[12px] font-semibold text-rose-900">硬删除阻断</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {batchForceDeleteNotice.blockedReasonSummary.map((item) => (
+                      <span
+                        key={item.code}
+                        className="inline-flex items-center rounded-full border border-rose-200 bg-white px-2.5 py-1 text-[12px] font-medium text-rose-800"
+                        title={item.description}
+                      >
+                        {item.label} {item.count} 位
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               {showBatchActiveBar ? (
                 <div
                   className={cn(
@@ -1703,12 +1910,18 @@ export function CustomersTable({
                       {batchExecutionBlockedByLimit
                         ? `超过单次 ${MAX_BATCH_CUSTOMER_ACTION_SIZE} 位上限，请缩小范围。`
                         : manualRecycleUnavailable && canBatchMoveToRecycleBin
-                          ? "已选客户均不满足回收条件，可继续添加标签或移交负责人。"
+                          ? canBatchForceHardDelete
+                            ? "已选客户均不满足回收条件；如需删除，请走硬删确认。"
+                            : "已选客户均不满足回收条件，可继续添加标签或移交负责人。"
                           : selectionMode === "filtered"
-                            ? "动作将应用到整个筛选结果，回收会逐条校验误建轻客户条件。"
+                            ? canBatchForceHardDelete
+                              ? "动作将应用到整个筛选结果；回收会逐条校验，硬删会直接清理关联记录。"
+                              : "动作将应用到整个筛选结果，回收会逐条校验误建轻客户条件。"
                           : allCurrentPageSelected && canSelectFiltered
                             ? `可扩展到 ${pagination.totalCount} 位筛选结果。`
-                            : "可添加标签、移交负责人或移入回收站。"}
+                            : canBatchForceHardDelete
+                              ? "可添加标签、移交负责人、移入回收站或硬删。"
+                              : "可添加标签、移交负责人或移入回收站。"}
                     </span>
                   </div>
 
@@ -1796,6 +2009,19 @@ export function CustomersTable({
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                         回收
+                      </button>
+                    ) : null}
+
+                    {canBatchForceHardDelete ? (
+                      <button
+                        type="button"
+                        onClick={openBatchForceDeleteDialog}
+                        disabled={batchExecutionBlockedByLimit}
+                        title="批量硬删除客户"
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full bg-destructive px-3 text-xs font-semibold text-destructive-foreground shadow-sm transition hover:bg-destructive/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        硬删
                       </button>
                     ) : null}
                   </div>
@@ -1933,6 +2159,21 @@ export function CustomersTable({
         pending={batchRecyclePending}
         onClose={closeBatchRecycleDialog}
         onSubmit={handleBatchRecycleSubmit}
+        selectedCustomerIds={manualSelectedIds}
+      />
+
+      <BatchForceDeleteDialog
+        open={batchForceDeleteDialogOpen}
+        selectedCount={selectedCount}
+        selectionMode={selectionMode}
+        filters={filters}
+        pending={batchForceDeletePending}
+        confirmation={batchForceDeleteConfirmation}
+        reason={batchForceDeleteReason}
+        onClose={closeBatchForceDeleteDialog}
+        onSubmit={handleBatchForceDeleteSubmit}
+        onConfirmationChange={setBatchForceDeleteConfirmation}
+        onReasonChange={setBatchForceDeleteReason}
         selectedCustomerIds={manualSelectedIds}
       />
     </>

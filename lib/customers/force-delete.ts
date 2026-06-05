@@ -25,11 +25,13 @@ type ForceDeleteDependencySnapshot = Awaited<
 >;
 
 type DeleteCountMap = Record<string, number>;
+type ForceDeleteConfirmationMode = "customer_identity" | "batch_phrase";
 
 const forceDeleteTransactionOptions = {
   maxWait: 10_000,
   timeout: 60_000,
 };
+export const CUSTOMER_BATCH_FORCE_HARD_DELETE_CONFIRMATION = "永久删除";
 
 const forceDeleteCustomerSelect = {
   id: true,
@@ -828,6 +830,7 @@ export async function forceHardDeleteCustomer(
     customerId: string;
     confirmation: string;
     reason: string;
+    confirmationMode?: ForceDeleteConfirmationMode;
   },
 ): Promise<ForceHardDeleteCustomerResult> {
   return prisma.$transaction(async (tx) => {
@@ -853,7 +856,11 @@ export async function forceHardDeleteCustomer(
 
     const confirmation = input.confirmation.trim();
 
-    if (confirmation !== customer.name && confirmation !== customer.phone) {
+    if (input.confirmationMode === "batch_phrase") {
+      if (confirmation !== CUSTOMER_BATCH_FORCE_HARD_DELETE_CONFIRMATION) {
+        throw new Error(`确认内容不匹配，请输入“${CUSTOMER_BATCH_FORCE_HARD_DELETE_CONFIRMATION}”。`);
+      }
+    } else if (confirmation !== customer.name && confirmation !== customer.phone) {
       throw new Error("确认内容不匹配，请输入客户姓名或手机号。");
     }
 
