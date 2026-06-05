@@ -1723,7 +1723,7 @@ export function CustomerDetailWorkbench({
       header={
         <section
           className={cn(
-            "rounded-2xl border border-border/60 bg-card px-4 shadow-sm md:px-5",
+            "rounded-xl border border-border/60 bg-card px-4 shadow-sm md:px-5",
             isTradeOrderComposerMode ? "py-3" : "py-4 xl:px-6",
           )}
         >
@@ -1816,7 +1816,7 @@ export function CustomerDetailWorkbench({
             </div>
 
             {isTradeOrderComposerMode ? null : (
-            <div className="max-w-xl rounded-2xl border border-border/40 bg-muted/30 px-4 py-3">
+            <div className="max-w-xl rounded-xl border border-border/40 bg-muted/30 px-4 py-3">
               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -1918,7 +1918,7 @@ export function CustomerDetailWorkbench({
         {isTradeOrderComposerMode ? null : (
         <aside className="min-w-0 lg:col-span-4">
           <div className="sticky top-6 space-y-4">
-            <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
+            <section className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -1950,7 +1950,7 @@ export function CustomerDetailWorkbench({
               </div>
             </section>
 
-            <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
+            <section className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -2009,7 +2009,7 @@ export function CustomerDetailWorkbench({
               </div>
             </section>
 
-            <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
+            <section className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -2162,7 +2162,7 @@ export function CustomerDetailWorkbench({
             </div>
 
             {customerRecycleGuard && moveCustomerToRecycleBinAction ? (
-              <section className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
+              <section className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
                 <CustomerRecycleEntry
                   key={`${shell.id}-${customerRecycleGuard.canMoveToRecycleBin ? "move" : "blocked"}-${customerRecycleGuard.blockers.length}`}
                   customerId={shell.id}
