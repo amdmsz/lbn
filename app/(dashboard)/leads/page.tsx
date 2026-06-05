@@ -4,7 +4,10 @@ import { LeadsFilters } from "@/components/leads/leads-filters";
 import { LeadsTable } from "@/components/leads/leads-table";
 import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { PageHeader } from "@/components/shared/page-header";
-import type { PageSummaryStripItem } from "@/components/shared/page-summary-strip";
+import {
+  PageSummaryStrip,
+  type PageSummaryStripItem,
+} from "@/components/shared/page-summary-strip";
 import {
   canAccessLeadModule,
   canManageLeadAssignments,
@@ -72,35 +75,6 @@ function buildSummaryItems(input: {
   ];
 }
 
-function LeadSummaryGrid({
-  items,
-}: Readonly<{
-  items: PageSummaryStripItem[];
-}>) {
-  return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {items.map((item, index) => (
-        <div
-          key={item.key ?? `${item.label}-${index}`}
-          className="rounded-xl border border-border/60 bg-card p-5 shadow-sm"
-        >
-          <p className="text-xs font-semibold uppercase text-muted-foreground">
-            {item.label}
-          </p>
-          <div className="mt-2 text-2xl font-semibold text-foreground">
-            {item.value}
-          </div>
-          {item.note ? (
-            <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
-              {item.note}
-            </p>
-          ) : null}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default async function LeadsPage({
   searchParams,
 }: Readonly<{
@@ -154,7 +128,7 @@ export default async function LeadsPage({
               <Link
                 href="/lead-imports"
                 scroll={false}
-                className="inline-flex min-h-0 items-center rounded-lg border border-border/60 bg-card px-3 py-1.5 text-[13px] font-medium text-muted-foreground shadow-sm transition-all hover:border-primary/40 hover:text-primary"
+                className="inline-flex min-h-0 items-center rounded-lg border border-border/60 bg-card px-3 py-1.5 text-[13px] font-medium text-muted-foreground shadow-sm transition-colors duration-150 hover:border-primary/40 hover:text-primary"
               >
                 返回导入中心
               </Link>
@@ -162,7 +136,7 @@ export default async function LeadsPage({
                 <Link
                   href={`/lead-imports/${data.importBatch.id}`}
                   scroll={false}
-                  className="inline-flex min-h-0 items-center rounded-lg bg-primary px-3 py-1.5 text-[13px] font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90"
+                  className="inline-flex min-h-0 items-center rounded-lg bg-primary px-3 py-1.5 text-[13px] font-medium text-primary-foreground shadow-sm transition-colors duration-150 hover:opacity-90"
                 >
                   查看当前批次
                 </Link>
@@ -173,7 +147,7 @@ export default async function LeadsPage({
         />
       }
       summary={
-        <LeadSummaryGrid
+        <PageSummaryStrip
           items={buildSummaryItems({
             contextLabel,
             importBatchFileName: data.importBatch?.fileName ?? null,

@@ -58,18 +58,13 @@ export default async function LeadDetailPage({
   }
 
   const region = [lead.province, lead.city, lead.district].filter(Boolean).join(" / ");
-  const isSalesReferenceView = false;
   const canManageTags = canUseLeadTags(session.user.role);
 
   return (
     <div className="crm-page">
       <PageHeader
         title={lead.name?.trim() || lead.phone}
-        description={
-          isSalesReferenceView
-            ? "线索详情页仅保留追溯、归并结果和分配历史的参考用途。实际承接与后续动作请转到客户中心。"
-            : "线索详情页展示基础资料、归并结果、负责人、状态、分配记录与操作日志。"
-        }
+        description="线索详情页展示基础资料、归并结果、负责人、状态、分配记录与操作日志。"
         actions={
           <>
             <LeadStatusBadge status={lead.status} />
@@ -84,12 +79,6 @@ export default async function LeadDetailPage({
       {notice ? (
         <ActionBanner tone={notice.tone} className="mt-6">
           {notice.message}
-        </ActionBanner>
-      ) : null}
-
-      {isSalesReferenceView ? (
-        <ActionBanner tone="danger" className="mt-6">
-          销售的主业务入口已切换为客户中心。当前线索页仅作导入来源、归并结果和分配历史的只读参考。
         </ActionBanner>
       ) : null}
 
@@ -114,7 +103,7 @@ export default async function LeadDetailPage({
           <DetailItem label="手机号" value={lead.phone} />
           <DetailItem label="导入来源" value={getLeadSourceLabel(lead.source)} />
           <DetailItem
-            label="已购产品"
+            label="意向产品"
             value={lead.interestedProduct?.trim() || "未填写"}
           />
           <DetailItem label="当前状态" value={getLeadStatusLabel(lead.status)} />
@@ -131,7 +120,7 @@ export default async function LeadDetailPage({
             }
           />
           <DetailItem label="来源详情" value={lead.sourceDetail?.trim() || "未填写"} />
-          <DetailItem label="物流单号" value={lead.campaignName?.trim() || "未填写"} />
+          <DetailItem label="活动标记" value={lead.campaignName?.trim() || "未填写"} />
           <DetailItem label="区域" value={region || "未填写"} />
           <DetailItem label="详细地址" value={lead.address?.trim() || "未填写"} />
           <DetailItem
