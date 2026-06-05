@@ -404,7 +404,7 @@ function CustomerViewToggle({
         type="button"
         onClick={() => onChange("table")}
         className={cn(
-          "inline-flex h-8 items-center gap-1.5 rounded-[10px] px-3 text-[12px] font-medium transition-[background-color,color,box-shadow,transform] duration-150 motion-safe:hover:-translate-y-[1px]",
+          "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[12px] font-medium transition-[background-color,color] duration-120",
           value === "table"
             ? "bg-[var(--color-shell-hover)] text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)]"
             : "text-[var(--color-sidebar-muted)] hover:text-[var(--foreground)]",
@@ -417,7 +417,7 @@ function CustomerViewToggle({
         type="button"
         onClick={() => onChange("cards")}
         className={cn(
-          "inline-flex h-8 items-center gap-1.5 rounded-[10px] px-3 text-[12px] font-medium transition-[background-color,color,box-shadow,transform] duration-150 motion-safe:hover:-translate-y-[1px]",
+          "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-[12px] font-medium transition-[background-color,color] duration-120",
           value === "cards"
             ? "bg-[var(--color-shell-hover)] text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)]"
             : "text-[var(--color-sidebar-muted)] hover:text-[var(--foreground)]",
