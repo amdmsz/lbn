@@ -8,6 +8,7 @@ import {
   canCreateLiveInvitation,
   canCreateSalesOrder,
   canCreateWechatRecord,
+  canPermanentlyDeleteCustomers,
   canTransferCustomerOwner,
   canUseCustomerTags,
   getDefaultRouteForRole,
@@ -36,6 +37,7 @@ import {
 import { getCustomerTradeOrderComposerData } from "@/lib/trade-orders/queries";
 import {
   deleteImportedCustomerDirectAction,
+  forceHardDeleteCustomerAction,
   moveCustomerToRecycleBinAction,
   requestImportedCustomerDeletionAction,
   saveTradeOrderDraftAction,
@@ -165,6 +167,7 @@ export default async function CustomerDetailPage({
   const canEditProfile =
     session.user.role !== "SALES" || isOwnedByCurrentSales;
   const canTransferOwner = canTransferCustomerOwner(session.user.role);
+  const canForceHardDeleteCustomer = canPermanentlyDeleteCustomers(session.user.role);
   const [callResultOptions, outboundCallEnabled] = canCreateCalls
     ? await Promise.all([
         getEnabledCallResultOptions(),
@@ -236,9 +239,13 @@ export default async function CustomerDetailPage({
       tradeOrderComposer={tradeOrderComposer}
       customerRecycleGuard={customerRecycleTarget?.guard ?? null}
       customerFinalizePreview={customerFinalizePreview}
+      canForceHardDeleteCustomer={canForceHardDeleteCustomer}
       ownerTransferOptions={ownerTransferOptions}
       transferCustomerOwnerAction={
         canTransferOwner ? transferCustomerOwnerAction : undefined
+      }
+      forceHardDeleteCustomerAction={
+        canForceHardDeleteCustomer ? forceHardDeleteCustomerAction : undefined
       }
       moveCustomerToRecycleBinAction={moveCustomerToRecycleBinAction}
       updateCustomerProfileAction={updateCustomerProfileAction}

@@ -28,6 +28,7 @@ import {
   requestImportedCustomerDeletion,
   reviewImportedCustomerDeletion,
 } from "@/lib/customers/imported-customer-deletion";
+import { forceHardDeleteCustomer } from "@/lib/customers/force-delete";
 import { moveToRecycleBin } from "@/lib/recycle-bin/lifecycle";
 import type {
   MoveToRecycleBinResult,
@@ -49,7 +50,19 @@ const importedCustomerDeletionReviewSchema = z.object({
   reason: z.string().trim().max(500, "原因不能超过 500 字").optional(),
 });
 
+const forceHardDeleteCustomerSchema = z.object({
+  customerId: z.string().trim().min(1, "缺少客户 ID"),
+  confirmation: z.string().trim().min(1, "请输入客户姓名或手机号确认"),
+  reason: z.string().trim().min(1, "请填写强制硬删除原因").max(500, "原因不能超过 500 字"),
+});
+
 export type ImportedCustomerDeletionActionResult = {
+  status: "success" | "error";
+  message: string;
+  redirectTo: string | null;
+};
+
+export type ForceHardDeleteCustomerActionResult = {
   status: "success" | "error";
   message: string;
   redirectTo: string | null;
@@ -115,6 +128,18 @@ function revalidateImportedCustomerDeletionPaths(input: {
   if (input.batchId) {
     revalidatePath(`/lead-imports/${input.batchId}`);
   }
+}
+
+function revalidateForceHardDeleteCustomerPaths(customerId: string) {
+  revalidatePath("/customers");
+  revalidatePath("/customers/public-pool");
+  revalidatePath("/dashboard");
+  revalidatePath("/recycle-bin");
+  revalidatePath("/orders");
+  revalidatePath("/fulfillment");
+  revalidatePath("/finance");
+  revalidatePath("/reports");
+  revalidatePath(`/customers/${customerId}`);
 }
 
 function getCustomerRecycleReasonCode(formData: FormData): CustomerRecycleReasonCode {
@@ -710,6 +735,65 @@ export async function deleteImportedCustomerDirectAction(
       redirectTo: item.redirectTo
         ? buildRedirectTarget(item.redirectTo, "success", item.message)
         : null,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: getErrorMessage(error),
+      redirectTo: null,
+    };
+  }
+}
+
+export async function forceHardDeleteCustomerAction(
+  input: z.input<typeof forceHardDeleteCustomerSchema>,
+): Promise<ForceHardDeleteCustomerActionResult> {
+  const session = await auth();
+
+  if (!session?.user) {
+    return {
+      status: "error",
+      message: "登录状态已失效，请重新登录后再试。",
+      redirectTo: null,
+    };
+  }
+
+  const parsed = forceHardDeleteCustomerSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      status: "error",
+      message: parsed.error.issues[0]?.message ?? "提交数据不完整。",
+      redirectTo: null,
+    };
+  }
+
+  try {
+    const result = await forceHardDeleteCustomer(
+      {
+        id: session.user.id,
+        role: session.user.role,
+      },
+      parsed.data,
+    );
+
+    revalidateForceHardDeleteCustomerPaths(result.customerId);
+
+    const deletedBusinessCount =
+      (result.deletedCounts.tradeOrders ?? 0) +
+      (result.deletedCounts.salesOrders ?? 0) +
+      (result.deletedCounts.paymentPlans ?? 0) +
+      (result.deletedCounts.paymentRecords ?? 0) +
+      (result.deletedCounts.shippingTasks ?? 0);
+    const message =
+      deletedBusinessCount > 0
+        ? `已强制硬删除 ${result.customerName}，并清理关联业务记录 ${deletedBusinessCount} 项。`
+        : `已强制硬删除 ${result.customerName}。`;
+
+    return {
+      status: "success",
+      message,
+      redirectTo: buildRedirectTarget(result.redirectTo, "success", message),
     };
   } catch (error) {
     return {

@@ -4,6 +4,10 @@ import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { CustomerCallRecordsSection } from "@/components/customers/customer-call-records-section";
 import { CustomerDetailTabs } from "@/components/customers/customer-detail-tabs";
 import {
+  CustomerForceDeletePanel,
+  type ForceHardDeleteCustomerAction,
+} from "@/components/customers/customer-force-delete-panel";
+import {
   CustomerDossierLedgerRow,
   type CustomerDossierStatusItem,
   type CustomerDossierStatusTone,
@@ -209,6 +213,21 @@ function formatLeadSourceSummary(
 
 function getCustomerTotalOrderCount(shell: CustomerDetailShellData) {
   return shell.tradeOrderSummary.approvedCount || shell._count.salesOrders;
+}
+
+function getCustomerBusinessRecordCount(shell: CustomerDetailShellData) {
+  return (
+    shell._count.leads +
+    shell._count.callRecords +
+    shell._count.wechatRecords +
+    shell._count.liveInvitations +
+    shell._count.salesOrders +
+    shell._count.giftRecords +
+    shell._count.mergeLogs +
+    shell._count.ownershipEvents +
+    shell.tradeOrderSummary.approvedCount +
+    shell.logisticsFollowUpCount
+  );
 }
 
 function getEngagementStageLabel(shell: CustomerDetailShellData) {
@@ -1738,6 +1757,8 @@ export function CustomerDetailWorkbench({
   navigationContext,
   customerRecycleGuard,
   customerFinalizePreview,
+  canForceHardDeleteCustomer,
+  forceHardDeleteCustomerAction,
   moveCustomerToRecycleBinAction,
   ownerTransferOptions,
   transferCustomerOwnerAction,
@@ -1768,6 +1789,8 @@ export function CustomerDetailWorkbench({
   submitTradeOrderForReviewAction?: (formData: FormData) => Promise<void>;
   customerRecycleGuard: RecycleMoveGuard | null;
   customerFinalizePreview: RecycleFinalizePreview | null;
+  canForceHardDeleteCustomer: boolean;
+  forceHardDeleteCustomerAction?: ForceHardDeleteCustomerAction;
   moveCustomerToRecycleBinAction?: MoveCustomerToRecycleBinAction;
   ownerTransferOptions: CustomerOwnerTransferOption[];
   transferCustomerOwnerAction?: TransferCustomerOwnerAction;
@@ -1791,6 +1814,7 @@ export function CustomerDetailWorkbench({
     canManageLiveInvitations,
   );
   const totalOrderCount = getCustomerTotalOrderCount(shell);
+  const businessRecordCount = getCustomerBusinessRecordCount(shell);
   const totalPurchaseAmount = formatCurrency(shell.tradeOrderSummary.lifetimeAmount);
   const executionDisplayInput = {
     executionClass: shell.executionClass,
@@ -2372,6 +2396,17 @@ export function CustomerDetailWorkbench({
                   moveToRecycleBinAction={moveCustomerToRecycleBinAction}
                 />
               </section>
+            ) : null}
+
+            {canForceHardDeleteCustomer && forceHardDeleteCustomerAction ? (
+              <CustomerForceDeletePanel
+                customerId={shell.id}
+                customerName={shell.name}
+                phone={shell.phone}
+                ownerLabel={formatOwnerLabel(shell.owner)}
+                businessRecordCount={businessRecordCount}
+                action={forceHardDeleteCustomerAction}
+              />
             ) : null}
           </div>
         </aside>
