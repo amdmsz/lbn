@@ -8,9 +8,19 @@ import {
   type ForceHardDeleteCustomerAction,
 } from "@/components/customers/customer-force-delete-panel";
 import {
+  CompactArchiveCard,
   CustomerDossierLedgerRow,
   type CustomerDossierStatusItem,
   type CustomerDossierStatusTone,
+  OrderArchiveCard,
+  OverviewSummaryCard,
+  PortraitActionLink,
+  PortraitFact,
+  type PortraitSignal,
+  PortraitSignalRail,
+  QuietSectionMeta,
+  type SummaryCard,
+  type SummaryTone,
 } from "@/components/customers/customer-dossier-primitives";
 import { ImportedCustomerDeletionPanel } from "@/components/customers/imported-customer-deletion-panel";
 import { CustomerLiveRecordsSection } from "@/components/customers/customer-live-records-section";
@@ -32,7 +42,6 @@ import { CustomerTagsPanel } from "@/components/customers/customer-tags-panel";
 import { CustomerWechatRecordsSection } from "@/components/customers/customer-wechat-records-section";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { PageContextLink } from "@/components/shared/page-context-link";
-import { SmartLink } from "@/components/shared/smart-link";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { TradeOrderForm } from "@/components/trade-orders/trade-order-form";
 import {
@@ -148,24 +157,6 @@ type CustomerDetailTabDataMap = {
   logs: CustomerLogsData;
 };
 
-type SummaryTone = "default" | "info" | "warning" | "danger" | "success";
-
-type SummaryCard = {
-  label?: string;
-  eyebrow?: string;
-  value: string;
-  description?: string;
-  note: string;
-  href: string;
-  tone?: SummaryTone;
-};
-
-type PortraitSignal = {
-  label: string;
-  value: string;
-  description?: string;
-};
-
 type DetailField = {
   label: string;
   value: ReactNode;
@@ -177,14 +168,6 @@ type RiskState = {
   description: string;
   tone: SummaryTone;
   tab: CustomerDetailTab;
-};
-
-const summaryToneClassName: Record<SummaryTone, string> = {
-  default: "border-border/50",
-  info: "border-primary/20",
-  warning: "border-amber-400/25",
-  danger: "border-destructive/20",
-  success: "border-emerald-500/20",
 };
 
 const summaryToneBadgeVariant: Record<
@@ -532,206 +515,6 @@ function getFollowUpEntryTab(
   return "orders" as const;
 }
 
-function OverviewSummaryCard({
-  card,
-}: Readonly<{
-  card: SummaryCard;
-}>) {
-  return (
-    <SmartLink
-      href={card.href}
-      scrollTargetId="customer-main"
-      className={cn(
-        "group rounded-2xl border bg-card px-4 py-3.5 shadow-sm transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-[1px] hover:bg-muted/30 hover:shadow-md",
-        summaryToneClassName[card.tone ?? "default"],
-      )}
-    >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-        {card.eyebrow ?? card.label ?? "摘要"}
-      </p>
-      <p className="mt-2 text-[1.08rem] font-semibold text-foreground">
-        {card.value}
-      </p>
-      {card.description ? (
-        <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
-          {card.description}
-        </p>
-      ) : null}
-      <p className="mt-2 text-[11px] leading-5 text-muted-foreground/80">
-        {card.note}
-      </p>
-    </SmartLink>
-  );
-}
-
-function PortraitFact({
-  label,
-  value,
-  description,
-}: Readonly<{
-  label: string;
-  value: ReactNode;
-  description?: string;
-}>) {
-  return (
-    <div className="rounded-xl border border-border/40 bg-card px-3.5 py-3 shadow-sm">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-        {label}
-      </p>
-      <div className="mt-1.5 text-[13px] font-semibold leading-5 text-foreground">
-        {value}
-      </div>
-      {description ? (
-        <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-          {description}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function PortraitActionLink({
-  href,
-  label,
-  emphasis = "default",
-}: Readonly<{
-  href: string;
-  label: string;
-  emphasis?: "default" | "primary";
-}>) {
-  return (
-    <SmartLink
-      href={href}
-      scrollTargetId="customer-main"
-      className={cn(
-        "inline-flex h-9 items-center rounded-full border px-3.5 text-[12px] font-medium shadow-sm transition-[border-color,background-color,color,transform,box-shadow] duration-150 hover:-translate-y-[1px]",
-        emphasis === "primary"
-          ? "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
-          : "border-border/60 bg-card text-muted-foreground hover:border-primary/40 hover:bg-muted/40 hover:text-foreground",
-      )}
-    >
-      {label}
-    </SmartLink>
-  );
-}
-
-function PortraitSignalRail({
-  items,
-}: Readonly<{
-  items: PortraitSignal[];
-}>) {
-  return (
-    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-      {items.map((item) => (
-        <div
-          key={item.label}
-          className="rounded-xl border border-border/40 bg-card px-3.5 py-3 shadow-sm"
-        >
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            {item.label}
-          </p>
-          <p className="mt-1.5 text-[13px] font-semibold leading-5 text-foreground">
-            {item.value}
-          </p>
-          {item.description ? (
-            <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-              {item.description}
-            </p>
-          ) : null}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function CompactArchiveCard({
-  title,
-  meta,
-  description,
-  href,
-  hrefLabel,
-}: Readonly<{
-  title: string;
-  meta: string[];
-  description?: string;
-  href?: string;
-  hrefLabel?: string;
-}>) {
-  return (
-    <div className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow] hover:border-[rgba(122,154,255,0.18)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-md)]">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1 space-y-2">
-          <p className="text-sm font-semibold text-[var(--foreground)]">{title}</p>
-          {description ? (
-            <p className="text-[13px] leading-6 text-[var(--color-sidebar-muted)]">{description}</p>
-          ) : null}
-          <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
-            {meta.map((item, index) => (
-              <span key={`${index}-${item}`} className="inline-flex max-w-full items-center gap-2">
-                {index > 0 ? <span className="text-[var(--color-border)]">/</span> : null}
-                <span className="break-words">{item}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-        {href && hrefLabel ? (
-          <Link href={href} scroll={false} className="crm-text-link shrink-0 pt-0.5">
-            {hrefLabel}
-          </Link>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function QuietSectionMeta({
-  children,
-}: Readonly<{
-  children: ReactNode;
-}>) {
-  return (
-    <span className="text-[12px] font-medium leading-5 text-[var(--color-sidebar-muted)]">
-      {children}
-    </span>
-  );
-}
-
-function OrderArchiveCard({
-  title,
-  amount,
-  summary,
-  meta,
-  statusItems,
-  detail,
-  href,
-  hrefLabel,
-}: Readonly<{
-  title: string;
-  amount: string;
-  summary: string;
-  meta: string[];
-  statusItems: CustomerDossierStatusItem[];
-  detail?: ReactNode;
-  href: string;
-  hrefLabel: string;
-}>) {
-  return (
-    <CustomerDossierLedgerRow
-      title={title}
-      subtitle={summary}
-      meta={meta}
-      statusItems={statusItems}
-      aside={
-        <span className="text-[1.02rem] font-semibold text-foreground">
-          {amount}
-        </span>
-      }
-      detail={detail}
-      href={href}
-      hrefLabel={hrefLabel}
-    />
-  );
-}
 
 function getOrderReviewTone(
   status: CustomerOrdersData[number]["reviewStatus"],
