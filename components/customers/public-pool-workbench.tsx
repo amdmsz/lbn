@@ -67,13 +67,13 @@ const quietWorkbenchSampleCardClassName =
   "rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2.5 shadow-[var(--color-shell-shadow-sm)]";
 
 const quietWorkbenchActionLinkClassName =
-  "inline-flex h-9 items-center rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3.5 text-sm text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color,transform,box-shadow] duration-150 hover:-translate-y-px hover:border-[rgba(122,154,255,0.18)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)] hover:shadow-[var(--color-shell-shadow-sm)]";
+  "inline-flex h-9 items-center rounded-md border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3.5 text-sm text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color] duration-150 hover:border-[var(--tone-info-soft-border)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]";
 
 const quietWorkbenchTagClassName =
   "rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-2 py-0.5 text-[11px] text-[var(--color-sidebar-muted)]";
 
 const quietWorkbenchResultClassName =
-  "mt-4 rounded-[1rem] border border-[rgba(122,154,255,0.18)] bg-[rgba(111,141,255,0.12)] px-3.5 py-3";
+  "mt-4 rounded-xl border border-[var(--tone-info-soft-border)] bg-[var(--tone-info-soft-bg)] px-3.5 py-3";
 
 function formatDateTimeValue(value: Date | null) {
   return value ? formatDateTime(value) : "未记录";

@@ -770,7 +770,7 @@ export function RecycleBinWorkbench({
                         className={cn(
                           "cursor-pointer transition-colors",
                           selected
-                            ? "bg-[rgba(111,141,255,0.12)]"
+                            ? "bg-[var(--tone-info-soft-bg)]"
                             : "hover:bg-[var(--color-shell-hover)]",
                         )}
                       >
@@ -1248,8 +1248,8 @@ function RecycleBinConfirmDialog({
         : meta.impactHint;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(3,5,10,0.72)] px-4 py-8 backdrop-blur-[18px]">
-      <div className="w-full max-w-xl overflow-hidden rounded-[1.35rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-lg)]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-8">
+      <div className="w-full max-w-xl overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-lg)]">
         <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-5 py-4">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">

@@ -81,7 +81,7 @@ function ReportMetricTile({
     "group flex min-w-0 flex-col justify-between",
     isBare
       ? "min-h-[5.75rem]"
-      : "min-h-[8.25rem] rounded-xl border border-border/40 bg-background/50 p-4 transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-[1px] hover:bg-background hover:shadow-sm",
+      : "min-h-[7.5rem] rounded-xl border border-border/40 bg-background/50 p-4 transition-[border-color,background-color] duration-150 hover:bg-background",
     !isBare ? reportMetricToneClassName[item.tone ?? "default"] : "",
   );
   const content = (
@@ -102,7 +102,7 @@ function ReportMetricTile({
       {item.note ? (
         <p
           title={item.note}
-          className="mt-1.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground/50"
+          className="mt-1.5 line-clamp-2 text-[11px] leading-snug text-muted-foreground/70"
         >
           {item.note}
         </p>
@@ -166,7 +166,7 @@ function DomainSummaryCard({
       title={title}
       description={description}
       density="compact"
-      className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+      className="rounded-xl shadow-[var(--color-shell-shadow-sm)]"
       contentClassName="p-3 md:p-4"
     >
       <ReportMetricGrid
@@ -244,7 +244,7 @@ export function ReportOverview({
             : `当前视角：${scopeLabel}`
         }
         density="compact"
-        className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+        className="rounded-xl shadow-[var(--color-shell-shadow-sm)]"
         contentClassName="p-3 md:p-4"
       >
         {conversions ? (
@@ -273,7 +273,7 @@ export function ReportOverview({
             : `当前视角：${scopeLabel}`
         }
         density="compact"
-        className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+        className="rounded-xl shadow-[var(--color-shell-shadow-sm)]"
         contentClassName="p-3 md:p-4"
       >
         {ranking && ranking.items.length > 0 ? (
@@ -333,7 +333,7 @@ export function ReportOverview({
           title="口径"
           description="仅保留当前正式模型下的统计定义。"
           density="compact"
-          className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+          className="rounded-xl shadow-[var(--color-shell-shadow-sm)]"
           contentClassName="p-3 md:p-4"
         >
           <div className="grid gap-x-8 md:grid-cols-2">
