@@ -588,7 +588,7 @@ export function UserDetailManager({
                 <button
                   type="submit"
                   disabled={pending || !deleteConfirmationMatches}
-                  className="crm-button crm-button-secondary text-[var(--color-danger)] hover:border-[rgba(255,148,175,0.24)] hover:bg-[rgba(255,148,175,0.12)] disabled:cursor-not-allowed disabled:opacity-55"
+                  className="crm-button crm-button-secondary text-[var(--color-danger)] hover:border-[var(--tone-danger-soft-border-strong)] hover:bg-[var(--tone-danger-soft-bg)] disabled:cursor-not-allowed disabled:opacity-55"
                 >
                   {pending ? "删除中..." : "永久删除账号"}
                 </button>

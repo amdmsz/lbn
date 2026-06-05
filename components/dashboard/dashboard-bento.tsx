@@ -21,7 +21,7 @@ const ringToneClassNames: Record<BentoTone, string> = {
 };
 
 const bentoSurfaceClassName =
-  "rounded-2xl border border-border bg-card p-6 shadow-sm";
+  "rounded-xl border border-border bg-card p-4";
 
 export function BentoGrid({
   children,
@@ -33,7 +33,7 @@ export function BentoGrid({
   return (
     <div
       className={cn(
-        "grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6 lg:grid-cols-4",
+        "grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4 lg:grid-cols-4",
         className,
       )}
     >
@@ -62,20 +62,20 @@ export function BentoCard({
   return (
     <section className={cn(bentoSurfaceClassName, className)}>
       {title || eyebrow || description || actions ? (
-        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 space-y-1.5">
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 space-y-1">
             {eyebrow ? (
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                 {eyebrow}
               </p>
             ) : null}
             {title ? (
-              <h2 className="text-base font-semibold tracking-tight text-foreground">
+              <h2 className="text-[15px] font-semibold tracking-tight text-foreground">
                 {title}
               </h2>
             ) : null}
             {description ? (
-              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+              <p className="max-w-2xl text-[13px] leading-5 text-muted-foreground">
                 {description}
               </p>
             ) : null}
@@ -107,27 +107,27 @@ export function BentoMetricCard({
     <div
       className={cn(
         bentoSurfaceClassName,
-        "group flex min-h-[11rem] flex-col justify-between transition duration-200 hover:-translate-y-px hover:border-primary/30",
+        "flex min-h-[8.5rem] flex-col justify-between transition-colors duration-150 hover:border-primary/30",
         className,
       )}
     >
       <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
           {label}
         </p>
         <span
           className={cn(
-            "mt-1 h-2.5 w-2.5 shrink-0 rounded-full opacity-80 transition group-hover:scale-125",
+            "mt-1 h-1.5 w-1.5 shrink-0 rounded-full opacity-70",
             toneClassNames[tone],
           )}
         />
       </div>
       <div>
-        <div className="font-mono text-4xl font-semibold tracking-tight text-foreground">
+        <div className="font-mono text-[28px] font-semibold leading-none tracking-tight text-foreground">
           {value}
         </div>
         {note ? (
-          <p className="mt-3 line-clamp-2 text-sm leading-5 text-muted-foreground">
+          <p className="mt-2 line-clamp-2 text-[12px] leading-[1.45] text-muted-foreground">
             {note}
           </p>
         ) : null}
@@ -158,14 +158,14 @@ export function BentoMiniStat({
   className?: string;
 }>) {
   return (
-    <div className={cn("rounded-xl border border-border bg-muted/35 px-3 py-2.5", className)}>
-      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+    <div className={cn("rounded-md border border-border bg-muted/30 px-3 py-2", className)}>
+      <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
         {label}
       </p>
-      <p className="mt-1 truncate font-mono text-lg font-semibold text-foreground">
+      <p className="mt-1 truncate font-mono text-base font-semibold text-foreground">
         {value}
       </p>
-      {note ? <p className="mt-0.5 text-xs text-muted-foreground">{note}</p> : null}
+      {note ? <p className="mt-0.5 text-[11px] text-muted-foreground">{note}</p> : null}
     </div>
   );
 }
@@ -183,7 +183,7 @@ export function BentoActionLink({
     <Link
       href={href}
       className={cn(
-        "inline-flex h-9 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs font-medium text-muted-foreground shadow-sm transition hover:border-primary/30 hover:bg-muted hover:text-foreground",
+        "inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-[12px] font-medium text-muted-foreground transition-colors duration-120 hover:border-primary/30 hover:bg-muted hover:text-foreground",
         className,
       )}
     >
@@ -209,7 +209,7 @@ export function BentoRadialMetric({
   const offset = circumference - (clampedPercent / 100) * circumference;
 
   return (
-    <div className="flex min-w-0 flex-col items-center gap-3 rounded-2xl border border-border bg-muted/20 px-3 py-4">
+    <div className="flex min-w-0 flex-col items-center gap-2.5 rounded-lg border border-border bg-muted/20 px-3 py-3">
       <div className="relative h-24 w-24">
         <svg
           viewBox="0 0 100 100"
@@ -248,7 +248,7 @@ export function BentoRadialMetric({
           </span>
         </div>
       </div>
-      <p className="text-center text-xs font-medium uppercase tracking-wider text-muted-foreground">
+      <p className="text-center text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
         {label}
       </p>
     </div>

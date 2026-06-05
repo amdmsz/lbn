@@ -23,13 +23,13 @@ const quietExecutionClassVariantClassNames: Record<StatusBadgeVariant, string> =
   {
     neutral:
       "border-[var(--crm-badge-neutral-border)] bg-[var(--crm-badge-neutral-bg)] text-[var(--crm-badge-neutral-text)]",
-    info: "border-[rgba(111,141,255,0.18)] bg-[rgba(111,141,255,0.12)] text-[var(--color-accent-strong)]",
+    info: "border-[var(--tone-info-soft-border)] bg-[var(--tone-info-soft-bg)] text-[var(--color-accent-strong)]",
     success:
-      "border-[rgba(87,212,176,0.16)] bg-[rgba(87,212,176,0.12)] text-[var(--color-success)]",
+      "border-[var(--tone-success-soft-border)] bg-[var(--tone-success-soft-bg)] text-[var(--color-success)]",
     warning:
-      "border-[rgba(240,195,106,0.18)] bg-[rgba(240,195,106,0.12)] text-[var(--color-warning)]",
+      "border-[var(--tone-warning-soft-border)] bg-[var(--tone-warning-soft-bg)] text-[var(--color-warning)]",
     danger:
-      "border-[rgba(255,148,175,0.16)] bg-[rgba(255,148,175,0.12)] text-[var(--color-danger)]",
+      "border-[var(--tone-danger-soft-border)] bg-[var(--tone-danger-soft-bg)] text-[var(--color-danger)]",
   };
 
 const quickClassActions = [

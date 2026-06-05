@@ -166,13 +166,13 @@ const quietExecutionButtonVariantClassNames = {
   neutral:
     "border-[var(--crm-badge-neutral-border)] bg-[var(--crm-badge-neutral-bg)] text-[var(--crm-badge-neutral-text)]",
   info:
-    "border-[rgba(111,141,255,0.18)] bg-[rgba(111,141,255,0.1)] text-[var(--color-accent-strong)]",
+    "border-[var(--tone-info-soft-border)] bg-[var(--tone-info-soft-bg)] text-[var(--color-accent-strong)]",
   success:
-    "border-[rgba(87,212,176,0.16)] bg-[rgba(87,212,176,0.1)] text-[var(--color-success)]",
+    "border-[var(--tone-success-soft-border)] bg-[var(--tone-success-soft-bg)] text-[var(--color-success)]",
   warning:
-    "border-[rgba(240,195,106,0.18)] bg-[rgba(240,195,106,0.1)] text-[var(--color-warning)]",
+    "border-[var(--tone-warning-soft-border)] bg-[var(--tone-warning-soft-bg)] text-[var(--color-warning)]",
   danger:
-    "border-[rgba(255,148,175,0.16)] bg-[rgba(255,148,175,0.1)] text-[var(--color-danger)]",
+    "border-[var(--tone-danger-soft-border)] bg-[var(--tone-danger-soft-bg)] text-[var(--color-danger)]",
 } as const;
 
 function DailyQuote() {
@@ -206,11 +206,11 @@ const spaciousExecutionPillClassNames = {
   neutral: "border-border bg-muted/55 text-muted-foreground",
   info: "border-primary/20 bg-primary/10 text-primary",
   success:
-    "border-[rgba(87,212,176,0.22)] bg-[rgba(87,212,176,0.1)] text-[var(--color-success)]",
+    "border-[var(--tone-success-soft-border-strong)] bg-[var(--tone-success-soft-bg)] text-[var(--color-success)]",
   warning:
-    "border-[rgba(240,195,106,0.26)] bg-[rgba(240,195,106,0.12)] text-[var(--color-warning)]",
+    "border-[var(--tone-warning-soft-border-strong)] bg-[var(--tone-warning-soft-bg)] text-[var(--color-warning)]",
   danger:
-    "border-[rgba(255,148,175,0.22)] bg-[rgba(255,148,175,0.1)] text-[var(--color-danger)]",
+    "border-[var(--tone-danger-soft-border-strong)] bg-[var(--tone-danger-soft-bg)] text-[var(--color-danger)]",
 } as const;
 
 function getCustomerAddress(item: CustomerListItem) {

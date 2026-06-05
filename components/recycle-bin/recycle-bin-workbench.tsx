@@ -352,7 +352,7 @@ function renderFinalizeActionButtons({
             onOpenDialog("purge", item);
           }}
           disabled={!item.canPurge || pending}
-          className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm text-[var(--color-danger)] hover:border-[rgba(255,148,175,0.24)] hover:bg-[rgba(255,148,175,0.12)] disabled:cursor-not-allowed disabled:text-[var(--color-sidebar-muted)] disabled:opacity-55"
+          className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm text-[var(--color-danger)] hover:border-[var(--tone-danger-soft-border-strong)] hover:bg-[var(--tone-danger-soft-bg)] disabled:cursor-not-allowed disabled:text-[var(--color-sidebar-muted)] disabled:opacity-55"
           title={item.canPurge ? "永久删除对象" : item.purgeSummary}
         >
           永久删除
@@ -392,7 +392,7 @@ function renderDefaultActionButtons({
           onOpenDialog("purge", item);
         }}
         disabled={!item.canPurge || pending}
-        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm text-[var(--color-danger)] hover:border-[rgba(255,148,175,0.24)] hover:bg-[rgba(255,148,175,0.12)] disabled:cursor-not-allowed disabled:text-[var(--color-sidebar-muted)] disabled:opacity-55"
+        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm text-[var(--color-danger)] hover:border-[var(--tone-danger-soft-border-strong)] hover:bg-[var(--tone-danger-soft-bg)] disabled:cursor-not-allowed disabled:text-[var(--color-sidebar-muted)] disabled:opacity-55"
         title={
           item.canPurge
             ? "永久删除对象"

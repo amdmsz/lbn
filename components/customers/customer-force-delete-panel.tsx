@@ -111,7 +111,7 @@ export function CustomerForceDeletePanel({
             setNotice(null);
             setOpen((value) => !value);
           }}
-          className="crm-button crm-button-secondary min-h-0 px-3.5 py-2 text-sm text-[var(--color-danger)] hover:border-[rgba(255,148,175,0.24)] hover:bg-[rgba(255,148,175,0.12)]"
+          className="crm-button crm-button-secondary min-h-0 px-3.5 py-2 text-sm text-[var(--color-danger)] hover:border-[var(--tone-danger-soft-border-strong)] hover:bg-[var(--tone-danger-soft-bg)]"
         >
           <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
           {open ? "收起" : "硬删除"}
