@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LeadsFilters } from "@/components/leads/leads-filters";
 import { LeadsTable } from "@/components/leads/leads-table";
+import { LeadsWorkspaceTabs } from "@/components/leads/leads-workspace-tabs";
 import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { PageHeader } from "@/components/shared/page-header";
 import {
@@ -106,9 +107,11 @@ export default async function LeadsPage({
     <WorkbenchLayout
       className="!gap-4 md:!gap-5"
       header={
-        <PageHeader
-          eyebrow="线索中心"
-          title="线索分配中心"
+        <div className="space-y-3">
+          <LeadsWorkspaceTabs activeValue="allocation" />
+          <PageHeader
+            eyebrow="线索中心"
+            title="线索分配中心"
           description={undefined}
           meta={
             <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-muted-foreground">
@@ -143,8 +146,9 @@ export default async function LeadsPage({
               ) : null}
             </div>
           }
-          className="px-4 py-2 md:px-5 md:py-2.5"
-        />
+            className="px-4 py-2 md:px-5 md:py-2.5"
+          />
+        </div>
       }
       summary={
         <PageSummaryStrip

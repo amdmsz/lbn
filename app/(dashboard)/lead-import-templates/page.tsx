@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { toggleLeadImportTemplateAction, upsertLeadImportTemplateAction } from "@/app/(dashboard)/lead-imports/actions";
+import { LeadsWorkspaceTabs } from "@/components/leads/leads-workspace-tabs";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -61,6 +62,8 @@ export default async function LeadImportTemplatesPage({
 
   return (
     <div className="crm-page">
+      <LeadsWorkspaceTabs activeValue="templates" />
+
       <PageHeader
         title="导入模板管理"
         description="统一查看线索导入自定义模板和客户续接固定模板，减少重复解释和字段口径不一致。"

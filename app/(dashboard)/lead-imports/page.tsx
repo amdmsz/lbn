@@ -4,6 +4,7 @@ import type { LeadImportBatchStatus } from "@prisma/client";
 import { LeadImportBatchesTable } from "@/components/lead-imports/lead-import-batches-table";
 import { LeadImportListFiltersForm } from "@/components/lead-imports/lead-import-list-filters";
 import { LeadImportUploadForm } from "@/components/lead-imports/lead-import-upload-form";
+import { LeadsWorkspaceTabs } from "@/components/leads/leads-workspace-tabs";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -195,6 +196,8 @@ export default async function LeadImportsPage({
 
   return (
     <div className="crm-page">
+      <LeadsWorkspaceTabs activeValue="imports" />
+
       <SummaryHeader
         eyebrow="客户运营 / 导入中心"
         title={data.modeMeta.title}
