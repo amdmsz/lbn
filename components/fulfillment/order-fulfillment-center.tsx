@@ -198,28 +198,24 @@ export function OrderFulfillmentCenter({
         value={String(tradeOrdersData.summary.totalCount)}
         note="当前筛选范围内的成交主单"
         density="strip"
-        className="rounded-2xl border-border/60 bg-card shadow-sm"
       />
       <MetricCard
         label="待审核"
         value={String(tradeOrdersData.summary.pendingReviewCount)}
         note="等待主管或管理员处理"
         density="strip"
-        className="rounded-2xl border-border/60 bg-card shadow-sm"
       />
       <MetricCard
         label="履约异常"
         value={String(tradeOrdersData.summary.focusCounts.exception)}
         note="优先排查报单、物流或状态冲突"
         density="strip"
-        className="rounded-2xl border-border/60 bg-card shadow-sm"
       />
       <MetricCard
         label="成交金额"
         value={formatCurrency(tradeOrdersData.summary.totalFinalAmount)}
         note="父单成交金额，子单按 supplier 执行"
         density="strip"
-        className="rounded-2xl border-border/60 bg-card shadow-sm"
       />
     </div>
   ) : isShippingView ? (
@@ -324,7 +320,7 @@ export function OrderFulfillmentCenter({
               {canCreateTradeOrder ? (
                 <Link
                   href="/customers"
-                  className="inline-flex min-h-0 items-center justify-center rounded-lg bg-primary px-3 py-1.5 text-[13px] font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90"
+                  className="inline-flex min-h-0 items-center justify-center rounded-lg bg-primary px-3 py-1.5 text-[13px] font-medium text-primary-foreground shadow-sm transition-colors duration-150 hover:opacity-90"
                 >
                   去客户中心建单
                 </Link>

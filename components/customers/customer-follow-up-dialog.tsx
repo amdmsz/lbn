@@ -331,7 +331,7 @@ function CustomerFollowUpDialogBody({
                     "[&_.crm-input:focus]:ring-primary [&_.crm-select:focus]:ring-primary [&_.crm-textarea:focus]:ring-primary",
                     "[&_.crm-banner]:rounded-lg [&_.crm-banner]:border-border/60 [&_.crm-banner]:bg-background [&_.crm-banner]:shadow-none",
                   )}
-                  submitButtonClassName="inline-flex w-full items-center justify-center rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                  submitButtonClassName="inline-flex w-full items-center justify-center rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors duration-150 hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                   onSuccess={onClose}
                 />
               </div>

@@ -303,7 +303,7 @@ export function ImportedCustomerDeletionPanel({
                 <button
                   type="button"
                   disabled={isPending || directReason.trim().length === 0}
-                  className="inline-flex h-9 items-center rounded-lg bg-destructive px-3.5 text-sm font-medium text-destructive-foreground shadow-sm transition-all hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-55"
+                  className="inline-flex h-9 items-center rounded-lg bg-destructive px-3.5 text-sm font-medium text-destructive-foreground shadow-sm transition-colors duration-150 hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-55"
                   onClick={() =>
                     handleAction(
                       () =>
@@ -343,7 +343,7 @@ export function ImportedCustomerDeletionPanel({
                 <button
                   type="button"
                   disabled={isPending || requestReason.trim().length === 0}
-                  className="inline-flex h-9 items-center rounded-lg bg-destructive px-3.5 text-sm font-medium text-destructive-foreground shadow-sm transition-all hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-55"
+                  className="inline-flex h-9 items-center rounded-lg bg-destructive px-3.5 text-sm font-medium text-destructive-foreground shadow-sm transition-colors duration-150 hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-55"
                   onClick={() =>
                     handleAction(
                       () =>
@@ -408,7 +408,7 @@ export function ImportedCustomerDeletionPanel({
                 <button
                   type="button"
                   disabled={isPending}
-                  className="inline-flex h-9 items-center rounded-lg bg-destructive px-3.5 text-sm font-medium text-destructive-foreground shadow-sm transition-all hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-55"
+                  className="inline-flex h-9 items-center rounded-lg bg-destructive px-3.5 text-sm font-medium text-destructive-foreground shadow-sm transition-colors duration-150 hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-55"
                   onClick={() =>
                     handleAction(
                       () =>

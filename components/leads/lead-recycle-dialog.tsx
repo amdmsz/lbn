@@ -176,7 +176,7 @@ export function LeadRecycleDialog({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex min-h-0 items-center justify-center rounded-lg border border-border/60 bg-card px-3 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-all hover:border-primary/40 hover:text-primary"
+              className="inline-flex min-h-0 items-center justify-center rounded-lg border border-border/60 bg-card px-3 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-colors duration-150 hover:border-primary/40 hover:text-primary"
             >
               取消
             </button>
@@ -185,7 +185,7 @@ export function LeadRecycleDialog({
                 type="button"
                 onClick={onConfirm}
                 disabled={pending || !onConfirm}
-                className="inline-flex min-h-0 items-center justify-center rounded-lg bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground shadow-sm transition-all hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-55"
+                className="inline-flex min-h-0 items-center justify-center rounded-lg bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground shadow-sm transition-colors duration-150 hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-55"
               >
                 {pending ? "处理中..." : "移入回收站"}
               </button>

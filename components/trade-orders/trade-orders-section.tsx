@@ -84,7 +84,7 @@ const tradeOrderMenuItemClassName =
   "block rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-primary/5 hover:text-primary";
 
 const tradeOrderPrimaryButtonClassName =
-  "inline-flex min-h-0 items-center justify-center rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex min-h-0 items-center justify-center rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60";
 
 const tradeOrderSecondaryButtonClassName =
   "inline-flex min-h-0 items-center justify-center rounded-lg border border-border/60 bg-card px-3.5 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60";

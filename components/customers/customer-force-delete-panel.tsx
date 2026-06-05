@@ -183,7 +183,7 @@ export function CustomerForceDeletePanel({
               type="button"
               onClick={handleSubmit}
               disabled={pending || !confirmationMatched || !reason.trim()}
-              className="inline-flex min-h-0 items-center justify-center gap-2 rounded-lg bg-destructive px-3.5 py-2 text-sm font-medium text-destructive-foreground shadow-sm transition-all hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-55"
+              className="inline-flex min-h-0 items-center justify-center gap-2 rounded-lg bg-destructive px-3.5 py-2 text-sm font-medium text-destructive-foreground shadow-sm transition-colors duration-150 hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-55"
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
               {pending ? "删除中..." : "确认永久删除"}

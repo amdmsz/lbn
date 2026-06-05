@@ -136,10 +136,10 @@ const initialRecycleBatchNoticeState =
   createInitialLeadBatchActionNoticeState("已在回收站");
 
 const leadPrimaryButtonClassName =
-  "inline-flex min-h-0 items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex min-h-0 items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50";
 
 const leadSecondaryButtonClassName =
-  "inline-flex min-h-0 items-center justify-center rounded-lg border border-border/60 bg-card px-3 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-all hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex min-h-0 items-center justify-center rounded-lg border border-border/60 bg-card px-3 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-colors duration-150 hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50";
 
 const leadActionLinkClassName =
   "text-sm font-medium text-muted-foreground transition-colors hover:text-primary";
@@ -727,7 +727,7 @@ export function LeadsTable({
           density="compact"
           anchorId={scrollTargetId}
           description="只在需要时进入回看，不再占据默认主工作台。"
-          className="rounded-2xl border-border/60 bg-card shadow-sm"
+          className="rounded-xl border-border/60 bg-card shadow-sm"
           actions={
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <span>共 {assigned.totalCount} 条</span>
@@ -770,7 +770,7 @@ export function LeadsTable({
           title="未分配"
           density="compact"
           anchorId={scrollTargetId}
-          className="rounded-2xl border-border/60 bg-card shadow-sm"
+          className="rounded-xl border-border/60 bg-card shadow-sm"
           description="优先承接本次导入、今日导入与全部未分配线索。"
           actions={
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">

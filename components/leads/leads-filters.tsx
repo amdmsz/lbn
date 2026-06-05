@@ -110,7 +110,7 @@ function getScopeLabel(filters: LeadListFilters) {
 }
 
 const inlineFieldClassName =
-  "group flex h-10 min-w-0 items-center gap-2 rounded-xl border border-border/60 bg-background px-3 shadow-sm transition-all duration-150 hover:border-primary/40 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20";
+  "group flex h-10 min-w-0 items-center gap-2 rounded-xl border border-border/60 bg-background px-3 shadow-sm transition-[border-color,background-color] duration-150 hover:border-primary/40 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20";
 
 function ScopeLink({
   label,
@@ -314,7 +314,7 @@ export function LeadsFilters({
         <div className={cn("grid gap-2 md:grid-cols-2", gridClassName)}>
           <label
             className={cn(
-              "flex min-h-10 items-center gap-2 rounded-xl border border-border/60 bg-background px-2.5 shadow-sm transition-all duration-150 hover:border-primary/40 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20",
+              "flex min-h-10 items-center gap-2 rounded-xl border border-border/60 bg-background px-2.5 shadow-sm transition-[border-color,background-color] duration-150 hover:border-primary/40 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20",
               "xl:col-span-1",
             )}
           >
@@ -446,13 +446,13 @@ export function LeadsFilters({
                   scheduleSmartScroll(scrollTargetId);
                 }
               }}
-              className="inline-flex h-9 items-center rounded-full border border-border/60 bg-background px-4 text-sm font-medium text-muted-foreground shadow-sm transition-all hover:border-primary/40 hover:text-primary"
+              className="inline-flex h-9 items-center rounded-full border border-border/60 bg-background px-4 text-sm font-medium text-muted-foreground shadow-sm transition-colors duration-150 hover:border-primary/40 hover:text-primary"
             >
               重置
             </Link>
             <button
               type="submit"
-              className="inline-flex h-9 items-center rounded-full bg-primary px-6 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90"
+              className="inline-flex h-9 items-center rounded-full bg-primary px-6 text-sm font-medium text-primary-foreground shadow-sm transition-colors duration-150 hover:opacity-90"
             >
               应用
             </button>

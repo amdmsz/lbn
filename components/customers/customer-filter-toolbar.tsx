@@ -914,7 +914,7 @@ export function CustomerFilterToolbar({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="inline-flex h-9 items-center rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:opacity-90"
+              className="inline-flex h-9 items-center rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-sm transition-colors duration-150 hover:opacity-90"
             >
               完成
             </button>

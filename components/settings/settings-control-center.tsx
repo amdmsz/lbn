@@ -252,7 +252,7 @@ export function SettingsControlCenter({
               {isAdmin ? (
                 <Link
                   href="/settings/call-ai"
-                  className="inline-flex min-h-0 items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90"
+                  className="inline-flex min-h-0 items-center justify-center rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors duration-150 hover:opacity-90"
                 >
                   AI 配置
                 </Link>

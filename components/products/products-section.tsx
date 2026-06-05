@@ -152,7 +152,7 @@ const productQuietActionClassName =
   "inline-flex min-h-0 items-center rounded-full border border-transparent px-2.5 py-2 text-sm font-medium text-muted-foreground transition-[border-color,background-color,color] hover:border-border/60 hover:bg-muted/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50";
 
 const productPrimaryButtonClassName =
-  "inline-flex min-h-0 items-center justify-center rounded-lg bg-primary text-sm font-medium text-primary-foreground shadow-sm transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex min-h-0 items-center justify-center rounded-lg bg-primary text-sm font-medium text-primary-foreground shadow-sm transition-colors duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60";
 
 const productSecondaryButtonClassName =
   "inline-flex min-h-0 items-center justify-center rounded-lg border border-border/60 bg-card text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60";
