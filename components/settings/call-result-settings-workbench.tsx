@@ -30,7 +30,7 @@ function Field({
       <span className="crm-label">{label}</span>
       {children}
       {description ? (
-        <p className="text-sm leading-6 text-black/56">{description}</p>
+        <p className="text-sm leading-6 text-muted-foreground">{description}</p>
       ) : null}
     </label>
   );
@@ -51,16 +51,16 @@ function ToggleField({
     <label className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3.5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-black/82">{label}</p>
+          <p className="text-sm font-medium text-foreground">{label}</p>
           {description ? (
-            <p className="mt-1 text-sm leading-6 text-black/56">{description}</p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
           ) : null}
         </div>
         <input
           type="checkbox"
           name={name}
           defaultChecked={defaultChecked}
-          className="mt-1 h-4 w-4 rounded border-black/20 text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
+          className="mt-1 h-4 w-4 rounded border-border text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
         />
       </div>
     </label>
@@ -73,7 +73,7 @@ function ResultEditor({
   item: CallResultSettingsPageData["items"][number];
 }>) {
   return (
-    <div className="rounded-[1rem] border border-black/7 bg-white/78 p-4">
+    <div className="rounded-[1rem] border border-border bg-white/78 p-4">
       <form action={saveCallResultSettingAction} className="space-y-4">
         <input type="hidden" name="id" value={item.id ?? ""} />
         <input type="hidden" name="code" value={item.code} />
@@ -92,8 +92,8 @@ function ResultEditor({
               />
               <StatusBadge label={`引用 ${item.usageCount}`} variant="neutral" />
             </div>
-            <div className="text-base font-semibold text-black/84">{item.label}</div>
-            <div className="text-[12px] text-black/46">
+            <div className="text-base font-semibold text-foreground">{item.label}</div>
+            <div className="text-[12px] text-muted-foreground/70">
               {item.code} ·{" "}
               {item.source === "system-default"
                 ? "内置默认"
@@ -224,7 +224,7 @@ function ResultEditor({
         </div>
 
         {!item.canDelete ? (
-          <div className="text-sm leading-6 text-black/50">
+          <div className="text-sm leading-6 text-muted-foreground/70">
             {item.isSystem
               ? "系统结果不允许删除。"
               : item.usageCount > 0

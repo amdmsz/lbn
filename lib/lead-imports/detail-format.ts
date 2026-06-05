@@ -12,6 +12,8 @@ export type LeadImportDetailData = NonNullable<
   Awaited<ReturnType<typeof getLeadImportDetailData>>
 >;
 export type LeadImportDetailRow = LeadImportDetailData["rows"][number];
+export type DuplicateReplacementSalesOption =
+  LeadImportDetailData["duplicateReplacementSalesOptions"][number];
 
 export function getHeaders(value: Prisma.JsonValue | null) {
   return Array.isArray(value)

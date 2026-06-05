@@ -122,7 +122,7 @@ function formatSource(setting: SystemSettingPublic) {
 
 function SettingMeta({ setting }: Readonly<{ setting: SystemSettingPublic }>) {
   return (
-    <div className="flex flex-wrap items-center gap-2 text-[12px] leading-5 text-black/52">
+    <div className="flex flex-wrap items-center gap-2 text-[12px] leading-5 text-muted-foreground">
       <StatusBadge
         label={setting.source === "database" ? "DB 配置" : "默认值"}
         variant={setting.source === "database" ? "success" : "neutral"}
@@ -153,7 +153,7 @@ function Field({
       <span className="crm-label">{label}</span>
       {children}
       {description ? (
-        <p className="text-[12px] leading-5 text-black/52">{description}</p>
+        <p className="text-[12px] leading-5 text-muted-foreground">{description}</p>
       ) : null}
     </label>
   );
@@ -174,9 +174,9 @@ function ToggleField({
     <label className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3">
       <div className="flex items-start justify-between gap-3">
         <span className="min-w-0">
-          <span className="block text-[13px] font-medium text-black/82">{label}</span>
+          <span className="block text-[13px] font-medium text-foreground">{label}</span>
           {description ? (
-            <span className="mt-1 block text-[12px] leading-5 text-black/52">
+            <span className="mt-1 block text-[12px] leading-5 text-muted-foreground">
               {description}
             </span>
           ) : null}
@@ -185,7 +185,7 @@ function ToggleField({
           type="checkbox"
           name={name}
           defaultChecked={defaultChecked}
-          className="mt-1 h-4 w-4 rounded border-black/20 text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
+          className="mt-1 h-4 w-4 rounded border-border text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
         />
       </div>
     </label>
@@ -233,7 +233,7 @@ function SystemSettingForm({
         <div className="min-w-0">
           <SettingMeta setting={setting} />
           {setting.secret.supported ? (
-            <p className="mt-2 text-[12px] leading-5 text-black/52">
+            <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
               API Key：{formatSecretStatus(setting)}
             </p>
           ) : null}
@@ -640,10 +640,10 @@ function OutboundCallSeatBindingForm({
       <input type="hidden" name="userId" value={row.id} />
 
       <div className="min-w-0">
-        <p className="truncate text-[13px] font-semibold text-black/82">
+        <p className="truncate text-[13px] font-semibold text-foreground">
           {row.name}
         </p>
-        <p className="mt-1 truncate text-[12px] text-black/52">
+        <p className="mt-1 truncate text-[12px] text-muted-foreground">
           @{row.username} / {row.team?.name ?? "未分组"} / {row.role.name}
         </p>
       </div>
@@ -703,12 +703,12 @@ function OutboundCallSeatBindingForm({
       </label>
 
       <div className="flex items-end gap-2">
-        <label className="mb-2 flex items-center gap-2 text-[12px] font-medium text-black/62">
+        <label className="mb-2 flex items-center gap-2 text-[12px] font-medium text-muted-foreground">
           <input
             type="checkbox"
             name="enabled"
             defaultChecked={binding?.enabled ?? true}
-            className="h-4 w-4 rounded border-black/20 text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
+            className="h-4 w-4 rounded border-border text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
           />
           启用
         </label>
@@ -721,14 +721,14 @@ function OutboundCallSeatBindingForm({
       </div>
 
       {binding?.lastRegisteredAt || binding?.updatedAt ? (
-        <p className="text-[11px] leading-5 text-black/42 xl:col-span-7">
+        <p className="text-[11px] leading-5 text-muted-foreground/70 xl:col-span-7">
           最近保存 {formatDateTimeLabel(binding.updatedAt)}
           {binding.lastRegisteredAt
             ? ` / 最近注册 ${formatDateTimeLabel(binding.lastRegisteredAt)}`
             : ""}
         </p>
       ) : (
-        <p className="text-[11px] leading-5 text-black/42 xl:col-span-7">
+        <p className="text-[11px] leading-5 text-muted-foreground/70 xl:col-span-7">
           未单独保存时，系统会直接使用 CRM 登录账号 @{defaultSeatNo} 作为坐席号。
         </p>
       )}
@@ -916,7 +916,7 @@ export function OutboundCallSettingsWorkbench({
         description="默认使用 CRM 登录账号作为 CTI 坐席号；这里只维护少数需要覆盖或禁用的账号。"
       >
         <div className="space-y-3">
-          <div className="grid gap-2 rounded-[0.95rem] border border-black/7 bg-[var(--color-panel-soft)] px-3.5 py-3 text-[12px] leading-5 text-black/56 md:grid-cols-3">
+          <div className="grid gap-2 rounded-[0.95rem] border border-border bg-[var(--color-panel-soft)] px-3.5 py-3 text-[12px] leading-5 text-muted-foreground md:grid-cols-3">
             <span>
               坐席规则：未单独保存时，系统用销售 CRM 登录账号作为坐席号。
             </span>
@@ -1391,9 +1391,9 @@ export function SettingsAuditWorkbench({
         description="配置保存会写入 OperationLog，敏感字段只保留脱敏指纹。"
       >
         {logs.length > 0 ? (
-          <div className="overflow-hidden rounded-[0.95rem] border border-black/7">
+          <div className="overflow-hidden rounded-[0.95rem] border border-border">
             <table className="min-w-full divide-y divide-black/7 text-left text-[13px]">
-              <thead className="bg-[var(--color-panel-soft)] text-[11px] uppercase tracking-[0.12em] text-black/42">
+              <thead className="bg-[var(--color-panel-soft)] text-[11px] uppercase tracking-[0.12em] text-muted-foreground/70">
                 <tr>
                   <th className="px-3 py-2 font-medium">时间</th>
                   <th className="px-3 py-2 font-medium">动作</th>
@@ -1404,21 +1404,21 @@ export function SettingsAuditWorkbench({
               <tbody className="divide-y divide-black/7 bg-white">
                 {logs.map((item) => (
                   <tr key={item.id} className="align-top">
-                    <td className="whitespace-nowrap px-3 py-2 text-black/56">
+                    <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
                       {formatDateTimeLabel(item.createdAt)}
                     </td>
                     <td className="px-3 py-2">
-                      <div className="font-medium text-black/82">{item.action}</div>
-                      <div className="mt-1 text-[12px] leading-5 text-black/50">
+                      <div className="font-medium text-foreground">{item.action}</div>
+                      <div className="mt-1 text-[12px] leading-5 text-muted-foreground/70">
                         {item.description ?? "无描述"}
                       </div>
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-black/62">
+                    <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
                       {item.actor
                         ? `${item.actor.name} (@${item.actor.username})`
                         : "系统"}
                     </td>
-                    <td className="px-3 py-2 font-mono text-[11px] text-black/42">
+                    <td className="px-3 py-2 font-mono text-[11px] text-muted-foreground/70">
                       {item.targetId}
                     </td>
                   </tr>

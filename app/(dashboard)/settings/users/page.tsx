@@ -235,8 +235,8 @@ export default async function SettingsUsersPage({
                     <tr key={item.id}>
                       <td>
                         <div className="space-y-0.5">
-                          <div className="font-medium text-black/80">{item.name}</div>
-                          <div className="text-xs text-black/45">
+                          <div className="font-medium text-foreground">{item.name}</div>
+                          <div className="text-xs text-muted-foreground/70">
                             @{item.username}
                             {item.phone ? ` · ${item.phone}` : ""}
                           </div>
@@ -253,7 +253,7 @@ export default async function SettingsUsersPage({
                         {item.supervisor ? (
                           <div>
                             <div>{item.supervisor.name}</div>
-                            <div className="text-xs text-black/45">
+                            <div className="text-xs text-muted-foreground/70">
                               @{item.supervisor.username}
                             </div>
                           </div>
@@ -273,7 +273,7 @@ export default async function SettingsUsersPage({
                           />
                         </div>
                       </td>
-                      <td className="whitespace-nowrap text-sm text-black/60">
+                      <td className="whitespace-nowrap text-sm text-muted-foreground">
                         {formatDateTimeLabel(item.lastLoginAt)}
                       </td>
                       <td>

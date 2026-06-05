@@ -160,10 +160,10 @@ export default async function SettingsUserDetailPage({
               <div key={item.id} className="crm-card-muted p-4">
                 <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                   <div>
-                    <p className="text-sm font-medium text-black/80">
+                    <p className="text-sm font-medium text-foreground">
                       {item.description ?? item.action}
                     </p>
-                    <p className="mt-1 text-xs text-black/45">
+                    <p className="mt-1 text-xs text-muted-foreground/70">
                       {item.actor ? `${item.actor.name} (@${item.actor.username})` : "系统"}
                       {" · "}
                       {formatDateTimeLabel(item.createdAt)}

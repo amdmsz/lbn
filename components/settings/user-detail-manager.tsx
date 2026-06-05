@@ -337,8 +337,8 @@ export function UserDetailManager({
       <div className="crm-card-muted p-4">
         <div className="space-y-3">
           <div>
-            <p className="text-sm font-medium text-black/80">额外权限</p>
-            <p className="mt-2 text-sm leading-6 text-black/58">
+            <p className="text-sm font-medium text-foreground">额外权限</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
               这些权限用于给具体账号追加跨岗位模块能力，不改变该角色默认的数据边界。
               权限变更后，目标账号需要重新登录一次才会在路由守卫和侧边栏里完全生效。
             </p>
@@ -358,7 +358,7 @@ export function UserDetailManager({
               })}
             </div>
           ) : (
-            <div className="text-sm text-black/55">当前未授予额外权限。</div>
+            <div className="text-sm text-muted-foreground">当前未授予额外权限。</div>
           )}
 
           {canManagePermissions ? (
@@ -377,11 +377,11 @@ export function UserDetailManager({
                       value={item.code}
                       defaultChecked={grantedPermissionCodes.includes(item.code)}
                       disabled={pending}
-                      className="mt-1 h-4 w-4 rounded border-black/15"
+                      className="mt-1 h-4 w-4 rounded border-border"
                     />
                     <div className="space-y-1">
-                      <p className="text-sm font-medium text-black/80">{item.label}</p>
-                      <p className="text-sm leading-6 text-black/55">{item.description}</p>
+                      <p className="text-sm font-medium text-foreground">{item.label}</p>
+                      <p className="text-sm leading-6 text-muted-foreground">{item.description}</p>
                     </div>
                   </label>
                 ))}
@@ -414,8 +414,8 @@ export function UserDetailManager({
           <div className="crm-card-muted p-4">
             <div className="space-y-3">
               <div>
-                <p className="text-sm font-medium text-black/80">重置临时密码</p>
-                <p className="mt-2 text-sm leading-6 text-black/58">
+                <p className="text-sm font-medium text-foreground">重置临时密码</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   重置后会生成新的临时密码，并要求该账号下次登录时先修改密码。
                 </p>
               </div>
@@ -447,10 +447,10 @@ export function UserDetailManager({
           <div className="crm-card-muted p-4">
             <div className="space-y-3">
               <div>
-                <p className="text-sm font-medium text-black/80">
+                <p className="text-sm font-medium text-foreground">
                   {user.userStatus === "ACTIVE" ? "禁用账号" : "启用账号"}
                 </p>
-                <p className="mt-2 text-sm leading-6 text-black/58">
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   禁用后不删除历史业务数据，只禁止该账号继续登录和操作系统。
                 </p>
               </div>
@@ -483,8 +483,8 @@ export function UserDetailManager({
           <div className="space-y-4">
             <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-2">
-                <p className="text-sm font-medium text-black/80">永久删除账号</p>
-                <p className="text-sm leading-6 text-black/58">
+                <p className="text-sm font-medium text-foreground">永久删除账号</p>
+                <p className="text-sm leading-6 text-muted-foreground">
                   删除前会先把该账号名下客户回收到团队待分配池，并清理该账号的个人权限、坐席绑定、移动设备和个人视图。
                   通话、支付、导入等历史记录也会一并删除。这个动作不可恢复。
                 </p>
@@ -494,26 +494,26 @@ export function UserDetailManager({
 
             <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3">
-                <p className="text-xs font-medium uppercase tracking-[0.08em] text-black/45">
+                <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
                   客户待分配
                 </p>
-                <p className="mt-1.5 text-sm font-medium text-black/78">
+                <p className="mt-1.5 text-sm font-medium text-foreground">
                   {deletionImpact.transferableCustomerCount} 个客户会进入团队待分配池
                 </p>
               </div>
               <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3">
-                <p className="text-xs font-medium uppercase tracking-[0.08em] text-black/45">
+                <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
                   可清理配置
                 </p>
-                <p className="mt-1.5 text-sm font-medium text-black/78">
+                <p className="mt-1.5 text-sm font-medium text-foreground">
                   {deletionImpact.cleanupConfigCount} 项个人配置会被清理
                 </p>
               </div>
               <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3">
-                <p className="text-xs font-medium uppercase tracking-[0.08em] text-black/45">
+                <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
                   历史记录
                 </p>
-                <p className="mt-1.5 text-sm font-medium text-black/78">
+                <p className="mt-1.5 text-sm font-medium text-foreground">
                   {deletionImpact.historyItems.length > 0
                     ? `${deletionImpact.historyItems.length} 类历史记录会一并删除`
                     : "当前没有需要一并删除的历史记录"}
@@ -523,7 +523,7 @@ export function UserDetailManager({
 
             {deletionImpact.cleanupItems.length > 0 ? (
               <div className="space-y-2.5">
-                <p className="text-sm font-medium text-black/78">将清理的个人配置</p>
+                <p className="text-sm font-medium text-foreground">将清理的个人配置</p>
                 <div className="flex flex-wrap gap-1.5">
                   {deletionImpact.cleanupItems.map((item) => (
                     <StatusBadge
@@ -545,7 +545,7 @@ export function UserDetailManager({
 
             {deletionImpact.historyItems.length > 0 ? (
               <div className="space-y-2.5">
-                <p className="text-sm font-medium text-black/78">将删除的历史记录</p>
+                <p className="text-sm font-medium text-foreground">将删除的历史记录</p>
                 <div className="flex flex-wrap gap-1.5">
                   {deletionImpact.historyItems.map((item) => (
                     <StatusBadge
@@ -582,7 +582,7 @@ export function UserDetailManager({
               </label>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm leading-6 text-black/55">
+                <p className="text-sm leading-6 text-muted-foreground">
                   输入完整账号名后才能提交。提交后会先回收客户，再永久删除账号与关联历史记录。
                 </p>
                 <button

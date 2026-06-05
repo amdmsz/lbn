@@ -209,7 +209,7 @@ export function UserCreateForm({
               <input name="supervisorId" type="hidden" value={defaultSupervisorId ?? ""} />
               <div className="space-y-1.5">
                 <span className="crm-label">直属主管</span>
-                <div className="crm-input flex items-center text-sm text-black/65">
+                <div className="crm-input flex items-center text-sm text-muted-foreground">
                   {defaultSupervisor
                     ? `${defaultSupervisor.name} (@${defaultSupervisor.username})`
                     : "当前账号尚未配置团队主管"}
@@ -237,7 +237,7 @@ export function UserCreateForm({
       ) : null}
 
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm leading-6 text-black/55">
+        <p className="text-sm leading-6 text-muted-foreground">
           系统会自动生成临时密码，并要求新账号首次登录后修改密码。
         </p>
         <button

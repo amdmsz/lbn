@@ -150,21 +150,21 @@ export default async function SettingsTeamsPage({
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-lg font-semibold text-black/82">{team.name}</h3>
+                      <h3 className="text-lg font-semibold text-foreground">{team.name}</h3>
                       <StatusBadge label={team.code} variant="neutral" />
                       <StatusBadge label={`${team._count.users} 位成员`} variant="info" />
                     </div>
-                    <p className="mt-2 text-sm leading-6 text-black/58">
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
                       {team.description?.trim() || "暂无团队说明。"}
                     </p>
-                    <p className="mt-2 text-sm text-black/55">
+                    <p className="mt-2 text-sm text-muted-foreground">
                       团队负责人：
                       {team.supervisor
                         ? ` ${team.supervisor.name} (@${team.supervisor.username})`
                         : " 未指定"}
                     </p>
                   </div>
-                  <div className="text-sm text-black/50">
+                  <div className="text-sm text-muted-foreground/70">
                     更新于 {formatDateTimeLabel(team.updatedAt)}
                   </div>
                 </div>
@@ -239,7 +239,7 @@ export default async function SettingsTeamsPage({
                   </form>
                 ) : null}
 
-                <div className="mt-4 border-t border-black/8 pt-4">
+                <div className="mt-4 border-t border-border pt-4">
                   {team.users.length > 0 ? (
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {team.users.map((member) => (
@@ -257,10 +257,10 @@ export default async function SettingsTeamsPage({
                               variant={getUserStatusVariant(member.userStatus)}
                             />
                           </div>
-                          <p className="mt-3 text-sm font-medium text-black/82">
+                          <p className="mt-3 text-sm font-medium text-foreground">
                             {member.name}
                           </p>
-                          <p className="mt-1 text-xs text-black/48">@{member.username}</p>
+                          <p className="mt-1 text-xs text-muted-foreground/70">@{member.username}</p>
                         </div>
                       ))}
                     </div>
