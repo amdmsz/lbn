@@ -369,7 +369,7 @@ export function UserDetailManager({
                 {permissionOptions.map((item) => (
                   <label
                     key={item.code}
-                    className="flex items-start gap-3 rounded-2xl border border-black/8 bg-white/80 px-4 py-3"
+                    className="flex items-start gap-3 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-4 py-3"
                   >
                     <input
                       type="checkbox"
@@ -493,7 +493,7 @@ export function UserDetailManager({
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl border border-black/8 bg-white/72 px-3.5 py-3">
+              <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3">
                 <p className="text-xs font-medium uppercase tracking-[0.08em] text-black/45">
                   客户待分配
                 </p>
@@ -501,7 +501,7 @@ export function UserDetailManager({
                   {deletionImpact.transferableCustomerCount} 个客户会进入团队待分配池
                 </p>
               </div>
-              <div className="rounded-2xl border border-black/8 bg-white/72 px-3.5 py-3">
+              <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3">
                 <p className="text-xs font-medium uppercase tracking-[0.08em] text-black/45">
                   可清理配置
                 </p>
@@ -509,7 +509,7 @@ export function UserDetailManager({
                   {deletionImpact.cleanupConfigCount} 项个人配置会被清理
                 </p>
               </div>
-              <div className="rounded-2xl border border-black/8 bg-white/72 px-3.5 py-3">
+              <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3">
                 <p className="text-xs font-medium uppercase tracking-[0.08em] text-black/45">
                   历史记录
                 </p>

@@ -48,7 +48,7 @@ function ToggleField({
   defaultChecked: boolean;
 }>) {
   return (
-    <label className="rounded-[0.95rem] border border-black/7 bg-[rgba(247,248,250,0.72)] p-3.5">
+    <label className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3.5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-medium text-black/82">{label}</p>
@@ -127,7 +127,7 @@ function ResultEditor({
               item.isSystem ? "系统结果固定。" : "创建后只读。"
             }
           >
-            <input value={item.code} readOnly className="crm-input bg-[rgba(247,248,250,0.9)]" />
+            <input value={item.code} readOnly className="crm-input bg-[var(--color-shell-surface-soft)]" />
           </Field>
 
           <Field label="结果名称">
@@ -417,7 +417,7 @@ export function CallResultSettingsWorkbench({
               <ResultEditor key={item.code} item={item} />
             ))}
             {customItems.length === 0 ? (
-              <div className="rounded-[1rem] border border-dashed border-black/10 bg-[rgba(247,248,250,0.68)] px-4 py-6 text-sm leading-7 text-black/56">
+              <div className="rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-shell-surface-soft)] px-4 py-6 text-sm leading-7 text-[var(--color-sidebar-muted)]">
                 当前还没有自定义结果。
               </div>
             ) : null}

@@ -91,7 +91,7 @@ export function SettingsAdminPreviewWorkbench({
         title="当前状态"
         description="本页先承接管理员配置入口和当前运行状态预览；真实保存、版本审计与回滚会在 SystemSetting 里程碑接入。"
       >
-        <div className="rounded-[0.95rem] border border-[rgba(201,138,30,0.16)] bg-[rgba(201,138,30,0.06)] px-4 py-3 text-[13px] leading-6 text-[var(--color-warning)]">
+        <div className="rounded-xl border border-[var(--tone-warning-soft-border)] bg-[var(--tone-warning-soft-bg)] px-4 py-3 text-[13px] leading-6 text-[var(--color-warning)]">
           现在不会写数据库，也不会修改当前环境变量。录音存储和 AI worker 仍按现有运行时配置工作。
         </div>
       </SectionCard>

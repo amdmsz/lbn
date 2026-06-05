@@ -245,7 +245,7 @@ export default async function SettingsTeamsPage({
                       {team.users.map((member) => (
                         <div
                           key={member.id}
-                          className="rounded-2xl border border-black/8 bg-white/65 p-3"
+                          className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3"
                         >
                           <div className="flex flex-wrap gap-1.5">
                             <StatusBadge

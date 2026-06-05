@@ -171,7 +171,7 @@ function ToggleField({
   defaultChecked: boolean;
 }>) {
   return (
-    <label className="rounded-[0.9rem] border border-black/7 bg-[rgba(247,248,250,0.72)] p-3">
+    <label className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3">
       <div className="flex items-start justify-between gap-3">
         <span className="min-w-0">
           <span className="block text-[13px] font-medium text-black/82">{label}</span>
@@ -634,7 +634,7 @@ function OutboundCallSeatBindingForm({
   return (
     <form
       action={saveOutboundCallSeatBindingAction}
-      className="grid gap-3 rounded-[0.95rem] border border-black/7 bg-white px-3.5 py-3 shadow-[var(--color-shell-shadow-sm)] xl:grid-cols-[minmax(12rem,1.1fr)_8.5rem_8rem_8rem_8rem_8rem_6.5rem]"
+      className="grid gap-3 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3.5 py-3 shadow-[var(--color-shell-shadow-sm)] xl:grid-cols-[minmax(12rem,1.1fr)_8.5rem_8rem_8rem_8rem_8rem_6.5rem]"
     >
       <input type="hidden" name="redirectTo" value="/settings/outbound-call" />
       <input type="hidden" name="userId" value={row.id} />
