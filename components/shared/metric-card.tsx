@@ -75,15 +75,11 @@ export function MetricCard({
   const isCompact = density === "compact";
   const cardClassName =
     (isStrip
-      ? "block rounded-2xl border border-border/60 bg-card px-3.5 py-3 shadow-sm transition-[transform,border-color,background-color,box-shadow] duration-200 md:px-4 md:py-3.25"
+      ? "block rounded-xl border border-border/60 bg-card px-3.5 py-3 shadow-sm transition-[border-color,background-color] duration-150 md:px-4 md:py-3.25"
       : isCompact
-        ? "block rounded-2xl border border-border/60 bg-card px-3.5 py-3 shadow-sm transition-[transform,border-color,background-color,box-shadow] duration-200 md:px-4 md:py-3.25"
-        : "block rounded-2xl border border-border/60 bg-card p-4 shadow-sm transition-[transform,border-color,background-color,box-shadow] duration-200 md:p-5") +
-    (href
-      ? isStrip
-        ? " hover:-translate-y-[1px] hover:border-primary/40 hover:bg-card hover:shadow-sm"
-        : " hover:-translate-y-[1px] hover:border-primary/40 hover:bg-card hover:shadow-md"
-      : "") +
+        ? "block rounded-xl border border-border/60 bg-card px-3.5 py-3 shadow-sm transition-[border-color,background-color] duration-150 md:px-4 md:py-3.25"
+        : "block rounded-xl border border-border/60 bg-card p-4 shadow-sm transition-[border-color,background-color] duration-150 md:p-5") +
+    (href ? " hover:border-primary/40 hover:bg-muted/20" : "") +
     (className ? ` ${className}` : "");
 
   if (href) {

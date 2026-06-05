@@ -755,8 +755,8 @@ export default async function LeadImportDetailPage({
                   aria-current={active ? "page" : undefined}
                   className={
                     active
-                      ? "inline-flex items-center rounded-full border border-[#c8d8ee] bg-[#eef4fb] px-3 py-1.5 text-sm font-semibold text-[#18324d]"
-                      : "inline-flex items-center rounded-full border border-black/8 bg-white/70 px-3 py-1.5 text-sm text-black/62 transition hover:text-black/84"
+                      ? "inline-flex items-center rounded-md border border-[var(--tone-info-soft-border)] bg-[var(--tone-info-soft-bg)] px-3 py-1.5 text-sm font-semibold text-[var(--color-accent-strong)]"
+                      : "inline-flex items-center rounded-md border border-[var(--color-border)] bg-[var(--color-shell-surface)] px-3 py-1.5 text-sm text-[var(--color-sidebar-muted)] transition-colors duration-150 hover:text-[var(--foreground)]"
                   }
                 >
                   {item.label}

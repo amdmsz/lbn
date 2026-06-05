@@ -46,7 +46,7 @@ export function WorkspaceGuide({
                 "group flex h-full flex-col transition-colors",
                 isCompact
                   ? "rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)] hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)]"
-                  : "crm-card-muted p-5 transition-transform hover:-translate-y-0.5 hover:border-[var(--color-accent)]/20",
+                  : "crm-card-muted p-4 hover:border-[var(--color-accent)]/20",
               )}
             >
               <div className={cn("flex items-start justify-between", isCompact ? "gap-3" : "gap-4")}>
