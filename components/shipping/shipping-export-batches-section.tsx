@@ -373,9 +373,7 @@ export function ShippingExportBatchesSection({
   return (
     <div className="space-y-5">
       <SectionCard
-        eyebrow="Batch Filters"
         title="结果筛选与回看"
-        description="按批次号、来源父单和文件状态过滤冻结结果。保留跨视图返回语义，不把这里重新做成执行主入口。"
         density="compact"
         actions={
           <div className="flex flex-wrap items-center gap-2 text-[12px] text-[var(--color-sidebar-muted)]">
@@ -444,9 +442,7 @@ export function ShippingExportBatchesSection({
 
       {items.length > 0 ? (
         <SectionCard
-          eyebrow="Frozen Batch Results"
           title="批次结果列表"
-          description="以文件状态、来源父单和审计说明为主线回看冻结结果，下载与重生成保留为清楚但次级的动作层。"
           density="compact"
           actions={
             <p className="text-[12px] text-[var(--color-sidebar-muted)]">

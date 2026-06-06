@@ -1678,9 +1678,7 @@ export function ShippingOperationsSection({
       </datalist>
 
       <SectionCard
-        eyebrow="Stage Workspace"
         title="发货执行工作面"
-        description="把当前报单、待填物流、已发货与异常关注放在同一条 supplier 执行主线里，历史批次只保留为结果回看。"
         density="compact"
         actions={
           <div className="flex flex-wrap items-center gap-2 text-[12px] text-[var(--color-sidebar-muted)]">
@@ -1858,9 +1856,7 @@ export function ShippingOperationsSection({
       ) : (
         <>
           <SectionCard
-            eyebrow="Supplier Pool"
             title="当前阶段 supplier 池"
-            description="supplier 是当前工作池的组织轴。先选 supplier，再进入对应阶段动作。"
             density="compact"
             actions={
               <p className="text-[12px] text-[var(--color-sidebar-muted)]">
