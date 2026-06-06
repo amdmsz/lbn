@@ -1553,7 +1553,7 @@ export function TradeOrderDetailSection({
               <div className="grid gap-3 md:grid-cols-2">
                 <form
                   action={reviewAction}
-                  className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3.5"
+                  className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3.5"
                 >
                   <input type="hidden" name="tradeOrderId" value={order.id} />
                   <input type="hidden" name="reviewStatus" value="APPROVED" />
@@ -1569,7 +1569,7 @@ export function TradeOrderDetailSection({
 
                 <form
                   action={reviewAction}
-                  className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3.5"
+                  className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-3.5"
                 >
                   <input type="hidden" name="tradeOrderId" value={order.id} />
                   <input type="hidden" name="reviewStatus" value="REJECTED" />

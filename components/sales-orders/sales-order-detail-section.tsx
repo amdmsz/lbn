@@ -417,28 +417,28 @@ export function SalesOrderDetailSection({
         </div>
 
         {order.tradeOrder?.tradeNo ? (
-          <div className="mt-4 rounded-2xl border border-black/8 bg-white/72 px-4 py-3 text-sm text-black/68">
+          <div className="mt-4 rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] px-4 py-3 text-sm text-foreground/70">
             <div className="grid gap-3 md:grid-cols-3">
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
                   成交主单
                 </div>
-                <div className="mt-1 font-medium text-black/80">{tradeNo}</div>
+                <div className="mt-1 font-medium text-foreground">{tradeNo}</div>
               </div>
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
                   子单编号
                 </div>
-                <div className="mt-1 font-medium text-black/80">{subOrderNo}</div>
+                <div className="mt-1 font-medium text-foreground">{subOrderNo}</div>
               </div>
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-black/40">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
                   供货商
                 </div>
-                <div className="mt-1 font-medium text-black/80">{order.supplier.name}</div>
+                <div className="mt-1 font-medium text-foreground">{order.supplier.name}</div>
               </div>
             </div>
-            <p className="mt-3 text-xs leading-6 text-black/52">
+            <p className="mt-3 text-xs leading-6 text-muted-foreground">
               当前页面仍然是供应商子单详情。审核、支付和履约结果会回流到父单，但这里继续承接子单执行事实。
             </p>
           </div>
@@ -447,7 +447,7 @@ export function SalesOrderDetailSection({
         <div className="mt-4 grid gap-4 lg:grid-cols-3">
           <div className="crm-subtle-panel">
             <p className="crm-detail-label">订单基础</p>
-            <div className="mt-3 space-y-2 text-sm text-black/70">
+            <div className="mt-3 space-y-2 text-sm text-foreground/80">
               <div>成交主单：{tradeNo || "当前仍为单 SalesOrder 结构"}</div>
               <div>子单编号：{subOrderNo}</div>
               <div>客户：{order.customer.name}</div>
@@ -460,7 +460,7 @@ export function SalesOrderDetailSection({
 
           <div className="crm-subtle-panel">
             <p className="crm-detail-label">价格与收款</p>
-            <div className="mt-3 space-y-2 text-sm text-black/70">
+            <div className="mt-3 space-y-2 text-sm text-foreground/80">
               <div>原价小计：{formatCurrency(order.listAmount)}</div>
               <div>成交小计：{formatCurrency(order.dealAmount)}</div>
               <div>优惠金额：{formatCurrency(order.discountAmount)}</div>
@@ -470,7 +470,7 @@ export function SalesOrderDetailSection({
               <div>待收金额：{formatCurrency(order.remainingAmount)}</div>
               <div>代收金额：{formatCurrency(order.codAmount)}</div>
             </div>
-            <p className="mt-3 text-xs leading-6 text-black/45">
+            <p className="mt-3 text-xs leading-6 text-muted-foreground/70">
               以上金额字段由 payment layer 同步回写，仅作为列表与详情摘要；计划、记录、催收任务仍以 PaymentPlan /
               PaymentRecord / CollectionTask 为准。
             </p>
@@ -478,7 +478,7 @@ export function SalesOrderDetailSection({
 
           <div className="crm-subtle-panel">
             <p className="crm-detail-label">收件与保价</p>
-            <div className="mt-3 space-y-2 text-sm text-black/70">
+            <div className="mt-3 space-y-2 text-sm text-foreground/80">
               <div>收件人：{order.receiverNameSnapshot}</div>
               <div>电话：{order.receiverPhoneSnapshot}</div>
               <div>地址：{order.receiverAddressSnapshot}</div>
@@ -493,17 +493,17 @@ export function SalesOrderDetailSection({
           <div className="mt-4 grid gap-4 lg:grid-cols-3">
             <div className="crm-subtle-panel">
               <p className="crm-detail-label">优惠原因</p>
-              <p className="mt-2 text-sm leading-7 text-black/70">
+              <p className="mt-2 text-sm leading-7 text-foreground/80">
                 {order.discountReason || "未填写"}
               </p>
             </div>
             <div className="crm-subtle-panel">
               <p className="crm-detail-label">订单备注</p>
-              <p className="mt-2 text-sm leading-7 text-black/70">{order.remark || "无"}</p>
+              <p className="mt-2 text-sm leading-7 text-foreground/80">{order.remark || "无"}</p>
             </div>
             <div className="crm-subtle-panel">
               <p className="crm-detail-label">审核结果</p>
-              <p className="mt-2 text-sm leading-7 text-black/70">
+              <p className="mt-2 text-sm leading-7 text-foreground/80">
                 {order.reviewStatus === "REJECTED"
                   ? `驳回原因：${order.rejectReason || "未填写"}`
                   : order.reviewedAt
@@ -530,8 +530,8 @@ export function SalesOrderDetailSection({
 
       <section className="crm-section-card">
         <div className="space-y-2">
-          <h3 className="text-lg font-semibold text-black/85">子单执行快照</h3>
-          <p className="text-sm leading-7 text-black/60">
+          <h3 className="text-lg font-semibold text-foreground">子单执行快照</h3>
+          <p className="text-sm leading-7 text-muted-foreground">
             当前详情继续展示供应商子单承接到的执行行。普通 SKU、订单赠品和套餐展开组件都会以执行快照形式保留，避免后续主数据变化污染历史交易。
           </p>
         </div>
@@ -541,18 +541,18 @@ export function SalesOrderDetailSection({
             <p className="crm-detail-label">执行行快照</p>
             <div className="mt-3 space-y-3">
               {order.items.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                <div key={item.id} className="rounded-xl border border-border/60 bg-white/70 p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge
                       label={getExecutionLineTypeLabel(item.itemTypeSnapshot)}
                       variant={getExecutionLineTypeVariant(item.itemTypeSnapshot)}
                     />
-                    <div className="font-medium text-black/80">{getExecutionLineTitle(item)}</div>
+                    <div className="font-medium text-foreground">{getExecutionLineTitle(item)}</div>
                   </div>
-                  <div className="mt-2 text-sm leading-7 text-black/60">
+                  <div className="mt-2 text-sm leading-7 text-muted-foreground">
                     {getExecutionLineSemantics(item)}
                   </div>
-                  <div className="mt-3 grid gap-2 text-sm text-black/60 md:grid-cols-2">
+                  <div className="mt-3 grid gap-2 text-sm text-muted-foreground md:grid-cols-2">
                     <div>商品：{item.productNameSnapshot}</div>
                     <div>SKU：{item.skuNameSnapshot}</div>
                     <div>规格：{item.specSnapshot}</div>
@@ -571,21 +571,21 @@ export function SalesOrderDetailSection({
 
           <div className="crm-subtle-panel">
             <p className="crm-detail-label">历史兼容赠品记录</p>
-            <p className="mt-2 text-sm leading-7 text-black/60">
+            <p className="mt-2 text-sm leading-7 text-muted-foreground">
               这里仅保留旧 `SalesOrderGiftItem` 的历史兼容展示。TradeOrder 新写路径下的赠品已经作为左侧 `GIFT` 执行行进入当前子单。
             </p>
             <div className="mt-3 space-y-3">
               {order.giftItems.length > 0 ? (
                 order.giftItems.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-black/8 bg-white/70 p-4">
-                    <div className="font-medium text-black/80">
+                  <div key={item.id} className="rounded-xl border border-border/60 bg-white/70 p-4">
+                    <div className="font-medium text-foreground">
                       {item.giftName} x {item.qty}
                     </div>
-                    <div className="mt-1 text-sm text-black/60">{item.remark || "无备注"}</div>
+                    <div className="mt-1 text-sm text-muted-foreground">{item.remark || "无备注"}</div>
                   </div>
                 ))
               ) : (
-                <div className="rounded-2xl border border-dashed border-black/10 bg-white/55 p-4 text-sm leading-7 text-black/55">
+                <div className="rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm leading-7 text-muted-foreground">
                   当前子单没有历史兼容赠品记录。若赠品来自新写路径，请在左侧 `GIFT` 执行行中查看。
                 </div>
               )}
@@ -597,8 +597,8 @@ export function SalesOrderDetailSection({
       {/* legacy shipping block disabled during M14 migration
         <section className="crm-section-card">
           <div className="space-y-2">
-            <h3 className="text-lg font-semibold text-black/85">发货与物流</h3>
-            <p className="text-sm leading-7 text-black/60">
+            <h3 className="text-lg font-semibold text-foreground">发货与物流</h3>
+            <p className="text-sm leading-7 text-muted-foreground">
               报单状态与发货状态分层维护。只有回填物流单号后，订单才进入已发货。
             </p>
           </div>
@@ -606,7 +606,7 @@ export function SalesOrderDetailSection({
           <div className="mt-6 grid gap-4 lg:grid-cols-3">
             <div className="crm-subtle-panel">
               <p className="crm-detail-label">发货任务</p>
-              <div className="mt-3 space-y-2 text-sm text-black/70">
+              <div className="mt-3 space-y-2 text-sm text-foreground/80">
                 <div>任务编号：{shippingTask.id}</div>
                 <div>
                   报单时间：
@@ -625,7 +625,7 @@ export function SalesOrderDetailSection({
 
             <div className="crm-subtle-panel">
               <p className="crm-detail-label">物流信息</p>
-              <div className="mt-3 space-y-2 text-sm text-black/70">
+              <div className="mt-3 space-y-2 text-sm text-foreground/80">
                 <div>承运商：{shippingTask.shippingProvider || "未填写"}</div>
                 <div>物流单号：{shippingTask.trackingNumber || "未回填"}</div>
               </div>
@@ -633,7 +633,7 @@ export function SalesOrderDetailSection({
 
             <div className="crm-subtle-panel">
               <p className="crm-detail-label">后续动作</p>
-              <div className="mt-3 space-y-2 text-sm text-black/70">
+              <div className="mt-3 space-y-2 text-sm text-foreground/80">
                 <div>物流跟进任务数：{order.logisticsFollowUpTasks.length}</div>
                 {canAccessShippingCenter ? (
                   <Link
@@ -654,15 +654,15 @@ export function SalesOrderDetailSection({
           <div className="mt-4 grid gap-3">
             {order.logisticsFollowUpTasks.length > 0 ? (
               order.logisticsFollowUpTasks.map((task) => (
-                <div key={task.id} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                <div key={task.id} className="rounded-xl border border-border/60 bg-white/70 p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge
                       label={getLogisticsTaskStatusLabel(task.status)}
                       variant={getLogisticsTaskStatusVariant(task.status)}
                     />
-                    <span className="text-xs text-black/45">每 {task.intervalDays} 天提醒一次</span>
+                    <span className="text-xs text-muted-foreground/70">每 {task.intervalDays} 天提醒一次</span>
                   </div>
-                  <div className="mt-2 space-y-1 text-sm text-black/65">
+                  <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                     <div>下次触发：{formatDateTime(task.nextTriggerAt)}</div>
                     <div>
                       最近触发：{task.lastTriggeredAt ? formatDateTime(task.lastTriggeredAt) : "尚未触发"}
@@ -675,7 +675,7 @@ export function SalesOrderDetailSection({
                 </div>
               ))
             ) : (
-              <div className="rounded-2xl border border-dashed border-black/10 bg-white/55 p-4 text-sm leading-7 text-black/55">
+              <div className="rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm leading-7 text-muted-foreground">
                 首次回填物流单号后，系统会自动创建物流跟进任务。
               </div>
             )}
@@ -686,8 +686,8 @@ export function SalesOrderDetailSection({
       {shippingTask ? (
         <section className="crm-section-card">
           <div className="space-y-2">
-            <h3 className="text-lg font-semibold text-black/85">发货与物流</h3>
-            <p className="text-sm leading-7 text-black/60">
+            <h3 className="text-lg font-semibold text-foreground">发货与物流</h3>
+            <p className="text-sm leading-7 text-muted-foreground">
               报单状态与发货状态分层维护。只有回填物流单号后，订单才能进入已发货及后续状态；COD 回款状态也在这里回流展示。
             </p>
           </div>
@@ -711,7 +711,7 @@ export function SalesOrderDetailSection({
                   />
                 ) : null}
               </div>
-              <div className="mt-3 space-y-2 text-sm text-black/70">
+              <div className="mt-3 space-y-2 text-sm text-foreground/80">
                 <div>任务编号：{shippingTask.id}</div>
                 <div>报单批次：{shippingTask.exportBatch?.exportNo || "未导出"}</div>
                 <div>
@@ -731,7 +731,7 @@ export function SalesOrderDetailSection({
 
             <div className="crm-subtle-panel">
               <p className="crm-detail-label">物流信息</p>
-              <div className="mt-3 space-y-2 text-sm text-black/70">
+              <div className="mt-3 space-y-2 text-sm text-foreground/80">
                 <div>承运商：{shippingTask.shippingProvider || "未填写"}</div>
                 <div>物流单号：{shippingTask.trackingNumber || "未回填"}</div>
                 <div>订单 COD 金额：{formatCurrency(order.codAmount)}</div>
@@ -751,14 +751,14 @@ export function SalesOrderDetailSection({
                 ) : null}
               </div>
               {latestCodRecord?.paymentRecord ? (
-                <div className="mt-4 rounded-2xl border border-black/8 bg-white/70 p-4">
+                <div className="mt-4 rounded-xl border border-border/60 bg-white/70 p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge
                       label={getPaymentRecordStatusLabel(latestCodRecord.paymentRecord.status)}
                       variant={getPaymentRecordStatusVariant(latestCodRecord.paymentRecord.status)}
                     />
                   </div>
-                  <div className="mt-2 space-y-1 text-sm text-black/65">
+                  <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                     <div>回款记录金额：{formatCurrency(latestCodRecord.paymentRecord.amount)}</div>
                     <div>
                       记录时间：{formatDateTime(latestCodRecord.paymentRecord.occurredAt)}
@@ -778,7 +778,7 @@ export function SalesOrderDetailSection({
 
             <div className="crm-subtle-panel">
               <p className="crm-detail-label">执行入口</p>
-              <div className="mt-3 space-y-2 text-sm text-black/70">
+              <div className="mt-3 space-y-2 text-sm text-foreground/80">
                 <div>物流跟进任务数：{order.logisticsFollowUpTasks.length}</div>
                 {canAccessShippingCenter ? (
                   <Link
@@ -799,15 +799,15 @@ export function SalesOrderDetailSection({
           <div className="mt-4 grid gap-3">
             {order.logisticsFollowUpTasks.length > 0 ? (
               order.logisticsFollowUpTasks.map((task) => (
-                <div key={task.id} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                <div key={task.id} className="rounded-xl border border-border/60 bg-white/70 p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge
                       label={getLogisticsTaskStatusLabel(task.status)}
                       variant={getLogisticsTaskStatusVariant(task.status)}
                     />
-                    <span className="text-xs text-black/45">每 {task.intervalDays} 天提醒一次</span>
+                    <span className="text-xs text-muted-foreground/70">每 {task.intervalDays} 天提醒一次</span>
                   </div>
-                  <div className="mt-2 space-y-1 text-sm text-black/65">
+                  <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                     <div>负责人：{task.owner.name || task.owner.username}</div>
                     <div>下次触发：{formatDateTime(task.nextTriggerAt)}</div>
                     <div>
@@ -869,7 +869,7 @@ export function SalesOrderDetailSection({
                 </div>
               ))
             ) : (
-              <div className="rounded-2xl border border-dashed border-black/10 bg-white/55 p-4 text-sm leading-7 text-black/55">
+              <div className="rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm leading-7 text-muted-foreground">
                 首次回填物流单号后，系统会自动创建物流跟进任务。
               </div>
             )}
@@ -912,8 +912,8 @@ export function SalesOrderDetailSection({
       {canReview && order.reviewStatus === "PENDING_REVIEW" ? (
         <section className="crm-section-card">
           <div className="space-y-2">
-            <h3 className="text-lg font-semibold text-black/85">订单审核</h3>
-            <p className="text-sm leading-7 text-black/60">
+            <h3 className="text-lg font-semibold text-foreground">订单审核</h3>
+            <p className="text-sm leading-7 text-muted-foreground">
               {order.tradeOrder?.tradeNo
                 ? "当前子单走成交主单审核链。通过后会统一初始化子单的 shipping/payment artifacts；驳回后需回到客户成交表单重提。"
                 : "审核通过后会激活主 ShippingTask；驳回后销售可修改并重新提交。所有审核动作都会进入 OperationLog。"}
@@ -926,7 +926,7 @@ export function SalesOrderDetailSection({
               <input type="hidden" name="reviewStatus" value="APPROVED" />
               <input type="hidden" name="redirectTo" value={`/orders/${order.id}`} />
               <p className="crm-detail-label">通过审核</p>
-              <p className="text-sm leading-7 text-black/60">
+              <p className="text-sm leading-7 text-muted-foreground">
                 审核通过后，订单进入发货池，等待发货员报单和回填物流。
               </p>
               <button type="submit" className="crm-button crm-button-primary">
@@ -956,8 +956,8 @@ export function SalesOrderDetailSection({
 
       <section className="crm-section-card">
         <div className="space-y-2">
-          <h3 className="text-lg font-semibold text-black/85">操作日志</h3>
-          <p className="text-sm leading-7 text-black/60">
+          <h3 className="text-lg font-semibold text-foreground">操作日志</h3>
+          <p className="text-sm leading-7 text-muted-foreground">
             订单、审核、收款、发货和物流跟进等关键动作都会完整留痕，便于追溯责任链路。
           </p>
         </div>
@@ -965,23 +965,23 @@ export function SalesOrderDetailSection({
         <div className="mt-6 space-y-3">
           {operationLogs.length > 0 ? (
             operationLogs.map((record) => (
-              <div key={record.id} className="rounded-2xl border border-black/8 bg-white/70 p-4">
+              <div key={record.id} className="rounded-xl border border-border/60 bg-white/70 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="font-medium text-black/80">
+                  <div className="font-medium text-foreground">
                     {record.module} / {record.action}
                   </div>
-                  <div className="text-xs text-black/45">{formatDateTime(record.createdAt)}</div>
+                  <div className="text-xs text-muted-foreground/70">{formatDateTime(record.createdAt)}</div>
                 </div>
-                <div className="mt-2 text-sm leading-7 text-black/60">
+                <div className="mt-2 text-sm leading-7 text-muted-foreground">
                   {record.description || "无描述"}
                 </div>
-                <div className="mt-2 text-xs text-black/45">
+                <div className="mt-2 text-xs text-muted-foreground/70">
                   操作人：{record.actor?.name || record.actor?.username || "系统"}
                 </div>
               </div>
             ))
           ) : (
-            <div className="rounded-2xl border border-dashed border-black/10 bg-white/55 p-4 text-sm leading-7 text-black/55">
+            <div className="rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm leading-7 text-muted-foreground">
               当前暂无操作日志。
             </div>
           )}
