@@ -166,17 +166,6 @@ const productTableShellClassName =
 const productSpatialTableClassName =
   "w-full min-w-[980px] border-separate border-spacing-0 text-sm [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-muted/30 [&_td]:border-b [&_td]:border-border/40 [&_td]:px-4 [&_td]:py-4 [&_td]:align-top [&_th]:border-b [&_th]:border-border/40 [&_th]:bg-transparent [&_th]:px-4 [&_th]:py-3 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wider [&_th]:text-muted-foreground [&_thead]:bg-transparent";
 
-function resolveDictionaryLabel(
-  options: ProductCenterDictionaryOption[],
-  code: string | null,
-) {
-  if (!code) {
-    return "";
-  }
-
-  return options.find((option) => option.code === code)?.label ?? code;
-}
-
 function hasAdvancedFilters(filters: ProductCenterFilters) {
   return Boolean(
     filters.brandName ||
@@ -258,48 +247,6 @@ function buildSkuPreviewLabel(
   return skus.length > 2
     ? `${visibleNames.join(" · ")} +${skus.length - 2}`
     : visibleNames.join(" · ");
-}
-
-function buildReferenceFillPercentage(value: number, maxValue: number) {
-  if (value <= 0 || maxValue <= 0) {
-    return 0;
-  }
-
-  return Math.max(10, Math.round((value / maxValue) * 100));
-}
-
-function getReferenceSignal(value: number, maxValue: number) {
-  if (value <= 0 || maxValue <= 0) {
-    return {
-      label: "低",
-      barClassName: "bg-destructive/70",
-      textClassName: "text-destructive",
-    };
-  }
-
-  const ratio = value / maxValue;
-
-  if (ratio >= 0.66) {
-    return {
-      label: "高",
-      barClassName: "bg-primary",
-      textClassName: "text-primary",
-    };
-  }
-
-  if (ratio >= 0.33) {
-    return {
-      label: "中",
-      barClassName: "bg-amber-500",
-      textClassName: "text-amber-600 dark:text-amber-400",
-    };
-  }
-
-  return {
-    label: "低",
-    barClassName: "bg-destructive/80",
-    textClassName: "text-destructive",
-  };
 }
 
 export function ProductsSection({
@@ -403,10 +350,6 @@ export function ProductsSection({
       ? Math.min(pagination.page * pagination.pageSize, pagination.totalCount)
       : 0;
   const activeFilters = hasAnyFilters(filters);
-  const maxReferenceCount = items.reduce(
-    (max, item) => Math.max(max, item._count.salesOrderItems),
-    0,
-  );
   const visibleStatusLabel =
     filters.status === "enabled"
       ? "仅启用"
@@ -696,9 +639,8 @@ export function ProductsSection({
                     <th>商品名称</th>
                     <th>价格</th>
                     <th>规格</th>
-                    <th>经营信息</th>
-                    <th>引用情况</th>
-                    <th>上架状态</th>
+                    <th>引用</th>
+                    <th>上架</th>
                     <th className="text-right">动作</th>
                   </tr>
                 </thead>
@@ -709,43 +651,6 @@ export function ProductsSection({
                       item.brandName,
                       item.seriesName,
                     ]);
-                    const categoryLabel =
-                      resolveDictionaryLabel(
-                        dictionaryOptions.categoryOptions,
-                        item.categoryCode,
-                      ) || "";
-                    const sceneLabel =
-                      resolveDictionaryLabel(
-                        dictionaryOptions.primarySalesSceneOptions,
-                        item.primarySalesSceneCode,
-                      ) || "";
-                    const supplyGroupLabel =
-                      resolveDictionaryLabel(
-                        dictionaryOptions.supplyGroupOptions,
-                        item.supplyGroupCode,
-                      ) || "";
-                    const financeCategoryLabel =
-                      resolveDictionaryLabel(
-                        dictionaryOptions.financeCategoryOptions,
-                        item.financeCategoryCode,
-                      ) || "";
-                    const businessLine = joinReadableParts([
-                      canViewSupplyIdentity ? item.supplier?.name : null,
-                      canViewSupplyGroup ? supplyGroupLabel : null,
-                      canViewFinanceCategory ? financeCategoryLabel : null,
-                    ]);
-                    const classificationLine = joinReadableParts([
-                      categoryLabel,
-                      sceneLabel,
-                    ]);
-                    const referenceFill = buildReferenceFillPercentage(
-                      item._count.salesOrderItems,
-                      maxReferenceCount,
-                    );
-                    const referenceSignal = getReferenceSignal(
-                      item._count.salesOrderItems,
-                      maxReferenceCount,
-                    );
 
                     return (
                       <Fragment key={item.id}>
@@ -818,86 +723,43 @@ export function ProductsSection({
                           </td>
 
                           <td>
-                            <div className="space-y-1.5">
-                              {businessLine ? (
-                                <p className="text-[13px] font-medium text-foreground">
-                                  {businessLine}
-                                </p>
-                              ) : (
-                                <p className="text-[13px] font-medium text-foreground">
-                                  商品主档
-                                </p>
-                              )}
-                              {classificationLine ? (
-                                <p className="text-[12px] leading-5 text-muted-foreground">
-                                  {classificationLine}
-                                </p>
-                              ) : (
-                                <p className="text-[12px] leading-5 text-muted-foreground">
-                                  未补充主档归类
-                                </p>
-                              )}
+                            <div className="flex items-baseline gap-1.5 text-[13px]">
+                              <span className="font-semibold text-foreground tabular-nums">
+                                {item._count.salesOrderItems}
+                              </span>
+                              <span className="text-[11px] text-muted-foreground">
+                                次
+                              </span>
                             </div>
                           </td>
 
                           <td>
-                            <div className="w-[10rem] space-y-2">
-                              <div className="flex items-center justify-between gap-2 text-[12px]">
-                                <span
-                                  className={cn(
-                                    "font-medium",
-                                    referenceSignal.textClassName,
-                                  )}
-                                >
-                                  {referenceSignal.label}
-                                </span>
-                                <span className="text-muted-foreground">
-                                  已引用 {item._count.salesOrderItems}
-                                </span>
-                              </div>
-                              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                                <div
-                                  className={cn(
-                                    "h-full rounded-full transition-[width] duration-300",
-                                    referenceSignal.barClassName,
-                                  )}
-                                  style={{ width: `${referenceFill}%` }}
-                                />
-                              </div>
-                            </div>
-                          </td>
-
-                          <td>
-                            <div className="flex min-w-[6.5rem] flex-col items-start gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleToggle(item)}
-                                disabled={!canManage || pendingAction}
-                                aria-label={
-                                  item.enabled ? "停用商品" : "启用商品"
-                                }
+                            <button
+                              type="button"
+                              onClick={() => handleToggle(item)}
+                              disabled={!canManage || pendingAction}
+                              aria-label={
+                                item.enabled ? "停用商品" : "启用商品"
+                              }
+                              title={item.enabled ? "已上架(点击停用)" : "已停用(点击启用)"}
+                              className={cn(
+                                "relative inline-flex h-7 w-11 items-center rounded-full border p-[3px] transition-[border-color,background-color]",
+                                item.enabled
+                                  ? "border-primary/30 bg-primary/15"
+                                  : "border-border/60 bg-muted",
+                                (!canManage || pendingAction) &&
+                                  "cursor-not-allowed opacity-70",
+                              )}
+                            >
+                              <span
                                 className={cn(
-                                  "relative inline-flex h-7 w-11 items-center rounded-full border p-[3px] transition-[border-color,background-color]",
+                                  "h-5 w-5 rounded-full bg-card shadow-[0_2px_8px_rgba(18,24,31,0.14)] transition-transform duration-200",
                                   item.enabled
-                                    ? "border-primary/30 bg-primary/15"
-                                    : "border-border/60 bg-muted",
-                                  (!canManage || pendingAction) &&
-                                    "cursor-not-allowed opacity-70",
+                                    ? "translate-x-4"
+                                    : "translate-x-0",
                                 )}
-                              >
-                                <span
-                                  className={cn(
-                                    "h-5 w-5 rounded-full bg-card shadow-[0_2px_8px_rgba(18,24,31,0.14)] transition-transform duration-200",
-                                    item.enabled
-                                      ? "translate-x-4"
-                                      : "translate-x-0",
-                                  )}
-                                />
-                              </button>
-                              <p className="text-[11px] font-medium text-muted-foreground">
-                                {item.enabled ? "已上架" : "已停用"}
-                              </p>
-                            </div>
+                              />
+                            </button>
                           </td>
 
                           <td>
@@ -918,7 +780,7 @@ export function ProductsSection({
 
                         {isExpanded ? (
                           <tr>
-                            <td colSpan={8} className="!p-0">
+                            <td colSpan={7} className="!p-0">
                               <div className="mx-4 my-2 rounded-r-lg border-l-2 border-primary/40 bg-muted/10 py-3 pl-4 pr-4">
                                 <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.25fr)]">
                                   <div className="space-y-3">
