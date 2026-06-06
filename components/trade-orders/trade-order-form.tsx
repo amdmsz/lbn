@@ -841,7 +841,7 @@ export function TradeOrderForm({
                   <div
                     key={line.lineId}
                     className={cn(
-                      "rounded-xl border border-border/60 bg-white/78 p-3.5 shadow-[0_1px_0_rgba(255,255,255,0.76)_inset]",
+                      "rounded-xl border border-border/60 bg-card p-3.5 shadow-sm",
                       lineIssues.length > 0 && "border-amber-500/25 bg-amber-500/5",
                     )}
                   >
@@ -1075,7 +1075,7 @@ export function TradeOrderForm({
                         <div
                           key={line.lineId}
                           className={cn(
-                            "rounded-xl border border-border/60 bg-white/78 p-3.5 shadow-[0_1px_0_rgba(255,255,255,0.76)_inset]",
+                            "rounded-xl border border-border/60 bg-card p-3.5 shadow-sm",
                             giftIssues.length > 0 && "border-amber-500/25 bg-amber-500/5",
                           )}
                         >

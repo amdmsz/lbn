@@ -159,7 +159,7 @@ export function CollectionTasksSection({
 }>) {
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
+      <div className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
         <form
           method="get"
           className="grid gap-3 xl:grid-cols-[minmax(0,1.5fr)_repeat(5,minmax(0,1fr))_auto] xl:items-end"
@@ -271,7 +271,7 @@ export function CollectionTasksSection({
             </span>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+          <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
             <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <table className="w-full min-w-[1040px] border-separate border-spacing-0 text-sm">
                 <thead className="bg-transparent">
