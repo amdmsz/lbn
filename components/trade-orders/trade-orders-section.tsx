@@ -434,6 +434,7 @@ function TradeOrderExecutionStrip({
   totalQty,
   supplierNames,
   latestBatchLabel,
+  batchHref,
   shippingTaskCount,
   shippingPackageCount,
   fulfillmentSummary,
@@ -444,6 +445,7 @@ function TradeOrderExecutionStrip({
   totalQty: number;
   supplierNames: string[];
   latestBatchLabel: string;
+  batchHref: string;
   shippingTaskCount: number;
   shippingPackageCount: number;
   fulfillmentSummary: Array<{
@@ -464,7 +466,16 @@ function TradeOrderExecutionStrip({
         <div className="space-y-2">
           {product.lines.map((line) => (
             <div key={line.id} className="flex items-start gap-2">
-              <span className="mt-0.5 rounded-full border border-border/50 bg-background px-2 py-0.5 text-[10px] text-muted-foreground">
+              <span
+                className={cn(
+                  "mt-0.5 shrink-0 rounded-full border px-2 py-0.5 text-[10px]",
+                  line.type === "GIFT"
+                    ? "border-[var(--tone-warning-soft-border)] bg-[var(--tone-warning-soft-bg)] text-[var(--color-warning)]"
+                    : line.type === "BUNDLE"
+                      ? "border-[var(--tone-info-soft-border)] bg-[var(--tone-info-soft-bg)] text-[var(--color-accent-strong)]"
+                      : "border-border/50 bg-background text-muted-foreground",
+                )}
+              >
                 {line.type === "GIFT"
                   ? "赠品"
                   : line.type === "BUNDLE"
@@ -472,24 +483,42 @@ function TradeOrderExecutionStrip({
                     : "商品"}
               </span>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-foreground">
+                <div
+                  className="truncate text-sm font-medium text-foreground"
+                  title={line.label}
+                >
                   {line.label}
                 </div>
               </div>
             </div>
           ))}
           <div className={tradeOrderMetaClassName}>
-            <span>SKU {item.items.length}</span>
-            <span>件数 {totalQty}</span>
-            <span>supplier {supplierNames.length || "未拆单"}</span>
-            <span>最近批次 {latestBatchLabel}</span>
+            <span className="tabular-nums">
+              {item.items.length} SKU · {totalQty} 件
+            </span>
+            {supplierNames.length > 0 ? (
+              <span
+                className="truncate"
+                title={supplierNames.join(" / ")}
+              >
+                供货商{" "}
+                {supplierNames.length === 1
+                  ? supplierNames[0]
+                  : `${supplierNames[0]} 等 ${supplierNames.length} 家`}
+              </span>
+            ) : (
+              <span className="text-muted-foreground/70">未拆单</span>
+            )}
+            {item.latestExportBatch ? (
+              <Link
+                href={batchHref}
+                className="text-[var(--color-accent-strong)] hover:underline"
+                title={`最近批次 ${latestBatchLabel}`}
+              >
+                批次 ✓
+              </Link>
+            ) : null}
           </div>
-          {supplierNames.length > 0 ? (
-            <div className="truncate text-xs text-muted-foreground">
-              {supplierNames.slice(0, 3).join(" / ")}
-              {supplierNames.length > 3 ? ` 等 ${supplierNames.length} 个` : ""}
-            </div>
-          ) : null}
           {product.rest > 0 ? (
             <div className="text-xs text-muted-foreground">
               其余 {product.rest} 项商品已收起
@@ -724,6 +753,7 @@ function TradeOrderRow({
         totalQty={totalQty}
         supplierNames={supplierNames}
         latestBatchLabel={latestBatchLabel}
+        batchHref={batchHref}
         shippingTaskCount={shippingTaskCount}
         shippingPackageCount={shippingPackageCount}
         fulfillmentSummary={fulfillmentSummary}
