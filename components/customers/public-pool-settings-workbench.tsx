@@ -32,7 +32,7 @@ function HeaderActionLink({
   return (
     <Link
       href={href}
-      className="inline-flex h-9 items-center rounded-[0.85rem] border border-black/8 bg-[rgba(247,248,250,0.84)] px-3.5 text-sm text-black/66 transition-colors hover:border-black/12 hover:bg-white hover:text-black/84"
+      className="inline-flex h-9 items-center rounded-md border border-border/60 bg-[var(--color-shell-surface-soft)] px-3.5 text-sm text-muted-foreground transition-colors hover:border-border hover:bg-[var(--color-shell-hover)] hover:text-foreground"
     >
       {label}
     </Link>
@@ -51,19 +51,19 @@ function SettingToggle({
   defaultChecked: boolean;
 }>) {
   return (
-    <label className="rounded-[1rem] border border-black/8 bg-[rgba(247,248,250,0.7)] p-3.5 transition-colors hover:border-black/12 hover:bg-white/84">
+    <label className="rounded-xl border border-border/60 bg-[rgba(247,248,250,0.7)] p-3.5 transition-colors hover:border-border hover:bg-white/84">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-black/82">{label}</p>
+          <p className="text-sm font-medium text-foreground">{label}</p>
           {description ? (
-            <p className="mt-1 text-[13px] leading-6 text-black/56">{description}</p>
+            <p className="mt-1 text-[13px] leading-6 text-muted-foreground">{description}</p>
           ) : null}
         </div>
         <input
           type="checkbox"
           name={name}
           defaultChecked={defaultChecked}
-          className="mt-1 h-4 w-4 rounded border-black/20 text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
+          className="mt-1 h-4 w-4 rounded border-border text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
         />
       </div>
     </label>
@@ -88,8 +88,8 @@ function SettingNumberInput({
   placeholder?: string;
 }>) {
   return (
-    <label className="space-y-2 rounded-[1rem] border border-black/8 bg-[rgba(247,248,250,0.7)] p-3.5 transition-colors hover:border-black/12 hover:bg-white/84">
-      <span className="text-sm font-medium text-black/82">{label}</span>
+    <label className="space-y-2 rounded-xl border border-border/60 bg-[rgba(247,248,250,0.7)] p-3.5 transition-colors hover:border-border hover:bg-white/84">
+      <span className="text-sm font-medium text-foreground">{label}</span>
       <input
         type="number"
         name={name}
@@ -100,7 +100,7 @@ function SettingNumberInput({
         className="crm-input"
       />
       {description ? (
-        <p className="text-[13px] leading-6 text-black/56">{description}</p>
+        <p className="text-[13px] leading-6 text-muted-foreground">{description}</p>
       ) : null}
     </label>
   );
@@ -123,8 +123,8 @@ function SettingSelect({
   }>;
 }>) {
   return (
-    <label className="space-y-2 rounded-[1rem] border border-black/8 bg-[rgba(247,248,250,0.7)] p-3.5 transition-colors hover:border-black/12 hover:bg-white/84">
-      <span className="text-sm font-medium text-black/82">{label}</span>
+    <label className="space-y-2 rounded-xl border border-border/60 bg-[rgba(247,248,250,0.7)] p-3.5 transition-colors hover:border-border hover:bg-white/84">
+      <span className="text-sm font-medium text-foreground">{label}</span>
       <select name={name} defaultValue={defaultValue} className="crm-select">
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -133,7 +133,7 @@ function SettingSelect({
         ))}
       </select>
       {description ? (
-        <p className="text-[13px] leading-6 text-black/56">{description}</p>
+        <p className="text-[13px] leading-6 text-muted-foreground">{description}</p>
       ) : null}
     </label>
   );
@@ -435,8 +435,8 @@ export function CustomerPublicPoolSettingsWorkbench({
                 placeholder="不设上限"
               />
             </div>
-            <div className="mt-4 rounded-[1rem] border border-black/8 bg-[rgba(247,248,250,0.64)] px-4 py-3 text-[13px] leading-6 text-black/56">
-              <p className="font-medium text-black/72">娓告爣璇存槑</p>
+            <div className="mt-4 rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] px-4 py-3 text-[13px] leading-6 text-muted-foreground">
+              <p className="font-medium text-foreground/70">游标说明</p>
               <p className="mt-1">系统会自动续位，轮转分配和低负载分配都在同一套团队规则下生效。</p>
             </div>
           </SectionCard>
@@ -505,13 +505,13 @@ export function CustomerPublicPoolSettingsWorkbench({
           {data.reservedRules.map((item) => (
             <div
               key={item.label}
-              className="rounded-[1rem] border border-dashed border-black/12 bg-[rgba(247,248,250,0.68)] p-4"
+              className="rounded-xl border border-dashed border-border bg-[var(--color-shell-surface-soft)] p-4"
             >
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-black/78">{item.label}</p>
+                <p className="text-sm font-medium text-foreground">{item.label}</p>
                 <StatusBadge label="鍚庣画寮€鏀?" variant="neutral" />
               </div>
-              <p className="mt-2 text-[13px] leading-6 text-black/56">{item.description}</p>
+              <p className="mt-2 text-[13px] leading-6 text-muted-foreground">{item.description}</p>
             </div>
           ))}
         </div>

@@ -30,7 +30,7 @@ function HeaderActionLink({
   return (
     <Link
       href={href}
-      className="inline-flex h-9 items-center rounded-[0.85rem] border border-black/8 bg-[rgba(247,248,250,0.84)] px-3.5 text-sm text-black/66 transition-colors hover:border-black/12 hover:bg-white hover:text-black/84"
+      className="inline-flex h-9 items-center rounded-md border border-border/60 bg-[var(--color-shell-surface-soft)] px-3.5 text-sm text-muted-foreground transition-colors hover:border-border hover:bg-[var(--color-shell-hover)] hover:text-foreground"
     >
       {label}
     </Link>
@@ -233,9 +233,9 @@ export function CustomerPublicPoolReportsWorkbench({
                 {data.trends.map((item) => (
                   <div
                     key={item.date}
-                    className="rounded-[0.95rem] border border-black/8 bg-[rgba(247,248,250,0.72)] px-3.5 py-3"
+                    className="rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] px-3.5 py-3"
                   >
-                    <div className="flex items-center justify-between gap-3 text-sm text-black/66">
+                    <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
                       <span>{item.date}</span>
                       <span>
                         入池 {item.enteredCount} / 认领 {item.claimedCount}
@@ -244,20 +244,20 @@ export function CustomerPublicPoolReportsWorkbench({
 
                     <div className="mt-3 space-y-2">
                       <div className="flex items-center gap-2">
-                        <span className="w-12 shrink-0 text-xs text-black/48">入池</span>
-                        <div className="h-2 flex-1 rounded-full bg-black/6">
+                        <span className="w-12 shrink-0 text-xs text-muted-foreground/70">入池</span>
+                        <div className="h-2 flex-1 rounded-full bg-muted">
                           <div
-                            className="h-2 rounded-full bg-[rgba(160,106,29,0.72)]"
+                            className="h-2 rounded-full bg-[var(--color-warning)]/70"
                             style={{ width: buildTrendBarWidth(item.enteredCount, maxTrendValue) }}
                           />
                         </div>
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <span className="w-12 shrink-0 text-xs text-black/48">认领</span>
-                        <div className="h-2 flex-1 rounded-full bg-black/6">
+                        <span className="w-12 shrink-0 text-xs text-muted-foreground/70">认领</span>
+                        <div className="h-2 flex-1 rounded-full bg-muted">
                           <div
-                            className="h-2 rounded-full bg-[rgba(47,107,71,0.74)]"
+                            className="h-2 rounded-full bg-[var(--color-success)]/70"
                             style={{ width: buildTrendBarWidth(item.claimedCount, maxTrendValue) }}
                           />
                         </div>
@@ -285,10 +285,10 @@ export function CustomerPublicPoolReportsWorkbench({
               ].map((section) => (
                 <div
                   key={section.title}
-                  className="rounded-[0.95rem] border border-black/8 bg-[rgba(247,248,250,0.72)] px-3.5 py-3"
+                  className="rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] px-3.5 py-3"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-black/82">{section.title}</p>
+                    <p className="text-sm font-medium text-foreground">{section.title}</p>
                     <StatusBadge label={`${section.items.length} 类`} variant="neutral" />
                   </div>
 
@@ -303,7 +303,7 @@ export function CustomerPublicPoolReportsWorkbench({
                       ))}
                     </div>
                   ) : (
-                    <p className="mt-3 text-sm text-black/52">当前窗口内暂无可展示分布。</p>
+                    <p className="mt-3 text-sm text-muted-foreground">当前窗口内暂无可展示分布。</p>
                   )}
                 </div>
               ))}
@@ -373,7 +373,7 @@ export function CustomerPublicPoolReportsWorkbench({
                       <tr key={row.ownerId}>
                         <td>
                           <div>{row.ownerName}</div>
-                          <div className="text-xs text-black/45">@{row.ownerUsername}</div>
+                          <div className="text-xs text-muted-foreground/70">@{row.ownerUsername}</div>
                         </td>
                         <td>{row.teamName ?? "未记录团队"}</td>
                         <td>{row.claimCount}</td>
@@ -423,11 +423,11 @@ export function CustomerPublicPoolReportsWorkbench({
                               lingerDays: data.filters.lingerDays,
                             }),
                           })}
-                          className="font-medium text-black/82 underline-offset-2 hover:text-black hover:underline"
+                          className="font-medium text-foreground underline-offset-2 hover:text-black hover:underline"
                         >
                           {row.customerName}
                         </Link>
-                        <div className="text-xs text-black/45">{row.phone}</div>
+                        <div className="text-xs text-muted-foreground/70">{row.phone}</div>
                       </td>
                       <td>{row.teamName ?? "未记录团队"}</td>
                       <td>{row.publicReasonLabel ?? "未记录原因"}</td>
@@ -462,10 +462,10 @@ export function CustomerPublicPoolReportsWorkbench({
             {data.definitions.map((item) => (
               <div
                 key={item.label}
-                className="rounded-[0.95rem] border border-black/8 bg-[rgba(247,248,250,0.72)] px-3.5 py-3"
+                className="rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] px-3.5 py-3"
               >
-                <p className="text-sm font-medium text-black/82">{item.label}</p>
-                <p className="mt-2 text-[13px] leading-6 text-black/56">{item.description}</p>
+                <p className="text-sm font-medium text-foreground">{item.label}</p>
+                <p className="mt-2 text-[13px] leading-6 text-muted-foreground">{item.description}</p>
               </div>
             ))}
           </div>
