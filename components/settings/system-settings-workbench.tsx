@@ -381,7 +381,7 @@ export function SiteSettingsWorkbench({
       <SettingSection
         setting={setting}
         redirectTo="/settings/site"
-        eyebrow="Site"
+        eyebrow="站点"
         title="站点资料"
         description="这些字段会先作为后台配置保存；运行时读取会在下一阶段接入。"
       >
@@ -490,7 +490,7 @@ export function RecordingStorageSettingsWorkbench({
       <SettingSection
         setting={storageSetting}
         redirectTo="/settings/recording-storage"
-        eyebrow="Storage"
+        eyebrow="录音存储"
         title="存储位置"
         description="内网服务器优先使用 LOCAL_MOUNT，把独立存储机器挂载成服务端本地目录。"
       >
@@ -566,7 +566,7 @@ export function RecordingStorageSettingsWorkbench({
       <SettingSection
         setting={uploadSetting}
         redirectTo="/settings/recording-storage"
-        eyebrow="Upload"
+        eyebrow="上传"
         title="上传限制"
         description="Android 录音上传会按这些限制执行分片、过期和完整性校验。"
       >
@@ -790,7 +790,7 @@ export function OutboundCallSettingsWorkbench({
       <SettingSection
         setting={providerSetting}
         redirectTo="/settings/outbound-call"
-        eyebrow="Provider"
+        eyebrow="外呼服务商"
         title="CTI Gateway"
         description="CRM 只调用服务端 CTI Gateway；SIP/VOS 密钥留在 PBX 或环境变量，不进前端。"
         secretLabel="Gateway / Webhook Secret"
@@ -911,7 +911,7 @@ export function OutboundCallSettingsWorkbench({
       </SettingSection>
 
       <SectionCard
-        eyebrow="Seats"
+        eyebrow="坐席绑定"
         title="坐席绑定"
         description="默认使用 CRM 登录账号作为 CTI 坐席号；这里只维护少数需要覆盖或禁用的账号。"
       >
@@ -986,7 +986,7 @@ export function CallAiSettingsWorkbench({
       <SettingSection
         setting={asrSetting}
         redirectTo="/settings/call-ai"
-        eyebrow="ASR"
+        eyebrow="ASR 转写"
         title="录音转文字"
         description="内网部署优先使用 LOCAL_HTTP_ASR / FunASR / SenseVoice，不要求录音公网可访问。"
         secretLabel="ASR API Key"
@@ -1064,7 +1064,7 @@ export function CallAiSettingsWorkbench({
       <SettingSection
         setting={llmSetting}
         redirectTo="/settings/call-ai"
-        eyebrow="LLM"
+        eyebrow="LLM 分析"
         title="AI 分析模型"
         description="支持 DeepSeek、通义千问、Kimi、智谱、火山方舟、腾讯混元和 OpenAI-compatible。"
         secretLabel="LLM API Key"
@@ -1137,7 +1137,7 @@ export function CallAiSettingsWorkbench({
       <SettingSection
         setting={diarizationSetting}
         redirectTo="/settings/call-ai"
-        eyebrow="Diarization"
+        eyebrow="说话人分离"
         title="说话人分离"
         description="把 ASR segments 标准化为销售 / 客户 / 未知，后续展示与分析都会复用该 contract。"
       >
@@ -1227,7 +1227,7 @@ export function SecuritySettingsWorkbench({
       <SettingSection
         setting={setting}
         redirectTo="/settings/security"
-        eyebrow="Security"
+        eyebrow="安全策略"
         title="认证策略"
         description="这些策略已进入可审计配置；实际登录运行时读取会在下一阶段接入。"
       >
@@ -1339,7 +1339,7 @@ export function SettingsAuditWorkbench({
       <SettingSection
         setting={runtimeSetting}
         redirectTo="/settings/audit"
-        eyebrow="Runtime"
+        eyebrow="运行时"
         title="后台 worker 参数"
         description="这里保存运行参数；进程常驻仍需要部署侧进程管理器负责。"
       >
@@ -1386,7 +1386,7 @@ export function SettingsAuditWorkbench({
       </SettingSection>
 
       <SectionCard
-        eyebrow="Audit"
+        eyebrow="审计"
         title="最近 SYSTEM 操作"
         description="配置保存会写入 OperationLog，敏感字段只保留脱敏指纹。"
       >

@@ -35,7 +35,7 @@ export function CustomerScopeSwitcher({
 
   return (
     <SectionCard
-      eyebrow="Scope Switch"
+      eyebrow="范围切换"
       title={title}
       description={description}
       actions={<StatusBadge label={scopeLabel} variant="info" />}

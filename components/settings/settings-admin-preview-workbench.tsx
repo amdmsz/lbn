@@ -87,7 +87,7 @@ export function SettingsAdminPreviewWorkbench({
 
       <SectionCard
         className="mt-5"
-        eyebrow="Phase 1"
+        eyebrow="第一阶段"
         title="当前状态"
         description="本页先承接管理员配置入口和当前运行状态预览；真实保存、版本审计与回滚会在 SystemSetting 里程碑接入。"
       >

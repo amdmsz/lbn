@@ -1301,7 +1301,7 @@ export function CustomerPublicPoolWorkbench({
           <DataTableWrapper
             title="公海客户列表"
             description="查看公海客户。"
-            eyebrow="Public Pool"
+            eyebrow="公海客户"
           >
             <EntityTable
               density="compact"
@@ -1546,7 +1546,7 @@ export function CustomerPublicPoolWorkbench({
             <DataTableWrapper
               title="可回收客户"
               description="查看可回收客户。"
-              eyebrow="Recycle"
+              eyebrow="回收"
             >
               <EntityTable
                 density="compact"
@@ -1695,7 +1695,7 @@ export function CustomerPublicPoolWorkbench({
           <DataTableWrapper
             title="Ownership 审计链"
             description="查看流转记录。"
-            eyebrow="Records"
+            eyebrow="记录"
           >
             <EntityTable
               density="compact"

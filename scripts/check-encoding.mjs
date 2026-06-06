@@ -3,7 +3,7 @@
 // 防止类似 6446685 那次 "公海池 -> 鍏捣姹" 的 UTF-8/GBK 编码事故再次溜进仓库.
 //
 // 检测两类损坏码点:
-//   1. U+FFFD REPLACEMENT CHARACTER (�) -- 几乎一定是编码损坏
+//   1. U+FFFD REPLACEMENT CHARACTER -- 几乎一定是编码损坏
 //   2. 私用区 PUA U+E000-U+F8FF -- 本仓库源码不应直接写私用区字符,
 //      mojibake (GBK 无法映射的字节) 常落在这里
 //
