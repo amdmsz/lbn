@@ -418,23 +418,13 @@ export function TradeOrderForm({
         <div className="min-w-0 space-y-5">
           {/* STEP 1 商品行 */}
           <section className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="flex items-center gap-2 text-[15px] font-semibold leading-6 text-foreground">
-                <PackageCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                商品行
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
-                  {lines.length}
-                </span>
-              </h2>
-              <button
-                type="button"
-                onClick={addLine}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 text-[12px] font-medium text-muted-foreground transition hover:border-primary/30 hover:text-primary"
-              >
-                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                添加商品
-              </button>
-            </div>
+            <h2 className="flex items-center gap-2 text-[15px] font-semibold leading-6 text-foreground">
+              <PackageCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              商品行
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+                {lines.length}
+              </span>
+            </h2>
             <div className="space-y-2.5">
               {lines.map((line, index) => (
                 <TradeOrderCartLine
