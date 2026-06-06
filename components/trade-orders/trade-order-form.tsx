@@ -248,7 +248,7 @@ function FormSection({
   className,
 }: Readonly<{
   icon: LucideIcon;
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   description?: string;
   actions?: React.ReactNode;
@@ -258,22 +258,22 @@ function FormSection({
   return (
     <section
       className={cn(
-        "overflow-hidden rounded-[1.15rem] border border-border/60 bg-card shadow-sm",
+        "overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm",
         className,
       )}
     >
-      <div className="flex flex-col gap-3 border-b border-border/50 bg-muted/20 px-4 py-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-primary/8 text-primary">
-            <Icon className="h-4 w-4" aria-hidden="true" />
-          </span>
+      <div className="flex flex-col gap-2 border-b border-border/50 bg-card px-4 py-2.5 md:flex-row md:items-center md:justify-between">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <div className="min-w-0">
-            <p className="crm-eyebrow">{eyebrow}</p>
-            <h2 className="mt-1 text-[0.98rem] font-semibold leading-5 text-foreground">
+            {eyebrow ? (
+              <p className="crm-eyebrow">{eyebrow}</p>
+            ) : null}
+            <h2 className="text-[0.95rem] font-semibold leading-5 text-foreground">
               {title}
             </h2>
             {description ? (
-              <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
+              <p className="mt-0.5 text-[12px] leading-5 text-muted-foreground">
                 {description}
               </p>
             ) : null}
@@ -322,8 +322,10 @@ function MetricTile({
   return (
     <div
       className={cn(
-        "rounded-2xl border bg-white/72 px-3.5 py-3 shadow-[0_1px_0_rgba(255,255,255,0.72)_inset]",
-        tone === "info" ? "border-primary/15 bg-primary/5" : "border-border/55",
+        "rounded-xl border px-3.5 py-2.5",
+        tone === "info"
+          ? "border-primary/15 bg-primary/5"
+          : "border-border/55 bg-muted/20",
       )}
     >
       <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
@@ -613,7 +615,7 @@ export function TradeOrderForm({
           </div>
 
           {draft?.rejectReason ? (
-            <div className="max-w-xl rounded-2xl border border-amber-500/20 bg-amber-500/10 px-3.5 py-3 text-[12px] leading-5 text-amber-800 dark:text-amber-300">
+            <div className="max-w-xl rounded-xl border border-amber-500/20 bg-amber-500/10 px-3.5 py-3 text-[12px] leading-5 text-amber-800 dark:text-amber-300">
               <span className="font-semibold">上次驳回：</span>
               {draft.rejectReason}
             </div>
@@ -649,15 +651,11 @@ export function TradeOrderForm({
         <div className="min-w-0 space-y-4">
           <FormSection
             icon={UserRound}
-            eyebrow="Customer / Payment"
             title="客户与支付策略"
-            description="下单时先确认客户承接人和收款方式，避免后续支付与履约口径反复改。"
           >
             <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)]">
-              <div className="rounded-2xl border border-border/55 bg-muted/20 px-4 py-3.5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
-                  Customer
-                </p>
+              <div className="rounded-xl border border-border/55 bg-muted/20 px-4 py-3.5">
+                <p className="crm-eyebrow">客户承接</p>
                 <div className="mt-3 space-y-2">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -687,7 +685,7 @@ export function TradeOrderForm({
                         type="button"
                         onClick={() => setPaymentScheme(option.value)}
                         className={cn(
-                          "min-h-[5.4rem] rounded-2xl border px-3.5 py-3 text-left transition-[border-color,background-color,box-shadow,transform]",
+                          "min-h-[5.4rem] rounded-xl border px-3.5 py-3 text-left transition-[border-color,background-color,box-shadow,transform]",
                           active
                             ? "border-primary/35 bg-primary/8 shadow-[0_0_0_3px_rgba(37,99,235,0.08)]"
                             : "border-border/55 bg-white/68 hover:border-primary/25 hover:bg-white",
@@ -731,9 +729,7 @@ export function TradeOrderForm({
 
           <FormSection
             icon={Truck}
-            eyebrow="Fulfillment"
             title="收件与履约信息"
-            description="这里会成为后续 supplier 子单、发货任务和物流跟进的快照。"
             actions={
               <button
                 type="button"
@@ -774,7 +770,7 @@ export function TradeOrderForm({
                 />
               </label>
 
-              <label className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-border/55 bg-muted/20 px-4 py-3">
+              <label className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-border/55 bg-muted/20 px-4 py-3">
                 <span className="flex min-w-0 items-center gap-2.5">
                   <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-primary/8 text-primary">
                     <ShieldCheck className="h-4 w-4" aria-hidden="true" />
@@ -814,9 +810,7 @@ export function TradeOrderForm({
 
           <FormSection
             icon={PackageCheck}
-            eyebrow="Line Editor"
-            title="商品行编辑"
-            description="每瓶酒保持独立成交行，系统只在提交审核时按 supplier 拆分执行子单。"
+            title="商品行"
             actions={
               <button
                 type="button"
@@ -847,7 +841,7 @@ export function TradeOrderForm({
                   <div
                     key={line.lineId}
                     className={cn(
-                      "rounded-2xl border border-border/60 bg-white/78 p-3.5 shadow-[0_1px_0_rgba(255,255,255,0.76)_inset]",
+                      "rounded-xl border border-border/60 bg-white/78 p-3.5 shadow-[0_1px_0_rgba(255,255,255,0.76)_inset]",
                       lineIssues.length > 0 && "border-amber-500/25 bg-amber-500/5",
                     )}
                   >
@@ -985,7 +979,7 @@ export function TradeOrderForm({
                         />
                       </label>
 
-                      <div className="rounded-2xl border border-border/55 bg-muted/20 px-3.5 py-2.5 md:text-right">
+                      <div className="rounded-xl border border-border/55 bg-muted/20 px-3.5 py-2.5 md:text-right">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                           行金额
                         </p>
@@ -1014,7 +1008,7 @@ export function TradeOrderForm({
                       </label>
 
                       {lineIssues.length > 0 ? (
-                        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12px] leading-5 text-amber-800 dark:text-amber-300">
+                        <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12px] leading-5 text-amber-800 dark:text-amber-300">
                           {lineIssues.map((message) => (
                             <div key={message} className="flex gap-2">
                               <AlertTriangle
@@ -1034,7 +1028,7 @@ export function TradeOrderForm({
               <button
                 type="button"
                 onClick={addLine}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-primary/25 bg-primary/5 text-sm font-semibold text-primary transition hover:border-primary/35 hover:bg-primary/8"
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-primary/25 bg-primary/5 text-sm font-semibold text-primary transition hover:border-primary/35 hover:bg-primary/8"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 继续加商品
@@ -1058,9 +1052,7 @@ export function TradeOrderForm({
             <div className="space-y-4 p-3.5 md:p-4">
               <FormSection
                 icon={Gift}
-                eyebrow="Gift Lines"
                 title="赠品行"
-                description="仅在需要时补充，默认收起来。"
                 actions={
                   <button
                     type="button"
@@ -1083,7 +1075,7 @@ export function TradeOrderForm({
                         <div
                           key={line.lineId}
                           className={cn(
-                            "rounded-2xl border border-border/60 bg-white/78 p-3.5 shadow-[0_1px_0_rgba(255,255,255,0.76)_inset]",
+                            "rounded-xl border border-border/60 bg-white/78 p-3.5 shadow-[0_1px_0_rgba(255,255,255,0.76)_inset]",
                             giftIssues.length > 0 && "border-amber-500/25 bg-amber-500/5",
                           )}
                         >
@@ -1184,7 +1176,7 @@ export function TradeOrderForm({
                         />
                       </label>
 
-                      <div className="rounded-2xl border border-border/55 bg-muted/20 px-3.5 py-2.5 md:text-right">
+                      <div className="rounded-xl border border-border/55 bg-muted/20 px-3.5 py-2.5 md:text-right">
                         <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                           行金额
                               </p>
@@ -1212,7 +1204,7 @@ export function TradeOrderForm({
                             </label>
 
                             {giftIssues.length > 0 ? (
-                              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12px] leading-5 text-amber-800 dark:text-amber-300">
+                              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12px] leading-5 text-amber-800 dark:text-amber-300">
                                 {giftIssues.map((message) => (
                                   <div key={message} className="flex gap-2">
                                     <AlertTriangle
@@ -1230,13 +1222,13 @@ export function TradeOrderForm({
                     })}
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-dashed border-border/70 bg-muted/20 px-4 py-4 text-[13px] leading-6 text-muted-foreground">
+                  <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-4 text-[13px] leading-6 text-muted-foreground">
                     如需和成交单一起发货的标准 SKU 赠品，可在这里新增赠品行。
                   </div>
                 )}
               </FormSection>
 
-              <FormSection icon={FileText} eyebrow="Notes" title="订单备注">
+              <FormSection icon={FileText} title="订单备注">
                 <textarea
                   name="remark"
                   rows={3}
@@ -1259,7 +1251,7 @@ export function TradeOrderForm({
               </h2>
             </div>
             <div className="space-y-4 p-4">
-              <div className="rounded-2xl border border-primary/15 bg-primary/5 px-4 py-4">
+              <div className="rounded-xl border border-primary/15 bg-primary/5 px-4 py-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-primary/75">
                   Final Amount
                 </p>
@@ -1309,7 +1301,7 @@ export function TradeOrderForm({
             </div>
             <div className="space-y-3 p-4">
               {submitReady ? (
-                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-3 text-[13px] leading-5 text-emerald-700 dark:text-emerald-300">
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3.5 py-3 text-[13px] leading-5 text-emerald-700 dark:text-emerald-300">
                   <div className="flex items-center gap-2 font-semibold">
                     <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
                     可以提交审核
@@ -1323,7 +1315,7 @@ export function TradeOrderForm({
                   {issueMessages.map((message) => (
                     <div
                       key={message}
-                      className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12px] leading-5 text-amber-800 dark:text-amber-300"
+                      className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12px] leading-5 text-amber-800 dark:text-amber-300"
                     >
                       <div className="flex gap-2">
                         <AlertTriangle
