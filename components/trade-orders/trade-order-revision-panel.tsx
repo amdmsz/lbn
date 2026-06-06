@@ -27,6 +27,13 @@ export type RevisionBlocker = {
   message: string;
 };
 
+export type RevisableItem = {
+  id: string;
+  titleSnapshot: string;
+  qty: number;
+  dealUnitPrice: string;
+};
+
 export type TradeOrderRevisionPanelProps = Readonly<{
   tradeOrderId: string;
   customerId: string;
@@ -38,6 +45,8 @@ export type TradeOrderRevisionPanelProps = Readonly<{
   canRequestRevision: boolean;
   canReviewRevision: boolean;
   currentUserId: string;
+  // 仅 SKU 类型行 (排除 GIFT/BUNDLE), 用于减量编辑
+  revisableItems: RevisableItem[];
   requestAction: (formData: FormData) => Promise<TradeOrderRevisionActionResult>;
   reviewAction: (formData: FormData) => Promise<TradeOrderRevisionActionResult>;
   withdrawAction: (formData: FormData) => Promise<TradeOrderRevisionActionResult>;
@@ -65,11 +74,16 @@ export default function TradeOrderRevisionPanel({
   canRequestRevision,
   canReviewRevision,
   currentUserId,
+  revisableItems,
   requestAction,
   reviewAction,
   withdrawAction,
 }: TradeOrderRevisionPanelProps) {
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
+  const [revisionKind, setRevisionKind] = useState<"CANCEL" | "REDUCE_QUANTITY">(
+    "CANCEL",
+  );
+  const [patchedQty, setPatchedQty] = useState<Record<string, number>>({});
   const [reason, setReason] = useState("");
   const [reviewNote, setReviewNote] = useState("");
   const [notice, setNotice] = useState<
@@ -99,6 +113,10 @@ export default function TradeOrderRevisionPanel({
               type="button"
               onClick={() => {
                 setReason("");
+                setRevisionKind("CANCEL");
+                setPatchedQty(
+                  Object.fromEntries(revisableItems.map((it) => [it.id, it.qty])),
+                );
                 setNotice(null);
                 setRequestDialogOpen(true);
               }}
@@ -107,7 +125,7 @@ export default function TradeOrderRevisionPanel({
               title={blocked ? blockers.map((b) => b.message).join("; ") : ""}
             >
               <ArrowLeftRight className="h-3.5 w-3.5" aria-hidden="true" />
-              申请撤单
+              申请撤单 / 减量
             </button>
           </div>
           {blocked ? (
@@ -136,14 +154,28 @@ export default function TradeOrderRevisionPanel({
             tradeNo={tradeNo}
             reason={reason}
             onReasonChange={setReason}
+            revisionKind={revisionKind}
+            onRevisionKindChange={setRevisionKind}
+            revisableItems={revisableItems}
+            patchedQty={patchedQty}
+            onPatchedQtyChange={setPatchedQty}
             pending={pending}
             onClose={() => setRequestDialogOpen(false)}
             onSubmit={() => {
               const fd = new FormData();
               fd.set("tradeOrderId", tradeOrderId);
               fd.set("customerId", customerId);
-              fd.set("kind", "CANCEL");
+              fd.set("kind", revisionKind);
               fd.set("reason", reason.trim());
+              if (revisionKind === "REDUCE_QUANTITY") {
+                const patchedLines = revisableItems
+                  .filter((it) => (patchedQty[it.id] ?? it.qty) < it.qty)
+                  .map((it) => ({
+                    itemId: it.id,
+                    newQty: Math.max(0, patchedQty[it.id] ?? it.qty),
+                  }));
+                fd.set("patchedLines", JSON.stringify(patchedLines));
+              }
               startTransition(async () => {
                 const result = await requestAction(fd);
                 setNotice(result);
@@ -345,6 +377,11 @@ function RequestDialog({
   tradeNo,
   reason,
   onReasonChange,
+  revisionKind,
+  onRevisionKindChange,
+  revisableItems,
+  patchedQty,
+  onPatchedQtyChange,
   pending,
   onClose,
   onSubmit,
@@ -354,26 +391,39 @@ function RequestDialog({
   tradeNo: string;
   reason: string;
   onReasonChange: (value: string) => void;
+  revisionKind: "CANCEL" | "REDUCE_QUANTITY";
+  onRevisionKindChange: (kind: "CANCEL" | "REDUCE_QUANTITY") => void;
+  revisableItems: RevisableItem[];
+  patchedQty: Record<string, number>;
+  onPatchedQtyChange: (next: Record<string, number>) => void;
   pending: boolean;
   onClose: () => void;
   onSubmit: () => void;
 }>) {
+  const hasItems = revisableItems.length > 0;
+  const someActuallyReduced = revisableItems.some(
+    (it) => (patchedQty[it.id] ?? it.qty) < it.qty,
+  );
+  const canSubmit =
+    reason.trim().length >= 4 &&
+    (revisionKind === "CANCEL" || someActuallyReduced);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-xl border border-border/60 bg-card p-5 shadow-lg"
+        className="w-full max-w-lg rounded-xl border border-border/60 bg-card p-5 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-base font-semibold text-foreground">
-              发起撤单申请
+              发起撤单 / 减量申请
             </h3>
             <p className="mt-1 text-[12.5px] leading-5 text-muted-foreground">
-              成交主单 {tradeNo} · 通过后将整单取消并逆向所有未发货任务/未确认收款
+              成交主单 {tradeNo} · 主管复审通过后由系统执行
             </p>
           </div>
           <button
@@ -386,16 +436,116 @@ function RequestDialog({
           </button>
         </div>
 
+        {/* 类型切换 */}
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={() => onRevisionKindChange("CANCEL")}
+            className={cn(
+              "flex-1 rounded-lg border px-3 py-2.5 text-left text-[12.5px] transition",
+              revisionKind === "CANCEL"
+                ? "border-amber-500/35 bg-amber-500/8 text-foreground"
+                : "border-border/60 bg-card text-muted-foreground hover:border-primary/25",
+            )}
+          >
+            <div className="font-semibold">整单撤销</div>
+            <div className="mt-0.5 text-[11px] text-muted-foreground">
+              客户不买了, 主单标 CANCELED
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => onRevisionKindChange("REDUCE_QUANTITY")}
+            disabled={!hasItems}
+            className={cn(
+              "flex-1 rounded-lg border px-3 py-2.5 text-left text-[12.5px] transition disabled:cursor-not-allowed disabled:opacity-40",
+              revisionKind === "REDUCE_QUANTITY"
+                ? "border-amber-500/35 bg-amber-500/8 text-foreground"
+                : "border-border/60 bg-card text-muted-foreground hover:border-primary/25",
+            )}
+          >
+            <div className="font-semibold">减少数量</div>
+            <div className="mt-0.5 text-[11px] text-muted-foreground">
+              客户调减某行, 通过后主单回草稿待重新提交
+            </div>
+          </button>
+        </div>
+
+        {/* 减量编辑区 */}
+        {revisionKind === "REDUCE_QUANTITY" && hasItems ? (
+          <div className="mt-3 rounded-lg border border-border/60 bg-[var(--color-shell-surface-soft)] p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              新数量 (newQty=0 表示删除该行)
+            </p>
+            <div className="mt-2 space-y-2">
+              {revisableItems.map((item) => {
+                const newQty = patchedQty[item.id] ?? item.qty;
+                const isChanged = newQty < item.qty;
+                return (
+                  <div
+                    key={item.id}
+                    className={cn(
+                      "flex items-center justify-between gap-3 rounded-md border bg-card px-2.5 py-2 text-[12px]",
+                      isChanged
+                        ? "border-amber-500/30"
+                        : "border-border/40",
+                    )}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-foreground">
+                        {item.titleSnapshot}
+                      </p>
+                      <p className="text-[10.5px] text-muted-foreground">
+                        原 {item.qty} 件 · ¥{item.dealUnitPrice}/件
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min="0"
+                        max={item.qty - 1}
+                        value={newQty}
+                        onChange={(e) =>
+                          onPatchedQtyChange({
+                            ...patchedQty,
+                            [item.id]: Math.max(
+                              0,
+                              Math.min(item.qty, Number(e.target.value) || 0),
+                            ),
+                          })
+                        }
+                        className="crm-input h-7 w-16 text-center text-[12px] tabular-nums"
+                      />
+                      <span className="text-[10.5px] text-muted-foreground">
+                        / {item.qty}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {!someActuallyReduced ? (
+              <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-300">
+                至少调减一行才能提交申请
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
         <label className="mt-4 block">
           <span className="text-[11px] font-semibold text-muted-foreground">
-            撤单原因 (必填,至少 4 个字)
+            原因 (必填,至少 4 个字)
           </span>
           <textarea
-            rows={4}
+            rows={3}
             value={reason}
             onChange={(e) => onReasonChange(e.target.value)}
-            className="crm-textarea mt-1 min-h-[5rem] text-[13px]"
-            placeholder="例如:客户临时改主意不下单了 / 客户要求改成 5 件改成 3 件"
+            className="crm-textarea mt-1 min-h-[4.5rem] text-[13px]"
+            placeholder={
+              revisionKind === "CANCEL"
+                ? "例如: 客户临时改主意不下单了"
+                : "例如: 客户预算调整, 第 1 行从 10 件减到 5 件"
+            }
             autoFocus
           />
         </label>
@@ -411,7 +561,7 @@ function RequestDialog({
           <button
             type="button"
             onClick={onSubmit}
-            disabled={pending || reason.trim().length < 4}
+            disabled={pending || !canSubmit}
             className="inline-flex h-9 items-center gap-1.5 rounded-full border border-amber-500/35 bg-amber-500/10 px-3.5 text-[12.5px] font-medium text-amber-700 transition hover:border-amber-500/50 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-50 dark:text-amber-300"
           >
             {pending ? (

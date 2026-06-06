@@ -613,11 +613,36 @@ export async function requestTradeOrderRevisionAction(
   try {
     const actor = await getTradeOrderActionActor();
 
+    let patchedLines: Array<{ itemId: string; newQty: number }> | undefined;
+    const patchedRaw = getFormValue(formData, "patchedLines");
+    if (patchedRaw) {
+      try {
+        const parsed = JSON.parse(patchedRaw);
+        if (Array.isArray(parsed)) {
+          patchedLines = parsed
+            .filter(
+              (it): it is { itemId: string; newQty: number } =>
+                typeof it === "object" &&
+                it !== null &&
+                typeof it.itemId === "string" &&
+                Number.isFinite(Number(it.newQty)),
+            )
+            .map((it) => ({ itemId: it.itemId, newQty: Number(it.newQty) }));
+        }
+      } catch {
+        return {
+          status: "error",
+          message: "减量数据格式错误, 请刷新页面重试",
+        };
+      }
+    }
+
     const result = await requestTradeOrderRevision(actor, {
       tradeOrderId: getFormValue(formData, "tradeOrderId"),
       kind: (getFormValue(formData, "kind") ||
         TradeOrderRevisionKind.CANCEL) as TradeOrderRevisionKind,
       reason: getFormValue(formData, "reason"),
+      patchedLines,
     });
 
     const customerId = getFormValue(formData, "customerId");

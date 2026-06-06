@@ -39,6 +39,11 @@ export type RevisionActor = {
   role: RoleCode;
 };
 
+const patchedLineSchema = z.object({
+  itemId: z.string().min(1),
+  newQty: z.number().int().min(0).max(99999),
+});
+
 const requestRevisionSchema = z.object({
   tradeOrderId: z.string().min(1, "请选择需要撤单的成交主单"),
   kind: z.nativeEnum(TradeOrderRevisionKind),
@@ -47,6 +52,9 @@ const requestRevisionSchema = z.object({
     .trim()
     .min(4, "请填写至少 4 个字的撤单原因")
     .max(800, "原因过长 (上限 800 字)"),
+  // REDUCE_QUANTITY 必填: 哪些行减成什么数量 (newQty=0 等于删该行).
+  // CANCEL 时填了也会忽略.
+  patchedLines: z.array(patchedLineSchema).optional(),
 });
 
 const reviewRevisionSchema = z.object({
@@ -178,10 +186,17 @@ export async function requestTradeOrderRevision(
 
   const input = requestRevisionSchema.parse(rawInput);
 
-  if (input.kind !== TradeOrderRevisionKind.CANCEL) {
+  if (input.kind === TradeOrderRevisionKind.MODIFY_LINES) {
     throw new Error(
-      "阶段 A MVP 仅支持整单撤销 (CANCEL); 减量 / 改 SKU 将在阶段 A.1 上线",
+      "阶段 A.1 暂不支持换 SKU / 加新行 (MODIFY_LINES). 如需大幅改单, 请整单撤销后重新建单.",
     );
+  }
+
+  if (
+    input.kind === TradeOrderRevisionKind.REDUCE_QUANTITY &&
+    (!input.patchedLines || input.patchedLines.length === 0)
+  ) {
+    throw new Error("减量申请必须指明要调整的商品行和新数量.");
   }
 
   const tradeOrder = await prisma.tradeOrder.findUnique({
@@ -196,6 +211,15 @@ export async function requestTradeOrderRevision(
       finalAmount: true,
       depositAmount: true,
       codAmount: true,
+      items: {
+        select: {
+          id: true,
+          itemType: true,
+          qty: true,
+          titleSnapshot: true,
+          dealUnitPriceSnapshot: true,
+        },
+      },
       salesOrders: {
         select: {
           id: true,
@@ -221,6 +245,24 @@ export async function requestTradeOrderRevision(
     throw new Error("您只能对自己负责的成交主单发起撤单申请");
   }
 
+  // 验证 patchedLines: 每项 newQty 必须 < 原 qty 且 itemId 必须存在
+  let normalizedPatchedLines: Array<{ itemId: string; newQty: number }> = [];
+  if (input.kind === TradeOrderRevisionKind.REDUCE_QUANTITY && input.patchedLines) {
+    const itemMap = new Map(tradeOrder.items.map((item) => [item.id, item]));
+    for (const patch of input.patchedLines) {
+      const item = itemMap.get(patch.itemId);
+      if (!item) {
+        throw new Error(`商品行 ${patch.itemId} 不存在或不属于本订单`);
+      }
+      if (patch.newQty >= item.qty) {
+        throw new Error(
+          `行 "${item.titleSnapshot}" 当前数量 ${item.qty}, 新数量 ${patch.newQty} 必须更小 (减量)`,
+        );
+      }
+    }
+    normalizedPatchedLines = input.patchedLines;
+  }
+
   const blockerCheck = await checkRevisionBlockers(prisma, tradeOrder.id);
   if (!blockerCheck.ok) {
     const err = new Error(blockerCheck.blockers.map((b) => b.message).join("; "));
@@ -243,6 +285,13 @@ export async function requestTradeOrderRevision(
           finalAmount: tradeOrder.finalAmount.toString(),
           depositAmount: tradeOrder.depositAmount.toString(),
           codAmount: tradeOrder.codAmount.toString(),
+          items: tradeOrder.items.map((it) => ({
+            id: it.id,
+            itemType: it.itemType,
+            qty: it.qty,
+            titleSnapshot: it.titleSnapshot,
+            dealUnitPriceSnapshot: it.dealUnitPriceSnapshot.toString(),
+          })),
           salesOrders: tradeOrder.salesOrders.map((so) => ({
             id: so.id,
             subOrderNo: so.subOrderNo,
@@ -251,6 +300,10 @@ export async function requestTradeOrderRevision(
             finalAmount: so.finalAmount.toString(),
           })),
         } satisfies Prisma.InputJsonValue,
+        patchedSnapshot:
+          normalizedPatchedLines.length > 0
+            ? ({ patchedLines: normalizedPatchedLines } satisfies Prisma.InputJsonValue)
+            : Prisma.JsonNull,
       },
     });
 
@@ -500,14 +553,107 @@ export async function reviewTradeOrderRevision(
       cancelledSalesOrderIds.push(so.id);
     }
 
-    // 主单收尾
-    await tx.tradeOrder.update({
-      where: { id: revision.tradeOrderId },
-      data: {
-        tradeStatus: TradeOrderStatus.CANCELED,
-        updatedById: actor.id,
-      },
-    });
+    // 主单收尾: kind=CANCEL 直接 CANCELED; kind=REDUCE_QUANTITY 则按 patchedLines
+    // 调整 TradeOrderItem.qty / subtotal 后回 DRAFT, 销售可重新提交审核.
+    const reduceTouchedItemIds: string[] = [];
+    const reduceDeletedItemIds: string[] = [];
+    if (revision.kind === TradeOrderRevisionKind.REDUCE_QUANTITY) {
+      const patchedSnapshot = await tx.tradeOrderRevisionRequest.findUnique({
+        where: { id: revision.id },
+        select: { patchedSnapshot: true },
+      });
+      const patchedLines =
+        (patchedSnapshot?.patchedSnapshot as
+          | { patchedLines?: Array<{ itemId: string; newQty: number }> }
+          | null)?.patchedLines ?? [];
+
+      for (const patch of patchedLines) {
+        const item = await tx.tradeOrderItem.findUnique({
+          where: { id: patch.itemId },
+          select: {
+            id: true,
+            qty: true,
+            dealUnitPriceSnapshot: true,
+            tradeOrderId: true,
+          },
+        });
+        if (!item || item.tradeOrderId !== revision.tradeOrderId) continue;
+
+        if (patch.newQty === 0) {
+          // 删行 + 同步删掉组件
+          await tx.tradeOrderItemComponent.deleteMany({
+            where: { tradeOrderItemId: item.id },
+          });
+          await tx.tradeOrderItem.delete({ where: { id: item.id } });
+          reduceDeletedItemIds.push(item.id);
+        } else if (patch.newQty < item.qty) {
+          const newSubtotal = item.dealUnitPriceSnapshot.mul(patch.newQty);
+          await tx.tradeOrderItem.update({
+            where: { id: item.id },
+            data: { qty: patch.newQty, subtotal: newSubtotal },
+          });
+          // 组件 qty 也按比例缩 (简化: 同步缩放)
+          const ratio = patch.newQty / item.qty;
+          const components = await tx.tradeOrderItemComponent.findMany({
+            where: { tradeOrderItemId: item.id },
+            select: { id: true, qty: true, allocatedSubtotal: true },
+          });
+          for (const comp of components) {
+            const newCompQty = Math.max(1, Math.round(comp.qty * ratio));
+            await tx.tradeOrderItemComponent.update({
+              where: { id: comp.id },
+              data: {
+                qty: newCompQty,
+                allocatedSubtotal: comp.allocatedSubtotal.mul(ratio),
+              },
+            });
+          }
+          reduceTouchedItemIds.push(item.id);
+        }
+      }
+
+      // 重算 TradeOrder 聚合金额 (deal/goods/final, deposit/cod/insurance 保留)
+      const remainingItems = await tx.tradeOrderItem.findMany({
+        where: { tradeOrderId: revision.tradeOrderId },
+        select: { itemType: true, subtotal: true, qty: true, listUnitPriceSnapshot: true },
+      });
+      const aggregateDeal = remainingItems
+        .filter((i) => i.itemType !== "GIFT")
+        .reduce((acc, i) => acc.plus(i.subtotal), new Prisma.Decimal(0));
+      const aggregateList = remainingItems
+        .filter((i) => i.itemType !== "GIFT")
+        .reduce(
+          (acc, i) => acc.plus(i.listUnitPriceSnapshot.mul(i.qty)),
+          new Prisma.Decimal(0),
+        );
+
+      await tx.tradeOrder.update({
+        where: { id: revision.tradeOrderId },
+        data: {
+          listAmount: aggregateList,
+          dealAmount: aggregateDeal,
+          goodsAmount: aggregateDeal,
+          discountAmount: aggregateList.minus(aggregateDeal),
+          finalAmount: aggregateDeal,
+          remainingAmount: aggregateDeal,
+          // 回 DRAFT, reviewStatus 也回 PENDING_REVIEW 让销售重新提交
+          tradeStatus: TradeOrderStatus.DRAFT,
+          reviewStatus: "PENDING_REVIEW",
+          reviewerId: null,
+          reviewedAt: null,
+          updatedById: actor.id,
+        },
+      });
+    } else {
+      // CANCEL: 整单 CANCELED
+      await tx.tradeOrder.update({
+        where: { id: revision.tradeOrderId },
+        data: {
+          tradeStatus: TradeOrderStatus.CANCELED,
+          updatedById: actor.id,
+        },
+      });
+    }
 
     await tx.tradeOrderRevisionRequest.update({
       where: { id: revision.id },
@@ -530,18 +676,27 @@ export async function reviewTradeOrderRevision(
       data: {
         actorId: actor.id,
         module: OperationModule.SALES_ORDER,
-        action: "trade_order.revision_approved_cancel",
+        action:
+          revision.kind === TradeOrderRevisionKind.REDUCE_QUANTITY
+            ? "trade_order.revision_approved_reduce"
+            : "trade_order.revision_approved_cancel",
         targetType: OperationTargetType.TRADE_ORDER,
         targetId: revision.tradeOrderId,
-        description: `Cancelled trade order ${revision.tradeOrder.tradeNo} via approved revision request`,
+        description:
+          revision.kind === TradeOrderRevisionKind.REDUCE_QUANTITY
+            ? `Reduced trade order ${revision.tradeOrder.tradeNo} via approved revision; touched=${reduceTouchedItemIds.length}, deleted=${reduceDeletedItemIds.length}`
+            : `Cancelled trade order ${revision.tradeOrder.tradeNo} via approved revision request`,
         beforeData: { tradeStatus: TradeOrderStatus.REVISION_PENDING },
         afterData: {
           revisionId: revision.id,
+          kind: revision.kind,
           cancelledShippingTaskIds,
           cancelledPaymentPlanIds,
           cancelledPaymentRecordIds,
           cancelledCollectionTaskIds,
           cancelledSalesOrderIds,
+          reduceTouchedItemIds,
+          reduceDeletedItemIds,
         },
       },
     });
@@ -550,11 +705,14 @@ export async function reviewTradeOrderRevision(
       status: "APPROVED" as const,
       revisionId: revision.id,
       tradeOrderId: revision.tradeOrderId,
+      kind: revision.kind,
       cancelledShippingTaskIds,
       cancelledPaymentPlanIds,
       cancelledPaymentRecordIds,
       cancelledCollectionTaskIds,
       cancelledSalesOrderIds,
+      reduceTouchedItemIds,
+      reduceDeletedItemIds,
     };
   });
 }

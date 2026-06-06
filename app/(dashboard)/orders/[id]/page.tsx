@@ -173,6 +173,17 @@ export default async function SalesOrderDetailPage({
                   canRequestRevision={canRequestRevision}
                   canReviewRevision={canReviewRevision}
                   currentUserId={session.user.id}
+                  revisableItems={tradeOrderData.order.items
+                    .filter((item) => item.itemType === "SKU")
+                    .map((item) => ({
+                      id: item.id,
+                      titleSnapshot: item.titleSnapshot,
+                      qty: item.qty,
+                      dealUnitPrice:
+                        typeof item.dealUnitPriceSnapshot === "string"
+                          ? item.dealUnitPriceSnapshot
+                          : String(item.dealUnitPriceSnapshot),
+                    }))}
                   requestAction={requestTradeOrderRevisionAction}
                   reviewAction={reviewTradeOrderRevisionAction}
                   withdrawAction={withdrawTradeOrderRevisionAction}
