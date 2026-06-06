@@ -375,6 +375,20 @@ enum TradeOrderStatus {
   APPROVED
   REJECTED
   CANCELED
+  REVISION_PENDING
+}
+
+enum TradeOrderRevisionKind {
+  CANCEL
+  REDUCE_QUANTITY
+  MODIFY_LINES
+}
+
+enum TradeOrderRevisionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WITHDRAWN
 }
 
 enum TradeOrderItemType {
@@ -806,6 +820,8 @@ model User {
   createdSalesOrders                        SalesOrder[]                      @relation("SalesOrderCreatedBy")
   updatedSalesOrders                        SalesOrder[]                      @relation("SalesOrderUpdatedBy")
   reviewedSalesOrders                       SalesOrder[]                      @relation("SalesOrderReviewer")
+  requestedTradeOrderRevisions              TradeOrderRevisionRequest[]       @relation("TradeOrderRevisionRequester")
+  reviewedTradeOrderRevisions               TradeOrderRevisionRequest[]       @relation("TradeOrderRevisionReviewer")
   ownedPaymentPlans                         PaymentPlan[]                     @relation("PaymentPlanOwner")
   createdPaymentPlans                       PaymentPlan[]                     @relation("PaymentPlanCreatedBy")
   updatedPaymentPlans                       PaymentPlan[]                     @relation("PaymentPlanUpdatedBy")
@@ -1718,6 +1734,7 @@ model TradeOrder {
   logisticsFollowUpTasks  LogisticsFollowUpTask[]
   codCollectionRecords    CodCollectionRecord[]
   exportLines             ShippingExportLine[]
+  revisionRequests        TradeOrderRevisionRequest[]
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime                  @updatedAt
 
@@ -1725,6 +1742,38 @@ model TradeOrder {
   @@index([ownerId, reviewStatus, createdAt])
   @@index([reviewStatus, tradeStatus, createdAt])
   @@map("tradeorder")
+}
+
+model TradeOrderRevisionRequest {
+  id                          String                   @id @default(cuid())
+  tradeOrderId                String
+  tradeOrder                  TradeOrder               @relation(fields: [tradeOrderId], references: [id])
+  kind                        TradeOrderRevisionKind
+  status                      TradeOrderRevisionStatus @default(PENDING)
+  reason                      String                   @db.Text
+  originalSnapshot            Json
+  patchedSnapshot             Json?
+  requesterId                 String
+  requester                   User                     @relation("TradeOrderRevisionRequester", fields: [requesterId], references: [id])
+  requestedAt                 DateTime                 @default(now())
+  reviewerId                  String?
+  reviewer                    User?                    @relation("TradeOrderRevisionReviewer", fields: [reviewerId], references: [id])
+  reviewedAt                  DateTime?
+  reviewNote                  String?                  @db.Text
+  blockedReason               String?                  @db.Text
+  cancelledShippingTaskIds    Json?
+  cancelledPaymentPlanIds     Json?
+  cancelledPaymentRecordIds   Json?
+  cancelledCollectionTaskIds  Json?
+  cancelledSalesOrderIds      Json?
+  createdAt                   DateTime                 @default(now())
+  updatedAt                   DateTime                 @updatedAt
+
+  @@index([tradeOrderId])
+  @@index([status, requestedAt])
+  @@index([reviewerId])
+  @@index([requesterId])
+  @@map("tradeorderrevisionrequest")
 }
 
 model TradeOrderItem {

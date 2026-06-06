@@ -19,7 +19,7 @@ type TradeOrderRecycleDialogItem = {
   customerName: string;
   receiverName: string;
   receiverPhone: string;
-  tradeStatus: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "CANCELED";
+  tradeStatus: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "CANCELED" | "REVISION_PENDING";
   reviewStatus: string;
   updatedAt: Date | string;
 };
@@ -29,7 +29,7 @@ function normalizeDate(value: Date | string) {
 }
 
 function getTradeStatusLabel(
-  value: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "CANCELED",
+  value: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "CANCELED" | "REVISION_PENDING",
 ) {
   switch (value) {
     case "DRAFT":
@@ -42,6 +42,8 @@ function getTradeStatusLabel(
       return "已驳回";
     case "CANCELED":
       return "已取消";
+    case "REVISION_PENDING":
+      return "撤单审批中";
     default:
       return value;
   }

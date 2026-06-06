@@ -98,6 +98,7 @@ const tradeStatusMeta: Record<
   APPROVED: { label: "已审核", variant: "success" },
   REJECTED: { label: "已驳回", variant: "danger" },
   CANCELED: { label: "已取消", variant: "neutral" },
+  REVISION_PENDING: { label: "撤单审批中", variant: "warning" },
 };
 
 function buildPageHref(

@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { SalesOrderDetailSection } from "@/components/sales-orders/sales-order-detail-section";
 import { TradeOrderDetailSection } from "@/components/trade-orders/trade-order-detail-section";
+import TradeOrderRevisionPanel from "@/components/trade-orders/trade-order-revision-panel";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { PageContextLink } from "@/components/shared/page-context-link";
@@ -24,15 +25,23 @@ import { buildFulfillmentTradeOrdersHref } from "@/lib/fulfillment/navigation";
 import { getSalesOrderDetail } from "@/lib/sales-orders/queries";
 import { getTradeOrderDetail } from "@/lib/trade-orders/queries";
 import {
+  checkRevisionBlockers,
+  getActiveRevisionForTradeOrder,
+} from "@/lib/trade-orders/revisions";
+import { prisma } from "@/lib/db/prisma";
+import {
   moveTradeOrderToRecycleBinAction,
+  requestTradeOrderRevisionAction,
   reviewPaymentRecordAction,
   reviewSalesOrderAction,
   reviewTradeOrderAction,
+  reviewTradeOrderRevisionAction,
   saveSalesOrderAction,
   submitPaymentRecordAction,
   updateCollectionTaskAction,
   updateLogisticsFollowUpTaskAction,
   upsertCollectionTaskAction,
+  withdrawTradeOrderRevisionAction,
 } from "../actions";
 
 function buildCustomerTradeOrderHref(customerId: string, tradeOrderId: string) {
@@ -78,6 +87,26 @@ export default async function SalesOrderDetailPage({
       (tradeOrderData.order.tradeStatus === "DRAFT" ||
         tradeOrderData.order.tradeStatus === "REJECTED");
 
+    // 计算撤单/改单面板需要的上下文
+    const isApprovedTrade = tradeOrderData.order.tradeStatus === "APPROVED";
+    const isRevisionPending =
+      tradeOrderData.order.tradeStatus === "REVISION_PENDING";
+    const activeRevision =
+      isApprovedTrade || isRevisionPending
+        ? await getActiveRevisionForTradeOrder(tradeOrderData.order.id)
+        : null;
+    const blockerCheck =
+      isApprovedTrade && !activeRevision
+        ? await checkRevisionBlockers(prisma, tradeOrderData.order.id)
+        : { ok: true as const, blockers: [] as never[] };
+    const canRequestRevision =
+      canCreateSalesOrder(session.user.role) &&
+      (session.user.role !== "SALES" ||
+        tradeOrderData.order.ownerId === session.user.id);
+    const canReviewRevision = canReviewSalesOrder(session.user.role);
+    const showRevisionPanel =
+      (isApprovedTrade && canRequestRevision) || isRevisionPending;
+
     return (
       <div className="crm-page">
         <PageHeader
@@ -120,6 +149,36 @@ export default async function SalesOrderDetailPage({
             }
             reviewAction={reviewTradeOrderAction}
             moveToRecycleBinAction={moveTradeOrderToRecycleBinAction}
+            revisionPanel={
+              showRevisionPanel ? (
+                <TradeOrderRevisionPanel
+                  tradeOrderId={tradeOrderData.order.id}
+                  customerId={tradeOrderData.order.customer.id}
+                  tradeNo={tradeOrderData.order.tradeNo}
+                  isApproved={isApprovedTrade}
+                  isRevisionPending={isRevisionPending}
+                  activeRevision={
+                    activeRevision
+                      ? {
+                          id: activeRevision.id,
+                          kind: activeRevision.kind,
+                          status: activeRevision.status,
+                          reason: activeRevision.reason,
+                          requestedAt: activeRevision.requestedAt,
+                          requester: activeRevision.requester,
+                        }
+                      : null
+                  }
+                  blockers={blockerCheck.ok ? [] : blockerCheck.blockers}
+                  canRequestRevision={canRequestRevision}
+                  canReviewRevision={canReviewRevision}
+                  currentUserId={session.user.id}
+                  requestAction={requestTradeOrderRevisionAction}
+                  reviewAction={reviewTradeOrderRevisionAction}
+                  withdrawAction={withdrawTradeOrderRevisionAction}
+                />
+              ) : null
+            }
           />
         </DataTableWrapper>
       </div>

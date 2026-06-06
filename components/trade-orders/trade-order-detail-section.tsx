@@ -68,9 +68,15 @@ type BatchReference = {
   supplierName: string;
 };
 
-function getTradeStatusLabel(
-  value: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "CANCELED",
-) {
+type TradeStatusValue =
+  | "DRAFT"
+  | "PENDING_REVIEW"
+  | "APPROVED"
+  | "REJECTED"
+  | "CANCELED"
+  | "REVISION_PENDING";
+
+function getTradeStatusLabel(value: TradeStatusValue) {
   switch (value) {
     case "DRAFT":
       return "草稿";
@@ -82,14 +88,14 @@ function getTradeStatusLabel(
       return "已拒绝";
     case "CANCELED":
       return "已取消";
+    case "REVISION_PENDING":
+      return "撤单审批中";
     default:
       return value;
   }
 }
 
-function getTradeStatusVariant(
-  value: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED" | "CANCELED",
-): StatusBadgeVariant {
+function getTradeStatusVariant(value: TradeStatusValue): StatusBadgeVariant {
   switch (value) {
     case "PENDING_REVIEW":
       return "warning";
@@ -97,6 +103,8 @@ function getTradeStatusVariant(
       return "success";
     case "REJECTED":
       return "danger";
+    case "REVISION_PENDING":
+      return "warning";
     default:
       return "neutral";
   }
@@ -1124,6 +1132,7 @@ export function TradeOrderDetailSection({
   continueEditHref,
   reviewAction,
   moveToRecycleBinAction,
+  revisionPanel,
 }: Readonly<{
   order: TradeOrderDetail;
   operationLogs: OperationLogItem[];
@@ -1132,6 +1141,7 @@ export function TradeOrderDetailSection({
   continueEditHref?: string;
   reviewAction: (formData: FormData) => Promise<void>;
   moveToRecycleBinAction: (formData: FormData) => Promise<TradeOrderRecycleActionResult>;
+  revisionPanel?: React.ReactNode;
 }>) {
   const [notice, setNotice] = useState<TradeOrderRecycleActionResult | null>(null);
   const [recycleDialogOpen, setRecycleDialogOpen] = useState(false);
@@ -1349,6 +1359,8 @@ export function TradeOrderDetailSection({
           {notice.message}
         </ActionBanner>
       ) : null}
+
+      {revisionPanel ?? null}
 
       <section className="crm-section-card">
         <div className="flex flex-wrap items-start justify-between gap-4">

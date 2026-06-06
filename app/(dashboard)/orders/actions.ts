@@ -28,6 +28,12 @@ import type {
 import { reviewSalesOrder, saveSalesOrder } from "@/lib/sales-orders/mutations";
 import { updateLogisticsFollowUpTask } from "@/lib/shipping/mutations";
 import { reviewTradeOrder } from "@/lib/trade-orders/mutations";
+import {
+  requestTradeOrderRevision,
+  reviewTradeOrderRevision,
+  withdrawTradeOrderRevision,
+} from "@/lib/trade-orders/revisions";
+import { TradeOrderRevisionKind } from "@prisma/client";
 
 function getErrorMessage(error: unknown) {
   if (error instanceof ZodError) {
@@ -591,5 +597,107 @@ export async function updateLogisticsFollowUpTaskAction(formData: FormData) {
   } catch (error) {
     rethrowRedirectError(error);
     redirect(buildRedirectTarget(redirectTo, "error", getErrorMessage(error)));
+  }
+}
+
+// === Trade Order Revision (撤单/改单) Actions ===
+
+export type TradeOrderRevisionActionResult = {
+  status: "success" | "error";
+  message: string;
+};
+
+export async function requestTradeOrderRevisionAction(
+  formData: FormData,
+): Promise<TradeOrderRevisionActionResult> {
+  try {
+    const actor = await getTradeOrderActionActor();
+
+    const result = await requestTradeOrderRevision(actor, {
+      tradeOrderId: getFormValue(formData, "tradeOrderId"),
+      kind: (getFormValue(formData, "kind") ||
+        TradeOrderRevisionKind.CANCEL) as TradeOrderRevisionKind,
+      reason: getFormValue(formData, "reason"),
+    });
+
+    const customerId = getFormValue(formData, "customerId");
+    revalidatePath("/orders");
+    revalidatePath(`/orders/${getFormValue(formData, "tradeOrderId")}`);
+    revalidatePath("/fulfillment");
+    if (customerId) {
+      revalidatePath(`/customers/${customerId}`);
+    }
+
+    return {
+      status: "success",
+      message: `撤单申请已提交,正在等待主管复审 (申请号 ${result.id.slice(-6)})`,
+    };
+  } catch (error) {
+    return { status: "error", message: getErrorMessage(error) };
+  }
+}
+
+export async function reviewTradeOrderRevisionAction(
+  formData: FormData,
+): Promise<TradeOrderRevisionActionResult> {
+  try {
+    const actor = await getTradeOrderActionActor();
+    const decisionRaw = getFormValue(formData, "decision");
+    const decision = decisionRaw === "APPROVED" ? "APPROVED" : "REJECTED";
+
+    const result = await reviewTradeOrderRevision(actor, {
+      revisionId: getFormValue(formData, "revisionId"),
+      decision,
+      reviewNote: getFormValue(formData, "reviewNote") || undefined,
+    });
+
+    const tradeOrderId = getFormValue(formData, "tradeOrderId");
+    const customerId = getFormValue(formData, "customerId");
+    revalidatePath("/orders");
+    if (tradeOrderId) {
+      revalidatePath(`/orders/${tradeOrderId}`);
+    }
+    revalidatePath("/fulfillment");
+    revalidatePath("/shipping");
+    revalidatePath("/payment-records");
+    revalidatePath("/collection-tasks");
+    if (customerId) {
+      revalidatePath(`/customers/${customerId}`);
+    }
+
+    return {
+      status: "success",
+      message:
+        result.status === "APPROVED"
+          ? "撤单已通过,所有下游履约/收款已逆向取消"
+          : "撤单已驳回,原订单状态恢复",
+    };
+  } catch (error) {
+    return { status: "error", message: getErrorMessage(error) };
+  }
+}
+
+export async function withdrawTradeOrderRevisionAction(
+  formData: FormData,
+): Promise<TradeOrderRevisionActionResult> {
+  try {
+    const actor = await getTradeOrderActionActor();
+    await withdrawTradeOrderRevision(actor, {
+      revisionId: getFormValue(formData, "revisionId"),
+    });
+
+    const tradeOrderId = getFormValue(formData, "tradeOrderId");
+    const customerId = getFormValue(formData, "customerId");
+    revalidatePath("/orders");
+    if (tradeOrderId) {
+      revalidatePath(`/orders/${tradeOrderId}`);
+    }
+    if (customerId) {
+      revalidatePath(`/customers/${customerId}`);
+    }
+
+    return { status: "success", message: "撤单申请已撤回" };
+  } catch (error) {
+    return { status: "error", message: getErrorMessage(error) };
   }
 }

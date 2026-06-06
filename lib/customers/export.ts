@@ -560,6 +560,7 @@ function getTradeStatusLabel(value: TradeOrderStatus) {
     APPROVED: "已成交",
     REJECTED: "已驳回",
     CANCELED: "已取消",
+    REVISION_PENDING: "撤单审批中",
   };
 
   return labels[value];
