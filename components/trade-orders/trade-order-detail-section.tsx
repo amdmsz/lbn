@@ -476,7 +476,7 @@ function OverviewCard({
   footer?: ReactNode;
 }>) {
   return (
-    <div className="rounded-2xl border border-border/60 bg-card px-5 py-4 shadow-sm">
+    <div className="rounded-xl border border-border/60 bg-card px-5 py-4 shadow-sm">
       <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
         {eyebrow}
       </div>
@@ -1415,7 +1415,7 @@ export function TradeOrderDetailSection({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border/60 bg-card px-5 py-4 shadow-sm">
+      <section className="rounded-xl border border-border/60 bg-card px-5 py-4 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0 space-y-2">
             <div className="flex flex-wrap items-center gap-2">

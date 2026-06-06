@@ -66,7 +66,7 @@ const DESKTOP_COLUMNS =
   "xl:grid-cols-[minmax(0,1.25fr)_minmax(12rem,0.82fr)_minmax(0,1.08fr)_minmax(0,1.08fr)]";
 
 const tradeOrderCardClassName =
-  "overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm";
+  "overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm";
 
 const tradeOrderHeaderClassName =
   "flex flex-col gap-2.5 border-b border-border/50 bg-transparent px-4 py-2.5 lg:flex-row lg:items-start lg:justify-between";
