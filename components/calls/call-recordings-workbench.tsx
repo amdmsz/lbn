@@ -218,7 +218,7 @@ function WorkbenchHero({
     : `${data.summary.failedCount} 条失败已拆分处理`;
 
   return (
-    <section className="overflow-hidden rounded-[1.08rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-sm)]">
+    <section className="overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-sm)]">
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1.35fr)_minmax(21rem,0.65fr)]">
         <div className="min-w-0 border-b border-[var(--color-border-soft)] px-4 py-4 md:px-5 lg:border-b-0 lg:border-r lg:py-5">
           <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-sidebar-muted)]">
@@ -490,7 +490,7 @@ function RecordingAiBlock({ item }: Readonly<{ item: CallRecordingWorkbenchItem 
 
   if (!ai) {
     return (
-      <div className="rounded-[0.78rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2.5 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+      <div className="rounded-xl border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2.5 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
         暂无 AI 分析
       </div>
     );
@@ -531,7 +531,7 @@ function RecordingAiBlock({ item }: Readonly<{ item: CallRecordingWorkbenchItem 
       </div>
 
       {ai.nextActionSuggestion ? (
-        <div className="flex gap-2 rounded-[0.75rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2.5 py-2 text-[11.5px] leading-5 text-[var(--foreground)]/82">
+        <div className="flex gap-2 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2.5 py-2 text-[11.5px] leading-5 text-[var(--foreground)]/82">
           <Target className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-accent)]" />
           <span className="line-clamp-2">{ai.nextActionSuggestion}</span>
         </div>
@@ -543,7 +543,7 @@ function RecordingAiBlock({ item }: Readonly<{ item: CallRecordingWorkbenchItem 
 function ReviewSummary({ item }: Readonly<{ item: CallRecordingWorkbenchItem }>) {
   if (!item.latestReview) {
     return (
-      <div className="flex items-center justify-between gap-2 rounded-[0.78rem] border border-dashed border-[var(--color-border-soft)] px-3 py-2 text-[12px] text-[var(--color-sidebar-muted)]">
+      <div className="flex items-center justify-between gap-2 rounded-xl border border-dashed border-[var(--color-border-soft)] px-3 py-2 text-[12px] text-[var(--color-sidebar-muted)]">
         <span className="inline-flex items-center gap-1.5">
           <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
           人工复核
@@ -554,7 +554,7 @@ function ReviewSummary({ item }: Readonly<{ item: CallRecordingWorkbenchItem }>)
   }
 
   return (
-    <div className="rounded-[0.78rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2">
+    <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2">
       <div className="flex items-center justify-between gap-2">
         <StatusBadge
           label={getReviewStatusLabel(item.latestReview.reviewStatus)}
@@ -589,7 +589,7 @@ function RecordingTranscriptBlock({
   const hasTranscript = Boolean(ai?.hasTranscript);
 
   return (
-    <section className="rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-3">
+    <section className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[var(--foreground)]">
           <FileText className="h-3.5 w-3.5 text-[var(--color-accent)]" aria-hidden="true" />
@@ -605,11 +605,11 @@ function RecordingTranscriptBlock({
           {transcriptPreview}
         </p>
       ) : hasTranscript ? (
-        <div className="mt-3 rounded-[0.75rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+        <div className="mt-3 rounded-xl border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
           为保证队列打开速度，完整转写不进入首屏数据。点击下方按钮后加载当前录音的完整对话。
         </div>
       ) : (
-        <div className="mt-3 rounded-[0.75rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+        <div className="mt-3 rounded-xl border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
           {ai
             ? "AI 暂未返回有效转写。可检查录音时长、文件大小、ASR 配置或重新入队分析。"
             : "暂无 AI 转写。录音进入 AI 处理后，这里会显示完整对话文本。"}
@@ -632,7 +632,7 @@ function RecordingFailureDetails({
 
   return (
     <div className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(18rem,0.65fr)]">
-      <section className="rounded-[0.9rem] border border-[rgba(220,38,38,0.14)] bg-[rgba(220,38,38,0.045)] px-3 py-3">
+      <section className="rounded-xl border border-[rgba(220,38,38,0.14)] bg-[rgba(220,38,38,0.045)] px-3 py-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[var(--foreground)]">
             <AlertTriangle className="h-3.5 w-3.5 text-[var(--color-danger)]" aria-hidden="true" />
@@ -658,7 +658,7 @@ function RecordingFailureDetails({
         </div>
       </section>
 
-      <section className="rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-3">
+      <section className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-3">
         <div className="space-y-1.5">
           <FieldLine
             icon={Clock}
@@ -710,7 +710,7 @@ function RecordingQueueItem({
   const failureMessage = item.failureMessage?.trim() || "未记录失败原因";
 
   return (
-    <details className="group overflow-hidden rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-xs)] transition-[border-color,background-color,box-shadow] hover:border-[rgba(30,64,175,0.18)] hover:shadow-[var(--color-shell-shadow-sm)] [&>summary::-webkit-details-marker]:hidden">
+    <details className="group overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-xs)] transition-[border-color,background-color,box-shadow] hover:border-[rgba(30,64,175,0.18)] hover:shadow-[var(--color-shell-shadow-sm)] [&>summary::-webkit-details-marker]:hidden">
       <summary className="grid cursor-pointer list-none gap-3 px-3 py-3 md:grid-cols-[minmax(9rem,0.85fr)_minmax(12rem,1.05fr)_minmax(10rem,0.9fr)_minmax(10rem,0.8fr)_auto] md:items-center md:px-4">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
@@ -787,7 +787,7 @@ function RecordingQueueItem({
 
             <section className="min-w-0 space-y-4 px-4 py-4 pl-5">
               <div className="grid gap-3 xl:grid-cols-[minmax(14rem,0.55fr)_minmax(22rem,1fr)]">
-                <div className="min-w-0 space-y-3 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
+                <div className="min-w-0 space-y-3 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <Link
@@ -840,7 +840,7 @@ function RecordingQueueItem({
                   </div>
                 </div>
 
-                <div className="min-w-0 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-3">
+                <div className="min-w-0 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-3">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--color-sidebar-muted)]">
                     <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--foreground)]">
                       <FileAudio className="h-3.5 w-3.5 text-[var(--color-accent)]" />

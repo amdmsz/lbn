@@ -68,7 +68,7 @@ function ReasonCard({
   children: ReactNode;
 }>) {
   return (
-    <div className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-4 shadow-[var(--color-shell-shadow-xs)]">
+    <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-4 shadow-[var(--color-shell-shadow-xs)]">
       <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-shell-surface)] text-[var(--foreground)]">
         {icon}
       </div>
@@ -95,7 +95,7 @@ export function NotFoundWorkbench({ withinDashboard = false }: Readonly<NotFound
       )}
     >
       <div className="w-full space-y-3">
-        <section className="relative overflow-hidden rounded-[1.25rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-5 shadow-[var(--color-shell-shadow-md)] md:p-6">
+        <section className="relative overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-5 shadow-[var(--color-shell-shadow-md)] md:p-6">
           <div className="pointer-events-none absolute right-6 top-6 h-32 w-32 rounded-full bg-[radial-gradient(circle,rgba(111,141,255,0.18),transparent_68%)]" />
           <div className="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl space-y-3">
@@ -109,18 +109,18 @@ export function NotFoundWorkbench({ withinDashboard = false }: Readonly<NotFound
               <p className="max-w-2xl text-sm leading-6 text-[var(--color-sidebar-muted)]">
                 系统没有直接丢给你空白页，而是把可能原因列出来，方便判断是链接问题、数据不存在，还是权限范围导致不可见。
               </p>
-              <div className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2 text-[12px] text-[var(--color-sidebar-muted)]">
+              <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2 text-[12px] text-[var(--color-sidebar-muted)]">
                 当前地址：<span className="font-mono text-[var(--foreground)]">{fullPath}</span>
               </div>
             </div>
-            <div className="grid min-w-[14rem] grid-cols-2 gap-2 rounded-[1.1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-3 shadow-[var(--color-shell-shadow-xs)]">
-              <div className="rounded-[0.9rem] bg-[var(--color-shell-surface)] p-3">
+            <div className="grid min-w-[14rem] grid-cols-2 gap-2 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-3 shadow-[var(--color-shell-shadow-xs)]">
+              <div className="rounded-xl bg-[var(--color-shell-surface)] p-3">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
                   Status
                 </div>
                 <div className="mt-1 text-2xl font-semibold text-[var(--foreground)]">404</div>
               </div>
-              <div className="rounded-[0.9rem] bg-[var(--color-shell-surface)] p-3">
+              <div className="rounded-xl bg-[var(--color-shell-surface)] p-3">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-sidebar-muted)]">
                   Scope
                 </div>
@@ -133,7 +133,7 @@ export function NotFoundWorkbench({ withinDashboard = false }: Readonly<NotFound
         </section>
 
         <section className="grid gap-3 lg:grid-cols-[1.05fr_0.95fr]">
-          <div className="rounded-[1.15rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4 shadow-[var(--color-shell-shadow-sm)]">
+          <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4 shadow-[var(--color-shell-shadow-sm)]">
             <div className="flex items-start gap-3">
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent-strong)]">
                 {reason.icon}

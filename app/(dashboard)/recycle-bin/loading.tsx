@@ -18,15 +18,15 @@ export default function RecycleBinLoading() {
           {Array.from({ length: 3 }).map((_, index) => (
             <div
               key={index}
-              className="crm-loading-block h-[5.75rem] rounded-[1rem] border border-black/8"
+              className="crm-loading-block h-[5.75rem] rounded-xl border border-border/60"
             />
           ))}
         </div>
       }
-      toolbar={<div className="crm-loading-block h-12 rounded-[1rem] border border-black/8" />}
+      toolbar={<div className="crm-loading-block h-12 rounded-xl border border-border/60" />}
     >
-      <section className="overflow-hidden rounded-[1rem] border border-black/7 bg-[rgba(255,255,255,0.86)] shadow-[0_10px_22px_rgba(18,24,31,0.04)]">
-        <div className="border-b border-black/8 bg-[rgba(247,248,250,0.66)] px-4 py-3 md:px-5">
+      <section className="overflow-hidden rounded-xl border border-border/60 bg-[rgba(255,255,255,0.86)] shadow-[0_10px_22px_rgba(18,24,31,0.04)]">
+        <div className="border-b border-border/60 bg-[rgba(247,248,250,0.66)] px-4 py-3 md:px-5">
           <div className="crm-loading-block h-5 w-48 rounded-full" />
           <div className="mt-2 crm-loading-block h-4 w-72 rounded-full" />
         </div>
@@ -34,7 +34,7 @@ export default function RecycleBinLoading() {
           {Array.from({ length: 6 }).map((_, index) => (
             <div
               key={index}
-              className="crm-loading-block h-14 rounded-none border-b border-black/6 last:border-b-0"
+              className="crm-loading-block h-14 rounded-none border-b border-border/60 last:border-b-0"
             />
           ))}
         </div>

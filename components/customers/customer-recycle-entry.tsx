@@ -91,10 +91,10 @@ function getFallbackSuggestion() {
 }
 
 const recycleDialogShellClassName =
-  "w-full max-w-3xl overflow-hidden rounded-[1.35rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-lg)] backdrop-blur-[18px]";
+  "w-full max-w-3xl overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-lg)] backdrop-blur-[18px]";
 
 const recycleDialogSectionClassName =
-  "space-y-2 rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
+  "space-y-2 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
 
 function useCustomerRecycleDialogState(
   input: Pick<
@@ -258,7 +258,7 @@ function CustomerRecycleDialog({
             </ActionBanner>
           ) : null}
 
-          <div className="grid gap-3 rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:grid-cols-2">
+          <div className="grid gap-3 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:grid-cols-2">
             <SummaryRow label="客户" value={customerName} />
             <SummaryRow label="手机号" value={phone} />
             <SummaryRow label="客户状态" value={statusLabel} />
@@ -351,7 +351,7 @@ function CustomerRecycleDialog({
                 </select>
               </div>
 
-              <div className="rounded-[1rem] border border-[rgba(240,195,106,0.18)] bg-[rgba(240,195,106,0.12)] px-4 py-3 text-[13px] leading-6 text-[var(--color-warning)]">
+              <div className="rounded-xl border border-[rgba(240,195,106,0.18)] bg-[rgba(240,195,106,0.12)] px-4 py-3 text-[13px] leading-6 text-[var(--color-warning)]">
                 确认后只会进入 3 天冷静期。move 不等于将来一定能 purge，最终以到期时最新服务端真相重算。
               </div>
             </>
@@ -511,7 +511,7 @@ function BlockerGroupCard({
   group: CustomerRecycleBlockerGroup;
 }>) {
   return (
-    <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+    <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
       <div className="space-y-1">
         <p className="text-sm font-semibold text-[var(--foreground)]">{group.title}</p>
         <p className="text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
@@ -523,7 +523,7 @@ function BlockerGroupCard({
         {group.items.map((item) => (
           <div
             key={`${group.key}-${item.name}`}
-            className="rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2.5 shadow-[var(--color-shell-shadow-sm)]"
+            className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2.5 shadow-[var(--color-shell-shadow-sm)]"
           >
             <p className="text-sm font-medium text-[var(--foreground)]">{item.name}</p>
             <p className="mt-1 text-[13px] leading-5 text-[var(--color-sidebar-muted)]">

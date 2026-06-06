@@ -84,7 +84,7 @@ export function RecordingTranscriptLoader({
       </button>
 
       {status === "failed" ? (
-        <div className="mt-2 rounded-[0.75rem] border border-[rgba(220,38,38,0.18)] bg-[rgba(220,38,38,0.06)] px-3 py-2 text-[12px] leading-5 text-[var(--color-danger)]">
+        <div className="mt-2 rounded-xl border border-[rgba(220,38,38,0.18)] bg-[rgba(220,38,38,0.06)] px-3 py-2 text-[12px] leading-5 text-[var(--color-danger)]">
           {error}
         </div>
       ) : null}
@@ -98,12 +98,12 @@ export function RecordingTranscriptLoader({
               className="mt-3 max-h-[34rem] overflow-y-auto pr-1"
             />
           ) : (
-            <p className="mt-3 max-h-[34rem] overflow-y-auto whitespace-pre-wrap rounded-[0.75rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3 pr-1 text-[12.5px] leading-6 text-[var(--foreground)]/84">
+            <p className="mt-3 max-h-[34rem] overflow-y-auto whitespace-pre-wrap rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3 pr-1 text-[12.5px] leading-6 text-[var(--foreground)]/84">
               {transcriptText}
             </p>
           )
         ) : (
-          <div className="mt-2 rounded-[0.75rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+          <div className="mt-2 rounded-xl border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
             AI 暂未返回有效转写。
           </div>
         )

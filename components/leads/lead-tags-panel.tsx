@@ -41,8 +41,8 @@ export function LeadTagsPanel({
     <section className="crm-card p-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-black/85">线索标签</h2>
-          <p className="mt-2 text-sm leading-6 text-black/60">
+          <h2 className="text-lg font-semibold text-foreground">线索标签</h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
             标签用于快速标记线索特征，可在列表中直接筛选高意向、风险或直播信号。
           </p>
         </div>
@@ -86,7 +86,7 @@ export function LeadTagsPanel({
           {tags.map((item) => (
             <div
               key={item.id}
-              className="flex items-center gap-2 rounded-2xl border border-black/8 bg-white/70 px-3 py-2"
+              className="flex items-center gap-2 rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] px-3 py-2"
             >
               <TagPill label={item.tag.name} color={item.tag.color} />
               {canManage ? (

@@ -271,7 +271,7 @@ function RankingList({
       {ranking.items.map((row) => (
         <div
           key={row.userId}
-          className="grid grid-cols-12 gap-3 rounded-2xl border border-border bg-muted/25 p-3"
+          className="grid grid-cols-12 gap-3 rounded-xl border border-border bg-muted/25 p-3"
         >
           <div className="col-span-2 font-mono text-sm font-semibold text-foreground">
             #{row.rank}
@@ -348,7 +348,7 @@ export function DashboardWorkbench({
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="group rounded-2xl border border-border bg-muted/25 px-4 py-3 transition hover:border-primary/30 hover:bg-muted/40"
+                  className="group rounded-xl border border-border bg-muted/25 px-4 py-3 transition hover:border-primary/30 hover:bg-muted/40"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1.5">
@@ -371,7 +371,7 @@ export function DashboardWorkbench({
                 .map((group) => (
                   <div
                     key={group.key}
-                    className="rounded-2xl border border-border bg-muted/25 px-4 py-3"
+                    className="rounded-xl border border-border bg-muted/25 px-4 py-3"
                   >
                     <p className="text-sm font-semibold text-foreground">{group.title}</p>
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">

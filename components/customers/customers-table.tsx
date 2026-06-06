@@ -1033,7 +1033,7 @@ export function CustomersTable({
         <DataTableWrapper
           title="客户列表"
           headerMode="hidden"
-          className="rounded-2xl border-border bg-card shadow-sm"
+          className="rounded-xl border-border bg-card shadow-sm"
           contentClassName="p-3 md:p-4"
         >
           {items.length === 0 ? (
@@ -1089,7 +1089,7 @@ export function CustomersTable({
               </div>
 
               {batchTransferNotice.blockedReasonSummary.length > 0 ? (
-                <div className="rounded-[0.95rem] border border-amber-200 bg-amber-50/70 px-4 py-3.5">
+                <div className="rounded-xl border border-amber-200 bg-amber-50/70 px-4 py-3.5">
                   <p className="text-[12px] font-semibold text-amber-900">移交阻断</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {batchTransferNotice.blockedReasonSummary.map((item) => (
@@ -1112,7 +1112,7 @@ export function CustomersTable({
               ) : null}
 
               {batchForceDeleteNotice.blockedReasonSummary.length > 0 ? (
-                <div className="rounded-[0.95rem] border border-rose-200 bg-rose-50/75 px-4 py-3.5">
+                <div className="rounded-xl border border-rose-200 bg-rose-50/75 px-4 py-3.5">
                   <p className="text-[12px] font-semibold text-rose-900">硬删除阻断</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {batchForceDeleteNotice.blockedReasonSummary.map((item) => (
@@ -1131,7 +1131,7 @@ export function CustomersTable({
               {showBatchActiveBar ? (
                 <div
                   className={cn(
-                    "flex flex-col gap-2 rounded-2xl border px-3 py-2.5 text-sm shadow-sm sm:flex-row sm:items-center sm:justify-between",
+                    "flex flex-col gap-2 rounded-xl border px-3 py-2.5 text-sm shadow-sm sm:flex-row sm:items-center sm:justify-between",
                     batchExecutionBlockedByLimit
                       ? "border-rose-200 bg-rose-50 text-rose-700"
                       : selectionMode === "filtered"

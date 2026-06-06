@@ -51,7 +51,7 @@ function SettingToggle({
   defaultChecked: boolean;
 }>) {
   return (
-    <label className="rounded-xl border border-border/60 bg-[rgba(247,248,250,0.7)] p-3.5 transition-colors hover:border-border hover:bg-white/84">
+    <label className="rounded-xl border border-border/60 bg-[rgba(247,248,250,0.7)] p-3.5 transition-colors hover:border-border hover:bg-card">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-medium text-foreground">{label}</p>
@@ -88,7 +88,7 @@ function SettingNumberInput({
   placeholder?: string;
 }>) {
   return (
-    <label className="space-y-2 rounded-xl border border-border/60 bg-[rgba(247,248,250,0.7)] p-3.5 transition-colors hover:border-border hover:bg-white/84">
+    <label className="space-y-2 rounded-xl border border-border/60 bg-[rgba(247,248,250,0.7)] p-3.5 transition-colors hover:border-border hover:bg-card">
       <span className="text-sm font-medium text-foreground">{label}</span>
       <input
         type="number"
@@ -123,7 +123,7 @@ function SettingSelect({
   }>;
 }>) {
   return (
-    <label className="space-y-2 rounded-xl border border-border/60 bg-[rgba(247,248,250,0.7)] p-3.5 transition-colors hover:border-border hover:bg-white/84">
+    <label className="space-y-2 rounded-xl border border-border/60 bg-[rgba(247,248,250,0.7)] p-3.5 transition-colors hover:border-border hover:bg-card">
       <span className="text-sm font-medium text-foreground">{label}</span>
       <select name={name} defaultValue={defaultValue} className="crm-select">
         {options.map((option) => (

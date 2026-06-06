@@ -320,7 +320,7 @@ export function SalesOrderForm({
         </div>
 
         {selectedCustomer ? (
-          <div className="rounded-xl border border-border/60 bg-white/75 p-4 text-sm text-foreground/80">
+          <div className="rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] p-4 text-sm text-foreground/80">
             <div className="font-medium text-foreground">
               {selectedCustomer.name} / {selectedCustomer.phone}
             </div>
@@ -347,7 +347,7 @@ export function SalesOrderForm({
             </label>
 
             {customerSearchLoading ? (
-              <div className="rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm text-muted-foreground">
+              <div className="rounded-xl border border-dashed border-border bg-[var(--color-shell-surface-soft)] p-4 text-sm text-muted-foreground">
                 正在搜索客户…
               </div>
             ) : null}
@@ -362,7 +362,7 @@ export function SalesOrderForm({
             !customerSearchError &&
             deferredCustomerKeyword &&
             customerResults.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm text-muted-foreground">
+              <div className="rounded-xl border border-dashed border-border bg-[var(--color-shell-surface-soft)] p-4 text-sm text-muted-foreground">
                 没有匹配客户，请检查姓名、手机号或负责人关键词。
               </div>
             ) : null}
@@ -373,7 +373,7 @@ export function SalesOrderForm({
                   <button
                     key={customer.id}
                     type="button"
-                    className="rounded-xl border border-border/60 bg-white/75 p-4 text-left transition hover:border-black/15"
+                    className="rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] p-4 text-left transition hover:border-border"
                     onClick={() => {
                       setSelectedCustomer(customer);
                       setCustomerKeyword(`${customer.name} ${customer.phone}`);
@@ -522,7 +522,7 @@ export function SalesOrderForm({
           </select>
         </label>
 
-        <div className="rounded-xl border border-border/60 bg-white/75 p-4 text-sm text-muted-foreground">
+        <div className="rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] p-4 text-sm text-muted-foreground">
           {selectedPaymentSchemeMeta?.description}
         </div>
 
@@ -545,19 +545,19 @@ export function SalesOrderForm({
         )}
 
         <div className="grid gap-4 xl:grid-cols-3">
-          <div className="rounded-xl border border-border/60 bg-white/75 p-4 text-sm text-foreground/80">
+          <div className="rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] p-4 text-sm text-foreground/80">
             <div className="crm-detail-label">已收金额</div>
             <div className="mt-2 font-medium text-foreground">
               {formatCurrency(paymentBreakdown.collectedAmount)}
             </div>
           </div>
-          <div className="rounded-xl border border-border/60 bg-white/75 p-4 text-sm text-foreground/80">
+          <div className="rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] p-4 text-sm text-foreground/80">
             <div className="crm-detail-label">待收金额</div>
             <div className="mt-2 font-medium text-foreground">
               {formatCurrency(paymentBreakdown.remainingAmount)}
             </div>
           </div>
-          <div className="rounded-xl border border-border/60 bg-white/75 p-4 text-sm text-foreground/80">
+          <div className="rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] p-4 text-sm text-foreground/80">
             <div className="crm-detail-label">代收金额</div>
             <div className="mt-2 font-medium text-foreground">
               {formatCurrency(paymentBreakdown.codAmount)}
@@ -605,7 +605,7 @@ export function SalesOrderForm({
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[auto_minmax(0,1fr)]">
-          <label className="flex items-center gap-3 rounded-xl border border-border/60 bg-white/75 px-4 py-3 text-sm text-foreground/80">
+          <label className="flex items-center gap-3 rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] px-4 py-3 text-sm text-foreground/80">
             <input
               type="checkbox"
               name="insuranceRequired"
@@ -693,7 +693,7 @@ export function SalesOrderForm({
         </label>
       </section>
 
-      <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-border bg-white/55 px-4 py-3 text-sm text-muted-foreground">
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-border bg-[var(--color-shell-surface-soft)] px-4 py-3 text-sm text-muted-foreground">
         <span>
           订单提交后将进入待审核。审核通过才进入发货池，回填物流单号后才进入已发货。
         </span>

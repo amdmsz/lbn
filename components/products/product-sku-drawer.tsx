@@ -29,7 +29,7 @@ const drawerPanelClassName =
   "fixed inset-y-0 right-0 z-[10031] flex h-[100dvh] max-h-[100dvh] w-full max-w-[42rem] flex-col overflow-hidden border-l border-[var(--color-border-soft)] bg-background shadow-2xl";
 
 const drawerSectionClassName =
-  "rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-4 shadow-[var(--color-shell-shadow-sm)]";
+  "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-4 shadow-[var(--color-shell-shadow-sm)]";
 
 export function ProductSkuDrawer({
   open,

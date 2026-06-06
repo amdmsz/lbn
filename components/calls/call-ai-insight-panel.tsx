@@ -137,7 +137,7 @@ function MetricTile({
   tone?: InsightTone;
 }>) {
   return (
-    <div className={cn("rounded-[0.55rem] border px-2.5 py-2", toneClassName(tone))}>
+    <div className={cn("rounded-lg border px-2.5 py-2", toneClassName(tone))}>
       <p className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-70">
         {label}
       </p>
@@ -242,7 +242,7 @@ export function CallAiInsightPanel({
       </div>
 
       {summary ? (
-        <div className="rounded-[0.55rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2.5 py-2">
+        <div className="rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-2.5 py-2">
           <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-sidebar-muted)]">
             <MessageSquareText className="h-3.5 w-3.5" aria-hidden="true" />
             <span>业务摘要</span>
@@ -252,7 +252,7 @@ export function CallAiInsightPanel({
       ) : null}
 
       {nextActionSuggestion ? (
-        <div className="rounded-[0.55rem] border border-[rgba(79,125,247,0.16)] bg-[rgba(79,125,247,0.05)] px-2.5 py-2">
+        <div className="rounded-lg border border-[rgba(79,125,247,0.16)] bg-[rgba(79,125,247,0.05)] px-2.5 py-2">
           <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-primary)]">
             <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
             <span>下一步动作</span>
@@ -290,7 +290,7 @@ export function CallAiInsightPanel({
           maxSegments={maxTranscriptSegments}
         />
       ) : showTranscript && transcriptText ? (
-        <div className="rounded-[0.55rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2.5 py-2">
+        <div className="rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2.5 py-2">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
             转写
           </p>

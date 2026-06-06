@@ -464,7 +464,7 @@ export function LeadImportUploadForm({
               onChange={handleFileChange}
               required
             />
-            <p className="text-sm text-black/55">
+            <p className="text-sm text-muted-foreground">
               {mode === "customer_continuation"
                 ? "固定模板至少需要手机号列；标签列可直接填写 A/B/C/D、跟进客户（未接通/拒接）、拒绝添加、无效客户（空号/停机）。"
                 : "固定模板必填列为手机号、姓名、地址；备注列会在预览和批次详情里直接展示，其余列可以留空。"}
@@ -472,9 +472,9 @@ export function LeadImportUploadForm({
           </label>
 
           {mode === "customer_continuation" ? (
-            <div className="space-y-1.5 rounded-[1rem] border border-black/8 bg-[rgba(248,250,252,0.78)] px-4 py-3">
+            <div className="space-y-1.5 rounded-xl border border-border/60 bg-[rgba(248,250,252,0.78)] px-4 py-3">
               <span className="crm-label">续接导入规则</span>
-              <p className="text-sm leading-6 text-black/60">
+              <p className="text-sm leading-6 text-muted-foreground">
                 命中已有客户时默认只补齐空字段并保留原负责人；A/B/C/D 会承接为已加微信，跟进客户会承接为挂断待回访，拒绝添加和无效客户会写入对应通话结果。
               </p>
             </div>
@@ -492,7 +492,7 @@ export function LeadImportUploadForm({
                   </option>
                 ))}
               </select>
-              <p className="text-sm text-black/55">
+              <p className="text-sm text-muted-foreground">
                 导入中心当前统一收口到固定来源，后续承接和审计会沿用这一来源信息。
               </p>
             </label>
@@ -513,25 +513,25 @@ export function LeadImportUploadForm({
           <>
             <div className="grid gap-3.5 md:grid-cols-4">
               <div className="crm-section-card">
-                <p className="text-xs uppercase tracking-[0.18em] text-black/45">总行数</p>
-                <p className="mt-2.5 text-[1.8rem] font-semibold text-black/85">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">总行数</p>
+                <p className="mt-2.5 text-[1.8rem] font-semibold text-foreground">
                   {previewSummary.totalRows}
                 </p>
               </div>
               <div className="crm-section-card">
-                <p className="text-xs uppercase tracking-[0.18em] text-black/45">有效手机号</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">有效手机号</p>
                 <p className="mt-2.5 text-[1.8rem] font-semibold text-[var(--color-success)]">
                   {previewSummary.validPhoneRows}
                 </p>
               </div>
               <div className="crm-section-card">
-                <p className="text-xs uppercase tracking-[0.18em] text-black/45">手机号异常</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">手机号异常</p>
                 <p className="mt-2.5 text-[1.8rem] font-semibold text-[var(--color-danger)]">
                   {previewSummary.invalidPhoneRows}
                 </p>
               </div>
               <div className="crm-section-card">
-                <p className="text-xs uppercase tracking-[0.18em] text-black/45">文件内重复</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">文件内重复</p>
                 <p className="mt-2.5 text-[1.8rem] font-semibold text-[var(--color-warning)]">
                   {previewSummary.fileDuplicateRows}
                 </p>
@@ -543,11 +543,11 @@ export function LeadImportUploadForm({
             (previewWarnings.unresolvedOwners.length > 0 ||
               previewWarnings.unresolvedTags.length > 0) ? (
               <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-[1rem] border border-[rgba(155,106,29,0.24)] bg-[rgba(155,106,29,0.08)] px-4 py-3.5">
+                <div className="rounded-xl border border-[rgba(155,106,29,0.24)] bg-[rgba(155,106,29,0.08)] px-4 py-3.5">
                   <p className="text-sm font-semibold text-[var(--color-warning)]">
                     负责人预警
                   </p>
-                  <p className="mt-1 text-sm leading-6 text-black/62">
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
                     这些账号不会阻塞导入，但不会自动命中负责人。
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -555,20 +555,20 @@ export function LeadImportUploadForm({
                       previewWarnings.unresolvedOwners.slice(0, 6).map((item) => (
                         <span
                           key={`owner-${item.value}`}
-                          className="rounded-full border border-[rgba(155,106,29,0.18)] bg-white/75 px-3 py-1 text-xs text-[var(--color-warning)]"
+                          className="rounded-full border border-[rgba(155,106,29,0.18)] bg-[var(--color-shell-surface-soft)] px-3 py-1 text-xs text-[var(--color-warning)]"
                         >
                           {item.value} x {item.count}
                         </span>
                       ))
                     ) : (
-                      <span className="text-sm text-black/55">未发现未识别负责人。</span>
+                      <span className="text-sm text-muted-foreground">未发现未识别负责人。</span>
                     )}
                   </div>
                 </div>
 
-                <div className="rounded-[1rem] border border-[rgba(155,106,29,0.24)] bg-[rgba(155,106,29,0.08)] px-4 py-3.5">
+                <div className="rounded-xl border border-[rgba(155,106,29,0.24)] bg-[rgba(155,106,29,0.08)] px-4 py-3.5">
                   <p className="text-sm font-semibold text-[var(--color-warning)]">标签预警</p>
-                  <p className="mt-1 text-sm leading-6 text-black/62">
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
                     未识别业务标签会进入 warning；跟进客户、拒绝添加、无效客户这类信号词不会误报。
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -576,13 +576,13 @@ export function LeadImportUploadForm({
                       previewWarnings.unresolvedTags.slice(0, 6).map((item) => (
                         <span
                           key={`tag-${item.value}`}
-                          className="rounded-full border border-[rgba(155,106,29,0.18)] bg-white/75 px-3 py-1 text-xs text-[var(--color-warning)]"
+                          className="rounded-full border border-[rgba(155,106,29,0.18)] bg-[var(--color-shell-surface-soft)] px-3 py-1 text-xs text-[var(--color-warning)]"
                         >
                           {item.value} x {item.count}
                         </span>
                       ))
                     ) : (
-                      <span className="text-sm text-black/55">未发现未识别标签。</span>
+                      <span className="text-sm text-muted-foreground">未发现未识别标签。</span>
                     )}
                   </div>
                 </div>
@@ -622,7 +622,7 @@ export function LeadImportUploadForm({
                       </td>
                       {mode === "customer_continuation" ? (
                         <td>
-                          <div className="space-y-1 text-sm text-black/60">
+                          <div className="space-y-1 text-sm text-muted-foreground">
                             <p
                               className={
                                 row.unresolvedOwner
@@ -656,13 +656,13 @@ export function LeadImportUploadForm({
                                 />
                               ))
                             ) : (
-                              <span className="text-sm text-black/45">未命中自动承接规则</span>
+                              <span className="text-sm text-muted-foreground/70">未命中自动承接规则</span>
                             )}
                           </div>
                         </td>
                       ) : null}
                       {mode === "lead" ? (
-                        <td className="max-w-[16rem] whitespace-pre-wrap text-sm leading-6 text-black/60">
+                        <td className="max-w-[16rem] whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
                           {row.remark || "-"}
                         </td>
                       ) : null}
@@ -673,7 +673,7 @@ export function LeadImportUploadForm({
                             .map(([key, value]) => (
                               <span
                                 key={`${row.rowNumber}-${key}`}
-                                className="rounded-full border border-black/8 bg-black/4 px-3 py-1 text-xs text-black/60"
+                                className="rounded-full border border-border/60 bg-foreground/5 px-3 py-1 text-xs text-muted-foreground"
                               >
                                 {key}: {value || "-"}
                               </span>
@@ -688,8 +688,8 @@ export function LeadImportUploadForm({
           </>
         ) : null}
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/8 pt-2">
-          <p className="text-sm text-black/58">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-2">
+          <p className="text-sm text-muted-foreground">
             {mode === "customer_continuation"
               ? "重复手机号会在批次内直接剔除；未识别负责人和标签会进入 warning，不阻塞客户导入。提交后文件会进入队列并由后台 Worker 分批处理。"
               : "重复手机号会直接剔除，但仍会保留批次行结果和去重日志。提交后文件会进入队列并由后台 Worker 分批处理。"}

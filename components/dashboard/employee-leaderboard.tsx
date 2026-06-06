@@ -318,7 +318,7 @@ export function EmployeeLeaderboard({
     currentPeriod === "custom" ? "自定义周期" : periodLabels[currentPeriod];
 
   return (
-    <section className="md:col-span-3 lg:col-span-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+    <section className="md:col-span-3 lg:col-span-4 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
       <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0 space-y-1.5">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">

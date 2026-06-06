@@ -58,13 +58,13 @@ import { cn } from "@/lib/utils";
 const sectionShellClassName = "crm-workspace-shell";
 
 const quietWorkbenchCardClassName =
-  "rounded-[1.05rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-4 py-4 shadow-[var(--color-shell-shadow-sm)]";
+  "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-4 py-4 shadow-[var(--color-shell-shadow-sm)]";
 
 const quietWorkbenchInsetClassName =
-  "rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
+  "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
 
 const quietWorkbenchSampleCardClassName =
-  "rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2.5 shadow-[var(--color-shell-shadow-sm)]";
+  "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2.5 shadow-[var(--color-shell-shadow-sm)]";
 
 const quietWorkbenchActionLinkClassName =
   "inline-flex h-9 items-center rounded-md border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3.5 text-sm text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color] duration-150 hover:border-[var(--tone-info-soft-border)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]";
@@ -552,7 +552,7 @@ function RecycleAutomationCard({
                   </div>
                 ))
               ) : (
-                <div className="rounded-[0.95rem] border border-dashed border-[var(--color-border-soft)] px-3 py-3 text-[var(--color-sidebar-muted)]">
+                <div className="rounded-xl border border-dashed border-[var(--color-border-soft)] px-3 py-3 text-[var(--color-sidebar-muted)]">
                   当前规则预览没有命中客户。
                 </div>
               )}
@@ -770,7 +770,7 @@ function AutoAssignAutomationCard({
                   </div>
                 ))
               ) : (
-                <div className="rounded-[0.95rem] border border-dashed border-[var(--color-border-soft)] px-3 py-3 text-[var(--color-sidebar-muted)]">
+                <div className="rounded-xl border border-dashed border-[var(--color-border-soft)] px-3 py-3 text-[var(--color-sidebar-muted)]">
                   当前规则预览没有命中客户。
                 </div>
               )}
@@ -986,7 +986,7 @@ export function CustomerPublicPoolWorkbench({
       className="!gap-0"
       header={
         <div className={cn(sectionShellClassName, "mb-4")}>
-          <header className="rounded-[1.1rem] border border-[var(--color-border-soft)] bg-[linear-gradient(180deg,var(--color-shell-surface-strong),var(--color-shell-surface-soft))] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)] backdrop-blur-[18px] md:px-5 md:py-4">
+          <header className="rounded-xl border border-[var(--color-border-soft)] bg-[linear-gradient(180deg,var(--color-shell-surface-strong),var(--color-shell-surface-soft))] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)] backdrop-blur-[18px] md:px-5 md:py-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <p className="crm-detail-label text-[10px]">
@@ -1071,7 +1071,7 @@ export function CustomerPublicPoolWorkbench({
             title={viewMeta.title}
             description={viewMeta.description}
             density="compact"
-            className="rounded-[1.05rem] border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]"
+            className="rounded-xl border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]"
             actions={
               <div className="flex flex-wrap gap-1.5">
                 {data.filters.view !== "records" ? (
@@ -1119,7 +1119,7 @@ export function CustomerPublicPoolWorkbench({
           <form
             action="/customers/public-pool"
             method="get"
-            className="grid gap-3 rounded-[1.05rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-4 py-4 shadow-[var(--color-shell-shadow-sm)] md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6"
+            className="grid gap-3 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-4 py-4 shadow-[var(--color-shell-shadow-sm)] md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6"
           >
             <input type="hidden" name="view" value={data.filters.view} />
             {data.filters.view === "pool" ? (

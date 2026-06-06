@@ -21,7 +21,7 @@ export function CustomerRecycleBlockedReasonSummary({
   }
 
   return (
-    <div className="rounded-[0.95rem] border border-[rgba(141,59,51,0.12)] bg-[rgba(255,247,246,0.78)] px-4 py-3.5">
+    <div className="rounded-xl border border-[rgba(141,59,51,0.12)] bg-[rgba(255,247,246,0.78)] px-4 py-3.5">
       <div className="space-y-1">
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[rgba(141,59,51,0.72)]">
           阻断解释
@@ -35,25 +35,25 @@ export function CustomerRecycleBlockedReasonSummary({
         {groups.map((group) => (
           <div
             key={group.key}
-            className="rounded-[0.9rem] border border-[rgba(141,59,51,0.1)] bg-white/88 px-3.5 py-3"
+            className="rounded-xl border border-[rgba(141,59,51,0.1)] bg-card px-3.5 py-3"
           >
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-black/82">{group.title}</p>
-              <p className="text-[12px] leading-5 text-black/54">{group.description}</p>
+              <p className="text-sm font-semibold text-foreground">{group.title}</p>
+              <p className="text-[12px] leading-5 text-muted-foreground">{group.description}</p>
             </div>
 
             <div className="mt-3 space-y-2">
               {group.items.map((item) => (
                 <div
                   key={`${group.key}-${item.name}`}
-                  className="rounded-[0.8rem] border border-black/8 bg-[rgba(249,250,252,0.78)] px-3 py-2.5"
+                  className="rounded-xl border border-border/60 bg-[rgba(249,250,252,0.78)] px-3 py-2.5"
                 >
-                  <p className="text-[13px] font-medium text-black/82">
+                  <p className="text-[13px] font-medium text-foreground">
                     {item.name}
                     {typeof item.count === "number" ? ` ${item.count} 位` : ""}
                   </p>
-                  <p className="mt-1 text-[12px] leading-5 text-black/58">{item.description}</p>
-                  <p className="mt-1 text-[12px] leading-5 text-black/48">
+                  <p className="mt-1 text-[12px] leading-5 text-muted-foreground">{item.description}</p>
+                  <p className="mt-1 text-[12px] leading-5 text-muted-foreground/70">
                     建议动作：{item.suggestedAction}
                   </p>
                 </div>

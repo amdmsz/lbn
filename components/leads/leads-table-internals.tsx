@@ -165,7 +165,7 @@ export function LeadWorkbenchDialog({
   footer: ReactNode;
 }>) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-6 dark:bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-6 dark:bg-foreground/50">
       <div className="w-full max-w-[36rem] overflow-hidden rounded-xl border border-border/60 bg-card shadow-lg">
         <div className="flex items-start justify-between gap-4 border-b border-border/50 bg-background/60 px-5 py-4">
           <div className="space-y-1.5">

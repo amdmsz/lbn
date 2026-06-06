@@ -58,21 +58,21 @@ export function ProductListItemEditor({
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <MasterDataStatusBadge isActive={item.enabled} />
-            <span className="rounded-full border border-black/10 px-2.5 py-1 text-xs text-black/55">
+            <span className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
               {item.code}
             </span>
           </div>
           <div>
-            <div className="text-base font-semibold text-black/84">{item.name}</div>
-            <div className="mt-1 text-sm text-black/58">
+            <div className="text-base font-semibold text-foreground">{item.name}</div>
+            <div className="mt-1 text-sm text-muted-foreground">
               {item.supplier.name} ({item.supplier.code})
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-black/55">
-            <span className="rounded-full border border-black/10 px-2.5 py-1">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="rounded-full border border-border px-2.5 py-1">
               SKU {item._count.skus}
             </span>
-            <span className="rounded-full border border-black/10 px-2.5 py-1">
+            <span className="rounded-full border border-border px-2.5 py-1">
               成交引用 {item._count.salesOrderItems}
             </span>
           </div>

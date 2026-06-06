@@ -43,17 +43,17 @@ export function RoleAwareCustomerHeader({
                       {item.label}
                     </Link>
                     {index < breadcrumbs.length - 1 ? (
-                      <span className="text-black/28">/</span>
+                      <span className="text-muted-foreground/50">/</span>
                     ) : null}
                   </span>
                 ) : (
                   <span
                     key={`${item.label}-${index}`}
-                    className="flex items-center gap-2 text-sm font-medium text-black/68"
+                    className="flex items-center gap-2 text-sm font-medium text-foreground/70"
                   >
                     <span>{item.label}</span>
                     {index < breadcrumbs.length - 1 ? (
-                      <span className="text-black/28">/</span>
+                      <span className="text-muted-foreground/50">/</span>
                     ) : null}
                   </span>
                 ),

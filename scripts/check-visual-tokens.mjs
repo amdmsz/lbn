@@ -21,10 +21,12 @@ import { readFileSync } from "node:fs";
 
 const STRICT = process.argv.includes("--strict");
 
+// bg-black/{20-80} 多为 modal overlay (在 dark mode 下也是合理的灰黑遮罩),
+// 只匹配低 alpha (≤10) — 这种通常是被误用作淡灰背景, 应该用 bg-foreground/N。
 const PATTERNS = [
   { name: "text-black/N", re: /text-black\/\d+/g },
   { name: "border-black/N", re: /border-black\/\d+/g },
-  { name: "bg-black/N", re: /bg-black\/\d+/g },
+  { name: "bg-black/low", re: /\bbg-black\/(?:[1-9]|10)\b/g },
   { name: "bg-white/N", re: /bg-white\/\d+/g },
   { name: "rounded-2xl", re: /\brounded-2xl\b/g },
   { name: "rounded-[Nrem]", re: /rounded-\[[\d.]+rem\]/g },

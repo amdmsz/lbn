@@ -710,7 +710,7 @@ function renderProfileTab({
               <input type="hidden" name="customerId" value={shell.id} />
               <input type="hidden" name="redirectTo" value={archiveHref} />
 
-              <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-4 py-3 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+              <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-4 py-3 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
                 当前档案页仅编辑基础资料。正式分类已切到 `ABCDE` 经营分类，由通话 / 加微 / 邀约 / 成交信号自动映射；手机号、负责人、归属模式、公海字段与保护期仍保持只读。
               </div>
 
@@ -982,7 +982,7 @@ function renderProfileTab({
         <PortraitSignalRail items={sourceSignals} />
 
         <div className="mt-6 grid gap-4 xl:grid-cols-2">
-          <div className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4 shadow-[var(--color-shell-shadow-sm)]">
+          <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4 shadow-[var(--color-shell-shadow-sm)]">
             <div className="space-y-1">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="crm-detail-label">线索回流</p>
@@ -1013,7 +1013,7 @@ function renderProfileTab({
                 </div>
               ) : (
                 <CustomerEmptyState
-                  className="rounded-[1rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-4 py-4 shadow-none"
+                  className="rounded-xl border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-4 py-4 shadow-none"
                   title="暂无关联线索"
                   description="暂无线索记录。"
                 />
@@ -1021,7 +1021,7 @@ function renderProfileTab({
             </div>
           </div>
 
-          <div className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4 shadow-[var(--color-shell-shadow-sm)]">
+          <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4 shadow-[var(--color-shell-shadow-sm)]">
             <div className="space-y-1">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="crm-detail-label">导入历史</p>
@@ -1074,7 +1074,7 @@ function renderProfileTab({
                 </div>
               ) : (
                 <CustomerEmptyState
-                  className="rounded-[1rem] border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-4 py-4 shadow-none"
+                  className="rounded-xl border border-dashed border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-4 py-4 shadow-none"
                   title="暂无导入归并记录"
                   description="暂无导入历史。"
                 />
@@ -1151,7 +1151,7 @@ function renderOrdersTab({
             />
           }
         >
-          <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4 text-sm leading-6 text-[var(--color-sidebar-muted)]">
+          <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4 text-sm leading-6 text-[var(--color-sidebar-muted)]">
             当前没有进行中的成交草稿。成交入口继续挂在客户画像里，需要推进时再进入。
           </div>
         </CustomerTabSection>
@@ -1508,7 +1508,7 @@ export function CustomerDetailWorkbench({
               <div className="flex min-w-0 items-start gap-3">
                 <div
                   className={cn(
-                    "inline-flex shrink-0 items-center justify-center rounded-2xl border border-border/60 bg-muted/40 font-semibold text-foreground shadow-sm",
+                    "inline-flex shrink-0 items-center justify-center rounded-xl border border-border/60 bg-muted/40 font-semibold text-foreground shadow-sm",
                     isTradeOrderComposerMode ? "h-10 w-10 text-[0.9rem]" : "h-12 w-12 text-[1rem]",
                   )}
                 >
@@ -1608,7 +1608,7 @@ export function CustomerDetailWorkbench({
         >
           <section
             id="customer-main"
-            className="sticky top-0 z-10 rounded-2xl border border-border/60 bg-background/90 px-4 py-3 shadow-sm backdrop-blur-md md:px-5"
+            className="sticky top-0 z-10 rounded-xl border border-border/60 bg-background/90 px-4 py-3 shadow-sm backdrop-blur-md md:px-5"
           >
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="min-w-0">

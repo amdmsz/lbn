@@ -158,7 +158,7 @@ export function RecordingAudioPlayer({
     return (
       <div
         className={cn(
-          "rounded-[0.75rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2 text-[11px] font-medium text-[var(--color-sidebar-muted)]",
+          "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2 text-[11px] font-medium text-[var(--color-sidebar-muted)]",
           className,
         )}
       >
@@ -173,7 +173,7 @@ export function RecordingAudioPlayer({
   return (
     <div
       className={cn(
-        "rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-2.5 shadow-[var(--color-shell-shadow-sm)]",
+        "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-2.5 shadow-[var(--color-shell-shadow-sm)]",
         className,
       )}
     >

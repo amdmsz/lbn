@@ -35,7 +35,7 @@ export function DetailSidebar({
           key={section.key ?? `${section.title}-${index}`}
           className={
             isCompact
-              ? "overflow-hidden rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow]"
+              ? "overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow]"
               : "crm-card overflow-hidden border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-md)]"
           }
         >
@@ -62,7 +62,7 @@ export function DetailSidebar({
             {section.items?.map((item) => (
               <div
                 key={`${section.title}-${item.label}`}
-                className={cn("crm-detail-item rounded-[0.95rem] px-3.5", isCompact ? "py-2.5" : "py-3")}
+                className={cn("crm-detail-item rounded-xl px-3.5", isCompact ? "py-2.5" : "py-3")}
               >
                 <p className={cn("crm-detail-label", isCompact ? "text-[10px]" : "text-[11px]")}>
                   {item.label}

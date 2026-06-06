@@ -98,10 +98,10 @@ function getFinalizeCommandLabel(item: RecycleBinListItem) {
 }
 
 const recyclePanelClassName =
-  "space-y-3 rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
+  "space-y-3 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
 
 const recycleInsetPanelClassName =
-  "rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2.5 shadow-[var(--color-shell-shadow-sm)]";
+  "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2.5 shadow-[var(--color-shell-shadow-sm)]";
 
 function getDialogMeta(state: RecycleBinDialogState): RecycleBinDialogMeta | null {
   if (!state) {
@@ -240,7 +240,7 @@ function GuardSection({
                 {group.items.map((blocker) => (
                   <div
                     key={`${title}-${group.title}-${blocker.name}`}
-                    className="rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-strong)] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+                    className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-strong)] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
                   >
                     <p className="text-[12.5px] font-medium leading-5 text-[var(--foreground)]">
                       {blocker.name}
@@ -1084,7 +1084,7 @@ export function RecycleBinWorkbench({
                       <summary className="cursor-pointer list-none crm-detail-label text-[11px]">
                         Archive Payload
                       </summary>
-                      <pre className="mt-3 overflow-x-auto rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] p-3 text-xs leading-6 text-[var(--color-sidebar-muted)]">
+                      <pre className="mt-3 overflow-x-auto rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] p-3 text-xs leading-6 text-[var(--color-sidebar-muted)]">
                         {selectedItem.archivePayloadJsonText}
                       </pre>
                     </details>
@@ -1184,7 +1184,7 @@ export function RecycleBinWorkbench({
                 <p className="crm-detail-label text-[11px]">
                   {isHistoryView ? "对象入口快照" : "恢复目标位置"}
                 </p>
-                <div className="rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2 text-sm font-medium text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)]">
+                <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2 text-sm font-medium text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)]">
                   {selectedItem.restoreRouteSnapshot}
                 </div>
               </div>
@@ -1285,7 +1285,7 @@ function RecycleBinConfirmDialog({
         </div>
 
         <div className="space-y-4 px-5 py-4">
-          <div className="grid gap-3 rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:grid-cols-2">
+          <div className="grid gap-3 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:grid-cols-2">
             <SummaryRow label="对象名称" value={state.item.name} />
             <SummaryRow label="对象类型" value={state.item.targetTypeLabel} />
             <SummaryRow label="次标识" value={state.item.secondaryLabel} />
@@ -1300,14 +1300,14 @@ function RecycleBinConfirmDialog({
             <SummaryRow label="删除人" value={state.item.deletedByLabel} />
           </div>
 
-          <div className="space-y-2 rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+          <div className="space-y-2 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
             <p className="crm-detail-label text-[11px]">当前判断</p>
             <p className="text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
               {currentSummary}
             </p>
           </div>
 
-          <div className="space-y-2 rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+          <div className="space-y-2 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
             <p className="crm-detail-label text-[11px]">
               {meta.impactLabel}
             </p>

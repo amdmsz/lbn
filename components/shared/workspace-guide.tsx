@@ -45,7 +45,7 @@ export function WorkspaceGuide({
               className={cn(
                 "group flex h-full flex-col transition-colors",
                 isCompact
-                  ? "rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)] hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)]"
+                  ? "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)] hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)]"
                   : "crm-card-muted p-4 hover:border-[var(--color-accent)]/20",
               )}
             >
@@ -74,7 +74,7 @@ export function WorkspaceGuide({
                         "border border-[var(--crm-badge-neutral-border)] bg-[var(--crm-badge-neutral-bg)] font-semibold text-[var(--crm-badge-neutral-text)]",
                         isCompact
                           ? "rounded-full px-2.5 py-1 text-[12px]"
-                          : "rounded-2xl px-3 py-1.5 text-sm",
+                          : "rounded-xl px-3 py-1.5 text-sm",
                       )}
                     >
                       {item.value}

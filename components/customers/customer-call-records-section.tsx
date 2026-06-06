@@ -157,7 +157,7 @@ export function CustomerCallRecordsSection({
           {canCreate ? (
             <CustomerDossierPanel className="space-y-4">
               {outboundCallEnabled && canDialOnMobile ? (
-                <div className="flex flex-col gap-3 rounded-[0.95rem] border border-[rgba(79,125,247,0.16)] bg-[var(--color-shell-surface)] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-3 rounded-xl border border-[rgba(79,125,247,0.16)] bg-[var(--color-shell-surface)] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-[var(--foreground)]">
                       CRM 外呼
@@ -174,7 +174,7 @@ export function CustomerCallRecordsSection({
                   />
                 </div>
               ) : canDialOnMobile ? (
-                <div className="flex flex-col gap-3 rounded-[0.95rem] border border-[rgba(79,125,247,0.16)] bg-[var(--color-shell-surface)] px-3.5 py-3 md:hidden">
+                <div className="flex flex-col gap-3 rounded-xl border border-[rgba(79,125,247,0.16)] bg-[var(--color-shell-surface)] px-3.5 py-3 md:hidden">
                   <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-[var(--foreground)]">
                       手机外呼

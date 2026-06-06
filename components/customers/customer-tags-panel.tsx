@@ -51,9 +51,9 @@ export function CustomerTagsPanel({
     <section
       className={cn(
         isCompact
-          ? "rounded-[1rem] border border-black/6 bg-[rgba(248,249,250,0.78)] px-4 py-4"
+          ? "rounded-xl border border-border/60 bg-[rgba(248,249,250,0.78)] px-4 py-4"
           : isEmbedded
-            ? "rounded-[1.1rem] border border-black/7 bg-[rgba(255,255,255,0.82)] px-4 py-4 shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+            ? "rounded-xl border border-border/60 bg-[rgba(255,255,255,0.82)] px-4 py-4 shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
             : "crm-card p-6",
         className,
       )}
@@ -65,16 +65,16 @@ export function CustomerTagsPanel({
         )}
       >
         <div className="space-y-1.5">
-          <p className="crm-detail-label text-black/38">客户标签</p>
+          <p className="crm-detail-label text-muted-foreground/70">客户标签</p>
           <h2
             className={cn(
-              "font-semibold text-black/85",
+              "font-semibold text-foreground",
               isCompact ? "text-[0.95rem]" : isEmbedded ? "text-base" : "text-lg",
             )}
           >
             标签与画像补充
           </h2>
-          <p className="text-[13px] leading-6 text-black/56">
+          <p className="text-[13px] leading-6 text-muted-foreground">
             {isCompact
               ? "把标签收成轻量辅助块，保留筛选和画像补充能力。"
               : "标签继续承接客户画像补充与筛选能力，但在详情页里收成更轻的经营侧块。"}
@@ -136,12 +136,12 @@ export function CustomerTagsPanel({
             <div
               key={item.id}
               className={cn(
-                "flex items-center gap-2 border border-black/7 bg-white/74",
+                "flex items-center gap-2 border border-border/60 bg-[var(--color-shell-surface-soft)]",
                 isCompact
                   ? "rounded-full px-2.5 py-1"
                   : isEmbedded
                     ? "rounded-full px-2.5 py-1.5 pr-2"
-                    : "rounded-2xl px-3 py-2",
+                    : "rounded-xl px-3 py-2",
               )}
             >
               <TagPill label={item.tag.name} color={item.tag.color} className="shadow-none" />
@@ -152,7 +152,7 @@ export function CustomerTagsPanel({
                   <input type="hidden" name="redirectTo" value={redirectTo} />
                   <button
                     type="submit"
-                    className="text-[11px] font-medium text-black/46 transition hover:text-black/72"
+                    className="text-[11px] font-medium text-muted-foreground/70 transition hover:text-foreground/70"
                   >
                     移除
                   </button>
@@ -162,7 +162,7 @@ export function CustomerTagsPanel({
           ))}
         </div>
       ) : isCompact || isEmbedded ? (
-        <div className="mt-4 rounded-[0.95rem] border border-dashed border-black/7 bg-[rgba(247,248,250,0.66)] px-4 py-4 text-sm leading-6 text-black/52">
+        <div className="mt-4 rounded-xl border border-dashed border-border/60 bg-[rgba(247,248,250,0.66)] px-4 py-4 text-sm leading-6 text-muted-foreground">
           当前客户还没有业务标签，可由有权限的角色从现有标签池中补充。
         </div>
       ) : (

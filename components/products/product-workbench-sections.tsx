@@ -130,7 +130,7 @@ function buildProductIdentityLine(
 }
 
 const productWorkbenchCardClassName =
-  "rounded-2xl border border-border/50 bg-card shadow-none";
+  "rounded-xl border border-border/50 bg-card shadow-none";
 
 const productWorkbenchInsetClassName =
   "border-l border-border/50 py-1 pl-3";
@@ -170,10 +170,10 @@ export function ProductWorkbenchHero({
   ]);
 
   return (
-    <section className="rounded-2xl border border-border/50 bg-card p-4 shadow-none sm:p-5">
+    <section className="rounded-xl border border-border/50 bg-card p-4 shadow-none sm:p-5">
       <div className="flex flex-col gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_16rem] xl:items-start">
         <div className="min-w-0 flex flex-1 flex-col gap-4 sm:flex-row">
-          <div className="group shrink-0 rounded-2xl border border-border/50 bg-background p-3.5">
+          <div className="group shrink-0 rounded-xl border border-border/50 bg-background p-3.5">
             <div className="flex h-full flex-col gap-3.5">
               <ProductMainImage
                 mainImagePath={product.mainImagePath}
@@ -414,7 +414,7 @@ export function ProductExecutionSummarySection({
   canViewSupplyIdentity: boolean;
 }>) {
   return (
-    <details className="group rounded-2xl border border-border/50 bg-card p-4 shadow-none sm:p-5">
+    <details className="group rounded-xl border border-border/50 bg-card p-4 shadow-none sm:p-5">
       <summary className="cursor-pointer list-none">
         <div className="flex items-center justify-between gap-3">
           <div className="space-y-1">

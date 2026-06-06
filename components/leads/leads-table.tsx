@@ -145,7 +145,7 @@ const leadActionLinkClassName =
   "text-sm font-medium text-muted-foreground transition-colors hover:text-primary";
 
 const leadTableShellClassName =
-  "overflow-x-auto rounded-2xl border border-border/60 bg-card shadow-sm";
+  "overflow-x-auto rounded-xl border border-border/60 bg-card shadow-sm";
 
 const leadTableClassName =
   "min-w-full border-separate border-spacing-0 text-sm [&_thead]:bg-transparent [&_th]:border-b [&_th]:border-border/40 [&_th]:bg-transparent [&_th]:px-4 [&_th]:py-3 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:text-muted-foreground [&_td]:border-b [&_td]:border-border/40 [&_td]:px-4 [&_td]:py-5 [&_td]:align-top [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-muted/30";
@@ -707,7 +707,7 @@ export function LeadsTable({
       {singleRecycleNotice.message ? (
         <ActionBanner
           tone={singleRecycleNotice.status === "success" ? "success" : "danger"}
-          className="rounded-[0.95rem] shadow-none"
+          className="rounded-xl shadow-none"
         >
           <p>{singleRecycleNotice.message}</p>
         </ActionBanner>
@@ -718,7 +718,7 @@ export function LeadsTable({
         successLabel="成功移入回收站"
         entityCountLabel="条线索"
         countUnitLabel="条"
-        className="rounded-[0.95rem] shadow-none"
+        className="rounded-xl shadow-none"
       />
 
       {isAssignedView ? (

@@ -29,7 +29,7 @@ export function SectionCard({
     <section
       className={cn(
         isCompact
-          ? "overflow-hidden rounded-[1.05rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow]"
+          ? "overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow]"
           : "crm-card overflow-hidden border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-md)]",
         className,
       )}

@@ -181,7 +181,7 @@ export function LiveSessionsSection({
 
   return (
     <div className="space-y-5">
-      <section className="rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
+      <section className="rounded-xl border border-border/60 bg-card p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -261,7 +261,7 @@ export function LiveSessionsSection({
       </section>
 
       {items.length > 0 ? (
-        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+        <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
           <table className="w-full min-w-[940px] border-separate border-spacing-0 text-sm">
             <thead className="bg-transparent">
               <tr className="border-b border-border/40">

@@ -82,16 +82,16 @@ const PRIMARY_STAGE_ITEMS: StageItem[] = [
 ];
 
 const workspaceSectionClassName =
-  "space-y-5 rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4 shadow-[var(--color-shell-shadow-sm)] md:p-5";
+  "space-y-5 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4 shadow-[var(--color-shell-shadow-sm)] md:p-5";
 
 const workspacePanelClassName =
-  "rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4";
+  "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4";
 
 const workspaceTableShellClassName =
-  "overflow-x-auto rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-sm)]";
+  "overflow-x-auto rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-sm)]";
 
 const workspaceHintClassName =
-  "rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-sm text-[var(--color-sidebar-muted)]";
+  "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-sm text-[var(--color-sidebar-muted)]";
 
 const workspaceQuietActionClassName =
   "inline-flex min-h-0 items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-2 text-sm font-medium text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]";
@@ -1282,7 +1282,7 @@ function ShippedAndExceptionWorkspace({
                 <div
                   key={item.id}
                   className={cn(
-                    "rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4 shadow-[var(--color-shell-shadow-sm)]",
+                    "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4 shadow-[var(--color-shell-shadow-sm)]",
                     isExceptionStage &&
                       "border-[rgba(177,63,45,0.16)] bg-[linear-gradient(180deg,rgba(255,246,244,0.72),rgba(255,255,255,0.96))]",
                   )}
@@ -1396,7 +1396,7 @@ function ShippedAndExceptionWorkspace({
                         title="查看物流轨迹"
                       />
                       {canFinalizeOutcome ? (
-                        <div className="rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3">
+                        <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3">
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div>
                               <div className="text-sm font-medium text-[var(--foreground)]">
@@ -1886,7 +1886,7 @@ export function ShippingOperationsSection({
                       baseSearchParams,
                     )}
                     className={cn(
-                      "rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4 transition hover:border-[var(--color-border-strong)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-sm)]",
+                      "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4 transition hover:border-[var(--color-border-strong)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-sm)]",
                       isActive &&
                         "border-[rgba(20,118,92,0.22)] bg-[linear-gradient(180deg,rgba(240,251,247,0.72),rgba(255,255,255,0.96))]",
                     )}

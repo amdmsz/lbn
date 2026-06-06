@@ -31,7 +31,7 @@ function SummaryRow({
   value: string;
 }>) {
   return (
-    <div className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3.5 py-2.5">
+    <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3.5 py-2.5">
       <p className="text-[11px] text-[var(--color-sidebar-muted)]">{label}</p>
       <p className="mt-1 text-[13px] font-medium leading-5 text-[var(--foreground)]">
         {value}
@@ -64,8 +64,8 @@ export function LeadRecycleDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-6 backdrop-blur-sm dark:bg-black/50">
-      <div className="w-full max-w-[40rem] overflow-hidden rounded-2xl border border-border/60 bg-card shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-6 backdrop-blur-sm dark:bg-foreground/50">
+      <div className="w-full max-w-[40rem] overflow-hidden rounded-xl border border-border/60 bg-card shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-border/50 bg-background/60 px-5 py-4">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -108,7 +108,7 @@ export function LeadRecycleDialog({
             />
           </div>
 
-          <div className="space-y-2 rounded-[0.98rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-4 py-3">
+          <div className="space-y-2 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-4 py-3">
             <p className="text-[10px] font-semibold uppercase text-muted-foreground">
               原因
             </p>
@@ -128,7 +128,7 @@ export function LeadRecycleDialog({
           </div>
 
           {guard.blockers.length > 0 ? (
-            <div className="space-y-2 rounded-[0.98rem] border border-[rgba(209,91,118,0.16)] bg-[rgba(209,91,118,0.06)] px-4 py-3">
+            <div className="space-y-2 rounded-xl border border-[rgba(209,91,118,0.16)] bg-[rgba(209,91,118,0.06)] px-4 py-3">
               <p className="text-[10px] font-semibold uppercase text-destructive">
                 阻断原因
               </p>
@@ -136,7 +136,7 @@ export function LeadRecycleDialog({
                 {guard.blockers.map((blocker) => (
                   <div
                     key={blocker.name}
-                    className="rounded-[0.92rem] border border-[rgba(209,91,118,0.14)] bg-[var(--color-shell-surface)] px-3.5 py-3"
+                    className="rounded-xl border border-[rgba(209,91,118,0.14)] bg-[var(--color-shell-surface)] px-3.5 py-3"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="space-y-1">
@@ -159,7 +159,7 @@ export function LeadRecycleDialog({
           ) : (
             <ActionBanner
               tone="success"
-              className="rounded-[0.98rem] shadow-none"
+              className="rounded-xl shadow-none"
             >
               当前线索已通过预检，确认后会从线索工作台中隐藏。
             </ActionBanner>

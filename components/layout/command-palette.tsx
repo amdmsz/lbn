@@ -173,7 +173,7 @@ export function CommandPalette({
             role="dialog"
             aria-modal="true"
             aria-label="命令搜索"
-            className="crm-animate-pop relative mx-auto w-full max-w-2xl overflow-hidden rounded-[1.2rem] border border-[var(--color-shell-topbar-border)] bg-[var(--color-shell-surface-strong)] shadow-[var(--color-shell-shadow-lg)] backdrop-blur-[20px]"
+            className="crm-animate-pop relative mx-auto w-full max-w-2xl overflow-hidden rounded-xl border border-[var(--color-shell-topbar-border)] bg-[var(--color-shell-surface-strong)] shadow-[var(--color-shell-shadow-lg)] backdrop-blur-[20px]"
           >
             <div className="flex items-center gap-3 border-b border-[var(--color-border-soft)] px-4 py-3">
               <Search className="h-4 w-4 shrink-0 text-[var(--color-sidebar-muted)]" />
@@ -205,7 +205,7 @@ export function CommandPalette({
                 <button
                   type="button"
                   onClick={submitCustomerSearch}
-                  className="group flex w-full items-center gap-3 rounded-[0.95rem] px-3 py-3 text-left transition hover:bg-[var(--color-shell-hover)]"
+                  className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-[var(--color-shell-hover)]"
                 >
                   <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent-soft)] text-[var(--color-accent-strong)]">
                     <Search className="h-4 w-4" />
@@ -233,7 +233,7 @@ export function CommandPalette({
                       key={item.href}
                       type="button"
                       onClick={() => navigateTo(item.href)}
-                      className="group flex w-full items-center gap-3 rounded-[0.95rem] px-3 py-3 text-left transition hover:bg-[var(--color-shell-hover)]"
+                      className="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-[var(--color-shell-hover)]"
                     >
                       <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] text-[var(--color-sidebar-muted)] transition group-hover:border-[var(--color-accent-soft)] group-hover:text-[var(--color-accent-strong)]">
                         <ArrowRight className="h-4 w-4" />
@@ -252,7 +252,7 @@ export function CommandPalette({
                     </button>
                   ))
                 ) : (
-                  <div className="rounded-[0.95rem] px-3 py-6 text-center text-sm text-[var(--color-sidebar-muted)]">
+                  <div className="rounded-xl px-3 py-6 text-center text-sm text-[var(--color-sidebar-muted)]">
                     没有匹配的模块入口
                   </div>
                 )}

@@ -101,7 +101,7 @@ export function CustomerOwnerTransferPanel({
       ) : (
         <form
           onSubmit={handleSubmit}
-          className="rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] p-3"
+          className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] p-3"
         >
           <input type="hidden" name="customerId" value={customerId} />
           <div className="flex items-center justify-between gap-3">

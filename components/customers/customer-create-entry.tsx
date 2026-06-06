@@ -78,11 +78,11 @@ export function CustomerCreateEntry() {
             className="crm-card w-full max-w-2xl overflow-hidden"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="border-b border-black/6 px-5 py-4">
+            <div className="border-b border-border/60 px-5 py-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-1.5">
-                  <h3 className="text-lg font-semibold text-black/84">手动新增客户</h3>
-                  <p className="text-sm leading-6 text-black/58">
+                  <h3 className="text-lg font-semibold text-foreground">手动新增客户</h3>
+                  <p className="text-sm leading-6 text-muted-foreground">
                     只给当前销售创建私有客户，不新建 Lead，不改公海池 / 回收站 / 订单主链。
                   </p>
                 </div>
@@ -100,9 +100,9 @@ export function CustomerCreateEntry() {
               {result?.message ? (
                 <div
                   className={cn(
-                    "rounded-[0.9rem] border px-4 py-3 text-[13px] leading-6",
+                    "rounded-md border px-4 py-3 text-[13px] leading-6",
                     result.status === "success"
-                      ? "border-[var(--color-accent)]/18 bg-[var(--color-accent)]/5 text-black/72"
+                      ? "border-[var(--color-accent)]/18 bg-[var(--color-accent)]/5 text-foreground/70"
                       : "border-[rgba(141,59,51,0.16)] bg-[rgba(255,247,246,0.92)] text-[var(--color-danger)]",
                   )}
                 >
@@ -112,7 +112,7 @@ export function CustomerCreateEntry() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-2">
-                  <span className="text-sm font-medium text-black/78">客户姓名</span>
+                  <span className="text-sm font-medium text-foreground">客户姓名</span>
                   <input
                     name="name"
                     required
@@ -123,7 +123,7 @@ export function CustomerCreateEntry() {
                 </label>
 
                 <label className="space-y-2">
-                  <span className="text-sm font-medium text-black/78">手机号</span>
+                  <span className="text-sm font-medium text-foreground">手机号</span>
                   <input
                     name="phone"
                     required
@@ -135,32 +135,32 @@ export function CustomerCreateEntry() {
                 </label>
 
                 <label className="space-y-2">
-                  <span className="text-sm font-medium text-black/78">省份</span>
+                  <span className="text-sm font-medium text-foreground">省份</span>
                   <input name="province" placeholder="选填" className="crm-input h-11 w-full" />
                   <FieldError message={result?.fieldErrors.province} />
                 </label>
 
                 <label className="space-y-2">
-                  <span className="text-sm font-medium text-black/78">城市</span>
+                  <span className="text-sm font-medium text-foreground">城市</span>
                   <input name="city" placeholder="选填" className="crm-input h-11 w-full" />
                   <FieldError message={result?.fieldErrors.city} />
                 </label>
 
                 <label className="space-y-2">
-                  <span className="text-sm font-medium text-black/78">区县</span>
+                  <span className="text-sm font-medium text-foreground">区县</span>
                   <input name="district" placeholder="选填" className="crm-input h-11 w-full" />
                   <FieldError message={result?.fieldErrors.district} />
                 </label>
 
                 <label className="space-y-2">
-                  <span className="text-sm font-medium text-black/78">详细地址</span>
+                  <span className="text-sm font-medium text-foreground">详细地址</span>
                   <input name="address" placeholder="选填" className="crm-input h-11 w-full" />
                   <FieldError message={result?.fieldErrors.address} />
                 </label>
               </div>
 
               <label className="space-y-2">
-                <span className="text-sm font-medium text-black/78">备注</span>
+                <span className="text-sm font-medium text-foreground">备注</span>
                 <textarea
                   name="remark"
                   rows={4}
@@ -170,7 +170,7 @@ export function CustomerCreateEntry() {
                 <FieldError message={result?.fieldErrors.remark} />
               </label>
 
-              <div className="rounded-[0.9rem] border border-black/7 bg-[rgba(247,248,250,0.76)] px-4 py-3 text-[13px] leading-6 text-black/56">
+              <div className="rounded-md border border-border/60 bg-[rgba(247,248,250,0.76)] px-4 py-3 text-[13px] leading-6 text-muted-foreground">
                 创建后会直接写入客户审计日志，并按当前销售 owner 进入客户中心。
               </div>
 

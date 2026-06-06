@@ -135,7 +135,7 @@ function ManagementDashboardDateToolbar({
   return (
     <form
       action="/dashboard"
-      className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-3 shadow-sm md:flex-row md:items-center md:justify-between"
+      className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3 shadow-sm md:flex-row md:items-center md:justify-between"
     >
       <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
         <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-muted text-foreground">
@@ -205,7 +205,7 @@ function EmployeeRowCard({
   metricPrefix: string;
 }>) {
   return (
-    <div className="rounded-2xl border border-border bg-muted/20 p-4">
+    <div className="rounded-xl border border-border bg-muted/20 p-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0 lg:w-[18rem]">
           <div className="flex flex-wrap items-center gap-2">
@@ -318,7 +318,7 @@ function HealthCard({
   tone: string;
 }>) {
   return (
-    <div className="rounded-2xl border border-border bg-muted/25 p-4">
+    <div className="rounded-xl border border-border bg-muted/25 p-4">
       <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-card text-foreground">
         {icon}
       </div>

@@ -21,10 +21,10 @@ type BatchFilters = BatchData["filters"];
 type PaginationData = BatchData["pagination"];
 
 const batchResultCardClassName =
-  "overflow-hidden rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-sm)]";
+  "overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-sm)]";
 
 const batchResultInsetClassName =
-  "rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)]";
+  "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)]";
 
 const batchQuietActionClassName =
   "inline-flex min-h-0 items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-1.5 text-xs font-medium text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]";

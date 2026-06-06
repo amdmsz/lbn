@@ -109,14 +109,14 @@ export function ShippingQuickFillDrawer({
             className="absolute inset-0 bg-black/24"
           />
 
-          <div className="absolute inset-y-0 right-0 flex w-full max-w-[34rem] flex-col border-l border-black/8 bg-[rgba(255,255,255,0.98)] shadow-[-18px_0_42px_rgba(15,23,42,0.12)]">
-            <div className="flex items-start justify-between gap-4 border-b border-black/6 px-6 py-5">
+          <div className="absolute inset-y-0 right-0 flex w-full max-w-[34rem] flex-col border-l border-border/60 bg-[rgba(255,255,255,0.98)] shadow-[-18px_0_42px_rgba(15,23,42,0.12)]">
+            <div className="flex items-start justify-between gap-4 border-b border-border/60 px-6 py-5">
               <div className="space-y-1">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-black/38">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
                   物流回填
                 </p>
-                <h3 className="text-lg font-semibold text-black/84">{subOrderNo}</h3>
-                <p className="text-sm text-black/56">
+                <h3 className="text-lg font-semibold text-foreground">{subOrderNo}</h3>
+                <p className="text-sm text-muted-foreground">
                   {supplierName} / {receiverName}
                 </p>
               </div>
@@ -124,7 +124,7 @@ export function ShippingQuickFillDrawer({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-black/8 bg-white/90 text-black/50"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-card text-muted-foreground/70"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -143,8 +143,8 @@ export function ShippingQuickFillDrawer({
                 <div className="space-y-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <div className="text-sm font-medium text-black/82">包裹信息</div>
-                      <div className="text-xs text-black/52">一个订单可录多个箱子 / 物流单号。</div>
+                      <div className="text-sm font-medium text-foreground">包裹信息</div>
+                      <div className="text-xs text-muted-foreground">一个订单可录多个箱子 / 物流单号。</div>
                     </div>
                     <button type="button" onClick={addPackage} className="crm-button crm-button-secondary">
                       <Plus className="h-4 w-4" />
@@ -154,13 +154,13 @@ export function ShippingQuickFillDrawer({
 
                   <div className="space-y-3">
                     {packages.map((item, index) => (
-                      <div key={item.id} className="rounded-2xl border border-black/8 bg-white/76 p-4">
+                      <div key={item.id} className="rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] p-4">
                         <div className="flex items-center justify-between gap-3">
-                          <div className="font-medium text-black/82">{item.label || `包裹 ${index + 1}`}</div>
+                          <div className="font-medium text-foreground">{item.label || `包裹 ${index + 1}`}</div>
                           <button
                             type="button"
                             onClick={() => removePackage(item.id)}
-                            className="inline-flex items-center gap-1 rounded-full border border-black/8 px-2.5 py-1 text-xs text-black/55"
+                            className="inline-flex items-center gap-1 rounded-full border border-border/60 px-2.5 py-1 text-xs text-muted-foreground"
                             disabled={packages.length === 1}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -210,13 +210,13 @@ export function ShippingQuickFillDrawer({
                     ))}
                   </div>
 
-                  <div className="rounded-2xl border border-black/8 bg-white/72 px-4 py-3 text-sm text-black/58">
+                  <div className="rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] px-4 py-3 text-sm text-muted-foreground">
                     保存后，这个子单会从已报单待物流移入已发货。
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 border-t border-black/6 px-6 py-4">
+              <div className="flex items-center justify-end gap-3 border-t border-border/60 px-6 py-4">
                 <button type="button" onClick={() => setOpen(false)} className="crm-button crm-button-secondary">
                   取消
                 </button>

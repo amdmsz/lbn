@@ -426,7 +426,7 @@ function MobileNavigationSheet({
                   aria-current={active ? "page" : undefined}
                   onClick={onClose}
                   className={cn(
-                    "crm-motion-pill flex items-center gap-3 rounded-[1rem] px-3 py-3 text-[14px] font-medium transition-[background-color,color,box-shadow] duration-200",
+                    "crm-motion-pill flex items-center gap-3 rounded-xl px-3 py-3 text-[14px] font-medium transition-[background-color,color,box-shadow] duration-200",
                     active
                       ? "bg-[var(--color-shell-active)] text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)]"
                       : "text-[var(--foreground)]/88 hover:bg-[var(--color-shell-hover)]",
@@ -489,7 +489,7 @@ function MobileNavigationSheet({
                                 aria-current={active ? "page" : undefined}
                                 onClick={onClose}
                                 className={cn(
-                                  "crm-motion-pill flex items-center gap-3 rounded-[0.95rem] px-3 py-2.5 text-[13px] transition-[background-color,color,box-shadow] duration-200",
+                                  "crm-motion-pill flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-[background-color,color,box-shadow] duration-200",
                                   active
                                     ? "bg-[rgba(79,125,247,0.1)] text-[var(--foreground)] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                                     : "text-[var(--color-sidebar-muted)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]",
@@ -519,7 +519,7 @@ function MobileNavigationSheet({
           </div>
 
           <div className="mt-5 border-t border-[var(--color-border-soft)] pt-4">
-            <div className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
+            <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3">
               <p className="text-[13px] font-medium text-[var(--foreground)]">
                 {currentUser.name}
               </p>

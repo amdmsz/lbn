@@ -50,9 +50,9 @@ export function EntityTable<T>({
   return (
     <div
       className={cn(
-        "crm-table-shell overflow-x-auto overflow-y-hidden rounded-2xl border border-border/60 bg-card shadow-sm",
+        "crm-table-shell overflow-x-auto overflow-y-hidden rounded-xl border border-border/60 bg-card shadow-sm",
         variant === "list" &&
-          "rounded-2xl border-border/50 bg-card shadow-sm",
+          "rounded-xl border-border/50 bg-card shadow-sm",
         className,
       )}
     >

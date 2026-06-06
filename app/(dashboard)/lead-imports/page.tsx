@@ -98,8 +98,8 @@ function LeadImportPartition({
   return (
     <div className="crm-section-card space-y-4">
       <div className="space-y-1.5">
-        <h3 className="text-base font-semibold text-black/85">{title}</h3>
-        <p className="text-sm leading-6 text-black/58">{description}</p>
+        <h3 className="text-base font-semibold text-foreground">{title}</h3>
+        <p className="text-sm leading-6 text-muted-foreground">{description}</p>
       </div>
 
       {items.length > 0 ? (
@@ -108,8 +108,8 @@ function LeadImportPartition({
             <div key={item.id} className="crm-subtle-panel">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium text-black/82">{item.fileName}</p>
-                  <p className="mt-1 text-xs text-black/48">
+                  <p className="text-sm font-medium text-foreground">{item.fileName}</p>
+                  <p className="mt-1 text-xs text-muted-foreground/70">
                     创建时间：{formatImportDateTime(item.createdAt)}
                   </p>
                 </div>
@@ -126,7 +126,7 @@ function LeadImportPartition({
               </div>
               {item.importKind === "CUSTOMER_CONTINUATION" &&
               item.customerContinuationResultSummary ? (
-                <div className="mt-3 grid gap-2 text-[12px] text-black/62 sm:grid-cols-2">
+                <div className="mt-3 grid gap-2 text-[12px] text-muted-foreground sm:grid-cols-2">
                   <span className="text-[var(--color-success)]">
                     新建并匹配：{item.customerContinuationResultSummary.createdAssignedCount}
                   </span>
@@ -146,7 +146,7 @@ function LeadImportPartition({
                   </span>
                 </div>
               ) : (
-                <div className="mt-3 flex flex-wrap gap-3 text-sm text-black/62">
+                <div className="mt-3 flex flex-wrap gap-3 text-sm text-muted-foreground">
                   <span>成功 {item.successRows}</span>
                   <span>重复 {item.duplicateRows}</span>
                   <span>失败 {item.failedRows}</span>
@@ -284,7 +284,7 @@ export default async function LeadImportsPage({
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-semibold text-black/82">
+                        <p className="text-sm font-semibold text-foreground">
                           {item.customerNameSnapshot}
                         </p>
                         <StatusBadge
@@ -293,17 +293,17 @@ export default async function LeadImportsPage({
                         />
                         <StatusBadge label={item.sourceModeLabel} variant="info" />
                       </div>
-                      <p className="text-[13px] leading-6 text-black/56">
+                      <p className="text-[13px] leading-6 text-muted-foreground">
                         手机号：{item.customerPhoneSnapshot} / 申请人：{item.requestedBy.name}
                       </p>
-                      <p className="text-[13px] leading-6 text-black/56">
+                      <p className="text-[13px] leading-6 text-muted-foreground">
                         批次：{item.sourceBatchFileName}
                         {item.sourceRowNumber ? ` / 第 ${item.sourceRowNumber} 行` : ""}
                       </p>
-                      <p className="text-[13px] leading-6 text-black/56">
+                      <p className="text-[13px] leading-6 text-muted-foreground">
                         原因：{item.requestReason}
                       </p>
-                      <p className="text-[12px] leading-5 text-black/45">
+                      <p className="text-[12px] leading-5 text-muted-foreground/70">
                         提交时间：{formatImportDateTime(item.createdAt)}
                       </p>
                     </div>

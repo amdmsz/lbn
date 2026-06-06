@@ -63,7 +63,7 @@ function PhoneSearchOwnershipDisclosure({
   }
 
   return (
-    <section className="mb-3 rounded-2xl border border-amber-200/70 bg-amber-50/70 px-4 py-3 text-amber-950 shadow-sm">
+    <section className="mb-3 rounded-xl border border-amber-200/70 bg-amber-50/70 px-4 py-3 text-amber-950 shadow-sm">
       <div className="flex flex-col gap-1.5 md:flex-row md:items-start md:justify-between">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-700">
@@ -76,7 +76,7 @@ function PhoneSearchOwnershipDisclosure({
             这里只显示客户归属，不开放详情、跟进、下单、标签或回收操作。
           </p>
         </div>
-        <span className="inline-flex h-7 w-fit items-center rounded-full border border-amber-300/80 bg-white/70 px-2.5 text-[11px] font-semibold text-amber-800">
+        <span className="inline-flex h-7 w-fit items-center rounded-full border border-amber-300/80 bg-[var(--color-shell-surface-soft)] px-2.5 text-[11px] font-semibold text-amber-800">
           只读
         </span>
       </div>
@@ -85,7 +85,7 @@ function PhoneSearchOwnershipDisclosure({
         {items.map((item) => (
           <div
             key={item.id}
-            className="grid gap-1 rounded-xl border border-amber-200/70 bg-white/80 px-3 py-2 md:grid-cols-[1.1fr_1.3fr_1fr_auto] md:items-center"
+            className="grid gap-1 rounded-xl border border-amber-200/70 bg-card px-3 py-2 md:grid-cols-[1.1fr_1.3fr_1fr_auto] md:items-center"
           >
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>

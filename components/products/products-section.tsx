@@ -153,10 +153,10 @@ const productSecondaryButtonClassName =
   "inline-flex min-h-0 items-center justify-center rounded-lg border border-border/60 bg-card text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60";
 
 const productControlSurfaceClassName =
-  "rounded-2xl border border-border/50 bg-card px-3 py-2.5 shadow-sm";
+  "rounded-xl border border-border/50 bg-card px-3 py-2.5 shadow-sm";
 
 const productTableShellClassName =
-  "overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm";
+  "overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm";
 
 const productSpatialTableClassName =
   "w-full min-w-[980px] border-separate border-spacing-0 text-sm [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-muted/30 [&_td]:border-b [&_td]:border-border/40 [&_td]:px-4 [&_td]:py-4 [&_td]:align-top [&_th]:border-b [&_th]:border-border/40 [&_th]:bg-transparent [&_th]:px-4 [&_th]:py-3 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-wider [&_th]:text-muted-foreground [&_thead]:bg-transparent";

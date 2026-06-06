@@ -94,7 +94,7 @@ export function InlineCustomerRemarkField({
           }
         }}
         className={cn(
-          "min-h-[66px] w-full resize-none rounded-[0.95rem] border bg-white/92 px-3 py-2.5 text-[13px] leading-5 text-[var(--foreground)] outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-[var(--color-sidebar-muted)]",
+          "min-h-[66px] w-full resize-none rounded-xl border bg-card px-3 py-2.5 text-[13px] leading-5 text-[var(--foreground)] outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-[var(--color-sidebar-muted)]",
           pending
             ? "border-[rgba(47,107,255,0.16)] shadow-[0_0_0_4px_rgba(47,107,255,0.08)]"
             : saveState === "error"

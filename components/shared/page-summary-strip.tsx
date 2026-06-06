@@ -53,8 +53,8 @@ function SummaryTile({
     <div
       className={cn(
         isCompact
-          ? "group flex h-full min-h-[68px] flex-col justify-between rounded-[0.98rem] border px-3 py-2 transition-[border-color,background-color] duration-150 md:min-h-[72px] md:py-2.5"
-          : "group h-full rounded-[1.08rem] border px-4 py-3 transition-[border-color,background-color] duration-150",
+          ? "group flex h-full min-h-[68px] flex-col justify-between rounded-xl border px-3 py-2 transition-[border-color,background-color] duration-150 md:min-h-[72px] md:py-2.5"
+          : "group h-full rounded-xl border px-4 py-3 transition-[border-color,background-color] duration-150",
         emphasis.surface,
         item.href
           ? "shadow-[var(--color-shell-shadow-xs)] hover:border-[var(--tone-info-soft-border)] hover:bg-[var(--color-shell-surface)]"

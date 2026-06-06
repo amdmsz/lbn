@@ -269,7 +269,7 @@ export function SalesOrdersSection({
 
       {items.length > 0 ? (
         <div className="space-y-5">
-          <div className="flex flex-wrap items-center gap-3 text-sm text-black/60">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
             <span>
               共 {pagination.totalCount} 条销售订单，当前第 {pagination.page} / {pagination.totalPages} 页
             </span>
@@ -291,33 +291,33 @@ export function SalesOrdersSection({
                 {items.map((item) => (
                   <tr key={item.id}>
                     <td>
-                      <div className="font-medium text-black/80">
+                      <div className="font-medium text-foreground">
                         {item.tradeOrder?.tradeNo
                           ? `${item.tradeOrder.tradeNo} / ${item.subOrderNo || item.orderNo}`
                           : item.orderNo}
                       </div>
-                      <div className="mt-1 text-xs text-black/45">
+                      <div className="mt-1 text-xs text-muted-foreground/70">
                         {item.customer.name} / {item.customer.phone}
                       </div>
                       {item.tradeOrder?.tradeNo ? (
-                        <div className="mt-1 text-xs text-black/45">
+                        <div className="mt-1 text-xs text-muted-foreground/70">
                           主单：{item.tradeOrder.tradeNo} / 子单：{item.subOrderNo || item.orderNo}
                         </div>
                       ) : null}
-                      <div className="mt-1 text-xs text-black/45">
+                      <div className="mt-1 text-xs text-muted-foreground/70">
                         当前负责人：
                         {item.customer.owner?.name || item.customer.owner?.username || "未分配"}
                       </div>
-                      <div className="mt-1 text-xs text-black/45">
+                      <div className="mt-1 text-xs text-muted-foreground/70">
                         供货商：{item.supplier.name}
                       </div>
-                      <div className="mt-1 text-xs text-black/45">
+                      <div className="mt-1 text-xs text-muted-foreground/70">
                         创建时间：{formatDateTime(item.createdAt)}
                       </div>
                     </td>
-                    <td className="text-black/80">
+                    <td className="text-foreground">
                       <div className="space-y-2">
-                        <div className="text-xs text-black/55">
+                        <div className="text-xs text-muted-foreground">
                           {item.items.map((orderItem) => (
                             <div key={orderItem.id}>
                               {orderItem.productNameSnapshot} / {orderItem.skuNameSnapshot} /{" "}
@@ -328,7 +328,7 @@ export function SalesOrdersSection({
                           ))}
                         </div>
                         {item.giftItems.length > 0 ? (
-                          <div className="text-xs text-black/45">
+                          <div className="text-xs text-muted-foreground/70">
                             随单赠品：
                             {item.giftItems
                               .map((gift) => `${gift.giftName} x ${gift.qty}`)
@@ -347,13 +347,13 @@ export function SalesOrdersSection({
                           label={getSalesOrderPaymentSchemeLabel(item.paymentScheme)}
                           variant={getSalesOrderPaymentSchemeVariant(item.paymentScheme)}
                         />
-                        <div className="text-xs text-black/45">
+                        <div className="text-xs text-muted-foreground/70">
                           收件人：{item.receiverNameSnapshot} / {item.receiverPhoneSnapshot}
                         </div>
                       </div>
                     </td>
                     <td>
-                      <div className="space-y-2 text-xs text-black/55">
+                      <div className="space-y-2 text-xs text-muted-foreground">
                         <div>原价小计：{formatCurrency(item.listAmount)}</div>
                         <div>成交小计：{formatCurrency(item.dealAmount)}</div>
                         <div>优惠金额：{formatCurrency(item.discountAmount)}</div>
@@ -377,12 +377,12 @@ export function SalesOrdersSection({
                             label={getShippingFulfillmentStatusLabel(item.shippingTask.shippingStatus)}
                             variant={getShippingFulfillmentStatusVariant(item.shippingTask.shippingStatus)}
                           />
-                          <div className="text-xs text-black/45">
+                          <div className="text-xs text-muted-foreground/70">
                             物流单号：{item.shippingTask.trackingNumber || "未回填"}
                           </div>
                         </div>
                       ) : (
-                        <div className="text-sm leading-7 text-black/55">
+                        <div className="text-sm leading-7 text-muted-foreground">
                           订单审核通过后自动进入发货池。
                         </div>
                       )}
@@ -394,7 +394,7 @@ export function SalesOrdersSection({
                         </Link>
 
                         {canReview && item.reviewStatus === "PENDING_REVIEW" ? (
-                          <div className="space-y-3 rounded-2xl border border-black/8 bg-white/70 p-3">
+                          <div className="space-y-3 rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] p-3">
                             <form action={reviewAction}>
                               <input type="hidden" name="salesOrderId" value={item.id} />
                               <input type="hidden" name="reviewStatus" value="APPROVED" />
@@ -421,7 +421,7 @@ export function SalesOrdersSection({
                             </form>
                           </div>
                         ) : item.reviewStatus === "REJECTED" ? (
-                          <div className="text-sm leading-7 text-black/55">
+                          <div className="text-sm leading-7 text-muted-foreground">
                             该订单已驳回，可进入详情页修改并重新提交。
                           </div>
                         ) : null}

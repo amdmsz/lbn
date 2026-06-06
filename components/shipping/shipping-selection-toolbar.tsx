@@ -25,9 +25,9 @@ export function ShippingSelectionToolbar({
   summary,
 }: Readonly<ShippingSelectionToolbarProps>) {
   return (
-    <div className="flex flex-col gap-3 rounded-[0.95rem] border border-black/7 bg-[rgba(247,248,250,0.78)] px-4 py-3 text-sm text-black/62 md:flex-row md:items-center md:justify-between">
+    <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-[rgba(247,248,250,0.78)] px-4 py-3 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
       <div className="space-y-1">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-black/40">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
           Bulk Selection
         </p>
         <p>{summary}</p>
@@ -42,7 +42,7 @@ export function ShippingSelectionToolbar({
         </button>
         <button
           type="button"
-          className="inline-flex min-h-0 items-center rounded-full border border-black/8 bg-white/88 px-3 py-1.5 text-sm font-medium text-black/58 transition hover:border-black/14 hover:text-black/72"
+          className="inline-flex min-h-0 items-center rounded-full border border-border/60 bg-card px-3 py-1.5 text-sm font-medium text-muted-foreground transition hover:border-border hover:text-foreground/70"
           onClick={() => setCheckedState(formId, inputName, false)}
         >
           清空当前页

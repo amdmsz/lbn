@@ -186,7 +186,7 @@ export function AccountMenu({
         aria-label="打开账户面板"
         onClick={() => setOpen((current) => !current)}
         className={cn(
-          "crm-motion-pill flex w-full items-center gap-3 rounded-[1.05rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3 text-left shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow]",
+          "crm-motion-pill flex w-full items-center gap-3 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-3 text-left shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow]",
           open
             ? "border-[var(--color-accent-soft)] bg-[var(--color-shell-hover)] shadow-[var(--color-shell-shadow-md)]"
             : "hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)]",

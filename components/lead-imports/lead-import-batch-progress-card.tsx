@@ -109,7 +109,7 @@ export function LeadImportBatchProgressCard({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-semibold text-black/86">{title}</h3>
+            <h3 className="text-lg font-semibold text-foreground">{title}</h3>
             <StatusBadge
               label={mode === "customer_continuation" ? "客户续接" : "线索导入"}
               variant="neutral"
@@ -117,7 +117,7 @@ export function LeadImportBatchProgressCard({
             <StatusBadge label={progress.statusLabel} variant={progress.statusVariant} />
             <StatusBadge label={progress.stageLabel} variant={progress.stageVariant} />
           </div>
-          <p className="text-sm leading-6 text-black/58">{description}</p>
+          <p className="text-sm leading-6 text-muted-foreground">{description}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -141,18 +141,18 @@ export function LeadImportBatchProgressCard({
       <div className="mt-5 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium text-black/78">
+            <p className="text-sm font-medium text-foreground">
               已处理 {progress.processedRows} / {progress.totalRows}
             </p>
-            <p className="mt-1 text-xs text-black/48">
+            <p className="mt-1 text-xs text-muted-foreground/70">
               成功 {progress.successRows} / 重复 {progress.duplicateRows} / 失败{" "}
               {progress.failedRows}
             </p>
           </div>
-          <p className="text-2xl font-semibold text-black/84">{progress.progressPercent}%</p>
+          <p className="text-2xl font-semibold text-foreground">{progress.progressPercent}%</p>
         </div>
 
-        <div className="h-2.5 overflow-hidden rounded-full bg-black/6">
+        <div className="h-2.5 overflow-hidden rounded-full bg-foreground/5">
           <div
             className="h-full rounded-full bg-[linear-gradient(90deg,#4d8fe6_0%,#7ab4ff_100%)] transition-[width] duration-500"
             style={{ width: `${progress.progressPercent}%` }}
@@ -162,15 +162,15 @@ export function LeadImportBatchProgressCard({
         <div className="grid gap-3 md:grid-cols-4">
           <div className="crm-subtle-panel">
             <p className="crm-detail-label">批次状态</p>
-            <p className="mt-2 text-sm text-black/72">{progress.statusLabel}</p>
+            <p className="mt-2 text-sm text-foreground/70">{progress.statusLabel}</p>
           </div>
           <div className="crm-subtle-panel">
             <p className="crm-detail-label">当前阶段</p>
-            <p className="mt-2 text-sm text-black/72">{progress.stageLabel}</p>
+            <p className="mt-2 text-sm text-foreground/70">{progress.stageLabel}</p>
           </div>
           <div className="crm-subtle-panel">
             <p className="crm-detail-label">开始时间</p>
-            <p className="mt-2 text-sm text-black/72">
+            <p className="mt-2 text-sm text-foreground/70">
               {progress.processingStartedAt
                 ? formatImportDateTime(progress.processingStartedAt)
                 : "等待 Worker 接单"}
@@ -178,7 +178,7 @@ export function LeadImportBatchProgressCard({
           </div>
           <div className="crm-subtle-panel">
             <p className="crm-detail-label">最近心跳</p>
-            <p className="mt-2 text-sm text-black/72">
+            <p className="mt-2 text-sm text-foreground/70">
               {progress.lastHeartbeatAt
                 ? formatImportDateTime(progress.lastHeartbeatAt)
                 : progress.isTerminal

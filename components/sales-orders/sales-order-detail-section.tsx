@@ -541,7 +541,7 @@ export function SalesOrderDetailSection({
             <p className="crm-detail-label">执行行快照</p>
             <div className="mt-3 space-y-3">
               {order.items.map((item) => (
-                <div key={item.id} className="rounded-xl border border-border/60 bg-white/70 p-4">
+                <div key={item.id} className="rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge
                       label={getExecutionLineTypeLabel(item.itemTypeSnapshot)}
@@ -577,7 +577,7 @@ export function SalesOrderDetailSection({
             <div className="mt-3 space-y-3">
               {order.giftItems.length > 0 ? (
                 order.giftItems.map((item) => (
-                  <div key={item.id} className="rounded-xl border border-border/60 bg-white/70 p-4">
+                  <div key={item.id} className="rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] p-4">
                     <div className="font-medium text-foreground">
                       {item.giftName} x {item.qty}
                     </div>
@@ -585,7 +585,7 @@ export function SalesOrderDetailSection({
                   </div>
                 ))
               ) : (
-                <div className="rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm leading-7 text-muted-foreground">
+                <div className="rounded-xl border border-dashed border-border bg-[var(--color-shell-surface-soft)] p-4 text-sm leading-7 text-muted-foreground">
                   当前子单没有历史兼容赠品记录。若赠品来自新写路径，请在左侧 `GIFT` 执行行中查看。
                 </div>
               )}
@@ -654,7 +654,7 @@ export function SalesOrderDetailSection({
           <div className="mt-4 grid gap-3">
             {order.logisticsFollowUpTasks.length > 0 ? (
               order.logisticsFollowUpTasks.map((task) => (
-                <div key={task.id} className="rounded-xl border border-border/60 bg-white/70 p-4">
+                <div key={task.id} className="rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge
                       label={getLogisticsTaskStatusLabel(task.status)}
@@ -675,7 +675,7 @@ export function SalesOrderDetailSection({
                 </div>
               ))
             ) : (
-              <div className="rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm leading-7 text-muted-foreground">
+              <div className="rounded-xl border border-dashed border-border bg-[var(--color-shell-surface-soft)] p-4 text-sm leading-7 text-muted-foreground">
                 首次回填物流单号后，系统会自动创建物流跟进任务。
               </div>
             )}
@@ -751,7 +751,7 @@ export function SalesOrderDetailSection({
                 ) : null}
               </div>
               {latestCodRecord?.paymentRecord ? (
-                <div className="mt-4 rounded-xl border border-border/60 bg-white/70 p-4">
+                <div className="mt-4 rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge
                       label={getPaymentRecordStatusLabel(latestCodRecord.paymentRecord.status)}
@@ -799,7 +799,7 @@ export function SalesOrderDetailSection({
           <div className="mt-4 grid gap-3">
             {order.logisticsFollowUpTasks.length > 0 ? (
               order.logisticsFollowUpTasks.map((task) => (
-                <div key={task.id} className="rounded-xl border border-border/60 bg-white/70 p-4">
+                <div key={task.id} className="rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge
                       label={getLogisticsTaskStatusLabel(task.status)}
@@ -869,7 +869,7 @@ export function SalesOrderDetailSection({
                 </div>
               ))
             ) : (
-              <div className="rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm leading-7 text-muted-foreground">
+              <div className="rounded-xl border border-dashed border-border bg-[var(--color-shell-surface-soft)] p-4 text-sm leading-7 text-muted-foreground">
                 首次回填物流单号后，系统会自动创建物流跟进任务。
               </div>
             )}
@@ -965,7 +965,7 @@ export function SalesOrderDetailSection({
         <div className="mt-6 space-y-3">
           {operationLogs.length > 0 ? (
             operationLogs.map((record) => (
-              <div key={record.id} className="rounded-xl border border-border/60 bg-white/70 p-4">
+              <div key={record.id} className="rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="font-medium text-foreground">
                     {record.module} / {record.action}
@@ -981,7 +981,7 @@ export function SalesOrderDetailSection({
               </div>
             ))
           ) : (
-            <div className="rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm leading-7 text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-border bg-[var(--color-shell-surface-soft)] p-4 text-sm leading-7 text-muted-foreground">
               当前暂无操作日志。
             </div>
           )}

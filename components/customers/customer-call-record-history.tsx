@@ -197,7 +197,7 @@ function renderRecordingDetail(
         "group px-3 py-2.5",
         variant === "timeline"
           ? "rounded-md border-0 bg-muted/30 px-2.5 py-2"
-          : "rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)]",
+          : "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)]",
       )}
     >
       <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 text-[12px] font-medium text-[var(--foreground)]">

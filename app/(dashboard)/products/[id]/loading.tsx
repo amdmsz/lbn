@@ -23,7 +23,7 @@ export default function ProductDetailLoading() {
           {Array.from({ length: 4 }).map((_, index) => (
             <div
               key={index}
-              className="crm-loading-block h-[5.75rem] rounded-[1rem] border border-black/8"
+              className="crm-loading-block h-[5.75rem] rounded-xl border border-border/60"
             />
           ))}
         </div>
@@ -36,13 +36,13 @@ export default function ProductDetailLoading() {
       >
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(260px,320px)]">
           <div className="space-y-3">
-            <div className="crm-loading-block h-24 rounded-[0.95rem]" />
+            <div className="crm-loading-block h-24 rounded-xl" />
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="crm-loading-block h-20 rounded-[0.95rem]" />
-              <div className="crm-loading-block h-20 rounded-[0.95rem]" />
+              <div className="crm-loading-block h-20 rounded-xl" />
+              <div className="crm-loading-block h-20 rounded-xl" />
             </div>
           </div>
-          <div className="crm-loading-block h-[13rem] rounded-[0.95rem]" />
+          <div className="crm-loading-block h-[13rem] rounded-xl" />
         </div>
       </SectionCard>
 

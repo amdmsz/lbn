@@ -112,7 +112,7 @@ export function ToastProvider() {
           <div
             key={item.id}
             className={cn(
-              "group relative overflow-hidden rounded-2xl border bg-background/90 p-4 text-foreground shadow-2xl backdrop-blur-xl",
+              "group relative overflow-hidden rounded-xl border bg-background/90 p-4 text-foreground shadow-2xl backdrop-blur-xl",
               "transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]",
               "border-border/60",
               tone.ring,

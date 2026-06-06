@@ -243,7 +243,7 @@ export function FinancePaymentsSection({
       <FiltersPanel
         title="收款筛选"
         headerMode="hidden"
-        className="rounded-[0.95rem] border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]"
+        className="rounded-xl border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]"
       >
         <form method="get" className="space-y-2.5">
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(320px,1.45fr)_repeat(6,minmax(0,0.86fr))]">
@@ -355,7 +355,7 @@ export function FinancePaymentsSection({
         title="收款记录"
         description="按来源、客户、销售与时间回看收款轨迹。"
         density="compact"
-        className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+        className="rounded-xl shadow-[var(--color-shell-shadow-sm)]"
         contentClassName="p-3 md:p-4"
       >
         {items.length > 0 ? (

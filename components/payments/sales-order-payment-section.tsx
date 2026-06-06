@@ -163,7 +163,7 @@ export function SalesOrderPaymentSection({
             const openTask = getOpenCollectionTask(plan);
 
             return (
-              <div key={plan.id} className="rounded-3xl border border-border/60 bg-white/80 p-5">
+              <div key={plan.id} className="rounded-3xl border border-border/60 bg-card p-5">
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge
                     label={getPaymentPlanSubjectLabel(plan.subjectType)}
@@ -200,7 +200,7 @@ export function SalesOrderPaymentSection({
                         plan.paymentRecords.map((record) => (
                           <div
                             key={record.id}
-                            className="rounded-xl border border-border/60 bg-white/70 p-4"
+                            className="rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] p-4"
                           >
                             <div className="flex flex-wrap items-center gap-2">
                               <StatusBadge
@@ -250,7 +250,7 @@ export function SalesOrderPaymentSection({
                           </div>
                         ))
                       ) : (
-                        <div className="rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm leading-7 text-muted-foreground">
+                        <div className="rounded-xl border border-dashed border-border bg-[var(--color-shell-surface-soft)] p-4 text-sm leading-7 text-muted-foreground">
                           当前还没有收款记录。
                         </div>
                       )}
@@ -261,7 +261,7 @@ export function SalesOrderPaymentSection({
                     <p className="crm-detail-label">催收任务</p>
                     <div className="mt-3 space-y-3">
                       {openTask ? (
-                        <div className="rounded-xl border border-border/60 bg-white/70 p-4">
+                        <div className="rounded-xl border border-border/60 bg-[var(--color-shell-surface-soft)] p-4">
                           <div className="flex flex-wrap items-center gap-2">
                             <StatusBadge
                               label={getCollectionTaskTypeLabel(openTask.taskType)}
@@ -344,7 +344,7 @@ export function SalesOrderPaymentSection({
                         plan.status !== "CANCELED" ? (
                         <form
                           action={upsertCollectionTaskAction}
-                          className="space-y-2 rounded-xl border border-dashed border-border bg-white/55 p-4"
+                          className="space-y-2 rounded-xl border border-dashed border-border bg-[var(--color-shell-surface-soft)] p-4"
                         >
                           <input type="hidden" name="paymentPlanId" value={plan.id} />
                           <input type="hidden" name="redirectTo" value={`/orders/${orderId}`} />
@@ -368,7 +368,7 @@ export function SalesOrderPaymentSection({
                           </button>
                         </form>
                       ) : (
-                        <div className="rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm leading-7 text-muted-foreground">
+                        <div className="rounded-xl border border-dashed border-border bg-[var(--color-shell-surface-soft)] p-4 text-sm leading-7 text-muted-foreground">
                           当前没有打开中的催收任务。
                         </div>
                       )}
@@ -439,7 +439,7 @@ export function SalesOrderPaymentSection({
                     </div>
                   </form>
                 ) : plan.collectionChannel === "COD" ? (
-                  <div className="mt-4 rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm leading-7 text-muted-foreground">
+                  <div className="mt-4 rounded-xl border border-dashed border-border bg-[var(--color-shell-surface-soft)] p-4 text-sm leading-7 text-muted-foreground">
                     COD 回款请在订单中心登记，系统会自动联动 PaymentPlan、PaymentRecord 与催收任务。
                   </div>
                 ) : null}
@@ -447,7 +447,7 @@ export function SalesOrderPaymentSection({
             );
           })
         ) : (
-          <div className="rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm leading-7 text-muted-foreground">
+          <div className="rounded-xl border border-dashed border-border bg-[var(--color-shell-surface-soft)] p-4 text-sm leading-7 text-muted-foreground">
             当前还没有应收计划。订单创建或驳回后重新提交时，系统会根据 `paymentScheme` 自动生成 PaymentPlan。
           </div>
         )}

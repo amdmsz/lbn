@@ -43,7 +43,7 @@ export function LogisticsTracePanel({
   return (
     <details
       className={cn(
-        "rounded-[0.85rem] border border-black/8 bg-[rgba(247,248,250,0.72)]",
+        "rounded-xl border border-border/60 bg-[rgba(247,248,250,0.72)]",
         className,
       )}
       onToggle={(event) => setIsOpen((event.currentTarget as HTMLDetailsElement).open)}
@@ -51,20 +51,20 @@ export function LogisticsTracePanel({
       <summary className="cursor-pointer list-none px-3.5 py-3">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
-            <div className="text-sm font-medium text-black/76">{title}</div>
-            <div className="text-xs leading-5 text-black/48">{summaryText}</div>
+            <div className="text-sm font-medium text-foreground">{title}</div>
+            <div className="text-xs leading-5 text-muted-foreground/70">{summaryText}</div>
           </div>
           {data ? (
             <StatusBadge label={traceStatusMeta.label} variant={traceStatusMeta.variant} />
           ) : (
-            <span className="text-xs text-black/42">
+            <span className="text-xs text-muted-foreground/70">
               {trackingNumber ? "展开查看" : "待回填单号"}
             </span>
           )}
         </div>
       </summary>
 
-      <div className="border-t border-black/7 px-3.5 py-3.5">
+      <div className="border-t border-border/60 px-3.5 py-3.5">
         <LogisticsTraceContent
           loadState={loadState}
           shippingProvider={shippingProvider}

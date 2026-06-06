@@ -93,7 +93,7 @@ export function AvatarSettingsPanel({
   }
 
   return (
-    <div className="space-y-3 rounded-[1rem] border border-[var(--color-border)] bg-[var(--color-panel)] p-3.5">
+    <div className="space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-3.5">
       <div className="flex items-center gap-3">
         {avatarSrc ? (
           // eslint-disable-next-line @next/next/no-img-element

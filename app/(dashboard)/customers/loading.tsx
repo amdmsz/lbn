@@ -54,7 +54,7 @@ function CustomerRowSkeleton({ index }: Readonly<{ index: number }>) {
 export default function CustomersLoading() {
   return (
     <div className="mx-auto w-full max-w-7xl space-y-4">
-      <div className="rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
+      <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <SkeletonBlock className="h-9 w-28 rounded-full" />
@@ -64,7 +64,7 @@ export default function CustomersLoading() {
         </div>
       </div>
 
-      <section className="overflow-hidden rounded-2xl border border-border bg-card p-3 shadow-sm md:p-4">
+      <section className="overflow-hidden rounded-xl border border-border bg-card p-3 shadow-sm md:p-4">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="space-y-2">
             <SkeletonBlock className="h-4 w-24" />

@@ -31,7 +31,7 @@ export function DataTableWrapper({
     <section
       className={cn(
         isCompact
-          ? "crm-animate-enter overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm transition-[border-color,background-color,box-shadow]"
+          ? "crm-animate-enter overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm transition-[border-color,background-color,box-shadow]"
           : "crm-card crm-animate-enter overflow-hidden border border-border/60 bg-card shadow-sm",
         className,
       )}

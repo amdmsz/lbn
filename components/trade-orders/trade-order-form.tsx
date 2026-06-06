@@ -586,7 +586,7 @@ export function TradeOrderForm({
       />
       <input type="hidden" name="bundleLinesJson" value={JSON.stringify([])} />
 
-      <section className="overflow-hidden rounded-[1.25rem] border border-border/60 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(247,249,252,0.9))] shadow-[var(--color-shell-shadow-sm)]">
+      <section className="overflow-hidden rounded-xl border border-border/60 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(247,249,252,0.9))] shadow-[var(--color-shell-shadow-sm)]">
         <div className="flex flex-col gap-4 border-b border-border/50 px-4 py-4 md:px-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
@@ -688,7 +688,7 @@ export function TradeOrderForm({
                           "min-h-[5.4rem] rounded-xl border px-3.5 py-3 text-left transition-[border-color,background-color,box-shadow,transform]",
                           active
                             ? "border-primary/35 bg-primary/8 shadow-[0_0_0_3px_rgba(37,99,235,0.08)]"
-                            : "border-border/55 bg-white/68 hover:border-primary/25 hover:bg-white",
+                            : "border-border/55 bg-[var(--color-shell-surface-soft)] hover:border-primary/25 hover:bg-white",
                         )}
                       >
                         <div className="flex items-center justify-between gap-3">
@@ -719,7 +719,7 @@ export function TradeOrderForm({
                     value={effectiveDepositAmount}
                     onChange={(event) => setDepositAmount(event.target.value)}
                     disabled={!isDepositScheme(paymentScheme)}
-                    className="crm-input disabled:cursor-not-allowed disabled:bg-black/5"
+                    className="crm-input disabled:cursor-not-allowed disabled:bg-foreground/5"
                     placeholder="0.00"
                   />
                 </label>
@@ -801,7 +801,7 @@ export function TradeOrderForm({
                   value={effectiveInsuranceAmount}
                   onChange={(event) => setInsuranceAmount(event.target.value)}
                   disabled={!insuranceRequired}
-                  className="crm-input disabled:cursor-not-allowed disabled:bg-black/5"
+                  className="crm-input disabled:cursor-not-allowed disabled:bg-foreground/5"
                   placeholder="0.00"
                 />
               </label>
@@ -1036,7 +1036,7 @@ export function TradeOrderForm({
             </div>
           </FormSection>
 
-          <details className="overflow-hidden rounded-[1.15rem] border border-border/60 bg-card shadow-sm">
+          <details className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 border-b border-border/50 bg-muted/20 px-4 py-3">
               <div className="min-w-0">
                 <p className="crm-eyebrow">Advanced</p>
@@ -1243,7 +1243,7 @@ export function TradeOrderForm({
         </div>
 
         <aside className="min-w-0 space-y-4 xl:sticky xl:top-4 xl:self-start">
-          <section className="overflow-hidden rounded-[1.15rem] border border-border/60 bg-card shadow-sm">
+          <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
             <div className="border-b border-border/50 bg-muted/20 px-4 py-3">
               <p className="crm-eyebrow">Settlement</p>
               <h2 className="mt-1 text-[0.98rem] font-semibold text-foreground">
@@ -1292,7 +1292,7 @@ export function TradeOrderForm({
             </div>
           </section>
 
-          <section className="overflow-hidden rounded-[1.15rem] border border-border/60 bg-card shadow-sm">
+          <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
             <div className="border-b border-border/50 bg-muted/20 px-4 py-3">
               <p className="crm-eyebrow">Readiness</p>
               <h2 className="mt-1 text-[0.98rem] font-semibold text-foreground">
@@ -1372,7 +1372,7 @@ export function TradeOrderForm({
         </aside>
       </div>
 
-      <div className="sticky bottom-0 z-20 -mx-1 rounded-[1.15rem] border border-border/70 bg-background/88 p-3 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md">
+      <div className="sticky bottom-0 z-20 -mx-1 rounded-xl border border-border/70 bg-background/88 p-3 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">

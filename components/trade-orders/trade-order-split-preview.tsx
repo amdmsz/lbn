@@ -30,7 +30,7 @@ function ExecutionMetric({
   note: string;
 }>) {
   return (
-    <div className="rounded-2xl border border-border/55 bg-white/72 px-3.5 py-3">
+    <div className="rounded-xl border border-border/55 bg-[var(--color-shell-surface-soft)] px-3.5 py-3">
       <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
         {label}
       </p>
@@ -48,7 +48,7 @@ export function TradeOrderSplitPreview({
   const ready = computation.items.length > 0 && computation.issues.length === 0;
 
   return (
-    <section className="overflow-hidden rounded-[1.15rem] border border-border/60 bg-card shadow-sm">
+    <section className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
       <div className="flex flex-col gap-3 border-b border-border/50 bg-muted/20 px-4 py-3 md:flex-row md:items-center md:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <span
@@ -108,7 +108,7 @@ export function TradeOrderSplitPreview({
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-          <div className="min-w-0 rounded-2xl border border-border/55 bg-white/68">
+          <div className="min-w-0 rounded-xl border border-border/55 bg-[var(--color-shell-surface-soft)]">
             <div className="flex items-center justify-between gap-3 border-b border-border/45 px-3.5 py-2.5">
               <div>
                 <p className="crm-eyebrow">Trade Lines</p>
@@ -163,7 +163,7 @@ export function TradeOrderSplitPreview({
             )}
           </div>
 
-          <div className="min-w-0 rounded-2xl border border-border/55 bg-white/68">
+          <div className="min-w-0 rounded-xl border border-border/55 bg-[var(--color-shell-surface-soft)]">
             <div className="flex items-center justify-between gap-3 border-b border-border/45 px-3.5 py-2.5">
               <div>
                 <p className="crm-eyebrow">Supplier Execution</p>

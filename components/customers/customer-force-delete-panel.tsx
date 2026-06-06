@@ -83,7 +83,7 @@ export function CustomerForceDeletePanel({
   }
 
   return (
-    <section className="rounded-2xl border border-destructive/20 bg-card p-4 shadow-sm">
+    <section className="rounded-xl border border-destructive/20 bg-card p-4 shadow-sm">
       {notice ? (
         <div className="mb-3">
           <ActionBanner tone={notice.status === "success" ? "success" : "danger"}>

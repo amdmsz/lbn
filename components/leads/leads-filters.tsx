@@ -299,7 +299,7 @@ export function LeadsFilters({
     <FiltersPanel
       title="线索筛选"
       headerMode="hidden"
-      className="rounded-2xl border border-border/50 bg-card p-4 shadow-sm"
+      className="rounded-xl border border-border/50 bg-card p-4 shadow-sm"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <input type="hidden" name="view" value={filters.view} />

@@ -50,8 +50,8 @@ export function ProductCreateForm({
   return (
     <section id="create-product" className="crm-section-card">
       <div className="space-y-2">
-        <h3 className="text-lg font-semibold text-black/85">新建商品</h3>
-        <p className="text-sm leading-7 text-black/60">
+        <h3 className="text-lg font-semibold text-foreground">新建商品</h3>
+        <p className="text-sm leading-7 text-muted-foreground">
           商品表单保持精简。供货商归属留在商品层，SKU、价格、货到付款和保价能力继续在下层维护。
         </p>
       </div>

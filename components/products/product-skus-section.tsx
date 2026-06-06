@@ -146,7 +146,7 @@ const skuSecondaryButtonClassName =
   "inline-flex min-h-0 items-center justify-center rounded-lg border border-border/60 bg-card text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60";
 
 const skuControlSurfaceClassName =
-  "rounded-2xl border border-border/50 bg-card px-3.5 py-3.5 shadow-sm";
+  "rounded-xl border border-border/50 bg-card px-3.5 py-3.5 shadow-sm";
 
 const skuMetricPillClassName =
   "rounded-full border border-border/60 bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground";
@@ -582,7 +582,7 @@ export function ProductSkusSection({
         </ActionBanner>
       ) : null}
 
-      <div className="rounded-2xl border border-border/60 bg-card shadow-sm">
+      <div className="rounded-xl border border-border/60 bg-card shadow-sm">
         {items.length > 0 ? (
           <div className="space-y-0 overflow-hidden">
             <div className="flex flex-col gap-2 border-b border-border/50 bg-card px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between">

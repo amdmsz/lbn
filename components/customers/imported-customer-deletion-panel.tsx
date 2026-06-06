@@ -146,7 +146,7 @@ export function ImportedCustomerDeletionPanel({
   }
 
   return (
-    <section className="rounded-2xl border border-destructive/20 bg-card px-4 py-4 shadow-sm">
+    <section className="rounded-xl border border-destructive/20 bg-card px-4 py-4 shadow-sm">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-1.5">
           <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">

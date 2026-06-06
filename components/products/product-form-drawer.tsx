@@ -55,13 +55,13 @@ const drawerPanelClassName =
   "fixed inset-y-0 right-0 z-[10021] flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden border-l border-[var(--color-border-soft)] bg-background shadow-2xl";
 
 const drawerSectionClassName =
-  "rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4 shadow-[var(--color-shell-shadow-sm)]";
+  "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4 shadow-[var(--color-shell-shadow-sm)]";
 
 const drawerFeatureSectionClassName =
-  "rounded-[1.05rem] border border-[rgba(37,99,235,0.10)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(244,248,255,0.98))] p-5 shadow-[0_18px_40px_rgba(15,23,42,0.06)]";
+  "rounded-xl border border-[rgba(37,99,235,0.10)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(244,248,255,0.98))] p-5 shadow-[0_18px_40px_rgba(15,23,42,0.06)]";
 
 const drawerInsetClassName =
-  "rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3.5";
+  "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3.5";
 
 function isSuspiciousDictionaryLabel(label: string) {
   const normalized = label.trim();
@@ -598,7 +598,7 @@ export function ProductFormDrawer({
                         {createChecklist.map((item) => (
                           <div
                             key={item.label}
-                            className="flex items-center justify-between gap-3 rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2.5"
+                            className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2.5"
                           >
                             <span className="text-[12px] font-medium text-[var(--foreground)]">
                               {item.label}
@@ -619,18 +619,18 @@ export function ProductFormDrawer({
                     <section className={drawerSectionClassName}>
                       <p className="crm-detail-label text-[11px]">创建后下一步</p>
                       <div className="mt-3 space-y-2.5 text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">
-                        <div className="rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2.5">
+                        <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2.5">
                           1. 进入商品详情补主图、类目和经营说明。
                         </div>
-                        <div className="rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2.5">
+                        <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2.5">
                           2. 在 SKU 区继续扩更多包装、默认价和供货能力。
                         </div>
-                        <div className="rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2.5">
+                        <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2.5">
                           3. 如果供应商还不完整，可回到详情里继续轻维护。
                         </div>
                       </div>
 
-                      <div className="mt-4 rounded-[0.85rem] border border-dashed border-[rgba(37,99,235,0.16)] bg-[rgba(37,99,235,0.04)] px-3 py-2.5 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                      <div className="mt-4 rounded-xl border border-dashed border-[rgba(37,99,235,0.16)] bg-[rgba(37,99,235,0.04)] px-3 py-2.5 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
                         当前预览：{createPreviewSkuName} / {createPreviewUnitPrice} / 默认 {createPreviewOrderQuantity} / {createPreviewSupplier}
                       </div>
                     </section>

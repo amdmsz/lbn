@@ -103,13 +103,13 @@ export default async function LeadImportTemplatesPage({
             {customerContinuationImportFieldDefinitions.map((field) => (
               <div key={field.key} className="crm-subtle-panel">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-semibold text-black/82">{field.label}</p>
+                  <p className="text-sm font-semibold text-foreground">{field.label}</p>
                   <StatusBadge
                     label={field.required ? "必填" : "可选"}
                     variant={field.required ? "warning" : "neutral"}
                   />
                 </div>
-                <p className="mt-2 text-xs leading-6 text-black/55">
+                <p className="mt-2 text-xs leading-6 text-muted-foreground">
                   别名：{field.aliases.slice(0, 5).join(" / ")}
                 </p>
               </div>
@@ -125,14 +125,14 @@ export default async function LeadImportTemplatesPage({
                 <StatusBadge label="未接/拒接 -> 挂断待回访" variant="warning" />
                 <StatusBadge label="拒绝添加 / 无效号码" variant="danger" />
               </div>
-              <p className="mt-3 text-sm leading-6 text-black/60">
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
                 跟进客户、拒绝添加、无效客户这类信号词不会被当成业务标签 warning，它们会直接映射到对应承接结果。
               </p>
             </div>
 
             <div className="crm-subtle-panel">
               <p className="crm-detail-label">使用建议</p>
-              <p className="mt-2 text-sm leading-7 text-black/60">
+              <p className="mt-2 text-sm leading-7 text-muted-foreground">
                 负责人建议填写销售账号；标签列优先放 A/B/C/D 这类业务标签，老系统跟进结果也可以继续写在标签列或跟进结果列，系统会自动识别。
               </p>
             </div>
@@ -286,11 +286,11 @@ export default async function LeadImportTemplatesPage({
 
                   <div className="crm-subtle-panel">
                     <p className="crm-detail-label">映射摘要</p>
-                    <p className="mt-2 text-sm leading-7 text-black/65">
+                    <p className="mt-2 text-sm leading-7 text-muted-foreground">
                       {summarizeLeadImportMapping(getTemplateMapping(item.mappingConfig)) ||
                         "未配置映射"}
                     </p>
-                    <p className="mt-2 text-sm text-black/45">
+                    <p className="mt-2 text-sm text-muted-foreground/70">
                       创建人：{item.createdBy?.name ?? "系统"} / 创建时间：
                       {" "}
                       {new Intl.DateTimeFormat("zh-CN", {

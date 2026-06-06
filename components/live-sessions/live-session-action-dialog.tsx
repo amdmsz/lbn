@@ -93,7 +93,7 @@ export function LiveSessionActionDialog({
   return (
     <ClientPortal>
     <div className="fixed inset-0 z-[10040] flex items-center justify-center bg-black/70 px-4 py-8 backdrop-blur-sm">
-      <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-border bg-card text-foreground shadow-2xl">
+      <div className="w-full max-w-2xl overflow-hidden rounded-xl border border-border bg-card text-foreground shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-border/50 bg-muted/30 px-5 py-4">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">

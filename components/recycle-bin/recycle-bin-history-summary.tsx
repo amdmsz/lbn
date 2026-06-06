@@ -175,13 +175,13 @@ function HistorySummaryCard({
   note?: string | null;
 }>) {
   return (
-    <div className="space-y-3 rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
+    <div className="space-y-3 rounded-xl border border-border/60 bg-[rgba(249,250,252,0.72)] p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+          <p className="text-[12px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
             {eyebrow}
           </p>
-          <p className="text-sm font-semibold text-black/82">{title}</p>
+          <p className="text-sm font-semibold text-foreground">{title}</p>
         </div>
         {badges}
       </div>
@@ -189,12 +189,12 @@ function HistorySummaryCard({
       <div className="grid gap-3 sm:grid-cols-2">
         {fields.map((field) => (
           <div key={`${title}-${field.label}`} className="space-y-1">
-            <p className="text-[12px] text-black/42">{field.label}</p>
+            <p className="text-[12px] text-muted-foreground/70">{field.label}</p>
             <p
               className={
                 field.multiline
-                  ? "text-sm leading-6 text-black/78"
-                  : "text-sm font-medium leading-5 text-black/78"
+                  ? "text-sm leading-6 text-foreground"
+                  : "text-sm font-medium leading-5 text-foreground"
               }
             >
               {field.value}
@@ -203,7 +203,7 @@ function HistorySummaryCard({
         ))}
       </div>
 
-      {note ? <p className="text-[12px] leading-5 text-black/50">{note}</p> : null}
+      {note ? <p className="text-[12px] leading-5 text-muted-foreground/70">{note}</p> : null}
     </div>
   );
 }
@@ -214,11 +214,11 @@ function RawArchivePayload({
   value: string;
 }>) {
   return (
-    <details className="rounded-[0.95rem] border border-black/7 bg-[rgba(249,250,252,0.72)] p-4">
-      <summary className="cursor-pointer list-none text-[12px] font-semibold uppercase tracking-[0.12em] text-black/40">
+    <details className="rounded-xl border border-border/60 bg-[rgba(249,250,252,0.72)] p-4">
+      <summary className="cursor-pointer list-none text-[12px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
         原始归档载荷
       </summary>
-      <pre className="mt-3 overflow-x-auto rounded-[0.85rem] border border-black/7 bg-white/80 p-3 text-xs leading-6 text-black/68">
+      <pre className="mt-3 overflow-x-auto rounded-md border border-border/60 bg-[var(--color-shell-surface-soft)] p-3 text-xs leading-6 text-foreground/70">
         {value}
       </pre>
     </details>

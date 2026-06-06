@@ -916,7 +916,7 @@ export function OutboundCallSettingsWorkbench({
         description="默认使用 CRM 登录账号作为 CTI 坐席号；这里只维护少数需要覆盖或禁用的账号。"
       >
         <div className="space-y-3">
-          <div className="grid gap-2 rounded-[0.95rem] border border-border bg-[var(--color-panel-soft)] px-3.5 py-3 text-[12px] leading-5 text-muted-foreground md:grid-cols-3">
+          <div className="grid gap-2 rounded-xl border border-border bg-[var(--color-panel-soft)] px-3.5 py-3 text-[12px] leading-5 text-muted-foreground md:grid-cols-3">
             <span>
               坐席规则：未单独保存时，系统用销售 CRM 登录账号作为坐席号。
             </span>
@@ -1391,7 +1391,7 @@ export function SettingsAuditWorkbench({
         description="配置保存会写入 OperationLog，敏感字段只保留脱敏指纹。"
       >
         {logs.length > 0 ? (
-          <div className="overflow-hidden rounded-[0.95rem] border border-border">
+          <div className="overflow-hidden rounded-xl border border-border">
             <table className="min-w-full divide-y divide-black/7 text-left text-[13px]">
               <thead className="bg-[var(--color-panel-soft)] text-[11px] uppercase tracking-[0.12em] text-muted-foreground/70">
                 <tr>

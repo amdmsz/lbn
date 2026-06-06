@@ -415,7 +415,7 @@ export function CustomerLiveRecordsSection({
                 },
               ];
               const editDetail = canManage ? (
-                <details className="rounded-[0.85rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2.5">
+                <details className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2.5">
                   <summary className="cursor-pointer list-none text-[12px] font-medium text-[var(--foreground)]">
                     更新该场记录
                   </summary>

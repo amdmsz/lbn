@@ -198,7 +198,7 @@ export default async function LeadImportDetailPage({
       />
 
       <div className="crm-page-meta">
-        <p className="text-sm text-black/55">
+        <p className="text-sm text-muted-foreground">
           创建于 {formatImportDateTime(batch.createdAt)}，完成于{" "}
           {batch.importedAt ? formatImportDateTime(batch.importedAt) : "尚未完成"}
         </p>
@@ -207,8 +207,8 @@ export default async function LeadImportDetailPage({
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {batch.reportMetrics.map((metric) => (
           <div key={metric.label} className="crm-section-card">
-            <p className="text-xs uppercase tracking-[0.18em] text-black/45">{metric.label}</p>
-            <p className="mt-3 text-4xl font-semibold text-black/85">{metric.value}</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">{metric.label}</p>
+            <p className="mt-3 text-4xl font-semibold text-foreground">{metric.value}</p>
           </div>
         ))}
       </section>
@@ -217,8 +217,8 @@ export default async function LeadImportDetailPage({
         <section className="crm-card p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold text-black/85">映射统计</h2>
-              <p className="mt-1 text-sm leading-6 text-black/58">
+              <h2 className="text-lg font-semibold text-foreground">映射统计</h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
                 方便复核这批续接客户的旧分类、标签和承接结果是否符合预期。
               </p>
             </div>
@@ -230,10 +230,10 @@ export default async function LeadImportDetailPage({
           <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {customerContinuationMetricCards.map((metric) => (
               <div key={metric.label} className="crm-section-card">
-                <p className="text-xs uppercase tracking-[0.18em] text-black/45">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">
                   {metric.label}
                 </p>
-                <p className="mt-3 text-3xl font-semibold text-black/85">{metric.value}</p>
+                <p className="mt-3 text-3xl font-semibold text-foreground">{metric.value}</p>
               </div>
             ))}
           </div>
@@ -251,7 +251,7 @@ export default async function LeadImportDetailPage({
           {headers.map((header) => (
             <span
               key={header}
-              className="rounded-full border border-black/8 bg-white/70 px-3 py-1 text-xs text-black/60"
+              className="rounded-full border border-border/60 bg-[var(--color-shell-surface-soft)] px-3 py-1 text-xs text-muted-foreground"
             >
               {header}
             </span>
@@ -262,8 +262,8 @@ export default async function LeadImportDetailPage({
       <section className="crm-card p-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-black/85">整批撤销导入</h2>
-            <p className="mt-1 text-sm leading-6 text-black/58">
+            <h2 className="text-lg font-semibold text-foreground">整批撤销导入</h2>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
               必须先做整批预检，只有整批所有有效行都可逆时才允许执行；不会做 partial rollback。
             </p>
           </div>
@@ -312,7 +312,7 @@ export default async function LeadImportDetailPage({
 
         <div className="mt-4 crm-subtle-panel">
           <p className="crm-detail-label">当前回滚策略</p>
-          <p className="mt-2 text-sm leading-7 text-black/68">
+          <p className="mt-2 text-sm leading-7 text-foreground/70">
             {batch.rollback.selectedModeDescription}
           </p>
         </div>
@@ -320,26 +320,26 @@ export default async function LeadImportDetailPage({
         {rollbackSummary ? (
           <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div className="crm-section-card">
-              <p className="text-xs uppercase tracking-[0.18em] text-black/45">有效行</p>
-              <p className="mt-3 text-3xl font-semibold text-black/85">
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">有效行</p>
+              <p className="mt-3 text-3xl font-semibold text-foreground">
                 {rollbackSummary.effectiveRows}
               </p>
             </div>
             <div className="crm-section-card">
-              <p className="text-xs uppercase tracking-[0.18em] text-black/45">可逆行</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">可逆行</p>
               <p className="mt-3 text-3xl font-semibold text-[var(--color-success)]">
                 {rollbackSummary.rollbackableRows}
               </p>
             </div>
             <div className="crm-section-card">
-              <p className="text-xs uppercase tracking-[0.18em] text-black/45">阻断行</p>
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">阻断行</p>
               <p className="mt-3 text-3xl font-semibold text-[var(--color-danger)]">
                 {rollbackSummary.blockedRows}
               </p>
             </div>
             <div className="crm-section-card">
-              <p className="text-xs uppercase tracking-[0.18em] text-black/45">删客 / Lead</p>
-              <p className="mt-3 text-3xl font-semibold text-black/85">
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">删客 / Lead</p>
+              <p className="mt-3 text-3xl font-semibold text-foreground">
                 {rollbackSummary.customerDeleteRows} /{" "}
                 {batch.rollback.selectedMode === "HARD_DELETE"
                   ? rollbackSummary.hardDeleteLeadRows
@@ -359,7 +359,7 @@ export default async function LeadImportDetailPage({
           <div className="mt-4 grid gap-4 xl:grid-cols-2">
             <div className="crm-subtle-panel">
               <p className="crm-detail-label">执行快照</p>
-              <div className="mt-3 space-y-2 text-sm text-black/62">
+              <div className="mt-3 space-y-2 text-sm text-muted-foreground">
                 <p>执行时间：{formatImportDateTime(batch.rollback.executed.executedAt)}</p>
                 <p>
                   执行人：{batch.rollback.executed.actor.name} (@
@@ -376,7 +376,7 @@ export default async function LeadImportDetailPage({
             </div>
             <div className="crm-subtle-panel">
               <p className="crm-detail-label">预检快照</p>
-              <div className="mt-3 space-y-2 text-sm text-black/62">
+              <div className="mt-3 space-y-2 text-sm text-muted-foreground">
                 <p>有效行：{rollbackSummary?.effectiveRows ?? 0}</p>
                 <p>可逆行：{rollbackSummary?.rollbackableRows ?? 0}</p>
                 <p>阻断行：{rollbackSummary?.blockedRows ?? 0}</p>
@@ -423,7 +423,7 @@ export default async function LeadImportDetailPage({
 
       <section className="crm-card p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-black/85">
+          <h2 className="text-lg font-semibold text-foreground">
             {mode === "customer_continuation" ? "续接结果分组" : "导入结果"}
           </h2>
           <StatusBadge
@@ -442,7 +442,7 @@ export default async function LeadImportDetailPage({
               {customerContinuationResultSummary ? (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   <div className="crm-section-card">
-                    <p className="text-xs uppercase tracking-[0.18em] text-black/45">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">
                       新建并匹配负责人
                     </p>
                     <p className="mt-3 text-3xl font-semibold text-[var(--color-success)]">
@@ -450,7 +450,7 @@ export default async function LeadImportDetailPage({
                     </p>
                   </div>
                   <div className="crm-section-card">
-                    <p className="text-xs uppercase tracking-[0.18em] text-black/45">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">
                       命中已有并补齐负责人
                     </p>
                     <p className="mt-3 text-3xl font-semibold text-[var(--color-info)]">
@@ -458,7 +458,7 @@ export default async function LeadImportDetailPage({
                     </p>
                   </div>
                   <div className="crm-section-card">
-                    <p className="text-xs uppercase tracking-[0.18em] text-black/45">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">
                       命中已有并保留原负责人
                     </p>
                     <p className="mt-3 text-3xl font-semibold text-[var(--color-info)]">
@@ -466,15 +466,15 @@ export default async function LeadImportDetailPage({
                     </p>
                   </div>
                   <div className="crm-section-card">
-                    <p className="text-xs uppercase tracking-[0.18em] text-black/45">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">
                       进入公海
                     </p>
-                    <p className="mt-3 text-3xl font-semibold text-black/85">
+                    <p className="mt-3 text-3xl font-semibold text-foreground">
                       {customerContinuationResultSummary.publicPoolCount}
                     </p>
                   </div>
                   <div className="crm-section-card">
-                    <p className="text-xs uppercase tracking-[0.18em] text-black/45">
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">
                       重复剔除
                     </p>
                     <p className="mt-3 text-3xl font-semibold text-[var(--color-warning)]">
@@ -482,7 +482,7 @@ export default async function LeadImportDetailPage({
                     </p>
                   </div>
                   <div className="crm-section-card">
-                    <p className="text-xs uppercase tracking-[0.18em] text-black/45">失败</p>
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">失败</p>
                     <p className="mt-3 text-3xl font-semibold text-[var(--color-danger)]">
                       {customerContinuationResultSummary.failedCount}
                     </p>
@@ -524,8 +524,8 @@ export default async function LeadImportDetailPage({
                   <div key={group.key} className="crm-subtle-panel">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <h3 className="text-base font-semibold text-black/84">{group.title}</h3>
-                        <p className="mt-1 text-sm leading-6 text-black/58">
+                        <h3 className="text-base font-semibold text-foreground">{group.title}</h3>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
                           {group.description}
                         </p>
                       </div>
@@ -585,11 +585,11 @@ export default async function LeadImportDetailPage({
                                 label={row.rollback.preview.stateLabel}
                                 variant={row.rollback.preview.stateVariant}
                               />
-                              <p className="text-xs leading-5 text-black/55">
+                              <p className="text-xs leading-5 text-muted-foreground">
                                 {row.rollback.preview.reason}
                               </p>
                               {rollbackAction ? (
-                                <p className="text-xs leading-5 text-black/45">
+                                <p className="text-xs leading-5 text-muted-foreground/70">
                                   {rollbackAction}
                                 </p>
                               ) : null}
@@ -605,7 +605,7 @@ export default async function LeadImportDetailPage({
                                 label={executionMeta.label}
                                 variant={executionMeta.variant}
                               />
-                              <p className="text-xs leading-5 text-black/55">
+                              <p className="text-xs leading-5 text-muted-foreground">
                                 {row.rollback.execution.note}
                               </p>
                             </div>
@@ -632,7 +632,7 @@ export default async function LeadImportDetailPage({
                             ) : (
                               <p>{customer.name}</p>
                             )}
-                            <p className="text-xs text-black/45">{customer.phone}</p>
+                            <p className="text-xs text-muted-foreground/70">{customer.phone}</p>
                             {customer.helper ? (
                               <p className="text-xs text-[var(--color-warning)]">
                                 {customer.helper}
@@ -685,7 +685,7 @@ export default async function LeadImportDetailPage({
                           )}
                         </td>
                         <td>{row.customerMerge ? (row.customerMerge.tagSynced ? "已同步" : "未同步") : "-"}</td>
-                        <td className="max-w-[18rem] whitespace-pre-wrap text-sm leading-6 text-black/60">
+                        <td className="max-w-[18rem] whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
                           {getLeadMappedRemark(row.mappedData)}
                         </td>
                         <td>{row.rollback.preview?.reason || row.errorReason || "-"}</td>
@@ -706,7 +706,7 @@ export default async function LeadImportDetailPage({
       <section className="grid gap-6 xl:grid-cols-2">
         <div className="crm-card p-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-black/85">失败行</h2>
+            <h2 className="text-lg font-semibold text-foreground">失败行</h2>
             <StatusBadge label={`${batch.failureRows.length} 行`} variant="danger" />
           </div>
           {batch.failureRows.length > 0 ? (
@@ -729,7 +729,7 @@ export default async function LeadImportDetailPage({
                       <td>{row.mappedName || "-"}</td>
                       <td>{row.phoneRaw || "-"}</td>
                       {mode === "lead" ? (
-                        <td className="max-w-[16rem] whitespace-pre-wrap text-sm leading-6 text-black/60">
+                        <td className="max-w-[16rem] whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
                           {getLeadMappedRemark(row.mappedData)}
                         </td>
                       ) : null}
@@ -757,7 +757,7 @@ export default async function LeadImportDetailPage({
 
         <div className="crm-card p-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-black/85">重复剔除</h2>
+            <h2 className="text-lg font-semibold text-foreground">重复剔除</h2>
             <StatusBadge label={`${batch.duplicateRows.length} 行`} variant="warning" />
           </div>
           {batch.duplicateRows.length > 0 ? (
@@ -787,21 +787,21 @@ export default async function LeadImportDetailPage({
                         />
                       ) : null}
                     </div>
-                    <p className="mt-3 text-sm font-medium text-black/80">
+                    <p className="mt-3 text-sm font-medium text-foreground">
                       第 {row.rowNumber} 行 / {row.mappedName || row.phoneRaw || "未识别"}
                     </p>
-                    <p className="mt-2 text-sm leading-7 text-black/60">
+                    <p className="mt-2 text-sm leading-7 text-muted-foreground">
                       {row.errorReason || "该行因手机号重复被直接剔除。"}
                     </p>
-                    <p className="mt-1 text-sm text-black/55">
+                    <p className="mt-1 text-sm text-muted-foreground">
                       手机号：{row.normalizedPhone || row.phoneRaw || "-"}
                     </p>
 
                     {duplicateCustomer ? (
-                      <div className="mt-3 rounded-[0.9rem] border border-black/8 bg-white/70 p-3">
+                      <div className="mt-3 rounded-md border border-border/60 bg-[var(--color-shell-surface-soft)] p-3">
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
-                            <p className="text-xs font-medium uppercase tracking-[0.08em] text-black/40">
+                            <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
                               命中客户
                             </p>
                             <Link
@@ -843,7 +843,7 @@ export default async function LeadImportDetailPage({
                             value={formatOptionalDateTime(duplicateCustomer.latestWechatAt)}
                           />
                         </div>
-                        <p className="mt-3 text-sm leading-7 text-black/60">
+                        <p className="mt-3 text-sm leading-7 text-muted-foreground">
                           {duplicateCustomer.replacementReason}
                         </p>
 
@@ -860,7 +860,7 @@ export default async function LeadImportDetailPage({
                         ) : null}
                       </div>
                     ) : row.dedupType === "EXISTING_CUSTOMER" ? (
-                      <p className="mt-3 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-white/70 px-3 py-2 text-sm leading-7 text-black/55">
+                      <p className="mt-3 rounded-md border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2 text-sm leading-7 text-muted-foreground">
                         历史导入行缺少重复客户快照；重新导入后可查看客户分类并执行主管判断。
                       </p>
                     ) : null}

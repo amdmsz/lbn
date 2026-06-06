@@ -416,7 +416,7 @@ export default async function ProductsPage({
       }
       toolbar={
         <div className="overflow-x-auto">
-          <div className="inline-flex min-w-max items-center gap-1 rounded-[0.9rem] border border-border/60 bg-card p-1 shadow-sm">
+          <div className="inline-flex min-w-max items-center gap-1 rounded-xl border border-border/60 bg-card p-1 shadow-sm">
             {viewTabLinks}
           </div>
         </div>

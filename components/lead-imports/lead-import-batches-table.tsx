@@ -130,8 +130,8 @@ export function LeadImportBatchesTable({
                 <tr key={item.id}>
                   <td>
                     <div className="space-y-0.5">
-                      <p className="font-medium text-black/80">{item.fileName}</p>
-                      <p className="text-xs text-black/50">
+                      <p className="font-medium text-foreground">{item.fileName}</p>
+                      <p className="text-xs text-muted-foreground/70">
                         {getLeadImportFileTypeLabel(item.fileType)}
                       </p>
                     </div>
@@ -148,7 +148,7 @@ export function LeadImportBatchesTable({
                           />
                         ) : null}
                       </div>
-                      <p className="text-xs text-black/50">
+                      <p className="text-xs text-muted-foreground/70">
                         {item.rollback
                           ? `执行于 ${formatImportDateTime(item.rollback.executedAt)} / ${item.rollback.actor.name}`
                           : item.progress.isTerminal
@@ -161,13 +161,13 @@ export function LeadImportBatchesTable({
                   <td>{getLeadImportSourceLabel(item.defaultLeadSource)}</td>
                   <td>
                     <div className="space-y-2">
-                      <div className="h-2 overflow-hidden rounded-full bg-black/6">
+                      <div className="h-2 overflow-hidden rounded-full bg-foreground/5">
                         <div
                           className="h-full rounded-full bg-[linear-gradient(90deg,#4d8fe6_0%,#7ab4ff_100%)]"
                           style={{ width: `${item.progress.progressPercent}%` }}
                         />
                       </div>
-                      <div className="space-y-0.5 text-sm text-black/65">
+                      <div className="space-y-0.5 text-sm text-muted-foreground">
                         <p>{item.progress.progressPercent}%</p>
                         <p>
                           {item.importKind === "CUSTOMER_CONTINUATION" ? "成功客户" : "成功线索"}：
@@ -181,7 +181,7 @@ export function LeadImportBatchesTable({
                   <td>
                     {item.importKind === "CUSTOMER_CONTINUATION" &&
                     item.customerContinuationResultSummary ? (
-                      <div className="space-y-0.5 text-sm text-black/65">
+                      <div className="space-y-0.5 text-sm text-muted-foreground">
                         <p className="text-[var(--color-success)]">
                           新建并匹配：{item.customerContinuationResultSummary.createdAssignedCount}
                         </p>
@@ -194,13 +194,13 @@ export function LeadImportBatchesTable({
                         </p>
                         <p>进入公海：{item.customerContinuationResultSummary.publicPoolCount}</p>
                         {item.rollback?.executionSummary ? (
-                          <p className="text-xs text-black/50">
+                          <p className="text-xs text-muted-foreground/70">
                             删客 {item.rollback.executionSummary.deletedCustomerRows} / Lead {rollbackLeadRows}
                           </p>
                         ) : null}
                       </div>
                     ) : (
-                      <div className="space-y-0.5 text-sm text-black/65">
+                      <div className="space-y-0.5 text-sm text-muted-foreground">
                         <p className="text-[var(--color-success)]">
                           新增客户：{item.createdCustomerRows}
                         </p>
@@ -208,7 +208,7 @@ export function LeadImportBatchesTable({
                           命中已有：{item.matchedCustomerRows}
                         </p>
                         {item.rollback?.executionSummary ? (
-                          <p className="text-xs text-black/50">
+                          <p className="text-xs text-muted-foreground/70">
                             删客 {item.rollback.executionSummary.deletedCustomerRows} / Lead {rollbackLeadRows}
                           </p>
                         ) : null}
@@ -217,10 +217,10 @@ export function LeadImportBatchesTable({
                   </td>
                   <td>
                     {item.createdBy.name}
-                    <p className="text-xs text-black/45">@{item.createdBy.username}</p>
+                    <p className="text-xs text-muted-foreground/70">@{item.createdBy.username}</p>
                   </td>
                   <td className="whitespace-nowrap">
-                    <div className="space-y-0.5 text-sm text-black/65">
+                    <div className="space-y-0.5 text-sm text-muted-foreground">
                       <p>创建：{formatImportDateTime(item.createdAt)}</p>
                       <p>
                         {item.progress.lastHeartbeatAt

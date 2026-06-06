@@ -103,14 +103,14 @@ export function FinanceExceptionsSection({
         title="异常分布"
         description={`${scopeLabel} · 按规则查看当前异常密度。`}
         density="compact"
-        className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+        className="rounded-xl shadow-[var(--color-shell-shadow-sm)]"
         contentClassName="p-3 md:p-4"
       >
         <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-5">
           {orderedExceptionKinds.map((kind) => (
             <div
               key={kind}
-              className="rounded-[0.98rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 shadow-[var(--color-shell-shadow-sm)]"
+              className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 shadow-[var(--color-shell-shadow-sm)]"
             >
               <p className="text-[11px] font-medium leading-5 text-[var(--color-sidebar-muted)]">
                 {getExceptionKindLabel(kind)}
@@ -127,7 +127,7 @@ export function FinanceExceptionsSection({
         title="异常列表"
         description="统一回流到订单或礼品链路处理。"
         density="compact"
-        className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+        className="rounded-xl shadow-[var(--color-shell-shadow-sm)]"
         contentClassName="p-3 md:p-4"
       >
         {items.length > 0 ? (

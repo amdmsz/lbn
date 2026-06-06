@@ -87,7 +87,7 @@ export function CustomerDossierSignalRail({
       {items.map((item) => (
         <div
           key={item.label}
-          className="rounded-[0.98rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3"
+          className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3"
         >
           <p className="crm-detail-label">{item.label}</p>
           <div className="mt-1.5 text-[13px] font-medium leading-5 text-[var(--foreground)]">
@@ -122,7 +122,7 @@ export function CustomerDossierStatusGrid({
         <div
           key={item.label}
           className={cn(
-            "min-w-0 rounded-[0.82rem] border px-3 py-2",
+            "min-w-0 rounded-xl border px-3 py-2",
             statusToneClassName[item.tone ?? "neutral"],
           )}
         >
@@ -162,7 +162,7 @@ export function CustomerDossierLedgerRow({
   return (
     <div
       className={cn(
-        "min-w-0 overflow-hidden rounded-[0.98rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3 shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow] duration-150 hover:border-[rgba(79,125,247,0.18)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-md)]",
+        "min-w-0 overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-3 shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow] duration-150 hover:border-[rgba(79,125,247,0.18)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-md)]",
         className,
       )}
     >
@@ -229,7 +229,7 @@ export function CustomerDossierPanel({
   return (
     <div
       className={cn(
-        "rounded-[0.98rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4 shadow-[0_8px_18px_rgba(124,101,70,0.03)]",
+        "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-4 shadow-[0_8px_18px_rgba(124,101,70,0.03)]",
         className,
       )}
     >
@@ -248,7 +248,7 @@ export function CustomerDossierNotice({
   return (
     <div
       className={cn(
-        "rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-2.5 text-[11px] leading-5 text-[var(--color-sidebar-muted)]",
+        "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3.5 py-2.5 text-[11px] leading-5 text-[var(--color-sidebar-muted)]",
         className,
       )}
     >
@@ -383,7 +383,7 @@ export function CompactArchiveCard({
   hrefLabel?: string;
 }>) {
   return (
-    <div className="rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow] hover:border-[rgba(122,154,255,0.18)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-md)]">
+    <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow] hover:border-[rgba(122,154,255,0.18)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-md)]">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1 space-y-2">
           <p className="text-sm font-semibold text-[var(--foreground)]">{title}</p>
@@ -478,7 +478,7 @@ export function CustomerDossierRecordCard({
   return (
     <div
       className={cn(
-        "rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow] duration-150 hover:border-[rgba(122,154,255,0.18)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-md)]",
+        "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow] duration-150 hover:border-[rgba(122,154,255,0.18)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-md)]",
         className,
       )}
     >

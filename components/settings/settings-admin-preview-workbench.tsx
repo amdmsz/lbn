@@ -27,7 +27,7 @@ function PreviewGrid({ items }: Readonly<{ items: PreviewItem[] }>) {
       {items.map((item) => (
         <div
           key={item.label}
-          className="rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-3.5 py-3"
+          className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-3.5 py-3"
         >
           <div className="flex items-start justify-between gap-2">
             <p className="crm-detail-label">{item.label}</p>

@@ -32,7 +32,7 @@ export function PageHeader({
     <header
       className={cn(
         isCompact
-          ? "relative overflow-hidden rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-2.5 shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow] md:px-5 md:py-3"
+          ? "relative overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-4 py-2.5 shadow-[var(--color-shell-shadow-sm)] transition-[border-color,background-color,box-shadow] md:px-5 md:py-3"
           : "crm-card relative overflow-hidden border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4.5 shadow-[var(--color-shell-shadow-md)] md:p-5",
         className,
       )}

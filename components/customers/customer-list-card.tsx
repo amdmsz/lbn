@@ -144,7 +144,7 @@ function CustomerModal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="flex max-h-[calc(100vh-4rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[1.3rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-lg)]"
+        className="flex max-h-[calc(100vh-4rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-lg)]"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="border-b border-[var(--color-border-soft)] px-5 py-4">
@@ -178,7 +178,7 @@ function CustomerIdentity({
   phone: string;
 }>) {
   return (
-    <div className="mb-4 rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-sm leading-6 text-[var(--color-sidebar-muted)]">
+    <div className="mb-4 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-sm leading-6 text-[var(--color-sidebar-muted)]">
       <p className="font-medium text-[var(--foreground)]">{name}</p>
       <p>{phone}</p>
     </div>

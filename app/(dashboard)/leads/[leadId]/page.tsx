@@ -93,7 +93,7 @@ export default async function LeadDetailPage({
             </Link>
           ) : null}
         </div>
-        <p className="text-sm text-black/55">
+        <p className="text-sm text-muted-foreground">
           创建于 {formatDateTime(lead.createdAt)}，最近更新于 {formatDateTime(lead.updatedAt)}
         </p>
       </div>
@@ -136,7 +136,7 @@ export default async function LeadDetailPage({
 
         <div className="crm-subtle-panel mt-4">
           <p className="crm-detail-label">备注</p>
-          <p className="mt-2 text-sm leading-7 text-black/70">
+          <p className="mt-2 text-sm leading-7 text-foreground/80">
             {lead.remark?.trim() || "暂无备注"}
           </p>
         </div>
@@ -144,7 +144,7 @@ export default async function LeadDetailPage({
 
       <section className="crm-card p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-black/85">归并结果</h2>
+          <h2 className="text-lg font-semibold text-foreground">归并结果</h2>
           <StatusBadge label={`${lead.mergeLogs.length} 条`} variant="info" />
         </div>
 
@@ -180,16 +180,16 @@ export default async function LeadDetailPage({
                     <StatusBadge label="客户已删除" variant="warning" />
                   ) : null}
                 </div>
-                <p className="mt-3 text-sm font-medium text-black/80">
+                <p className="mt-3 text-sm font-medium text-foreground">
                   客户：{record.customer.name} ({record.customer.phone})
                 </p>
-                <p className="mt-1 text-sm text-black/60">
+                <p className="mt-1 text-sm text-muted-foreground">
                   导入批次：{record.batch.fileName}
                 </p>
-                <p className="mt-1 text-sm text-black/60">
+                <p className="mt-1 text-sm text-muted-foreground">
                   来源标签同步：{record.tagSynced ? "已同步" : "未同步"}
                 </p>
-                <p className="mt-1 text-sm text-black/60">
+                <p className="mt-1 text-sm text-muted-foreground">
                   时间：{formatDateTime(record.createdAt)}
                 </p>
               </div>
@@ -217,7 +217,7 @@ export default async function LeadDetailPage({
       <section className="grid gap-6 xl:grid-cols-2">
         <div className="crm-card p-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-black/85">最近分配记录</h2>
+            <h2 className="text-lg font-semibold text-foreground">最近分配记录</h2>
             <StatusBadge label={`${lead.assignments.length} 条`} variant="neutral" />
           </div>
 
@@ -225,21 +225,21 @@ export default async function LeadDetailPage({
             <div className="mt-4 space-y-3">
               {lead.assignments.map((assignment) => (
                 <div key={assignment.id} className="crm-subtle-panel">
-                  <p className="text-sm font-medium text-black/80">
+                  <p className="text-sm font-medium text-foreground">
                     {assignment.fromUser
                       ? `${assignment.fromUser.name} -> ${assignment.toUser.name}`
                       : `首次分配 -> ${assignment.toUser.name}`}
                   </p>
-                  <p className="mt-2 text-sm text-black/60">
+                  <p className="mt-2 text-sm text-muted-foreground">
                     执行人：{assignment.assignedBy.name} (@{assignment.assignedBy.username})
                   </p>
-                  <p className="mt-1 text-sm text-black/60">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     时间：{formatDateTime(assignment.createdAt)}
                   </p>
-                  <p className="mt-1 text-sm text-black/60">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     类型：{assignment.assignmentType}
                   </p>
-                  <p className="mt-1 text-sm text-black/60">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     备注：{assignment.note?.trim() || "无"}
                   </p>
                 </div>
@@ -254,7 +254,7 @@ export default async function LeadDetailPage({
 
         <div className="crm-card p-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-black/85">最近操作日志</h2>
+            <h2 className="text-lg font-semibold text-foreground">最近操作日志</h2>
             <StatusBadge label={`${lead.operationLogs.length} 条`} variant="neutral" />
           </div>
 
@@ -262,15 +262,15 @@ export default async function LeadDetailPage({
             <div className="mt-4 space-y-3">
               {lead.operationLogs.map((log) => (
                 <div key={log.id} className="crm-subtle-panel">
-                  <p className="text-sm font-medium text-black/80">{log.action}</p>
-                  <p className="mt-2 text-sm text-black/60">
+                  <p className="text-sm font-medium text-foreground">{log.action}</p>
+                  <p className="mt-2 text-sm text-muted-foreground">
                     操作人：{log.actor?.name ?? "系统"}
                     {log.actor ? ` (@${log.actor.username})` : ""}
                   </p>
-                  <p className="mt-1 text-sm text-black/60">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     时间：{formatDateTime(log.createdAt)}
                   </p>
-                  <p className="mt-1 text-sm leading-7 text-black/60">
+                  <p className="mt-1 text-sm leading-7 text-muted-foreground">
                     {log.description?.trim() || "无描述"}
                   </p>
                 </div>

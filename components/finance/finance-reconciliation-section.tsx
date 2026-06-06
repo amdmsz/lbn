@@ -151,7 +151,7 @@ export function FinanceReconciliationSection({
         title="客户对账导出"
         description="按销售员和客户分配日期导出客户、沟通、商品、订单、付款与物流摘要。"
         density="compact"
-        className="rounded-[0.95rem] border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]"
+        className="rounded-xl border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] shadow-[var(--color-shell-shadow-sm)]"
       >
         <form
           method="get"
@@ -211,14 +211,14 @@ export function FinanceReconciliationSection({
         title="指标口径"
         description={`${scopeLabel} · 只读聚合 payment 与 collection。`}
         density="compact"
-        className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+        className="rounded-xl shadow-[var(--color-shell-shadow-sm)]"
         contentClassName="p-3 md:p-4"
       >
         <div className="grid gap-2.5 md:grid-cols-2">
           {metricDefinitions.map((item) => (
             <div
               key={item.label}
-              className="rounded-[0.98rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 shadow-[var(--color-shell-shadow-sm)]"
+              className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 shadow-[var(--color-shell-shadow-sm)]"
             >
               <p className="text-sm font-medium text-[var(--foreground)]">
                 {item.label}
@@ -235,7 +235,7 @@ export function FinanceReconciliationSection({
         title="PaymentPlan 聚合"
         description="按来源、标的与渠道查看应收、已确认与待收。"
         density="compact"
-        className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+        className="rounded-xl shadow-[var(--color-shell-shadow-sm)]"
         contentClassName="p-3 md:p-4"
       >
         {sourceBreakdown.length > 0 ? (
@@ -293,7 +293,7 @@ export function FinanceReconciliationSection({
         title="CollectionTask 聚合"
         description="只看 finance 视角下的催收任务分布。"
         density="compact"
-        className="rounded-[1.05rem] shadow-[var(--color-shell-shadow-sm)]"
+        className="rounded-xl shadow-[var(--color-shell-shadow-sm)]"
         contentClassName="p-3 md:p-4"
       >
         {collectionTaskBreakdown.length > 0 ? (

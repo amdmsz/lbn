@@ -151,8 +151,8 @@ export function ProductSkuSearchField({
         <span className="crm-label">{label}</span>
         <div
           className={cn(
-            "group flex min-h-10 items-center gap-2 rounded-[0.92rem] border border-[var(--color-border-soft)] bg-[var(--crm-subtle-bg)] px-3 transition-[border-color,background-color,box-shadow]",
-            "focus-within:border-primary/30 focus-within:bg-white/90 focus-within:shadow-[0_0_0_3px_rgba(37,99,235,0.08)]",
+            "group flex min-h-10 items-center gap-2 rounded-xl border border-[var(--color-border-soft)] bg-[var(--crm-subtle-bg)] px-3 transition-[border-color,background-color,box-shadow]",
+            "focus-within:border-primary/30 focus-within:bg-card focus-within:shadow-[0_0_0_3px_rgba(37,99,235,0.08)]",
             disabled && "cursor-not-allowed opacity-65",
           )}
         >
@@ -174,7 +174,7 @@ export function ProductSkuSearchField({
       </label>
 
       {selectedOption ? (
-        <div className="rounded-2xl border border-primary/15 bg-primary/5 px-3 py-2.5 text-sm text-foreground">
+        <div className="rounded-xl border border-primary/15 bg-primary/5 px-3 py-2.5 text-sm text-foreground">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -212,19 +212,19 @@ export function ProductSkuSearchField({
       ) : null}
 
       {error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-700">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-700">
           {error}
         </div>
       ) : null}
 
       {!loading && !error && deferredQuery && groupedResults.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border/70 bg-muted/20 px-3 py-3 text-sm text-muted-foreground">
+        <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 px-3 py-3 text-sm text-muted-foreground">
           {emptyMessage}
         </div>
       ) : null}
 
       {!error && deferredQuery && groupedResults.length > 0 ? (
-        <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+        <div className="overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
           {groupedResults.map((group) => (
             <div key={group.key} className="border-b border-border/45 last:border-b-0">
               <div className="flex items-center justify-between gap-3 bg-muted/20 px-3 py-2">

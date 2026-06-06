@@ -39,7 +39,7 @@ const quickClassActions = [
 ];
 
 const dialogSurfaceClassName =
-  "rounded-[1.18rem] border border-border bg-card shadow-sm";
+  "rounded-xl border border-border bg-card shadow-sm";
 
 const quietActionLinkClassName =
   "inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-[12px] font-medium text-muted-foreground transition-[border-color,background-color,color,transform,box-shadow] duration-150 motion-safe:hover:-translate-y-[1px] hover:border-primary/20 hover:bg-muted hover:text-foreground hover:shadow-sm";
@@ -190,7 +190,7 @@ function CustomerFollowUpDialogBody({
         role="dialog"
         aria-modal="true"
         aria-label={`跟进 ${item.name}`}
-        className="fixed left-[50%] top-[50%] z-50 flex h-[85vh] max-h-[85vh] w-full max-w-[1000px] translate-x-[-50%] translate-y-[-50%] flex-col overflow-hidden rounded-[1.35rem] border border-border bg-background text-foreground shadow-2xl"
+        className="fixed left-[50%] top-[50%] z-50 flex h-[85vh] max-h-[85vh] w-full max-w-[1000px] translate-x-[-50%] translate-y-[-50%] flex-col overflow-hidden rounded-xl border border-border bg-background text-foreground shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="relative shrink-0 border-b border-border bg-card px-4 py-3 md:px-5">

@@ -52,7 +52,7 @@ export function NavigationDomainOverview({
                   <div
                     key={`${group.key}-${section.title ?? index}`}
                     className={cn(
-                      "rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3",
+                      "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3",
                       section.title ? "space-y-3" : "space-y-2",
                     )}
                   >
@@ -74,7 +74,7 @@ export function NavigationDomainOverview({
                         <Link
                           key={item.href}
                           href={item.href}
-                          className="rounded-2xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3.5 py-3 transition-colors hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)]"
+                          className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3.5 py-3 transition-colors hover:border-[var(--color-accent-soft)] hover:bg-[var(--color-shell-hover)]"
                         >
                           <div className="flex items-center justify-between gap-3">
                             <p className="text-sm font-medium text-[var(--foreground)]">{item.title}</p>

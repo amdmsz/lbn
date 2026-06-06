@@ -35,7 +35,7 @@ export function ChangePasswordForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <label className="block space-y-2">
-        <span className="text-sm font-medium text-black/80">当前密码</span>
+        <span className="text-sm font-medium text-foreground">当前密码</span>
         <input
           type="password"
           name="currentPassword"
@@ -48,7 +48,7 @@ export function ChangePasswordForm() {
       </label>
 
       <label className="block space-y-2">
-        <span className="text-sm font-medium text-black/80">新密码</span>
+        <span className="text-sm font-medium text-foreground">新密码</span>
         <input
           type="password"
           name="nextPassword"
@@ -61,7 +61,7 @@ export function ChangePasswordForm() {
       </label>
 
       <label className="block space-y-2">
-        <span className="text-sm font-medium text-black/80">确认新密码</span>
+        <span className="text-sm font-medium text-foreground">确认新密码</span>
         <input
           type="password"
           name="confirmPassword"
@@ -82,7 +82,7 @@ export function ChangePasswordForm() {
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-2xl bg-[var(--color-accent)] px-4 py-3 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
+        className="w-full rounded-xl bg-[var(--color-accent)] px-4 py-3 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
       >
         {pending ? "保存中..." : "更新密码并重新登录"}
       </button>

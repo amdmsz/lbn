@@ -145,7 +145,7 @@ export function BatchTagDialog({
             </select>
           </label>
 
-          <div className="rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-[13px] leading-6 text-[var(--color-sidebar-muted)]">
+          <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-[13px] leading-6 text-[var(--color-sidebar-muted)]">
             {selectionMode === "filtered"
               ? `这次会按当前筛选结果批量处理 ${selectedCount} 位客户，不做标签移除，也不会覆盖已有标签。`
               : "这次会按当前页手选客户批量添加标签，不做标签移除，也不会覆盖已有标签。"}
@@ -273,7 +273,7 @@ export function BatchOwnerTransferDialog({
             />
           </label>
 
-          <div className="rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-[13px] leading-6 text-[var(--color-sidebar-muted)]">
+          <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-[13px] leading-6 text-[var(--color-sidebar-muted)]">
             {selectionMode === "filtered"
               ? `这次会按当前筛选结果批量处理 ${selectedCount} 位客户，服务端仍会校验当前账号可见范围、团队范围和目标销售状态。`
               : "这次会按当前页手选客户批量移交，服务端仍会校验当前账号可见范围、团队范围和目标销售状态。"}
@@ -381,7 +381,7 @@ export function BatchRecycleDialog({
           )}
           <input type="hidden" name="reasonCode" value="mistaken_creation" />
 
-          <div className="rounded-[0.9rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-[13px] leading-6 text-[var(--color-sidebar-muted)]">
+          <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-[13px] leading-6 text-[var(--color-sidebar-muted)]">
             {scopeNotice}
           </div>
 
@@ -488,7 +488,7 @@ export function BatchForceDeleteDialog({
             ))
           )}
 
-          <div className="rounded-[0.9rem] border border-[var(--tone-danger-soft-border)] bg-[var(--tone-danger-soft-bg)] px-4 py-3 text-[13px] leading-6 text-[rgba(84,49,45,0.78)]">
+          <div className="rounded-xl border border-[var(--tone-danger-soft-border)] bg-[var(--tone-danger-soft-bg)] px-4 py-3 text-[13px] leading-6 text-[rgba(84,49,45,0.78)]">
             {selectionMode === "filtered"
               ? "这次会按当前筛选结果逐条硬删除，服务端仍会校验当前账号可见范围和主管团队范围。"
               : "这次会按当前页手选客户逐条硬删除，服务端仍会校验当前账号可见范围和主管团队范围。"}

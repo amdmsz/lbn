@@ -354,7 +354,7 @@ function ThemedDatePicker({
       </button>
 
       {open ? (
-        <div className="crm-animate-pop absolute left-0 top-full z-50 mt-2 w-72 rounded-2xl border border-border bg-card p-3 text-foreground shadow-[0_18px_46px_rgba(15,23,42,0.16)]">
+        <div className="crm-animate-pop absolute left-0 top-full z-50 mt-2 w-72 rounded-xl border border-border bg-card p-3 text-foreground shadow-[0_18px_46px_rgba(15,23,42,0.16)]">
           <div className="flex items-center justify-between">
             <button
               type="button"
@@ -680,7 +680,7 @@ export function CustomerFilterToolbar({
 
   return (
     <div ref={rootRef} aria-busy={pending} className="relative">
-      <div className="rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
+      <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             {activeChips.length > 0 ? (
@@ -735,7 +735,7 @@ export function CustomerFilterToolbar({
       </div>
 
       {open ? (
-        <div className="crm-animate-pop absolute right-0 top-full z-40 mt-2 w-[min(54rem,calc(100vw-2rem))] rounded-2xl border border-border bg-card p-4 text-foreground shadow-[0_24px_60px_rgba(15,23,42,0.14)]">
+        <div className="crm-animate-pop absolute right-0 top-full z-40 mt-2 w-[min(54rem,calc(100vw-2rem))] rounded-xl border border-border bg-card p-4 text-foreground shadow-[0_24px_60px_rgba(15,23,42,0.14)]">
           <div className="grid gap-5 lg:grid-cols-2">
             <FilterSection title="分配时间">
               <div className="flex flex-wrap gap-2">

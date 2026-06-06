@@ -1026,7 +1026,7 @@ export function WebRtcSoftphone({
       ) : (
         <div
           className={cn(
-            "rounded-2xl border border-border/50 bg-background/85 p-4 text-foreground shadow-2xl backdrop-blur-xl transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]",
+            "rounded-xl border border-border/50 bg-background/85 p-4 text-foreground shadow-2xl backdrop-blur-xl transition-all duration-300 ease-[cubic-bezier(0.23,1,0.32,1)]",
             mobileVariant ? "w-72 max-w-[calc(100vw-1.5rem)]" : "w-72",
           )}
         >
@@ -1058,7 +1058,7 @@ export function WebRtcSoftphone({
             </button>
           </div>
 
-          <div className="mt-4 rounded-2xl border border-border/60 bg-muted/35 px-3 py-3">
+          <div className="mt-4 rounded-xl border border-border/60 bg-muted/35 px-3 py-3">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">

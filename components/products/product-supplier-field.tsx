@@ -33,13 +33,13 @@ type InlineSupplierResult =
     };
 
 const fieldSectionClassName =
-  "rounded-[0.95rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3.5";
+  "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3.5";
 
 const dialogPanelClassName =
-  "flex max-h-[calc(100vh-4rem)] w-full max-w-[40rem] flex-col overflow-hidden rounded-[1.1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[0_24px_70px_rgba(15,23,42,0.18)]";
+  "flex max-h-[calc(100vh-4rem)] w-full max-w-[40rem] flex-col overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[0_24px_70px_rgba(15,23,42,0.18)]";
 
 const dialogSectionClassName =
-  "rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-4 shadow-[var(--color-shell-shadow-sm)]";
+  "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-4 shadow-[var(--color-shell-shadow-sm)]";
 
 function matchesSupplier(option: SupplierOption, keyword: string) {
   const normalizedKeyword = keyword.trim().toLowerCase();
@@ -244,7 +244,7 @@ export function ProductSupplierField({
           {visibleSuppliers.length === 0 ? (
             <div
               className={cn(
-                "mt-3 rounded-[0.9rem] border border-dashed border-[var(--color-border-soft)] px-3.5 py-3 text-[13px] leading-5 text-[var(--color-sidebar-muted)]",
+                "mt-3 rounded-xl border border-dashed border-[var(--color-border-soft)] px-3.5 py-3 text-[13px] leading-5 text-[var(--color-sidebar-muted)]",
                 embedded
                   ? "bg-[var(--color-shell-surface-soft)]"
                   : "bg-[var(--color-shell-surface)]",

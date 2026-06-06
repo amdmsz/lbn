@@ -25,7 +25,7 @@ const drawerPanelClassName =
   "absolute inset-y-0 right-0 flex w-full max-w-[42rem] flex-col border-l border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[-18px_0_48px_rgba(15,23,42,0.12)]";
 
 const drawerSectionClassName =
-  "rounded-[1rem] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-4 shadow-[var(--color-shell-shadow-sm)]";
+  "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] p-4 shadow-[var(--color-shell-shadow-sm)]";
 
 export function SupplierFormDrawer({
   open,

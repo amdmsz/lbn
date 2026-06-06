@@ -73,7 +73,7 @@ function ResultEditor({
   item: CallResultSettingsPageData["items"][number];
 }>) {
   return (
-    <div className="rounded-[1rem] border border-border bg-white/78 p-4">
+    <div className="rounded-xl border border-border bg-[var(--color-shell-surface-soft)] p-4">
       <form action={saveCallResultSettingAction} className="space-y-4">
         <input type="hidden" name="id" value={item.id ?? ""} />
         <input type="hidden" name="code" value={item.code} />

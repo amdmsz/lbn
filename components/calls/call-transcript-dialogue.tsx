@@ -47,7 +47,7 @@ export function CallTranscriptDialogue({
           return (
             <div
               key={segment.id}
-              className="grid gap-2 rounded-[0.8rem] border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2.5 py-2 md:grid-cols-[4.5rem_minmax(0,1fr)]"
+              className="grid gap-2 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2.5 py-2 md:grid-cols-[4.5rem_minmax(0,1fr)]"
             >
               <div className="flex items-center gap-1.5 md:block">
                 <span
