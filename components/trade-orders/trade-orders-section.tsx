@@ -505,44 +505,25 @@ function TradeOrderExecutionStrip({
       </div>
 
       <div className="bg-transparent px-4 py-3.5">
-        <div className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            <StatusBadge
-              label={getSalesOrderPaymentSchemeLabel(item.paymentScheme)}
-              variant={getSalesOrderPaymentSchemeVariant(item.paymentScheme)}
-            />
-            <span className="rounded-full border border-border/50 bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-              已收 {formatCurrency(item.collectedAmount)}
-            </span>
-            <span className="rounded-full border border-border/50 bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
-              待收 {formatCurrency(item.remainingAmount)}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-            <div className="rounded-xl border border-border/50 bg-background px-3 py-2">
-              <div className="uppercase tracking-widest">子单</div>
-              <div className="mt-1 text-base font-semibold text-foreground">{item.executionSummary?.totalSubOrderCount ?? item.salesOrders.length}</div>
-            </div>
-            <div className="rounded-xl border border-border/50 bg-background px-3 py-2">
-              <div className="uppercase tracking-widest">物流任务</div>
-              <div className="mt-1 text-base font-semibold text-foreground">{shippingTaskCount}</div>
-            </div>
-            <div className="rounded-xl border border-border/50 bg-background px-3 py-2">
-              <div className="uppercase tracking-widest">包裹</div>
-              <div className="mt-1 text-base font-semibold text-foreground">{shippingPackageCount}</div>
-            </div>
-            <div className="rounded-xl border border-border/50 bg-background px-3 py-2">
-              <div className="uppercase tracking-widest">异常</div>
-              <div className="mt-1 text-base font-semibold text-foreground">
-                {item.executionSummary?.exceptionSubOrderCount ?? 0}
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
+        <div className="space-y-2.5">
+          <StatusBadge
+            label={getSalesOrderPaymentSchemeLabel(item.paymentScheme)}
+            variant={getSalesOrderPaymentSchemeVariant(item.paymentScheme)}
+          />
+          <div className="flex flex-wrap gap-1.5">
             {fulfillmentSummary.map((entry) => (
-              <StatusBadge key={entry.label} label={`${entry.label} ${entry.count}`} variant={entry.variant} />
+              <StatusBadge
+                key={entry.label}
+                label={`${entry.label} ${entry.count}`}
+                variant={entry.variant}
+              />
             ))}
           </div>
+          {shippingTaskCount > 0 || shippingPackageCount > 0 ? (
+            <p className="text-[11px] text-muted-foreground tabular-nums">
+              物流任务 {shippingTaskCount} · 包裹 {shippingPackageCount}
+            </p>
+          ) : null}
         </div>
       </div>
 
