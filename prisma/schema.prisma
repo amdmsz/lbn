@@ -1028,9 +1028,10 @@ model Customer {
   @@index([claimLockedUntil])
   @@index([lastEffectiveFollowUpAt])
   @@index([createdAt])
-  // F08 (audit) 加: 客户中心按 owner / team 分页用 cursor (updatedAt,id) 必走索引
+  // F08 (audit) 加: 客户中心按 owner 分页用 cursor (updatedAt,id) 必走索引.
+  // 团队视角的客户访问通过 owner → owner.team 间接关联, Customer 表自身无
+  // teamId, 所以这里只能从 ownerId 侧建复合索引.
   @@index([ownerId, updatedAt, id], map: "cust_owner_updated_id_idx")
-  @@index([teamId, updatedAt, id], map: "cust_team_updated_id_idx")
   @@map("customer")
 }
 
