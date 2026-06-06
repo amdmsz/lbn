@@ -1028,6 +1028,9 @@ model Customer {
   @@index([claimLockedUntil])
   @@index([lastEffectiveFollowUpAt])
   @@index([createdAt])
+  // F08 (audit) 加: 客户中心按 owner / team 分页用 cursor (updatedAt,id) 必走索引
+  @@index([ownerId, updatedAt, id], map: "cust_owner_updated_id_idx")
+  @@index([teamId, updatedAt, id], map: "cust_team_updated_id_idx")
   @@map("customer")
 }
 
