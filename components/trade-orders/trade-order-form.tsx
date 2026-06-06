@@ -1,20 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import {
-  FileText,
-  PackageCheck,
-  Plus,
-  UserRound,
-  type LucideIcon,
-} from "lucide-react";
+import { FileText, PackageCheck, Plus, UserRound } from "lucide-react";
 import TradeOrderCartLine from "@/components/trade-orders/trade-order-cart-line";
 import TradeOrderCustomerHeader from "@/components/trade-orders/trade-order-customer-header";
 import TradeOrderGiftsPopover from "@/components/trade-orders/trade-order-gifts-popover";
 import TradeOrderPaymentChipRow from "@/components/trade-orders/trade-order-payment-chip-row";
 import TradeOrderReceiverPanel from "@/components/trade-orders/trade-order-receiver-panel";
 import TradeOrderSummarySidebar from "@/components/trade-orders/trade-order-summary-sidebar";
-import { cn } from "@/lib/utils";
 import {
   buildTradeOrderDraftComputation,
   isTradeOrderDraftReadyForSubmit,
@@ -193,54 +186,6 @@ function getTranslatedIssueMessage(
     default:
       return issue.message;
   }
-}
-
-function FormSection({
-  icon: Icon,
-  eyebrow,
-  title,
-  description,
-  actions,
-  children,
-  className,
-}: Readonly<{
-  icon: LucideIcon;
-  eyebrow?: string;
-  title: string;
-  description?: string;
-  actions?: React.ReactNode;
-  children: React.ReactNode;
-  className?: string;
-}>) {
-  return (
-    <section
-      className={cn(
-        "overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm",
-        className,
-      )}
-    >
-      <div className="flex flex-col gap-2 border-b border-border/50 bg-card px-4 py-2.5 md:flex-row md:items-center md:justify-between">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <div className="min-w-0">
-            {eyebrow ? (
-              <p className="crm-eyebrow">{eyebrow}</p>
-            ) : null}
-            <h2 className="text-[0.95rem] font-semibold leading-5 text-foreground">
-              {title}
-            </h2>
-            {description ? (
-              <p className="mt-0.5 text-[12px] leading-5 text-muted-foreground">
-                {description}
-              </p>
-            ) : null}
-          </div>
-        </div>
-        {actions ? <div className="crm-toolbar-cluster md:justify-end">{actions}</div> : null}
-      </div>
-      <div className="p-3.5 md:p-4">{children}</div>
-    </section>
-  );
 }
 
 export function TradeOrderForm({
@@ -470,46 +415,27 @@ export function TradeOrderForm({
       ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="min-w-0 space-y-4">
-          <FormSection icon={UserRound} title="客户与支付策略">
-            <TradeOrderPaymentChipRow
-              schemes={paymentSchemeOptions}
-              paymentScheme={paymentScheme}
-              onPaymentSchemeChange={setPaymentScheme}
-              depositAmount={effectiveDepositAmount}
-              onDepositAmountChange={setDepositAmount}
-            />
-          </FormSection>
-
-          <TradeOrderReceiverPanel
-            customer={customer}
-            receiverName={receiverName}
-            receiverPhone={receiverPhone}
-            receiverAddress={receiverAddress}
-            onReceiverNameChange={setReceiverName}
-            onReceiverPhoneChange={setReceiverPhone}
-            onReceiverAddressChange={setReceiverAddress}
-            insuranceRequired={insuranceRequired}
-            insuranceAmount={insuranceAmount}
-            onInsuranceRequiredChange={handleInsuranceToggle}
-            onInsuranceAmountChange={setInsuranceAmount}
-          />
-
-          <FormSection
-            icon={PackageCheck}
-            title="商品行"
-            actions={
+        <div className="min-w-0 space-y-5">
+          {/* STEP 1 商品行 */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 text-[15px] font-semibold leading-6 text-foreground">
+                <PackageCheck className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                商品行
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+                  {lines.length}
+                </span>
+              </h2>
               <button
                 type="button"
-                className="crm-button crm-button-secondary h-9 w-9 justify-center p-0"
                 onClick={addLine}
-                aria-label="新增商品行"
+                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 text-[12px] font-medium text-muted-foreground transition hover:border-primary/30 hover:text-primary"
               >
-                <Plus className="h-4 w-4" aria-hidden="true" />
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                添加商品
               </button>
-            }
-          >
-            <div className="space-y-3">
+            </div>
+            <div className="space-y-2.5">
               {lines.map((line, index) => (
                 <TradeOrderCartLine
                   key={line.lineId}
@@ -531,14 +457,45 @@ export function TradeOrderForm({
               <button
                 type="button"
                 onClick={addLine}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-primary/25 bg-primary/5 text-sm font-semibold text-primary transition hover:border-primary/35 hover:bg-primary/8"
+                className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-primary/25 bg-primary/5 text-[12.5px] font-semibold text-primary transition hover:border-primary/40 hover:bg-primary/8"
               >
-                <Plus className="h-4 w-4" aria-hidden="true" />
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                 继续加商品
               </button>
             </div>
-          </FormSection>
+          </section>
 
+          {/* STEP 2 收件 */}
+          <TradeOrderReceiverPanel
+            customer={customer}
+            receiverName={receiverName}
+            receiverPhone={receiverPhone}
+            receiverAddress={receiverAddress}
+            onReceiverNameChange={setReceiverName}
+            onReceiverPhoneChange={setReceiverPhone}
+            onReceiverAddressChange={setReceiverAddress}
+            insuranceRequired={insuranceRequired}
+            insuranceAmount={insuranceAmount}
+            onInsuranceRequiredChange={handleInsuranceToggle}
+            onInsuranceAmountChange={setInsuranceAmount}
+          />
+
+          {/* STEP 3 支付方式 — chip 流, 无外层卡 */}
+          <section className="space-y-2.5">
+            <h2 className="flex items-center gap-2 text-[15px] font-semibold leading-6 text-foreground">
+              <UserRound className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              支付方式
+            </h2>
+            <TradeOrderPaymentChipRow
+              schemes={paymentSchemeOptions}
+              paymentScheme={paymentScheme}
+              onPaymentSchemeChange={setPaymentScheme}
+              depositAmount={effectiveDepositAmount}
+              onDepositAmountChange={setDepositAmount}
+            />
+          </section>
+
+          {/* 折叠区: 赠品 + 备注 */}
           <TradeOrderGiftsPopover
             giftLines={giftLines}
             skuOptions={availableSkuOptions}
@@ -550,16 +507,29 @@ export function TradeOrderForm({
             onUpsertOption={upsertSkuOption}
           />
 
-          <FormSection icon={FileText} title="订单备注">
-            <textarea
-              name="remark"
-              rows={3}
-              value={remark}
-              onChange={(event) => setRemark(event.target.value)}
-              placeholder="记录补充说明"
-              className="crm-textarea min-h-[5.5rem]"
-            />
-          </FormSection>
+          <details className="group rounded-xl border border-border/60 bg-card">
+            <summary className="flex cursor-pointer items-center justify-between gap-3 px-3.5 py-2.5 text-[13px] font-semibold text-foreground transition hover:text-primary">
+              <span className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                订单备注
+                {remark.trim() ? (
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                    已填写
+                  </span>
+                ) : null}
+              </span>
+            </summary>
+            <div className="border-t border-border/40 p-3.5">
+              <textarea
+                name="remark"
+                rows={3}
+                value={remark}
+                onChange={(event) => setRemark(event.target.value)}
+                placeholder="记录补充说明"
+                className="crm-textarea min-h-[5rem]"
+              />
+            </div>
+          </details>
         </div>
 
         <TradeOrderSummarySidebar

@@ -1,6 +1,13 @@
 "use client";
 
-import { CheckCircle2, CreditCard } from "lucide-react";
+import {
+  CheckCircle2,
+  Coins,
+  CreditCard,
+  Hourglass,
+  Truck,
+  type LucideIcon,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -22,6 +29,13 @@ export type PaymentChipRowProps = Readonly<{
   onDepositAmountChange: (value: string) => void;
 }>;
 
+const SCHEME_ICONS: Record<PaymentSchemeOption["value"], LucideIcon> = {
+  FULL_PREPAID: CreditCard,
+  DEPOSIT_PLUS_BALANCE: Hourglass,
+  FULL_COD: Truck,
+  DEPOSIT_PLUS_COD: Coins,
+};
+
 function isDepositScheme(value: PaymentSchemeOption["value"]) {
   return value === "DEPOSIT_PLUS_BALANCE" || value === "DEPOSIT_PLUS_COD";
 }
@@ -34,63 +48,62 @@ export default function TradeOrderPaymentChipRow({
   onDepositAmountChange,
 }: PaymentChipRowProps) {
   const depositActive = isDepositScheme(paymentScheme);
-  const depositFieldValue = depositActive ? depositAmount : "0";
 
   return (
-    <div className="grid gap-3">
-      <div className="grid gap-2 sm:grid-cols-2">
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         {schemes.map((option) => {
           const active = option.value === paymentScheme;
+          const Icon = active ? CheckCircle2 : SCHEME_ICONS[option.value];
           return (
             <button
               key={option.value}
               type="button"
               onClick={() => onPaymentSchemeChange(option.value)}
+              title={option.description}
               className={cn(
-                "min-h-[5.4rem] rounded-xl border px-3.5 py-3 text-left transition-[border-color,background-color,box-shadow,transform]",
+                "inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[12.5px] font-medium transition-[border-color,background-color,color]",
                 active
-                  ? "border-primary/35 bg-primary/8 shadow-[0_0_0_3px_rgba(37,99,235,0.08)]"
-                  : "border-border/55 bg-[var(--color-shell-surface-soft)] hover:border-primary/25 hover:bg-white",
+                  ? "border-primary/40 bg-primary/8 text-primary"
+                  : "border-border/60 bg-card text-muted-foreground hover:border-primary/25 hover:text-foreground",
               )}
+              aria-pressed={active}
             >
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold text-foreground">
-                  {option.label}
-                </span>
-                {active ? (
-                  <CheckCircle2
-                    className="h-4 w-4 text-primary"
-                    aria-hidden="true"
-                  />
-                ) : (
-                  <CreditCard
-                    className="h-4 w-4 text-muted-foreground"
-                    aria-hidden="true"
-                  />
+              <Icon
+                className={cn(
+                  "h-3.5 w-3.5",
+                  active ? "text-primary" : "text-muted-foreground/80",
                 )}
-              </div>
-              <p className="mt-2 line-clamp-2 text-[12px] leading-5 text-muted-foreground">
-                {option.description}
-              </p>
+                aria-hidden="true"
+              />
+              {option.label}
             </button>
           );
         })}
       </div>
 
-      <label className="block">
-        <span className="crm-label">定金金额</span>
+      {depositActive ? (
+        <label className="block max-w-xs">
+          <span className="crm-label">定金金额</span>
+          <input
+            name="depositAmount"
+            type="number"
+            min="0"
+            step="0.01"
+            value={depositAmount}
+            onChange={(event) => onDepositAmountChange(event.target.value)}
+            className="crm-input"
+            placeholder="0.00"
+          />
+        </label>
+      ) : (
         <input
+          type="hidden"
           name="depositAmount"
-          type="number"
-          min="0"
-          step="0.01"
-          value={depositFieldValue}
-          onChange={(event) => onDepositAmountChange(event.target.value)}
-          disabled={!depositActive}
-          className="crm-input disabled:cursor-not-allowed disabled:bg-foreground/5"
-          placeholder="0.00"
+          value="0"
+          readOnly
         />
-      </label>
+      )}
     </div>
   );
 }
