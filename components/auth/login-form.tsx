@@ -141,7 +141,7 @@ export function LoginForm() {
             {passwordChanged ? <div className="login-v2-success">{text.passwordChanged}</div> : null}
 
             <label className="login-v2-field">
-              <span>{text.username}</span>
+              <span id="login-username-label">{text.username}</span>
               <div className="login-v2-input-shell">
                 <UserRound className="h-5 w-5" />
                 <input
@@ -152,12 +152,14 @@ export function LoginForm() {
                   autoComplete="username"
                   placeholder={text.usernamePlaceholder}
                   required
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={error ? "login-error" : undefined}
                 />
               </div>
             </label>
 
             <label className="login-v2-field">
-              <span>{text.password}</span>
+              <span id="login-password-label">{text.password}</span>
               <div className="login-v2-input-shell">
                 <LockKeyhole className="h-5 w-5" />
                 <input
@@ -169,6 +171,8 @@ export function LoginForm() {
                   autoComplete="current-password"
                   placeholder={text.passwordPlaceholder}
                   required
+                  aria-invalid={Boolean(error)}
+                  aria-describedby={error ? "login-error" : undefined}
                 />
                 <button
                   type="button"
@@ -181,7 +185,11 @@ export function LoginForm() {
               </div>
             </label>
 
-            {error ? <div className="login-v2-error">{error}</div> : null}
+            {error ? (
+              <div id="login-error" role="alert" aria-live="polite" className="login-v2-error">
+                {error}
+              </div>
+            ) : null}
 
             <button type="submit" disabled={pending} className="login-v2-submit">
               <span>{pending ? text.pending : text.submit}</span>
