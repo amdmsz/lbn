@@ -2,7 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LeadsFilters } from "@/components/leads/leads-filters";
 import { LeadsTable } from "@/components/leads/leads-table";
-import { LeadsWorkspaceTabs } from "@/components/leads/leads-workspace-tabs";
+import {
+  LeadsWorkspaceTabs,
+  pickSharedLeadsTabQuery,
+} from "@/components/leads/leads-workspace-tabs";
 import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { PageHeader } from "@/components/shared/page-header";
 import {
@@ -108,7 +111,10 @@ export default async function LeadsPage({
       className="!gap-4 md:!gap-5"
       header={
         <div className="space-y-3">
-          <LeadsWorkspaceTabs activeValue="allocation" />
+          <LeadsWorkspaceTabs
+            activeValue="allocation"
+            sharedQuery={pickSharedLeadsTabQuery(resolvedSearchParams)}
+          />
           <PageHeader
             eyebrow="线索中心"
             title="线索分配中心"

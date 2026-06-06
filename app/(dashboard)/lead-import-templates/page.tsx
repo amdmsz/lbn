@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { toggleLeadImportTemplateAction, upsertLeadImportTemplateAction } from "@/app/(dashboard)/lead-imports/actions";
-import { LeadsWorkspaceTabs } from "@/components/leads/leads-workspace-tabs";
+import {
+  LeadsWorkspaceTabs,
+  pickSharedLeadsTabQuery,
+} from "@/components/leads/leads-workspace-tabs";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -60,9 +63,11 @@ export default async function LeadImportTemplatesPage({
       ? "/lead-imports?mode=customer_continuation"
       : "/lead-imports";
 
+  const sharedTabQuery = pickSharedLeadsTabQuery(resolvedSearchParams);
+
   return (
     <div className="crm-page">
-      <LeadsWorkspaceTabs activeValue="templates" />
+      <LeadsWorkspaceTabs activeValue="templates" sharedQuery={sharedTabQuery} />
 
       <PageHeader
         title="导入模板管理"

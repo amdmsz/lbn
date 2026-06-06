@@ -6,36 +6,61 @@ export type LeadsWorkspaceTabValue =
   | "imports"
   | "templates";
 
-const tabs: ReadonlyArray<{
+type Tab = {
   value: LeadsWorkspaceTabValue;
   label: string;
-  href: string;
+  basePath: string;
   description: string;
-}> = [
+};
+
+const tabs: ReadonlyArray<Tab> = [
   {
     value: "allocation",
     label: "分配中心",
-    href: "/leads",
+    basePath: "/leads",
     description: "未分配/已分配回看",
   },
   {
     value: "imports",
     label: "导入批次",
-    href: "/lead-imports",
+    basePath: "/lead-imports",
     description: "批次质量与回看",
   },
   {
     value: "templates",
     label: "模板管理",
-    href: "/lead-import-templates",
+    basePath: "/lead-import-templates",
     description: "字段映射与版本",
   },
 ];
 
+// 这些 query keys 在三个 tab 之间是共享语义 (例如 customer_continuation
+// 模式), 切 tab 时保留以维持上下文; 其他 query (如 page, search, 分配相关
+// filters) 通常是 tab-specific, 切走时应该清掉.
+const SHARED_QUERY_KEYS: ReadonlyArray<string> = ["mode"];
+
+function buildTabHref(tab: Tab, sharedQuery: ReadonlyArray<[string, string]>) {
+  if (sharedQuery.length === 0) {
+    return tab.basePath;
+  }
+  const params = new URLSearchParams();
+  for (const [key, value] of sharedQuery) {
+    params.set(key, value);
+  }
+  const queryString = params.toString();
+  return queryString ? `${tab.basePath}?${queryString}` : tab.basePath;
+}
+
 export function LeadsWorkspaceTabs({
   activeValue,
+  sharedQuery = [],
 }: Readonly<{
   activeValue: LeadsWorkspaceTabValue;
+  /**
+   * 切 tab 时要保留的 query 对. 调用方从 searchParams 取出 SHARED_QUERY_KEYS
+   * 里的项后传进来.
+   */
+  sharedQuery?: ReadonlyArray<[string, string]>;
 }>) {
   return (
     <nav
@@ -44,10 +69,11 @@ export function LeadsWorkspaceTabs({
     >
       {tabs.map((tab) => {
         const active = tab.value === activeValue;
+        const href = buildTabHref(tab, sharedQuery);
         return (
           <Link
             key={tab.value}
-            href={tab.href}
+            href={href}
             aria-current={active ? "page" : undefined}
             className={cn(
               "inline-flex h-8 items-center gap-2 rounded-md px-3 text-[13px] font-medium transition-colors duration-150",
@@ -63,4 +89,25 @@ export function LeadsWorkspaceTabs({
       })}
     </nav>
   );
+}
+
+/**
+ * 从 server-component searchParams 中提取共享 query 对, 用于传给
+ * LeadsWorkspaceTabs.sharedQuery. 调用方:
+ *   const sharedQuery = pickSharedLeadsTabQuery(resolvedSearchParams);
+ *   <LeadsWorkspaceTabs activeValue="imports" sharedQuery={sharedQuery} />
+ */
+export function pickSharedLeadsTabQuery(
+  searchParams: Record<string, string | string[] | undefined> | undefined,
+): Array<[string, string]> {
+  if (!searchParams) return [];
+  const pairs: Array<[string, string]> = [];
+  for (const key of SHARED_QUERY_KEYS) {
+    const value = searchParams[key];
+    const resolved = Array.isArray(value) ? value[0] : value;
+    if (typeof resolved === "string" && resolved.length > 0) {
+      pairs.push([key, resolved]);
+    }
+  }
+  return pairs;
 }
