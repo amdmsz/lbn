@@ -26,6 +26,7 @@
     "worker:recycle-auto-finalize": "tsx scripts/recycle-auto-finalize.ts",
     "diagnose:lead-customer-recycle": "tsx scripts/diagnose-lead-customer-recycle.ts",
     "lint": "eslint",
+    "check:encoding": "node scripts/check-encoding.mjs",
     "prisma:status": "node scripts/prisma-guardrails.mjs status",
     "prisma:name-drift": "node scripts/prisma-guardrails.mjs name-drift",
     "prisma:diff:schema": "node scripts/prisma-guardrails.mjs diff-schema",

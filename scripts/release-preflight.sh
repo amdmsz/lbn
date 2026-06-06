@@ -140,6 +140,7 @@ assert_module_resolvable \
 
 run_step npx prisma validate
 run_step npx prisma generate
+run_step npm run check:encoding
 run_step npm run lint
 run_step npm run build
 
