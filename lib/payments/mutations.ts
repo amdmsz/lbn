@@ -1338,12 +1338,20 @@ export async function syncShippingCollectionTasks(
     const codSubmittedById = input.actorId ?? plan.ownerId;
 
     if (requestedCodStatus === CodCollectionStatus.COLLECTED) {
-      const collectedAmount = roundCurrency(
-        Math.max(
-          Number((input.codCollectedAmount ?? remainingAmount) || expectedAmount),
-          0,
-        ),
-      );
+      // F01 修复: 用显式空值判断, 避免 `|| expectedAmount` 把空串/0/null 误当假值
+      // 而用计划金额覆盖真实回收金额(财务真相红线).
+      const rawInputAmount = input.codCollectedAmount;
+      const fallbackAmount =
+        remainingAmount !== undefined && remainingAmount !== null
+          ? remainingAmount
+          : expectedAmount;
+      const sourceAmount =
+        rawInputAmount !== null &&
+        rawInputAmount !== undefined &&
+        String(rawInputAmount).trim() !== ""
+          ? rawInputAmount
+          : fallbackAmount;
+      const collectedAmount = roundCurrency(Math.max(toNumber(sourceAmount), 0));
 
       if (collectedAmount <= 0) {
         throw new Error("Collected COD amount must be greater than 0.");
@@ -1562,11 +1570,26 @@ export async function syncShippingCollectionTasks(
     await syncPaymentPlanAggregateState(tx, plan.id);
     await syncSalesOrderSummary(tx, plan.salesOrderId);
 
-    if (plan.ownerId && plan.customerId) {
-      const task = await ensureCollectionTaskForPlan(tx, {
+    // F05 修复: 事务内重新读 plan 拿到最新 ownerId,
+    // 防止外层快照期间被并发清空导致 CollectionTask.ownerId 写 null
+    const freshPlan = await tx.paymentPlan.findUnique({
+      where: { id: plan.id },
+      select: { ownerId: true, customerId: true },
+    });
+    if (!freshPlan?.ownerId || !freshPlan.customerId) {
+      throw new Error(
+        `Payment plan ${plan.id} owner or customer cleared concurrently during COD update; collection task creation aborted.`,
+      );
+    }
+
+    if (freshPlan.ownerId && freshPlan.customerId) {
+      // F03 修复: 在 ensureCollectionTaskForPlan 外层包 try, 失败时把 plan.id 上下文带出去
+      let task;
+      try {
+        task = await ensureCollectionTaskForPlan(tx, {
         paymentPlanId: plan.id,
         actorId: input.actorId,
-        ownerId: plan.ownerId,
+        ownerId: freshPlan.ownerId,
         sourceType: plan.sourceType,
         salesOrderId: plan.salesOrderId,
         giftRecordId: plan.giftRecordId,
@@ -1581,6 +1604,12 @@ export async function syncShippingCollectionTasks(
         nextFollowUpAt: buildNextCollectionFollowUp(now),
         remark: getCodCollectionTaskRemark(requestedCodStatus),
       });
+      } catch (err) {
+        const cause = err instanceof Error ? err.message : String(err);
+        throw new Error(
+          `ensureCollectionTaskForPlan failed for plan=${plan.id}, sourceType=${plan.sourceType}: ${cause}`,
+        );
+      }
 
       if (task.created) {
         await tx.operationLog.create({

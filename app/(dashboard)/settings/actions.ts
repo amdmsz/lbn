@@ -9,6 +9,7 @@ import {
   rethrowRedirectError,
   sanitizeRedirectTarget,
 } from "@/lib/action-notice";
+import { canAccessSystemSettings } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
 import { upsertOutboundCallSeatBinding } from "@/lib/outbound-calls/seat-bindings";
 import {
@@ -180,6 +181,17 @@ export async function saveSystemSettingAction(formData: FormData) {
     "/settings",
   );
 
+  // F02 修复: 外层显式 RBAC 检查; 不再依赖 upsertSystemSetting 内部兜底
+  if (!canAccessSystemSettings(session.user.role)) {
+    redirect(
+      buildRedirectTarget(
+        redirectTo,
+        "error",
+        "无权访问系统设置, 请联系管理员开通权限。",
+      ),
+    );
+  }
+
   try {
     const namespace = getValue(formData, "namespace") as SystemSettingNamespace;
     const key = getValue(formData, "key") || "active";
@@ -216,6 +228,13 @@ export async function saveOutboundCallSeatBindingAction(formData: FormData) {
     getValue(formData, "redirectTo"),
     "/settings/outbound-call",
   );
+
+  // F02 修复同款: 显式 RBAC 防越权
+  if (!canAccessSystemSettings(session.user.role)) {
+    redirect(
+      buildRedirectTarget(redirectTo, "error", "无权管理外呼坐席绑定。"),
+    );
+  }
 
   try {
     await upsertOutboundCallSeatBinding(session.user.id, {
