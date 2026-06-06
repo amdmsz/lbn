@@ -780,6 +780,29 @@ export function TradeOrdersSection({
   const activeFocusView = getActiveFocusView(filters);
   const hasSalesFilter = salesOptions.length > 0;
   const createdAtFilterLabel = getCreatedAtFilterLabel(filters);
+  // 高级筛选回显: 只显示用户实际设置的非默认条件, 避免折叠状态
+  // 看到一串 "全部 / 全部 / 全部 / 全部" 的视觉噪音.
+  const advancedFilterEchoParts: string[] = [];
+  if (filters.statusView) {
+    advancedFilterEchoParts.push(`审核 ${filters.statusView}`);
+  }
+  if (filters.salesId) {
+    advancedFilterEchoParts.push(
+      getSalesFilterLabel(filters.salesId, salesOptions),
+    );
+  }
+  if (filters.supplierCount) {
+    advancedFilterEchoParts.push(
+      getSupplierCountFilterLabel(filters.supplierCount),
+    );
+  }
+  if (filters.sortBy && filters.sortBy !== "UPDATED_DESC") {
+    advancedFilterEchoParts.push(getSortFilterLabel(filters.sortBy));
+  }
+  if (filters.createdFrom || filters.createdTo) {
+    advancedFilterEchoParts.push(createdAtFilterLabel);
+  }
+  const hasAdvancedFilterApplied = advancedFilterEchoParts.length > 0;
   const currentPageHref = buildPageHref(
     filters,
     { page: pagination.page },
@@ -933,20 +956,9 @@ export function TradeOrdersSection({
       ) : null}
 
       <SectionCard
-        eyebrow="Parent-Order Workbench"
         title="父单工作池"
-        description="先按工作队列切换焦点，再用搜索和高级筛选收窄父单池。"
         density="compact"
         className="border-border/60 bg-card shadow-sm [&>div:first-child]:border-border/50 [&>div:first-child]:bg-transparent"
-        actions={
-          <div className="flex flex-wrap gap-1.5 text-[12px] text-muted-foreground">
-            <span>待审核 {summary.focusCounts.pendingReview}</span>
-            <span>·</span>
-            <span>待报单 {summary.focusCounts.pendingReport}</span>
-            <span>·</span>
-            <span>异常 {summary.focusCounts.exception}</span>
-          </div>
-        }
       >
         <div className="space-y-3.5">
           <RecordTabs activeValue={activeFocusView} items={tabs} />
@@ -1041,9 +1053,11 @@ export function TradeOrdersSection({
                 <span className="font-semibold uppercase tracking-widest">
                   高级筛选
                 </span>
-                <span className="text-muted-foreground/80">
-                  审核 {filters.statusView || "全部"} · {getSalesFilterLabel(filters.salesId, salesOptions)} · {getSupplierCountFilterLabel(filters.supplierCount)} · {getSortFilterLabel(filters.sortBy)} · {createdAtFilterLabel}
-                </span>
+                {hasAdvancedFilterApplied ? (
+                  <span className="text-muted-foreground/80">
+                    {advancedFilterEchoParts.join(" · ")}
+                  </span>
+                ) : null}
               </summary>
 
               <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -1134,20 +1148,13 @@ export function TradeOrdersSection({
 
       {items.length > 0 ? (
         <SectionCard
-          eyebrow="Parent-Order List"
           title="父单总览"
-          description="父单行只展示聚合态：金额、supplier 数、物流任务数和异常；具体物流单号下钻到发货执行或详情。"
           density="compact"
           className="border-border/60 bg-card shadow-sm [&>div:first-child]:border-border/50 [&>div:first-child]:bg-transparent"
           actions={
-            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              <span>共 {pagination.totalCount} 张父单</span>
-              <span>审核 {filters.statusView || "全部"}</span>
-              <span>{getSalesFilterLabel(filters.salesId, salesOptions)}</span>
-              <span>{getSupplierCountFilterLabel(filters.supplierCount)}</span>
-              <span>{getSortFilterLabel(filters.sortBy)}</span>
-              <span>{createdAtFilterLabel}</span>
-            </div>
+            <span className="text-xs text-muted-foreground tabular-nums">
+              共 {pagination.totalCount} 张父单
+            </span>
           }
         >
           <div className="space-y-3.5">
