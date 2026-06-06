@@ -40,7 +40,11 @@ import {
   type LeadImportDuplicateCustomerRecord,
 } from "@/lib/lead-imports/duplicate-customer";
 import { enqueueLeadImportBatchJob, getLeadImportChunkSize } from "@/lib/lead-imports/queue";
-import { readLeadImportSourceFile, saveLeadImportSourceFile } from "@/lib/lead-imports/storage";
+import {
+  deleteLeadImportSourceFile,
+  readLeadImportSourceFile,
+  saveLeadImportSourceFile,
+} from "@/lib/lead-imports/storage";
 import { withVisibleLeadWhere } from "@/lib/leads/visibility";
 
 type Actor = {
@@ -576,6 +580,22 @@ async function processLeadImportRowTx(
       };
       errorReason = buildExistingCustomerDuplicateReason(duplicateCustomer);
     } else {
+      // F06 修复: existingLeadMap 是 batch 开始时的快照, 多 batch (或同一销售
+      // 点两次上传) 并发时, 另一 batch 可能已在本 batch 期间写入了同 phone 的
+      // lead. 创建前再 tx 内查一次, 命中则降级为 DUPLICATE 不创建.
+      const liveExistingLead = await tx.lead.findFirst({
+        where: { phone: normalizedPhone },
+        select: { id: true, phone: true, name: true },
+      });
+      if (liveExistingLead) {
+        status = LeadImportRowStatus.DUPLICATE;
+        errorReason = "并发导入: 系统内已存在相同手机号的线索";
+        dedupType = LeadDedupType.EXISTING_LEAD;
+        matchedLeadId = liveExistingLead.id;
+        // 把命中结果回写 in-memory map, 防止本批次后续行又来一次 db 查询
+        input.existingLeadMap.set(normalizedPhone, liveExistingLead);
+        // status 已置 DUPLICATE; 不走 create, importedLead 保持 null
+      } else {
       importedLead = await tx.lead.create({
         data: {
           source: input.defaultLeadSource,
@@ -631,6 +651,7 @@ async function processLeadImportRowTx(
       linkedCustomerName = mergeResult.customer.name;
       mergeAction = mergeResult.action;
       tagSynced = mergeResult.tagSynced;
+      }
     }
 
     const createdRow = await tx.leadImportRow.create({
@@ -1075,6 +1096,9 @@ export async function createLeadImportBatchAsync(
         attempt: 1,
         attemptsAllowed: 1,
       });
+    } else {
+      // F07 修复: 文件已写入但 batch 未创建成功, 清理孤儿源文件
+      await deleteLeadImportSourceFile({ batchId });
     }
 
     throw error;

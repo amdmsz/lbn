@@ -48,7 +48,6 @@ export function toDecimal(value: DecimalInput): Prisma.Decimal {
     return new Prisma.Decimal(trimmed);
   } catch {
     if (process.env.NODE_ENV !== "production") {
-      // eslint-disable-next-line no-console
       console.warn(`[payments/decimal] toDecimal: invalid input "${trimmed}", coerced to 0`);
     }
     return new Prisma.Decimal(0);
