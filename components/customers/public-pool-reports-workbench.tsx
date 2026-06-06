@@ -107,11 +107,11 @@ export function CustomerPublicPoolReportsWorkbench({
                 trail={["客户中心", "公海池", "运营报表"]}
               />
             }
-            eyebrow="Customer Ownership Lifecycle"
+            eyebrow="客户归属生命周期"
             title="公海池运营报表"
-            description="围绕客户 ownership lifecycle 查看公海规模、认领效率、滞留风险和团队处理节奏，让主管视角与客户中心工作台保持同一套结构语言。"
+            description="查看公海规模、认领效率、滞留风险和团队处理节奏。"
             density="compact"
-            className="border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(248,246,242,0.9))] shadow-[0_14px_30px_rgba(15,23,42,0.04)]"
+            className="border-border/60 bg-card shadow-sm"
             meta={
               <>
                 <StatusBadge
@@ -152,11 +152,11 @@ export function CustomerPublicPoolReportsWorkbench({
       toolbar={
         <div className={cn(workspaceShellClassName, "mb-5")}>
           <SectionCard
-            eyebrow="Reports Scope"
+            eyebrow="报表范围"
             title="报表范围与过滤条件"
-            description="在同一条 customer lifecycle 主线上切换工作台、规则页和报表页，并按团队、时间窗口和滞留阈值查看当前运营表现。"
+            description="按团队、时间窗口和滞留阈值查看当前运营表现。"
             density="compact"
-            className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+            className="rounded-xl border-border/60 bg-card shadow-sm"
             actions={
               <div className="flex flex-wrap gap-1.5">
                 <StatusBadge label={`趋势样本 ${data.trends.length}`} variant="neutral" />
@@ -225,7 +225,7 @@ export function CustomerPublicPoolReportsWorkbench({
           <DataTableWrapper
             title="入池 / 认领趋势"
             description={`查看最近 ${data.filters.windowDays} 天的节奏变化。`}
-            eyebrow="Flow Signal"
+            eyebrow="流转信号"
             className="h-full"
           >
             {data.trends.length > 0 ? (
@@ -274,7 +274,7 @@ export function CustomerPublicPoolReportsWorkbench({
           <DataTableWrapper
             title="原因分布"
             description="查看当前入池原因、回收原因和认领来源。"
-            eyebrow="Distribution"
+            eyebrow="原因分布"
             className="h-full"
           >
             <div className="space-y-4">
@@ -315,7 +315,7 @@ export function CustomerPublicPoolReportsWorkbench({
           <DataTableWrapper
             title="团队表现"
             description="用统一口径观察团队当前公海规模、当天处理与滞留压力。"
-            eyebrow="Team Lens"
+            eyebrow="团队视角"
           >
             {data.teamPerformance.length > 0 ? (
               <div className="crm-table-shell">
@@ -354,7 +354,7 @@ export function CustomerPublicPoolReportsWorkbench({
           <DataTableWrapper
             title="Owner 表现"
             description="查看认领、重新回公海和离职回收等 owner 处理表现。"
-            eyebrow="Owner Lens"
+            eyebrow="负责人视角"
           >
             {data.ownerPerformance.length > 0 ? (
               <div className="crm-table-shell">
@@ -393,7 +393,7 @@ export function CustomerPublicPoolReportsWorkbench({
         <DataTableWrapper
           title="长期滞留明细"
           description={`展示滞留超过 ${data.filters.lingerDays} 天的客户，便于回收与再分配判断。`}
-          eyebrow="Risk Queue"
+          eyebrow="风险队列"
         >
           {data.longStayItems.length > 0 ? (
             <div className="crm-table-shell">
@@ -451,11 +451,11 @@ export function CustomerPublicPoolReportsWorkbench({
         </DataTableWrapper>
 
         <SectionCard
-          eyebrow="Definitions"
+          eyebrow="口径说明"
           title="统计口径"
-          description="保留报表解释，但收口为更轻的支持信息区，避免整页都像厚重 dashboard。"
+          description="报表指标的统计口径解释。"
           density="compact"
-          className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+          className="rounded-xl border-border/60 bg-card shadow-sm"
           actions={<StatusBadge label={`${data.definitions.length} 条口径`} variant="neutral" />}
         >
           <div className="grid gap-3 xl:grid-cols-2">

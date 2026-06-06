@@ -147,7 +147,7 @@ export function CustomerPublicPoolSettingsWorkbench({
   const moduleTabs = [
     {
       value: "workbench",
-      label: "鍏捣姹犲伐浣滃彴",
+      label: "公海池工作台",
       href: buildCustomerPublicPoolHref({
         view: "pool",
         segment: "all",
@@ -182,29 +182,29 @@ export function CustomerPublicPoolSettingsWorkbench({
             context={
               <PageContextLink
                 href="/customers/public-pool"
-                label="杩斿洖鍏捣姹?"
-                trail={["瀹㈡埛涓績", "鍏捣姹?", "鍥㈤槦瑙勫垯"]}
+                label="返回公海池"
+                trail={["客户中心", "公海池", "团队规则"]}
               />
             }
-            eyebrow="Customer Ownership Lifecycle"
-            title="鍥㈤槦鍏捣瑙勫垯"
-            description="鎸夊洟闃熸敹鍙ｅ洖鏀躲€佷繚鎶ゆ湡涓庤嚜鍔ㄥ垎閰嶏紝淇濇寔瀹㈡埛 ownership lifecycle 鍦ㄥ悓涓€濂楀伐浣滃彴璇█鍐呰〃杈俱€?"
-            className="border-black/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(248,246,242,0.9))] shadow-[0_14px_30px_rgba(15,23,42,0.04)]"
+            eyebrow="客户归属生命周期"
+            title="团队公海规则"
+            description="按团队收口回收、保护期与自动分配，保持客户 ownership lifecycle 在同一套工作台语言内表达。"
+            className="border-border/60 bg-card shadow-sm"
             meta={
               <>
                 <StatusBadge
-                  label={data.canManageAcrossTeams ? "ADMIN 鍙法鍥㈤槦璋冩暣" : "涓荤浠呯鐞嗘湰鍥㈤槦"}
+                  label={data.canManageAcrossTeams ? "ADMIN 可跨团队调整" : "主管仅管理本团队"}
                   variant={data.canManageAcrossTeams ? "info" : "warning"}
                 />
                 <StatusBadge
-                  label={data.setting.source === "custom" ? "褰撳墠浣跨敤鍥㈤槦瑕嗙洊" : "褰撳墠浣跨敤榛樿瑙勫垯"}
+                  label={data.setting.source === "custom" ? "当前使用团队覆盖" : "当前使用默认规则"}
                   variant={data.setting.source === "custom" ? "success" : "neutral"}
                 />
                 <StatusBadge
                   label={
                     data.setting.autoAssignEnabled
                       ? publicPoolAutoAssignStrategyLabels[data.setting.autoAssignStrategy]
-                      : "鑷姩鍒嗛厤鏈惎鐢?"
+                      : "自动分配未启用"
                   }
                   variant={data.setting.autoAssignEnabled ? "info" : "neutral"}
                 />
@@ -212,7 +212,7 @@ export function CustomerPublicPoolSettingsWorkbench({
             }
             actions={
               <div className="flex flex-wrap gap-2 lg:justify-end">
-                <HeaderActionLink href="/customers/public-pool" label="杩斿洖鍏捣姹?" />
+                <HeaderActionLink href="/customers/public-pool" label="返回公海池" />
                 <HeaderActionLink
                   href={buildCustomerPublicPoolReportsHref({
                     teamId: data.selectedTeam?.id ?? "",
@@ -242,14 +242,14 @@ export function CustomerPublicPoolSettingsWorkbench({
       toolbar={
         <div className={workspaceShellClassName}>
           <SectionCard
-            eyebrow="Rules Scope"
-            title="鍥㈤槦涓庢ā鍧楄瑙?"
-            description="鍏堝垏鎹㈠洟闃熷拰妯″潡锛屽啀鍦ㄥ悓涓€涓伐浣滃彴鍐呯淮鎶よ鍒欍€?"
+            eyebrow="规则范围"
+            title="团队与模块规则"
+            description="先切换团队和模块，再在同一套工作台内维护规则。"
             density="compact"
-            className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+            className="rounded-xl border-border/60 bg-card shadow-sm"
             actions={
               <div className="flex flex-wrap gap-1.5">
-                <StatusBadge label={`鍙鍥㈤槦 ${data.teamOptions.length}`} variant="neutral" />
+                <StatusBadge label={`可见团队 ${data.teamOptions.length}`} variant="neutral" />
                 {data.selectedTeam ? (
                   <StatusBadge label={`褰撳墠鍥㈤槦 ${data.selectedTeam.name}`} variant="info" />
                 ) : (
@@ -299,28 +299,28 @@ export function CustomerPublicPoolSettingsWorkbench({
           <input type="hidden" name="teamId" value={data.selectedTeam.id} />
 
           <SectionCard
-            eyebrow="Recycle Rules"
-            title="鍩虹鍥炴敹瑙勫垯"
-            description="鍥炴敹寮€鍏充笌鍩虹闃堝€硷紝鍏堟敹鍙ｅ綋鍓嶇湡姝ｅ奖鍝?ownership lifecycle 鐨勬潯浠躲€?"
+            eyebrow="回收规则"
+            title="基础回收规则"
+            description="回收开关与基础阈值，先收口当前真正影响 ownership lifecycle 的条件。"
             density="compact"
-            className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+            className="rounded-xl border-border/60 bg-card shadow-sm"
           >
             <div className="grid gap-3 md:grid-cols-2">
               <SettingToggle
                 name="autoRecycleEnabled"
-                label="鍚敤鑷姩鍥炴敹"
+                label="启用自动回收"
                 description="瓒呮椂鍚庤嚜鍔ㄥ洖鏀躲€?"
                 defaultChecked={data.setting.autoRecycleEnabled}
               />
               <SettingToggle
                 name="ownerExitRecycleEnabled"
-                label="鍚敤绂昏亴鍥炴敹"
+                label="启用离职回收"
                 description="绂昏亴鍚庤嚜鍔ㄥ洖鏀躲€?"
                 defaultChecked={data.setting.ownerExitRecycleEnabled}
               />
               <SettingNumberInput
                 name="defaultInactiveDays"
-                label="榛樿 inactivity days"
+                label="默认 inactivity days"
                 description="瓒呮椂澶╂暟銆?"
                 defaultValue={data.setting.defaultInactiveDays}
                 min={1}
@@ -328,7 +328,7 @@ export function CustomerPublicPoolSettingsWorkbench({
               />
               <SettingToggle
                 name="respectClaimLock"
-                label="鑷姩鍥炴敹灏婇噸 claim lock"
+                label="自动回收尊重 claim lock"
                 description="淇濇姢鏈熷唴涓嶆彁鍓嶅洖鏀躲€?"
                 defaultChecked={data.setting.respectClaimLock}
               />
@@ -336,11 +336,11 @@ export function CustomerPublicPoolSettingsWorkbench({
           </SectionCard>
 
           <SectionCard
-            eyebrow="Effective Follow-up"
+            eyebrow="有效跟进"
             title="鏈夋晥璺熻繘涓庝繚鎶ゆ湡"
             description="淇濇寔寮哄姩浣滃拰寮卞姩浣滅殑闃堝€间笌淇濇姢鏈熻〃杈惧湪鍚屼竴灞傘€?"
             density="compact"
-            className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+            className="rounded-xl border-border/60 bg-card shadow-sm"
           >
             <div className="grid gap-3 md:grid-cols-2">
               <SettingNumberInput
@@ -354,14 +354,14 @@ export function CustomerPublicPoolSettingsWorkbench({
               <SettingNumberInput
                 name="mediumEffectProtectionDays"
                 label="MEDIUM 淇濇姢鏈熷ぉ鏁?"
-                description="涓姩浣滀繚鎶ゆ湡銆?"
+                description="有效动作保护期。"
                 defaultValue={data.setting.mediumEffectProtectionDays}
                 min={0}
                 max={60}
               />
               <SettingToggle
                 name="weakEffectResetsClock"
-                label="WEAK 涔熼噸缃洖鏀舵椂閽?"
+                label="WEAK 也重置回收时钟"
                 description="寮卞姩浣滀粎閲嶇疆鏃堕挓銆?"
                 defaultChecked={data.setting.weakEffectResetsClock}
               />
@@ -375,18 +375,18 @@ export function CustomerPublicPoolSettingsWorkbench({
           </SectionCard>
 
           <SectionCard
-            eyebrow="Auto Assign"
-            title="鑷姩鍒嗛厤寮曟搸"
-            description="鑷姩鍒嗛厤渚濈劧鏄?public-pool 鍐呴儴鐨?ownership 鎵胯鍔ㄤ綔锛屼笉鍙︾珛鏂颁笟鍔″叆鍙ｃ€?"
+            eyebrow="自动分配"
+            title="自动分配引擎"
+            description="自动分配依然是 public-pool 内部的 ownership 承接动作，不另立新业务入口。"
             density="compact"
-            className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+            className="rounded-xl border-border/60 bg-card shadow-sm"
             actions={
               <div className="flex flex-wrap gap-1.5">
                 <StatusBadge
                   label={
                     data.setting.autoAssignEnabled
                       ? publicPoolAutoAssignStrategyLabels[data.setting.autoAssignStrategy]
-                      : "褰撳墠鏈惎鐢?"
+                      : "当前未启用"
                   }
                   variant={data.setting.autoAssignEnabled ? "info" : "neutral"}
                 />
@@ -394,7 +394,7 @@ export function CustomerPublicPoolSettingsWorkbench({
                   label={
                     data.roundRobinCursorUser
                       ? `褰撳墠娓告爣 ${data.roundRobinCursorUser.name}`
-                      : "褰撳墠娓告爣鏈褰?"
+                      : "当前游标未记录"
                   }
                   variant={
                     data.setting.autoAssignStrategy === "ROUND_ROBIN" ? "success" : "neutral"
@@ -406,71 +406,71 @@ export function CustomerPublicPoolSettingsWorkbench({
             <div className="grid gap-3 md:grid-cols-2">
               <SettingToggle
                 name="autoAssignEnabled"
-                label="鍚敤鑷姩鍒嗛厤"
-                description="鍏佽棰勮涓庢墽琛屻€?"
+                label="启用自动分配"
+                description="允许预览与执行。"
                 defaultChecked={data.setting.autoAssignEnabled}
               />
               <SettingSelect
                 name="autoAssignStrategy"
-                label="鑷姩鍒嗛厤绛栫暐"
-                description="杞浆鎴栦綆璐熻浇浼樺厛銆?"
+                label="自动分配策略"
+                description="轮转或低负载优先。"
                 defaultValue={data.setting.autoAssignStrategy}
                 options={publicPoolAutoAssignStrategyOptions}
               />
               <SettingNumberInput
                 name="autoAssignBatchSize"
-                label="鑷姩鍒嗛厤 batch size"
-                description="鍗曟澶勭悊涓婇檺銆?"
+                label="自动分配 batch size"
+                description="单次处理上限。"
                 defaultValue={data.setting.autoAssignBatchSize}
                 min={1}
                 max={200}
               />
               <SettingNumberInput
                 name="maxActiveCustomersPerSales"
-                label="鍗曚汉鏈€澶ф壙鎺ュ鎴?"
+                label="单人最大承接客户"
                 description="杈惧埌涓婇檺鏃惰烦杩囥€?"
                 defaultValue={data.setting.maxActiveCustomersPerSales}
                 min={1}
                 max={500}
-                placeholder="涓嶈涓婇檺"
+                placeholder="不设上限"
               />
             </div>
             <div className="mt-4 rounded-[1rem] border border-black/8 bg-[rgba(247,248,250,0.64)] px-4 py-3 text-[13px] leading-6 text-black/56">
               <p className="font-medium text-black/72">娓告爣璇存槑</p>
-              <p className="mt-1">绯荤粺浼氳嚜鍔ㄧ画浣嶏紝杞浆鍒嗛厤鍜屼綆璐熻浇鍒嗛厤閮藉湪鍚屼竴濂楀洟闃熻鍒欎笅鐢熸晥銆?</p>
+              <p className="mt-1">系统会自动续位，轮转分配和低负载分配都在同一套团队规则下生效。</p>
             </div>
           </SectionCard>
 
           <SectionCard
-            eyebrow="Action Boundary"
-            title="鍏捣鎿嶄綔杈圭晫"
-            description="淇濇寔璁ら銆佹寚娲俱€佸洖鏀剁殑鏉冮檺鍔熻兘鏀跺彛鍦?ownership lifecycle 涓紝涓嶆墿鎴愮涓夊椾紪鎺掋€?"
+            eyebrow="动作边界"
+            title="公海操作边界"
+            description="保持认领、指派、回收的权限功能收口在 ownership lifecycle 中，不扩成第三方编排。"
             density="compact"
-            className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+            className="rounded-xl border-border/60 bg-card shadow-sm"
           >
             <div className="grid gap-3 md:grid-cols-2">
               <SettingToggle
                 name="salesCanClaim"
-                label="SALES 鍙棰嗗洟闃熷叕娴?"
-                description="鍏抽棴鍚庝笉鍙富鍔ㄨ棰嗐€?"
+                label="SALES 可认领团队公海"
+                description="关闭后不可主动认领。"
                 defaultChecked={data.setting.salesCanClaim}
               />
               <SettingToggle
                 name="salesCanRelease"
-                label="SALES 鍙富鍔ㄩ噴鏀惧鎴?"
-                description="褰撳墠浠嶆棤閿€鍞噴鏀惧叆鍙ｃ€?"
+                label="SALES 可主动释放客户"
+                description="当前仍无销售释放入口。"
                 defaultChecked={data.setting.salesCanRelease}
               />
               <SettingToggle
                 name="batchRecycleEnabled"
-                label="鍏佽鎵归噺鍥炴敹"
-                description="鍏抽棴鍚庝粎鍙崟涓洖鏀躲€?"
+                label="允许批量回收"
+                description="关闭后仅可单个回收。"
                 defaultChecked={data.setting.batchRecycleEnabled}
               />
               <SettingToggle
                 name="batchAssignEnabled"
-                label="鍏佽鎵归噺鎸囨淳"
-                description="鍏抽棴鍚庝粎鍙崟涓寚娲俱€?"
+                label="允许批量指派"
+                description="关闭后仅可单个指派。"
                 defaultChecked={data.setting.batchAssignEnabled}
               />
             </div>
@@ -484,22 +484,22 @@ export function CustomerPublicPoolSettingsWorkbench({
         </form>
       ) : (
         <SectionCard
-          eyebrow="Team Scope"
+          eyebrow="团队范围"
           title="鍏堥€夋嫨鍥㈤槦"
-          description="璇峰厛閫夋嫨鍥㈤槦锛屽啀鍦ㄥ綋鍓嶅伐浣滃彴鍐呯淮鎶ゅ洟闃熻鍒欍€?"
+          description="请先选择团队，再在当前工作台内维护团队规则。"
           density="compact"
-          className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+          className="rounded-xl border-border/60 bg-card shadow-sm"
         >
           <EmptyState title="鍏堥€夋嫨鍥㈤槦" description="璇峰厛閫夋嫨鍥㈤槦銆?" />
         </SectionCard>
       )}
 
       <SectionCard
-        eyebrow="Reserved"
+        eyebrow="预留"
         title="鍚庣画娣卞寲"
-        description="杩欎簺鑳藉姏鏆備笉寮€鏀撅紝淇濇寔鍦ㄥ綋鍓嶈鍒欏伐浣滃彴鍐呰娓呮櫚鍦版彁绀恒€?"
+        description="这些能力暂不开放，保持在当前规则工作台内清晰地提示。"
         density="compact"
-        className="rounded-[1.05rem] border-black/8 bg-[rgba(255,255,255,0.88)] shadow-[0_10px_24px_rgba(18,24,31,0.04)]"
+        className="rounded-xl border-border/60 bg-card shadow-sm"
       >
         <div className="grid gap-3 md:grid-cols-2">
           {data.reservedRules.map((item) => (
