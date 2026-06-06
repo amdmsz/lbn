@@ -177,13 +177,13 @@ export default async function ProductsPage({
   const viewTabs = [
     {
       value: "products",
-      label: "商品",
+      label: "商品组",
       href: productWorkspaceHref,
       count: activeTab === "products" ? productData?.summary.totalCount : null,
     },
     {
       value: "skus",
-      label: "SKU",
+      label: "商品",
       href: skuWorkspaceHref,
       count: activeTab === "skus" ? productSkuData?.summary.totalCount : null,
     },
@@ -215,28 +215,28 @@ export default async function ProductsPage({
 
   const activeViewLabel =
     activeTab === "products"
-      ? "商品主档"
+      ? "商品组主档"
       : activeTab === "skus"
-        ? "SKU 经营"
+        ? "商品经营"
         : "供应目录";
   const headerTitle =
     activeTab === "products"
-      ? "商品列表"
+      ? "商品组列表"
       : activeTab === "skus"
-        ? "SKU 列表"
+        ? "商品列表"
         : "供应商目录";
   const headerDescription =
     activeTab === "products"
-      ? "以商品名与规格为主的轻量主数据工作区。"
+      ? "按系列或供货商分组管理的商品组主数据。每个商品组下挂具体商品。"
       : activeTab === "skus"
-        ? "按规格查看默认售价、商品覆盖与当前经营范围。"
+        ? "按商品查看默认售价、所属商品组与当前经营范围。"
         : "供应商保持为商品域次级面，只做轻维护。";
 
   const topSummaryItems =
     activeTab === "products" && productData
       ? [
           {
-            label: "商品",
+            label: "商品组",
             value: String(productData.summary.totalCount),
             note: "当前结果",
           },
@@ -246,9 +246,9 @@ export default async function ProductsPage({
             note: "仍可经营",
           },
           {
-            label: "规格",
+            label: "商品",
             value: String(productData.summary.skuCount),
-            note: "当前覆盖",
+            note: "组下商品总数",
           },
           {
             label: "引用",
@@ -259,7 +259,7 @@ export default async function ProductsPage({
       : activeTab === "skus" && productSkuData
         ? [
             {
-              label: "SKU",
+              label: "商品",
               value: String(productSkuData.summary.totalCount),
               note: "当前结果",
             },
@@ -269,9 +269,9 @@ export default async function ProductsPage({
               note: "仍可建单",
             },
             {
-              label: "商品",
+              label: "商品组",
               value: String(productSkuData.summary.productCount),
-              note: "当前覆盖",
+              note: "归属分布",
             },
             {
               label: "引用",
@@ -294,14 +294,14 @@ export default async function ProductsPage({
                 note: "仍在使用",
               },
               {
-                label: "关联商品",
+                label: "关联商品组",
                 value: String(
                   supplierData.items.reduce(
                     (sum, item) => sum + item._count.products,
                     0,
                   ),
                 ),
-                note: "商品覆盖",
+                note: "商品组覆盖",
               },
               {
                 label: "当前视图",
@@ -383,7 +383,7 @@ export default async function ProductsPage({
                   className="inline-flex min-h-0 items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[13px] font-medium text-primary-foreground shadow-sm transition-colors duration-150 hover:opacity-90"
                 >
                   <Plus className="h-4 w-4" />
-                  添加商品
+                  添加商品组
                 </Link>
               ) : null}
               {activeTab !== "suppliers" && canAccessSupplierTab ? (

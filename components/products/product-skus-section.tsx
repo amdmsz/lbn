@@ -369,15 +369,15 @@ export function ProductSkusSection({
 
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
           <label className="relative min-w-0 flex-1">
-            <span className="sr-only">搜索 SKU</span>
+            <span className="sr-only">搜索商品</span>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               name="q"
               defaultValue={filters.q}
               placeholder={
                 canViewSupplyIdentity
-                  ? "输入规格名、商品名、商品编码、品牌、系列或供应商"
-                  : "输入规格名、商品名、商品编码、品牌或系列"
+                  ? "输入商品名、商品组名、商品组编码、品牌、系列或供应商"
+                  : "输入商品名、商品组名、商品组编码、品牌或系列"
               }
               className="crm-input min-h-[2.85rem] pl-10"
             />
@@ -390,7 +390,7 @@ export function ProductSkusSection({
             )}
           >
             <label className="space-y-1.5">
-              <span className="sr-only">SKU 状态</span>
+              <span className="sr-only">商品状态</span>
               <select
                 name="status"
                 defaultValue={filters.status}
@@ -463,10 +463,10 @@ export function ProductSkusSection({
           </span>
           <span className={skuMetricPillClassName}>{visibleStatusLabel}</span>
           <span className={skuMetricPillClassName}>
-            SKU {summary.totalCount}
+            商品 {summary.totalCount}
           </span>
           <span className={skuMetricPillClassName}>
-            商品 {summary.productCount}
+            商品组 {summary.productCount}
           </span>
           <span className={skuMetricPillClassName}>
             启用 {summary.enabledCount}
@@ -587,9 +587,9 @@ export function ProductSkusSection({
           <div className="space-y-0 overflow-hidden">
             <div className="flex flex-col gap-2 border-b border-border/50 bg-card px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
               <div className="space-y-1">
-                <p className="crm-detail-label text-[11px]">SKU 工作台</p>
+                <p className="crm-detail-label text-[11px]">商品工作台</p>
                 <h3 className="text-[0.96rem] font-semibold text-foreground">
-                  规格与商品母档的轻维护视图
+                  按商品(规格)的轻维护视图,归属到商品组
                 </h3>
               </div>
               <p className="text-[12px] text-muted-foreground">
@@ -603,7 +603,7 @@ export function ProductSkusSection({
                 <thead>
                   <tr>
                     <th>规格</th>
-                    <th>所属商品</th>
+                    <th>所属商品组</th>
                     <th>默认售价</th>
                     <th>经营资料</th>
                     <th>状态</th>
@@ -811,7 +811,7 @@ export function ProductSkusSection({
             <PaginationControls
               page={pagination.page}
               totalPages={pagination.totalPages}
-              summary={`本页显示 ${pageStart} - ${pageEnd} 条 SKU，共 ${pagination.totalCount} 条`}
+              summary={`本页显示 ${pageStart} - ${pageEnd} 条商品，共 ${pagination.totalCount} 条`}
               buildHref={(pageNumber) =>
                 buildProductCenterHref(filters, {
                   tab: "skus",
@@ -826,12 +826,12 @@ export function ProductSkusSection({
           <div className="p-4 md:p-5">
             <EmptyState
               title={
-                activeFilters ? "当前筛选下没有 SKU" : "还没有可经营的 SKU"
+                activeFilters ? "当前筛选下没有商品" : "还没有可经营的商品"
               }
               description={
                 activeFilters
-                  ? "调整筛选后继续定位 SKU。"
-                  : "先创建商品，再在详情里继续补充规格。"
+                  ? "调整筛选后继续定位商品。"
+                  : "先创建商品组，再在详情里继续补充组下商品。"
               }
               action={
                 <div className="flex flex-wrap justify-center gap-2">
@@ -853,7 +853,7 @@ export function ProductSkusSection({
                       })}
                       className={cn(skuPrimaryButtonClassName, "px-3 py-2")}
                     >
-                      新建商品
+                      新建商品组
                     </Link>
                   ) : null}
                   {!activeFilters && canAccessSupplierTab ? (

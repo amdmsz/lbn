@@ -230,7 +230,7 @@ function buildSkuPreviewLabel(
   }>,
 ) {
   if (skus.length === 0) {
-    return "尚未建立 SKU";
+    return "尚未建立商品";
   }
 
   const visibleNames = skus
@@ -239,7 +239,7 @@ function buildSkuPreviewLabel(
     .slice(0, 2);
 
   if (visibleNames.length === 0) {
-    return `SKU ${skus.length}`;
+    return `${skus.length} 个商品`;
   }
 
   return skus.length > 2
@@ -353,7 +353,7 @@ export function ProductsSection({
       ? "仅启用"
       : filters.status === "disabled"
         ? "仅停用"
-        : "全部商品";
+        : "全部商品组";
 
   function openCreateDrawer() {
     setDrawerProduct(null);
@@ -419,15 +419,15 @@ export function ProductsSection({
 
         <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center">
           <label className="relative min-w-0 flex-1">
-            <span className="sr-only">搜索商品</span>
+            <span className="sr-only">搜索商品组</span>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               name="q"
               defaultValue={filters.q}
               placeholder={
                 canViewSupplyIdentity
-                  ? "输入商品名、编码、品牌、系列、SKU 或供应商"
-                  : "输入商品名、编码、品牌、系列或 SKU"
+                  ? "输入商品组名、编码、品牌、系列、商品名或供应商"
+                  : "输入商品组名、编码、品牌、系列或商品名"
               }
               className="crm-input min-h-[2.6rem] pl-10"
             />
@@ -440,7 +440,7 @@ export function ProductsSection({
             )}
           >
             <label className="space-y-1.5">
-              <span className="sr-only">商品状态</span>
+              <span className="sr-only">商品组状态</span>
               <select
                 name="status"
                 defaultValue={filters.status}
@@ -615,7 +615,7 @@ export function ProductsSection({
       <div className={productTableShellClassName}>
         <div className="flex flex-col gap-2 border-b border-border/50 bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[12.5px] leading-5 text-muted-foreground">
-            本页 {pageStart}-{pageEnd} · 共 {pagination.totalCount} 个商品
+            本页 {pageStart}-{pageEnd} · 共 {pagination.totalCount} 个商品组
           </p>
 
           <div className="flex flex-wrap items-center gap-1.5">
@@ -623,7 +623,7 @@ export function ProductsSection({
               显示 {visibleStatusLabel}
             </span>
             <span className={productMetaPillClassName}>
-              SKU {summary.skuCount}
+              商品 {summary.skuCount}
             </span>
             <span className={productMetaPillClassName}>
               引用 {summary.salesOrderItemCount}
@@ -638,9 +638,9 @@ export function ProductsSection({
                 <thead>
                   <tr>
                     <th className="w-14">展开</th>
-                    <th>商品名称</th>
+                    <th>商品组名称</th>
                     <th>价格</th>
-                    <th>规格</th>
+                    <th>所含商品</th>
                     <th>引用</th>
                     <th>上架</th>
                     <th className="text-right">动作</th>
@@ -662,7 +662,7 @@ export function ProductsSection({
                               type="button"
                               onClick={() => toggleProductExpansion(item.id)}
                               className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-background text-muted-foreground transition-[border-color,background-color,color] hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
-                              aria-label={isExpanded ? "收起 SKU" : "展开 SKU"}
+                              aria-label={isExpanded ? "收起所含商品" : "展开所含商品"}
                             >
                               {isExpanded ? (
                                 <ChevronDown className="h-4 w-4" />
@@ -682,6 +682,11 @@ export function ProductsSection({
                                 className="shrink-0"
                               />
                               <div className="min-w-0 space-y-1.5">
+                                {canViewSupplyIdentity && item.supplier ? (
+                                  <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+                                    供货商 · {item.supplier.name}
+                                  </p>
+                                ) : null}
                                 <button
                                   type="button"
                                   onClick={() => openDetail(item.id)}
@@ -708,7 +713,7 @@ export function ProductsSection({
                                 {buildProductPriceCoverageLabel(item.skus)}
                               </p>
                               <p className="text-[12px] leading-5 text-muted-foreground">
-                                当前主档的默认销售价格范围
+                                组下商品的默认销售价格范围
                               </p>
                             </div>
                           </td>
@@ -716,7 +721,7 @@ export function ProductsSection({
                           <td>
                             <div className="space-y-1.5">
                               <p className="text-[13px] font-medium text-foreground">
-                                SKU {item._count.skus}
+                                含 {item._count.skus} 个商品
                               </p>
                               <p className="text-[12px] leading-5 text-muted-foreground">
                                 {buildSkuPreviewLabel(item.skus)}
@@ -741,7 +746,7 @@ export function ProductsSection({
                               onClick={() => handleToggle(item)}
                               disabled={!canManage || pendingAction}
                               aria-label={
-                                item.enabled ? "停用商品" : "启用商品"
+                                item.enabled ? "停用商品组" : "启用商品组"
                               }
                               title={item.enabled ? "已上架(点击停用)" : "已停用(点击启用)"}
                               className={cn(
@@ -787,10 +792,10 @@ export function ProductsSection({
                                 <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.25fr)]">
                                   <div className="space-y-3">
                                     <div className="space-y-1.5">
-                                      <p className="crm-eyebrow">商品备注</p>
+                                      <p className="crm-eyebrow">商品组备注</p>
                                       <p className="text-sm leading-6 text-foreground">
                                         {item.description ||
-                                          "当前还没有商品说明，可在详情中继续补充。"}
+                                          "当前还没有商品组说明，可在详情中继续补充。"}
                                       </p>
                                     </div>
                                     {item.internalSupplyRemark &&
@@ -807,7 +812,7 @@ export function ProductsSection({
                                       className={productCompactMetaClassName}
                                     >
                                       <span>
-                                        商品创建{" "}
+                                        商品组创建{" "}
                                         {formatDateTime(item.createdAt)}
                                       </span>
                                       <span>
@@ -820,9 +825,9 @@ export function ProductsSection({
                                   <div className="space-y-3">
                                     <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
                                       <div>
-                                        <p className="crm-eyebrow">销售规格</p>
+                                        <p className="crm-eyebrow">所含商品</p>
                                         <p className="text-[12px] leading-5 text-muted-foreground">
-                                          SKU {item.skus.length} ·{" "}
+                                          {item.skus.length} 个商品 ·{" "}
                                           {buildProductPriceCoverageLabel(
                                             item.skus,
                                           )}
@@ -890,8 +895,7 @@ export function ProductsSection({
                                       </ul>
                                     ) : (
                                       <div className="rounded-lg border border-dashed border-border/60 bg-background px-3.5 py-3 text-sm leading-6 text-muted-foreground">
-                                        当前商品下还没有可见
-                                        SKU。进入详情抽屉后继续补充即可。
+                                        当前商品组下还没有可见商品。进入详情抽屉后继续补充即可。
                                       </div>
                                     )}
                                   </div>
@@ -910,7 +914,7 @@ export function ProductsSection({
             <PaginationControls
               page={pagination.page}
               totalPages={pagination.totalPages}
-              summary={`本页显示 ${pageStart} - ${pageEnd} 条商品，共 ${pagination.totalCount} 条`}
+              summary={`本页显示 ${pageStart} - ${pageEnd} 条商品组，共 ${pagination.totalCount} 条`}
               buildHref={(pageNumber) =>
                 buildProductCenterHref(filters, {
                   page: pageNumber,
@@ -924,12 +928,12 @@ export function ProductsSection({
           <div className="p-4 md:p-5">
             <EmptyState
               title={
-                activeFilters ? "当前筛选下没有商品" : "商品主数据还未建立"
+                activeFilters ? "当前筛选下没有商品组" : "商品组主数据还未建立"
               }
               description={
                 activeFilters
-                  ? "调整筛选后继续定位商品。"
-                  : "先创建商品，再在右侧详情里继续补充规格。"
+                  ? "调整筛选后继续定位商品组。"
+                  : "先创建商品组，再在右侧详情里继续补充组下商品。"
               }
               action={
                 <div className="flex flex-wrap justify-center gap-2">
@@ -949,7 +953,7 @@ export function ProductsSection({
                       onClick={openCreateDrawer}
                       className={cn(productPrimaryButtonClassName, "px-3 py-2")}
                     >
-                      新建商品
+                      新建商品组
                     </button>
                   ) : null}
                   {!activeFilters && canAccessSupplierTab ? (
