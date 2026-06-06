@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Search,
   SlidersHorizontal,
+  X,
 } from "lucide-react";
 import { Fragment, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -147,9 +148,6 @@ const productMetaPillClassName =
 
 const productCompactMetaClassName =
   "flex flex-wrap gap-x-3 gap-y-1 text-[12px] leading-5 text-muted-foreground";
-
-const productQuietActionClassName =
-  "inline-flex min-h-0 items-center rounded-full border border-transparent px-2.5 py-2 text-sm font-medium text-muted-foreground transition-[border-color,background-color,color] hover:border-border/60 hover:bg-muted/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50";
 
 const productPrimaryButtonClassName =
   "inline-flex min-h-0 items-center justify-center rounded-lg bg-primary text-sm font-medium text-primary-foreground shadow-sm transition-colors duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60";
@@ -488,21 +486,25 @@ export function ProductsSection({
             </button>
             <button
               type="submit"
+              aria-label="应用筛选"
+              title="应用筛选 (Enter)"
               className={cn(
                 productPrimaryButtonClassName,
-                "min-h-[2.6rem] px-3.5",
+                "min-h-[2.6rem] w-10 px-0",
               )}
             >
-              查看结果
+              <Search className="h-4 w-4" />
             </button>
             <Link
               href={buildProductCenterHref(PRODUCT_CENTER_EMPTY_FILTERS)}
+              aria-label="清空筛选"
+              title="清空所有筛选条件"
               className={cn(
                 productSecondaryButtonClassName,
-                "min-h-[2.6rem] px-3",
+                "min-h-[2.6rem] w-10 px-0",
               )}
             >
-              清空
+              <X className="h-4 w-4" />
             </Link>
           </div>
         </div>
@@ -829,7 +831,7 @@ export function ProductsSection({
                                     </div>
 
                                     {item.skus.length > 0 ? (
-                                      <div className="space-y-2.5">
+                                      <ul className="divide-y divide-border/40 rounded-lg border border-border/40 bg-card/50">
                                         {item.skus.map((sku) => {
                                           const skuDetailHref =
                                             buildProductCenterHref(filters, {
@@ -838,70 +840,56 @@ export function ProductsSection({
                                             });
 
                                           return (
-                                            <div
-                                              key={sku.id}
-                                              className="grid gap-3 rounded-xl border border-border/50 bg-card px-3.5 py-3 shadow-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-start"
-                                            >
-                                              <div className="min-w-0 space-y-2">
-                                                <button
-                                                  type="button"
-                                                  onClick={() =>
-                                                    router.push(skuDetailHref)
-                                                  }
-                                                  className="min-w-0 truncate text-left text-sm font-semibold text-foreground transition-colors hover:text-primary"
-                                                >
+                                            <li key={sku.id}>
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  router.push(skuDetailHref)
+                                                }
+                                                className="group flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-muted/30"
+                                              >
+                                                <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground group-hover:text-primary">
                                                   {sku.skuName}
-                                                </button>
-                                                <div
-                                                  className={
-                                                    productCompactMetaClassName
-                                                  }
-                                                >
-                                                  <span>
-                                                    默认售价{" "}
+                                                </span>
+                                                <span className="hidden shrink-0 items-center gap-3 text-[12px] text-muted-foreground tabular-nums lg:flex">
+                                                  <span title="默认售价">
                                                     {formatCurrency(
                                                       sku.defaultUnitPrice,
                                                     )}
                                                   </span>
-                                                  <span>
-                                                    默认件数{" "}
-                                                    {sku.defaultOrderQuantity}
+                                                  <span
+                                                    className="text-border"
+                                                    aria-hidden="true"
+                                                  >
+                                                    ·
                                                   </span>
-                                                  <span>
-                                                    订单引用{" "}
-                                                    {sku._count.salesOrderItems}
+                                                  <span title="默认件数">
+                                                    × {sku.defaultOrderQuantity}
                                                   </span>
-                                                  <span>
-                                                    更新{" "}
-                                                    {formatDateTime(
-                                                      sku.updatedAt,
-                                                    )}
+                                                  <span
+                                                    className="text-border"
+                                                    aria-hidden="true"
+                                                  >
+                                                    ·
                                                   </span>
-                                                </div>
-                                              </div>
-
-                                              <div className="flex flex-col items-start gap-2 md:items-end">
+                                                  <span title="订单引用次数">
+                                                    引用 {sku._count.salesOrderItems}
+                                                  </span>
+                                                </span>
                                                 <MasterDataStatusBadge
                                                   isActive={sku.enabled}
                                                 />
-                                                <button
-                                                  type="button"
-                                                  onClick={() =>
-                                                    router.push(skuDetailHref)
-                                                  }
-                                                  className={
-                                                    productQuietActionClassName
-                                                  }
-                                                >
-                                                  查看规格
-                                                </button>
-                                              </div>
-                                            </div>
+                                                <ChevronRight
+                                                  className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-colors group-hover:text-primary"
+                                                  aria-hidden="true"
+                                                />
+                                              </button>
+                                            </li>
                                           );
                                         })}
-                                      </div>
+                                      </ul>
                                     ) : (
-                                      <div className="rounded-xl border border-dashed border-border/60 bg-background px-3.5 py-3 text-sm leading-6 text-muted-foreground">
+                                      <div className="rounded-lg border border-dashed border-border/60 bg-background px-3.5 py-3 text-sm leading-6 text-muted-foreground">
                                         当前商品下还没有可见
                                         SKU。进入详情抽屉后继续补充即可。
                                       </div>
