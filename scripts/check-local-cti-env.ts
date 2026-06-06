@@ -7,6 +7,10 @@ function getArg(name: string) {
   return process.argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length);
 }
 
+function getFlag(name: string) {
+  return process.argv.includes(`--${name}`);
+}
+
 function repoPath(...parts: string[]) {
   return path.resolve(process.cwd(), ...parts);
 }
@@ -37,13 +41,101 @@ function requireEnv(name: string) {
   return value;
 }
 
+function optionalEnv(name: string) {
+  const value = process.env[name]?.trim();
+  return value ? value : null;
+}
+
+function booleanEnv(name: string, fallback = false) {
+  const value = process.env[name]?.trim().toLowerCase();
+
+  if (["1", "true", "yes", "on"].includes(value ?? "")) {
+    return true;
+  }
+
+  if (["0", "false", "no", "off"].includes(value ?? "")) {
+    return false;
+  }
+
+  return fallback;
+}
+
+function uniqueList(values: Array<string | null | undefined>) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    const normalized = value?.trim();
+
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+
+    seen.add(normalized);
+    result.push(normalized);
+  }
+
+  return result;
+}
+
+function getWebRtcDiagnostics() {
+  const crmEnabled = booleanEnv("OUTBOUND_CALL_WEBRTC_ENABLED");
+  const asteriskEnabled = booleanEnv("CTI_ASTERISK_WEBRTC_ENABLED");
+  const webSocketUrl = optionalEnv("OUTBOUND_CALL_WEBRTC_WS_URL");
+  const sipDomain = optionalEnv("OUTBOUND_CALL_WEBRTC_SIP_DOMAIN");
+  const transportProtocol = optionalEnv("CTI_ASTERISK_WEBRTC_TRANSPORT_PROTOCOL");
+  const httpEnabled = booleanEnv("CTI_ASTERISK_HTTP_ENABLED", true);
+  const seatNos = uniqueList([
+    optionalEnv("CTI_ASTERISK_DEFAULT_SEAT_NO"),
+    ...(process.env.CTI_ASTERISK_SEAT_NOS ?? "")
+      .split(",")
+      .map((item) => item.trim()),
+  ]);
+  const warnings: string[] = [];
+
+  if (!crmEnabled) {
+    warnings.push("OUTBOUND_CALL_WEBRTC_ENABLED is not enabled.");
+  }
+
+  if (!asteriskEnabled) {
+    warnings.push("CTI_ASTERISK_WEBRTC_ENABLED is not enabled.");
+  }
+
+  if (!webSocketUrl) {
+    warnings.push("OUTBOUND_CALL_WEBRTC_WS_URL is missing.");
+  }
+
+  if (!sipDomain) {
+    warnings.push("OUTBOUND_CALL_WEBRTC_SIP_DOMAIN is missing.");
+  }
+
+  if (!httpEnabled) {
+    warnings.push("CTI_ASTERISK_HTTP_ENABLED is disabled.");
+  }
+
+  if (seatNos.length === 0) {
+    warnings.push("No Asterisk seat numbers are configured.");
+  }
+
+  return {
+    ready: warnings.length === 0,
+    crmEnabled,
+    asteriskEnabled,
+    webSocketUrl,
+    sipDomain,
+    transportProtocol,
+    seatNos,
+    warnings,
+  };
+}
+
 function getGatewayEndpoint() {
   const baseUrl = requireEnv("OUTBOUND_CALL_GATEWAY_BASE_URL");
   const startPath = process.env.OUTBOUND_CALL_START_PATH?.trim() || "/calls/start";
   return new URL(startPath, baseUrl).toString();
 }
 
-function getNextMessage() {
+function getNextMessage(webRtc: ReturnType<typeof getWebRtcDiagnostics>) {
   const mode = process.env.CTI_GATEWAY_MODE;
 
   if (mode === "FREESWITCH_ESL") {
@@ -51,6 +143,10 @@ function getNextMessage() {
   }
 
   if (mode === "ASTERISK_AMI") {
+    if (!webRtc.ready) {
+      return "Asterisk AMI passed, but WebRTC seat config is incomplete. Fix webRtc.warnings before browser seat registration.";
+    }
+
     return "Asterisk AMI passed. Register a softphone with the seat number before making a real call.";
   }
 
@@ -78,6 +174,26 @@ async function fetchJson(url: string, init?: RequestInit) {
 async function main() {
   const envPath = repoPath(getArg("env") ?? "runtime/cti/local.env");
   loadEnv(envPath);
+
+  const webRtc = getWebRtcDiagnostics();
+
+  if (getFlag("webrtc-only")) {
+    console.log(
+      JSON.stringify({
+        event: webRtc.ready
+          ? "cti_local_webrtc.ok"
+          : "cti_local_webrtc.failed",
+        envPath,
+        webRtc,
+      }),
+    );
+
+    if (!webRtc.ready) {
+      process.exitCode = 1;
+    }
+
+    return;
+  }
 
   const endpoint = getGatewayEndpoint();
   const healthUrl = new URL("/health", process.env.OUTBOUND_CALL_GATEWAY_BASE_URL);
@@ -122,7 +238,8 @@ async function main() {
       endpoint,
       health: health.body,
       start: start.body,
-      next: getNextMessage(),
+      webRtc,
+      next: getNextMessage(webRtc),
     }),
   );
 }

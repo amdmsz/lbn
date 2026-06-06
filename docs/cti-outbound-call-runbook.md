@@ -56,6 +56,13 @@ curl -i --http1.1 --resolve crm.cclbn.com:443:127.0.0.1 \
 
 期望返回 `101 Switching Protocols` 且带 `Sec-WebSocket-Protocol: sip`。
 
+内网 DNS 模式：
+
+- 如果 `crm.cclbn.com` 在内网解析到 CRM 主机（例如 `192.168.11.101`），Nginx 的 `/asterisk/ws` 不应代理到 frp `127.0.0.1:18081`。
+- 内网应直接代理到 PBX Asterisk HTTP WebSocket，例如将 `wss://crm.cclbn.com/asterisk/ws-v2` 代理到 `http://192.168.11.103:8088/ws`，并保留 `Upgrade / Connection` header。
+- 如果旧页面已经在循环请求 `/asterisk/ws`，可让旧 path 返回 `410`，新页面通过 `/asterisk/ws-v2` 上线，避免旧 WebSocket 循环继续占用 PBX。
+- 仓库内网模板 [deploy/nginx/jiuzhuang-crm.conf](../deploy/nginx/jiuzhuang-crm.conf) 已按这个路径收口。
+
 Asterisk 侧：
 
 ```bash
@@ -168,6 +175,8 @@ CTI_ASTERISK_SEAT_NOS=6001,sales,sales2,zhansan
 
 - `ASTERISK_AMI` 适合 Ubuntu/WSL 本地快速搭建，因为 Ubuntu 源可直接安装 Asterisk。
 - `seatNo` 仍然默认等于 CRM 登录账号；`CTI_ASTERISK_SEAT_NOS` 要填允许注册的 CRM 销售账号，例如 `sales2`。
+- 新建销售 / 管理员账号后，如果要使用网页坐席，必须把账号名或坐席绑定号同步进 `CTI_ASTERISK_SEAT_NOS`，重新执行 `npm run cti:render:asterisk -- --env=/etc/jiuzhuang-crm/jiuzhuang-crm.env --output-dir=/tmp/lbn-asterisk-render`，再把 `pjsip_lbn_crm.conf` 发布到 PBX 并执行 `asterisk -rx 'pjsip reload'`。
+- 如果 `/api/outbound-calls/webrtc-config` 返回正常，但 PBX `pjsip show endpoints` 没有同名 endpoint，浏览器会表现为坐席卡片反复连接/刷新但无法上线。
 - `PCMA/G.711A` 在 Asterisk PJSIP 中对应 `alaw`。
 - 很多国内 SIP/VOS 线路不稳定响应 OPTIONS；trunk 默认 `qualify_frequency=0`，用 `pjsip show registrations` 判断注册状态，坐席端仍保留 qualify。
 - Asterisk `MixMonitor` 写入 `CTI_ASTERISK_RECORDING_DIR`，挂机后执行 `lbn-crm-post-call-webhook.sh`，以 HMAC 签名把 CDR、通话时长和 `recordingPath` 回传给 CRM。
@@ -178,7 +187,7 @@ CTI_ASTERISK_SEAT_NOS=6001,sales,sales2,zhansan
 OUTBOUND_CALL_WEBRTC_ENABLED=1
 OUTBOUND_CALL_WEBRTC_PUBLIC_HOST=crm.cclbn.com
 OUTBOUND_CALL_WEBRTC_SIP_DOMAIN=crm.cclbn.com
-OUTBOUND_CALL_WEBRTC_WS_URL=wss://crm.cclbn.com/asterisk/ws
+OUTBOUND_CALL_WEBRTC_WS_URL=wss://crm.cclbn.com/asterisk/ws-v2
 OUTBOUND_CALL_WEBRTC_DEFAULT_SEAT_PASSWORD=replace-with-generated-seat-secret
 OUTBOUND_CALL_WEBRTC_PREFERRED_CODECS=opus,pcma
 OUTBOUND_CALL_WEBRTC_ICE_SERVERS_JSON=[]

@@ -83,6 +83,7 @@ const pillStatusCopy: Record<SoftphoneStatus, string> = {
 };
 
 const preferredAudioInputStorageKey = "lbncrm.webrtc.preferredAudioInputId";
+const autoReconnectCooldownMs = 15_000;
 
 function formatElapsed(seconds: number) {
   const safeSeconds = Math.max(0, seconds);
@@ -187,6 +188,15 @@ function clearPreferredAudioInputId() {
   }
 }
 
+async function closeSimpleUser(user: SimpleUser | null | undefined) {
+  if (!user) {
+    return;
+  }
+
+  await user.unregister().catch(() => undefined);
+  await user.disconnect().catch(() => undefined);
+}
+
 function buildAudioConstraints(deviceId?: string | null): MediaTrackConstraints {
   return {
     echoCancellation: true,
@@ -277,6 +287,10 @@ export function WebRtcSoftphone({
   const [now, setNow] = useState(() => Date.now());
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const userRef = useRef<SimpleUser | null>(null);
+  const connectPromiseRef = useRef<Promise<void> | null>(null);
+  const connectionAttemptRef = useRef(0);
+  const desiredOnlineRef = useRef(false);
+  const lastAutoReconnectAtRef = useRef(0);
   const mountedRef = useRef(true);
   const callStartedAtRef = useRef<number | null>(null);
   const statusRef = useRef<SoftphoneStatus>("idle");
@@ -425,18 +439,14 @@ export function WebRtcSoftphone({
 
     return () => {
       mountedRef.current = false;
+      desiredOnlineRef.current = false;
+      connectPromiseRef.current = null;
+      connectionAttemptRef.current += 1;
 
       const currentUser = userRef.current;
       userRef.current = null;
 
-      if (currentUser?.isConnected()) {
-        void currentUser
-          .unregister()
-          .catch(() => undefined)
-          .finally(() => {
-            void currentUser.disconnect().catch(() => undefined);
-          });
-      }
+      void closeSimpleUser(currentUser);
     };
   }, []);
 
@@ -513,119 +523,169 @@ export function WebRtcSoftphone({
   }, [refreshAudioInputDevices]);
 
   const connect = useCallback(async () => {
-    const currentConfig = configRef.current ?? (await ensureConfigLoaded());
-
-    if (!currentConfig?.enabled) {
-      return;
+    if (connectPromiseRef.current) {
+      return connectPromiseRef.current;
     }
 
     if (
-      !currentConfig.webSocketServer ||
-      !currentConfig.sipUri ||
-      !currentConfig.authorizationUser ||
-      !currentConfig.password
+      userRef.current?.isConnected() &&
+      ["online", "incoming", "in_call", "connecting"].includes(statusRef.current)
     ) {
-      safeSetStatus("failed", "网页坐席配置不完整");
       return;
     }
 
-    if (currentConfig.secureContextRequired && !isLocalSecureEnough()) {
-      safeSetStatus(
-        "failed",
-        "浏览器麦克风需要 HTTPS；本地请用 localhost，生产请用 crm.cclbn.com",
-      );
-      return;
-    }
+    const attemptId = connectionAttemptRef.current + 1;
+    connectionAttemptRef.current = attemptId;
 
-    if (!navigator.mediaDevices?.getUserMedia) {
-      safeSetStatus("failed", "当前浏览器不支持网页通话");
-      return;
-    }
+    const connectPromise = (async () => {
+      const currentConfig = configRef.current ?? (await ensureConfigLoaded());
 
-    safeSetStatus("connecting", "正在授权麦克风并注册坐席");
-
-    try {
-      let preferredAudioInputId = getPreferredAudioInputId();
-      let stream: MediaStream;
-
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: buildAudioConstraints(preferredAudioInputId),
-          video: false,
-        });
-      } catch (error) {
-        if (!preferredAudioInputId) {
-          throw error;
-        }
-
-        clearPreferredAudioInputId();
-        preferredAudioInputId = null;
-        stream = await navigator.mediaDevices.getUserMedia({
-          audio: buildAudioConstraints(),
-          video: false,
-        });
+      if (!currentConfig?.enabled) {
+        return;
       }
 
-      const selectedAudioInputId =
-        stream.getAudioTracks()[0]?.getSettings().deviceId ?? preferredAudioInputId;
+      if (
+        !currentConfig.webSocketServer ||
+        !currentConfig.sipUri ||
+        !currentConfig.authorizationUser ||
+        !currentConfig.password
+      ) {
+        safeSetStatus("failed", "网页坐席配置不完整");
+        return;
+      }
 
-      preferredAudioInputIdRef.current = selectedAudioInputId ?? null;
-      savePreferredAudioInputId(selectedAudioInputId);
-      stream.getTracks().forEach((track) => track.stop());
-      void refreshAudioInputDevices();
+      if (currentConfig.secureContextRequired && !isLocalSecureEnough()) {
+        safeSetStatus(
+          "failed",
+          "浏览器麦克风需要 HTTPS；本地请用 localhost，生产请用 crm.cclbn.com",
+        );
+        return;
+      }
 
-      const sipModule = await import("sip.js");
-      const delegate: SimpleUserDelegate = {
-        onServerConnect: () => {
-          safeSetStatus("connecting", "已连接 Asterisk，正在注册");
-        },
-        onServerDisconnect: (error) => {
-          safeSetStatus(
-            "failed",
-            error ? `坐席连接断开：${error.message}` : "坐席连接已断开",
-          );
-        },
-        onRegistered: () => {
-          safeSetStatus("online", "可接收 CRM 外呼");
-        },
-        onUnregistered: () => {
-          safeSetStatus("idle", "坐席已下线");
-        },
-        onCallReceived: () => {
-          const startedAt = Date.now();
-          setIncomingStartedAt(startedAt);
-          setCallStartedAt(null);
-          callStartedAtRef.current = null;
-          setLastCallSeconds(null);
-          safeSetStatus("incoming", "CRM 外呼来电，请接听");
-        },
-        onCallAnswered: () => {
-          const startedAt = Date.now();
-          setIncomingStartedAt(null);
-          setCallStartedAt(startedAt);
-          callStartedAtRef.current = startedAt;
-          setLastCallSeconds(null);
-          setMuted(false);
-          attachRemoteAudio();
-          safeSetStatus("in_call", "通话已接通，录音由 Asterisk 服务端保存");
-        },
-        onCallHangup: () => {
-          setLastCallSeconds(
-            callStartedAtRef.current
-              ? Math.floor((Date.now() - callStartedAtRef.current) / 1000)
-              : null,
-          );
-          setIncomingStartedAt(null);
-          setCallStartedAt(null);
-          callStartedAtRef.current = null;
-          setMuted(false);
-          safeSetStatus("online", "通话结束，坐席在线");
-        },
-      };
+      if (!navigator.mediaDevices?.getUserMedia) {
+        safeSetStatus("failed", "当前浏览器不支持网页通话");
+        return;
+      }
 
-      const nextUser: SimpleUser = new sipModule.Web.SimpleUser(
-        currentConfig.webSocketServer,
-        {
+      desiredOnlineRef.current = true;
+      safeSetStatus("connecting", "正在授权麦克风并注册坐席");
+
+      const previousUser = userRef.current;
+      userRef.current = null;
+      await closeSimpleUser(previousUser);
+
+      let nextUser: SimpleUser | null = null;
+      const isCurrentUser = () =>
+        mountedRef.current &&
+        connectionAttemptRef.current === attemptId &&
+        userRef.current === nextUser;
+
+      try {
+        let preferredAudioInputId = getPreferredAudioInputId();
+        let stream: MediaStream;
+
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: buildAudioConstraints(preferredAudioInputId),
+            video: false,
+          });
+        } catch (error) {
+          if (!preferredAudioInputId) {
+            throw error;
+          }
+
+          clearPreferredAudioInputId();
+          preferredAudioInputId = null;
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: buildAudioConstraints(),
+            video: false,
+          });
+        }
+
+        const selectedAudioInputId =
+          stream.getAudioTracks()[0]?.getSettings().deviceId ?? preferredAudioInputId;
+
+        preferredAudioInputIdRef.current = selectedAudioInputId ?? null;
+        savePreferredAudioInputId(selectedAudioInputId);
+        stream.getTracks().forEach((track) => track.stop());
+        void refreshAudioInputDevices();
+
+        if (!mountedRef.current || connectionAttemptRef.current !== attemptId) {
+          return;
+        }
+
+        const sipModule = await import("sip.js");
+        const delegate: SimpleUserDelegate = {
+          onServerConnect: () => {
+            if (isCurrentUser()) {
+              safeSetStatus("connecting", "已连接 Asterisk，正在注册");
+            }
+          },
+          onServerDisconnect: (error) => {
+            if (isCurrentUser()) {
+              desiredOnlineRef.current = false;
+              safeSetStatus(
+                "failed",
+                error ? `坐席连接断开：${error.message}` : "坐席连接已断开",
+              );
+            }
+          },
+          onRegistered: () => {
+            if (isCurrentUser()) {
+              safeSetStatus("online", "可接收 CRM 外呼");
+            }
+          },
+          onUnregistered: () => {
+            if (isCurrentUser()) {
+              desiredOnlineRef.current = false;
+              safeSetStatus("idle", "坐席已下线");
+            }
+          },
+          onCallReceived: () => {
+            if (!isCurrentUser()) {
+              return;
+            }
+
+            const startedAt = Date.now();
+            setIncomingStartedAt(startedAt);
+            setCallStartedAt(null);
+            callStartedAtRef.current = null;
+            setLastCallSeconds(null);
+            safeSetStatus("incoming", "CRM 外呼来电，请接听");
+          },
+          onCallAnswered: () => {
+            if (!isCurrentUser()) {
+              return;
+            }
+
+            const startedAt = Date.now();
+            setIncomingStartedAt(null);
+            setCallStartedAt(startedAt);
+            callStartedAtRef.current = startedAt;
+            setLastCallSeconds(null);
+            setMuted(false);
+            attachRemoteAudio();
+            safeSetStatus("in_call", "通话已接通，录音由 Asterisk 服务端保存");
+          },
+          onCallHangup: () => {
+            if (!isCurrentUser()) {
+              return;
+            }
+
+            setLastCallSeconds(
+              callStartedAtRef.current
+                ? Math.floor((Date.now() - callStartedAtRef.current) / 1000)
+                : null,
+            );
+            setIncomingStartedAt(null);
+            setCallStartedAt(null);
+            callStartedAtRef.current = null;
+            setMuted(false);
+            safeSetStatus("online", "通话结束，坐席在线");
+          },
+        };
+
+        nextUser = new sipModule.Web.SimpleUser(currentConfig.webSocketServer, {
           aor: currentConfig.sipUri,
           delegate,
           media: {
@@ -637,8 +697,8 @@ export function WebRtcSoftphone({
               audio: audioRef.current ?? undefined,
             },
           },
-          reconnectionAttempts: 5,
-          reconnectionDelay: 3,
+          reconnectionAttempts: 0,
+          reconnectionDelay: 5,
           registererOptions: {
             expires: currentConfig.registrationExpiresSeconds,
           },
@@ -656,31 +716,47 @@ export function WebRtcSoftphone({
             },
             userAgentString: "JiuzhuangCRM-WebRTC-Seat",
           },
-        },
-      );
+        });
 
-      userRef.current = nextUser;
+        userRef.current = nextUser;
 
-      await nextUser.connect();
-      await nextUser.register();
-      safeSetStatus("online", "可接收 CRM 外呼");
-    } catch (error) {
-      const currentUser = userRef.current;
-      userRef.current = null;
-      setMuted(false);
-      setIncomingStartedAt(null);
-      setCallStartedAt(null);
-      callStartedAtRef.current = null;
+        await nextUser.connect();
 
-      if (currentUser?.isConnected()) {
-        void currentUser.disconnect().catch(() => undefined);
+        if (!isCurrentUser()) {
+          await closeSimpleUser(nextUser);
+          return;
+        }
+
+        await nextUser.register();
+
+        if (!isCurrentUser()) {
+          await closeSimpleUser(nextUser);
+          return;
+        }
+
+        safeSetStatus("online", "可接收 CRM 外呼");
+      } catch (error) {
+        if (userRef.current === nextUser) {
+          userRef.current = null;
+        }
+
+        await closeSimpleUser(nextUser);
+        setMuted(false);
+        setIncomingStartedAt(null);
+        setCallStartedAt(null);
+        callStartedAtRef.current = null;
+        desiredOnlineRef.current = false;
+
+        safeSetStatus("failed", getWebRtcSoftphoneErrorMessage(error));
       }
+    })().finally(() => {
+      if (connectPromiseRef.current === connectPromise) {
+        connectPromiseRef.current = null;
+      }
+    });
 
-      safeSetStatus(
-        "failed",
-        getWebRtcSoftphoneErrorMessage(error),
-      );
-    }
+    connectPromiseRef.current = connectPromise;
+    return connectPromise;
   }, [attachRemoteAudio, ensureConfigLoaded, refreshAudioInputDevices, safeSetStatus]);
 
   const reconnectIfReady = useCallback(
@@ -692,10 +768,15 @@ export function WebRtcSoftphone({
         return;
       }
 
+      if (!desiredOnlineRef.current) {
+        return;
+      }
+
       if (
         currentStatus === "loading" ||
         currentStatus === "disabled" ||
         currentStatus === "connecting" ||
+        currentStatus === "failed" ||
         currentStatus === "incoming" ||
         currentStatus === "in_call"
       ) {
@@ -706,6 +787,13 @@ export function WebRtcSoftphone({
         return;
       }
 
+      const nowMs = Date.now();
+
+      if (nowMs - lastAutoReconnectAtRef.current < autoReconnectCooldownMs) {
+        return;
+      }
+
+      lastAutoReconnectAtRef.current = nowMs;
       setMessage(
         reason === "desktop"
           ? "桌面端已恢复，正在重新注册坐席"
@@ -748,33 +836,13 @@ export function WebRtcSoftphone({
     };
   }, [reconnectIfReady]);
 
-  useEffect(() => {
-    if (!config?.enabled || status !== "idle") {
-      return;
-    }
-
-    if (!navigator.permissions?.query || !isLocalSecureEnough()) {
-      return;
-    }
-
-    let canceled = false;
-
-    void navigator.permissions
-      .query({ name: "microphone" as PermissionName })
-      .then((permission) => {
-        if (!canceled && permission.state === "granted") {
-          void connect();
-        }
-      })
-      .catch(() => undefined);
-
-    return () => {
-      canceled = true;
-    };
-  }, [config?.enabled, connect, status]);
-
   const disconnect = useCallback(async () => {
+    desiredOnlineRef.current = false;
+    connectPromiseRef.current = null;
+    connectionAttemptRef.current += 1;
+
     const currentUser = userRef.current;
+    userRef.current = null;
 
     if (!currentUser) {
       safeSetStatus("idle", "坐席已下线");
@@ -786,9 +854,7 @@ export function WebRtcSoftphone({
         await currentUser.hangup();
       }
 
-      await currentUser.unregister().catch(() => undefined);
-      await currentUser.disconnect().catch(() => undefined);
-      userRef.current = null;
+      await closeSimpleUser(currentUser);
       setMuted(false);
       setIncomingStartedAt(null);
       setCallStartedAt(null);
