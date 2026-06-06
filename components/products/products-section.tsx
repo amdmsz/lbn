@@ -143,9 +143,6 @@ const EMPTY_DICTIONARIES = {
   financeCategoryOptions: [] as ProductCenterDictionaryOption[],
 };
 
-const productMetaPillClassName =
-  "rounded-full border border-border/60 bg-background px-2 py-0.5 text-[10.5px] font-medium text-muted-foreground";
-
 const productCompactMetaClassName =
   "flex flex-wrap gap-x-3 gap-y-1 text-[12px] leading-5 text-muted-foreground";
 
@@ -251,7 +248,6 @@ export function ProductsSection({
   items,
   suppliers,
   filters,
-  summary,
   pagination,
   detailProduct,
   detailSkuId,
@@ -276,12 +272,6 @@ export function ProductsSection({
   items: ProductItem[];
   suppliers: SupplierOption[];
   filters: ProductCenterFilters;
-  summary: {
-    totalCount: number;
-    enabledCount: number;
-    skuCount: number;
-    salesOrderItemCount: number;
-  };
   pagination: {
     page: number;
     pageSize: number;
@@ -613,22 +603,11 @@ export function ProductsSection({
       ) : null}
 
       <div className={productTableShellClassName}>
-        <div className="flex flex-col gap-2 border-b border-border/50 bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[12.5px] leading-5 text-muted-foreground">
-            本页 {pageStart}-{pageEnd} · 共 {pagination.totalCount} 个商品组
+        <div className="border-b border-border/50 bg-card px-4 py-2.5">
+          <p className="text-[12px] leading-5 text-muted-foreground tabular-nums">
+            本页 {pageStart}-{pageEnd} · 共 {pagination.totalCount} 个商品组 ·
+            显示 {visibleStatusLabel}
           </p>
-
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className={productMetaPillClassName}>
-              显示 {visibleStatusLabel}
-            </span>
-            <span className={productMetaPillClassName}>
-              商品 {summary.skuCount}
-            </span>
-            <span className={productMetaPillClassName}>
-              引用 {summary.salesOrderItemCount}
-            </span>
-          </div>
         </div>
 
         {items.length > 0 ? (
@@ -681,28 +660,28 @@ export function ProductsSection({
                                 size="list"
                                 className="shrink-0"
                               />
-                              <div className="min-w-0 space-y-1.5">
-                                {canViewSupplyIdentity && item.supplier ? (
-                                  <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-muted-foreground">
-                                    供货商 · {item.supplier.name}
-                                  </p>
-                                ) : null}
-                                <button
-                                  type="button"
-                                  onClick={() => openDetail(item.id)}
-                                  className="block min-w-0 truncate text-left text-[0.98rem] font-semibold text-foreground transition-colors hover:text-primary"
-                                >
-                                  {item.name}
-                                </button>
-                                <p className="text-[12px] leading-5 text-muted-foreground">
-                                  ID: {item.code} · 更新{" "}
-                                  {formatDateTime(item.updatedAt)}
+                              <div className="min-w-0 space-y-0.5">
+                                <div className="flex flex-wrap items-baseline gap-x-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => openDetail(item.id)}
+                                    className="min-w-0 truncate text-left text-[0.95rem] font-semibold text-foreground transition-colors hover:text-primary"
+                                  >
+                                    {item.name}
+                                  </button>
+                                  <span className="text-[11px] text-muted-foreground tabular-nums">
+                                    {item.code}
+                                  </span>
+                                </div>
+                                <p className="line-clamp-1 text-[12px] leading-5 text-muted-foreground">
+                                  {canViewSupplyIdentity && item.supplier
+                                    ? `供货商 · ${item.supplier.name}`
+                                    : null}
+                                  {canViewSupplyIdentity && item.supplier && brandSeriesLine
+                                    ? " · "
+                                    : null}
+                                  {brandSeriesLine}
                                 </p>
-                                {brandSeriesLine ? (
-                                  <p className="text-[12px] leading-5 text-muted-foreground">
-                                    {brandSeriesLine}
-                                  </p>
-                                ) : null}
                               </div>
                             </div>
                           </td>

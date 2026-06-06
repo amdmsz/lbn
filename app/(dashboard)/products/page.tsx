@@ -324,15 +324,18 @@ export default async function ProductsPage({
                 : "default",
         }));
 
-  const headerMeta = (
+  // headerMeta 只在筛选有意义时显示, 避免跟下方 KPI strip 重复 view label.
+  const hasNonDefaultFilter =
+    activeTab !== "suppliers" &&
+    Boolean(productFilters.supplierId || productFilters.status);
+  const headerMeta = hasNonDefaultFilter ? (
     <>
       <StatusBadge label={activeStatusLabel} variant="neutral" />
-      {activeTab !== "suppliers" && productFilters.supplierId ? (
+      {productFilters.supplierId ? (
         <StatusBadge label="已限定供应商" variant="warning" />
       ) : null}
-      <StatusBadge label={activeViewLabel} variant="info" />
     </>
-  );
+  ) : null;
 
   const viewTabLinks = viewTabs.map((item) => (
     <Link
@@ -429,7 +432,6 @@ export default async function ProductsPage({
           items={productData.items}
           suppliers={productData.suppliers}
           filters={productData.filters}
-          summary={productData.summary}
           pagination={productData.pagination}
           detailProduct={detailData?.product ?? null}
           detailSkuId={detailSkuId}

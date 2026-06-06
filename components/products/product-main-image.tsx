@@ -17,7 +17,7 @@ const sizeClasses: Record<
   NonNullable<ProductMainImageProps["size"]>,
   string
 > = {
-  list: "h-12 w-12 rounded-md",
+  list: "h-9 w-9 rounded-md",
   hero: "h-32 w-32 rounded-xl",
   form: "h-20 w-20 rounded-lg",
 };
@@ -26,7 +26,7 @@ const fallbackIconSizeClasses: Record<
   NonNullable<ProductMainImageProps["size"]>,
   string
 > = {
-  list: "h-5 w-5",
+  list: "h-4 w-4",
   hero: "h-10 w-10",
   form: "h-7 w-7",
 };
