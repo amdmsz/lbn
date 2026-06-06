@@ -504,15 +504,33 @@ function TradeOrderExecutionStrip({
             label={getSalesOrderPaymentSchemeLabel(item.paymentScheme)}
             variant={getSalesOrderPaymentSchemeVariant(item.paymentScheme)}
           />
-          <div className="flex flex-wrap gap-1.5">
-            {fulfillmentSummary.map((entry) => (
-              <StatusBadge
-                key={entry.label}
-                label={`${entry.label} ${entry.count}`}
-                variant={entry.variant}
-              />
-            ))}
-          </div>
+          {(() => {
+            const activeEntries = fulfillmentSummary.filter(
+              (entry) =>
+                entry.count > 0 ||
+                // 始终保留"异常"那一项(即使为 0)让用户知道"无异常"是状态而不是缺失;
+                // 其余状态 0 时隐藏避免 [待报单 0] [待物流 1] [已发货 0] [异常 0] 这种噪音.
+                entry.label === "异常",
+            );
+            if (activeEntries.length === 0) {
+              return (
+                <span className="text-[11px] text-muted-foreground">
+                  暂无执行任务
+                </span>
+              );
+            }
+            return (
+              <div className="flex flex-wrap gap-1.5">
+                {activeEntries.map((entry) => (
+                  <StatusBadge
+                    key={entry.label}
+                    label={`${entry.label} ${entry.count}`}
+                    variant={entry.variant}
+                  />
+                ))}
+              </div>
+            );
+          })()}
           {shippingTaskCount > 0 || shippingPackageCount > 0 ? (
             <p className="text-[11px] text-muted-foreground tabular-nums">
               物流任务 {shippingTaskCount} · 包裹 {shippingPackageCount}
