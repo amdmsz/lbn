@@ -708,22 +708,17 @@ export function ProductsSection({
                           </td>
 
                           <td>
-                            <div className="space-y-1.5">
-                              <p className="text-[0.95rem] font-semibold text-foreground">
-                                {buildProductPriceCoverageLabel(item.skus)}
-                              </p>
-                              <p className="text-[12px] leading-5 text-muted-foreground">
-                                组下商品的默认销售价格范围
-                              </p>
-                            </div>
+                            <p className="text-[0.95rem] font-semibold text-foreground tabular-nums">
+                              {buildProductPriceCoverageLabel(item.skus)}
+                            </p>
                           </td>
 
                           <td>
-                            <div className="space-y-1.5">
-                              <p className="text-[13px] font-medium text-foreground">
-                                含 {item._count.skus} 个商品
+                            <div className="space-y-1">
+                              <p className="text-[13px] font-medium text-foreground tabular-nums">
+                                {item._count.skus} 个
                               </p>
-                              <p className="text-[12px] leading-5 text-muted-foreground">
+                              <p className="line-clamp-1 text-[12px] leading-5 text-muted-foreground">
                                 {buildSkuPreviewLabel(item.skus)}
                               </p>
                             </div>

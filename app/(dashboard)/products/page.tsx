@@ -312,9 +312,7 @@ export default async function ProductsPage({
           : [];
 
   const summaryItems: PageSummaryStripItem[] =
-    activeTab === "products"
-      ? []
-      : topSummaryItems.map((item) => ({
+    topSummaryItems.map((item) => ({
           label: item.label,
           value: item.value,
           note: item.note,
@@ -326,16 +324,15 @@ export default async function ProductsPage({
                 : "default",
         }));
 
-  const headerMeta =
-    activeTab === "products" ? null : (
-      <>
-        <StatusBadge label={activeStatusLabel} variant="neutral" />
-        {activeTab !== "suppliers" && productFilters.supplierId ? (
-          <StatusBadge label="已限定供应商" variant="warning" />
-        ) : null}
-        <StatusBadge label={activeViewLabel} variant="info" />
-      </>
-    );
+  const headerMeta = (
+    <>
+      <StatusBadge label={activeStatusLabel} variant="neutral" />
+      {activeTab !== "suppliers" && productFilters.supplierId ? (
+        <StatusBadge label="已限定供应商" variant="warning" />
+      ) : null}
+      <StatusBadge label={activeViewLabel} variant="info" />
+    </>
+  );
 
   const viewTabLinks = viewTabs.map((item) => (
     <Link
