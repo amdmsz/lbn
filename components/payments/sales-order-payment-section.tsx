@@ -150,8 +150,8 @@ export function SalesOrderPaymentSection({
   return (
     <section className="crm-section-card">
       <div className="space-y-2">
-        <h3 className="text-lg font-semibold text-black/85">收款与催收</h3>
-        <p className="text-sm leading-7 text-black/60">
+        <h3 className="text-lg font-semibold text-foreground">收款与催收</h3>
+        <p className="text-sm leading-7 text-muted-foreground">
           PaymentPlan 负责应收计划，PaymentRecord 负责收款记录，CollectionTask 负责后续催收与跟进动作。订单页上的
           depositAmount、collectedAmount、paidAmount、remainingAmount、codAmount 只是 payment layer 的同步摘要，不是唯一真相。
         </p>
@@ -163,7 +163,7 @@ export function SalesOrderPaymentSection({
             const openTask = getOpenCollectionTask(plan);
 
             return (
-              <div key={plan.id} className="rounded-3xl border border-black/8 bg-white/80 p-5">
+              <div key={plan.id} className="rounded-3xl border border-border/60 bg-white/80 p-5">
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge
                     label={getPaymentPlanSubjectLabel(plan.subjectType)}
@@ -186,7 +186,7 @@ export function SalesOrderPaymentSection({
                 <div className="mt-4 grid gap-4 xl:grid-cols-3">
                   <div className="crm-subtle-panel">
                     <p className="crm-detail-label">计划摘要</p>
-                    <div className="mt-3 space-y-2 text-sm text-black/70">
+                    <div className="mt-3 space-y-2 text-sm text-foreground/80">
                       <div>{getPaymentPlanProgressSummary(plan)}</div>
                       <div>到期时间：{plan.dueAt ? formatDateTime(plan.dueAt) : "未设置"}</div>
                       <div>备注：{plan.remark || "无"}</div>
@@ -200,19 +200,19 @@ export function SalesOrderPaymentSection({
                         plan.paymentRecords.map((record) => (
                           <div
                             key={record.id}
-                            className="rounded-2xl border border-black/8 bg-white/70 p-4"
+                            className="rounded-xl border border-border/60 bg-white/70 p-4"
                           >
                             <div className="flex flex-wrap items-center gap-2">
                               <StatusBadge
                                 label={getPaymentRecordStatusLabel(record.status)}
                                 variant={getPaymentRecordStatusVariant(record.status)}
                               />
-                              <span className="text-xs text-black/45">
+                              <span className="text-xs text-muted-foreground/70">
                                 {getPaymentRecordChannelLabel(record.channel)}
                               </span>
                             </div>
 
-                            <div className="mt-2 space-y-1 text-sm text-black/65">
+                            <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                               <div>金额：{formatCurrency(record.amount)}</div>
                               <div>发生时间：{formatDateTime(record.occurredAt)}</div>
                               <div>
@@ -250,7 +250,7 @@ export function SalesOrderPaymentSection({
                           </div>
                         ))
                       ) : (
-                        <div className="rounded-2xl border border-dashed border-black/10 bg-white/55 p-4 text-sm leading-7 text-black/55">
+                        <div className="rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm leading-7 text-muted-foreground">
                           当前还没有收款记录。
                         </div>
                       )}
@@ -261,7 +261,7 @@ export function SalesOrderPaymentSection({
                     <p className="crm-detail-label">催收任务</p>
                     <div className="mt-3 space-y-3">
                       {openTask ? (
-                        <div className="rounded-2xl border border-black/8 bg-white/70 p-4">
+                        <div className="rounded-xl border border-border/60 bg-white/70 p-4">
                           <div className="flex flex-wrap items-center gap-2">
                             <StatusBadge
                               label={getCollectionTaskTypeLabel(openTask.taskType)}
@@ -273,7 +273,7 @@ export function SalesOrderPaymentSection({
                             />
                           </div>
 
-                          <div className="mt-2 space-y-1 text-sm text-black/65">
+                          <div className="mt-2 space-y-1 text-sm text-muted-foreground">
                             <div>负责人：{openTask.owner.name || openTask.owner.username}</div>
                             <div>
                               到期时间：{openTask.dueAt ? formatDateTime(openTask.dueAt) : "未设置"}
@@ -344,7 +344,7 @@ export function SalesOrderPaymentSection({
                         plan.status !== "CANCELED" ? (
                         <form
                           action={upsertCollectionTaskAction}
-                          className="space-y-2 rounded-2xl border border-dashed border-black/10 bg-white/55 p-4"
+                          className="space-y-2 rounded-xl border border-dashed border-border bg-white/55 p-4"
                         >
                           <input type="hidden" name="paymentPlanId" value={plan.id} />
                           <input type="hidden" name="redirectTo" value={`/orders/${orderId}`} />
@@ -368,7 +368,7 @@ export function SalesOrderPaymentSection({
                           </button>
                         </form>
                       ) : (
-                        <div className="rounded-2xl border border-dashed border-black/10 bg-white/55 p-4 text-sm leading-7 text-black/55">
+                        <div className="rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm leading-7 text-muted-foreground">
                           当前没有打开中的催收任务。
                         </div>
                       )}
@@ -439,7 +439,7 @@ export function SalesOrderPaymentSection({
                     </div>
                   </form>
                 ) : plan.collectionChannel === "COD" ? (
-                  <div className="mt-4 rounded-2xl border border-dashed border-black/10 bg-white/55 p-4 text-sm leading-7 text-black/55">
+                  <div className="mt-4 rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm leading-7 text-muted-foreground">
                     COD 回款请在订单中心登记，系统会自动联动 PaymentPlan、PaymentRecord 与催收任务。
                   </div>
                 ) : null}
@@ -447,7 +447,7 @@ export function SalesOrderPaymentSection({
             );
           })
         ) : (
-          <div className="rounded-2xl border border-dashed border-black/10 bg-white/55 p-4 text-sm leading-7 text-black/55">
+          <div className="rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm leading-7 text-muted-foreground">
             当前还没有应收计划。订单创建或驳回后重新提交时，系统会根据 `paymentScheme` 自动生成 PaymentPlan。
           </div>
         )}

@@ -599,7 +599,7 @@ export function CustomerDetailSheet({
               remark={customer.remark}
             />
 
-            <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -641,7 +641,7 @@ export function CustomerDetailSheet({
               </div>
             </section>
 
-            <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -658,7 +658,7 @@ export function CustomerDetailSheet({
               <OrderHistory state={orderState} />
             </section>
 
-            <section className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">

@@ -292,15 +292,15 @@ export function SalesOrderForm({
       <input type="hidden" name="skuId" value={skuId} />
 
       <div className="space-y-2">
-        <h3 className="text-lg font-semibold text-black/85">{submitLabel}</h3>
-        <p className="text-sm leading-7 text-black/60">{helperText}</p>
+        <h3 className="text-lg font-semibold text-foreground">{submitLabel}</h3>
+        <p className="text-sm leading-7 text-muted-foreground">{helperText}</p>
       </div>
 
       <section className="crm-subtle-panel space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="crm-detail-label">下单客户</p>
-            <p className="mt-1 text-sm text-black/60">
+            <p className="mt-1 text-sm text-muted-foreground">
             主入口建议从客户详情页发起。订单中心直建时，只支持远程搜索客户。
             </p>
           </div>
@@ -320,17 +320,17 @@ export function SalesOrderForm({
         </div>
 
         {selectedCustomer ? (
-          <div className="rounded-2xl border border-black/8 bg-white/75 p-4 text-sm text-black/70">
-            <div className="font-medium text-black/85">
+          <div className="rounded-xl border border-border/60 bg-white/75 p-4 text-sm text-foreground/80">
+            <div className="font-medium text-foreground">
               {selectedCustomer.name} / {selectedCustomer.phone}
             </div>
-            <div className="mt-1 text-xs text-black/50">
+            <div className="mt-1 text-xs text-muted-foreground/70">
               当前负责人：
               {selectedCustomer.owner?.name ||
                 selectedCustomer.owner?.username ||
                 "未分配"}
             </div>
-            <div className="mt-1 text-xs text-black/50">
+            <div className="mt-1 text-xs text-muted-foreground/70">
               地址：{selectedCustomer.address || "未填写"}
             </div>
           </div>
@@ -347,13 +347,13 @@ export function SalesOrderForm({
             </label>
 
             {customerSearchLoading ? (
-              <div className="rounded-2xl border border-dashed border-black/10 bg-white/55 p-4 text-sm text-black/55">
+              <div className="rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm text-muted-foreground">
                 正在搜索客户…
               </div>
             ) : null}
 
             {customerSearchError ? (
-              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                 {customerSearchError}
               </div>
             ) : null}
@@ -362,7 +362,7 @@ export function SalesOrderForm({
             !customerSearchError &&
             deferredCustomerKeyword &&
             customerResults.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-black/10 bg-white/55 p-4 text-sm text-black/55">
+              <div className="rounded-xl border border-dashed border-border bg-white/55 p-4 text-sm text-muted-foreground">
                 没有匹配客户，请检查姓名、手机号或负责人关键词。
               </div>
             ) : null}
@@ -373,7 +373,7 @@ export function SalesOrderForm({
                   <button
                     key={customer.id}
                     type="button"
-                    className="rounded-2xl border border-black/8 bg-white/75 p-4 text-left transition hover:border-black/15"
+                    className="rounded-xl border border-border/60 bg-white/75 p-4 text-left transition hover:border-black/15"
                     onClick={() => {
                       setSelectedCustomer(customer);
                       setCustomerKeyword(`${customer.name} ${customer.phone}`);
@@ -383,14 +383,14 @@ export function SalesOrderForm({
                       setReceiverAddress(customer.address ?? "");
                     }}
                   >
-                    <div className="font-medium text-black/85">
+                    <div className="font-medium text-foreground">
                       {customer.name} / {customer.phone}
                     </div>
-                    <div className="mt-1 text-xs text-black/50">
+                    <div className="mt-1 text-xs text-muted-foreground/70">
                       当前负责人：
                       {customer.owner?.name || customer.owner?.username || "未分配"}
                     </div>
-                    <div className="mt-1 text-xs text-black/50">
+                    <div className="mt-1 text-xs text-muted-foreground/70">
                       地址：{customer.address || "未填写"}
                     </div>
                   </button>
@@ -420,7 +420,7 @@ export function SalesOrderForm({
             }
           }}
           helper={
-            <div className="text-xs text-black/50">
+            <div className="text-xs text-muted-foreground/70">
               {selectedSku
                 ? `${selectedSku.product.name} / ${selectedSku.skuName} / 列表价 ${formatCurrency(
                     listUnitPrice,
@@ -499,7 +499,7 @@ export function SalesOrderForm({
       <section className="crm-subtle-panel space-y-4">
         <div>
           <p className="crm-detail-label">收款方案</p>
-          <p className="mt-1 text-sm text-black/60">
+          <p className="mt-1 text-sm text-muted-foreground">
             只维护本阶段需要的订单结算结构，后续可平滑扩展到 PaymentPlan / PaymentRecord。
           </p>
         </div>
@@ -522,7 +522,7 @@ export function SalesOrderForm({
           </select>
         </label>
 
-        <div className="rounded-2xl border border-black/8 bg-white/75 p-4 text-sm text-black/65">
+        <div className="rounded-xl border border-border/60 bg-white/75 p-4 text-sm text-muted-foreground">
           {selectedPaymentSchemeMeta?.description}
         </div>
 
@@ -545,21 +545,21 @@ export function SalesOrderForm({
         )}
 
         <div className="grid gap-4 xl:grid-cols-3">
-          <div className="rounded-2xl border border-black/8 bg-white/75 p-4 text-sm text-black/70">
+          <div className="rounded-xl border border-border/60 bg-white/75 p-4 text-sm text-foreground/80">
             <div className="crm-detail-label">已收金额</div>
-            <div className="mt-2 font-medium text-black/85">
+            <div className="mt-2 font-medium text-foreground">
               {formatCurrency(paymentBreakdown.collectedAmount)}
             </div>
           </div>
-          <div className="rounded-2xl border border-black/8 bg-white/75 p-4 text-sm text-black/70">
+          <div className="rounded-xl border border-border/60 bg-white/75 p-4 text-sm text-foreground/80">
             <div className="crm-detail-label">待收金额</div>
-            <div className="mt-2 font-medium text-black/85">
+            <div className="mt-2 font-medium text-foreground">
               {formatCurrency(paymentBreakdown.remainingAmount)}
             </div>
           </div>
-          <div className="rounded-2xl border border-black/8 bg-white/75 p-4 text-sm text-black/70">
+          <div className="rounded-xl border border-border/60 bg-white/75 p-4 text-sm text-foreground/80">
             <div className="crm-detail-label">代收金额</div>
-            <div className="mt-2 font-medium text-black/85">
+            <div className="mt-2 font-medium text-foreground">
               {formatCurrency(paymentBreakdown.codAmount)}
             </div>
           </div>
@@ -569,7 +569,7 @@ export function SalesOrderForm({
       <section className="crm-subtle-panel space-y-4">
         <div>
           <p className="crm-detail-label">随单赠品与保价</p>
-          <p className="mt-1 text-sm text-black/60">
+          <p className="mt-1 text-sm text-muted-foreground">
             随单赠品写入 SalesOrderGiftItem，不复用 GiftRecord。
           </p>
         </div>
@@ -605,7 +605,7 @@ export function SalesOrderForm({
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[auto_minmax(0,1fr)]">
-          <label className="flex items-center gap-3 rounded-2xl border border-black/8 bg-white/75 px-4 py-3 text-sm text-black/70">
+          <label className="flex items-center gap-3 rounded-xl border border-border/60 bg-white/75 px-4 py-3 text-sm text-foreground/80">
             <input
               type="checkbox"
               name="insuranceRequired"
@@ -693,7 +693,7 @@ export function SalesOrderForm({
         </label>
       </section>
 
-      <div className="flex items-center justify-between gap-3 rounded-2xl border border-dashed border-black/10 bg-white/55 px-4 py-3 text-sm text-black/55">
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-border bg-white/55 px-4 py-3 text-sm text-muted-foreground">
         <span>
           订单提交后将进入待审核。审核通过才进入发货池，回填物流单号后才进入已发货。
         </span>
