@@ -9,15 +9,15 @@
 
 | 类别 | 数量 | 说明 |
 |---|---:|---|
-| 提交 | 6 | 全部按"事务边界分组", 风险隔离 |
-| 部署 | 6 | 每次 commit 后跑 release-preflight + migrate deploy + smoke |
+| 提交 | 8 | 全部按"事务边界分组", 风险隔离 |
+| 部署 | 8 | 每次 commit 后跑 release-preflight + migrate deploy + smoke |
 | 新增功能 | 1 大 | 订单反悔 **阶段 A.1 — REDUCE_QUANTITY** 真落地 |
 | Bug 修复 | 5 | P0 浮点收款 + 4 个 P1 高严重度 |
 | 性能优化 | 1 | 客户中心 + 2 个复合索引 (cursor 分页准备) |
 | 工具新增 | 1 | `lib/payments/decimal.ts` 精度安全 helper |
 | 系统审计 | 1 | 5 agent 并行扫了全仓 (security/bug/perf/data/UX) |
 
-**线上 HEAD**: `e0ec0d8` (含本报告) → 下一次 commit 后会变。
+**线上 HEAD**: `51abe66` (a11y login-form, 含本报告最新更新)
 
 ---
 
@@ -106,14 +106,25 @@ https://crm.cclbn.com/orders/<已审核的 tradeOrderId>
 
 ## Round 5: 客户中心性能 (F08 保守版)
 
-### Commit (本提交) — 加 2 个复合索引
+### Commit `acfc756` — 加 1 个复合索引
 
 | 索引 | 用途 |
 |---|---|
 | `cust_owner_updated_id_idx` 在 `(ownerId, updatedAt, id)` | 销售首页按 owner 分页 + 时间排序的查询路径 |
-| `cust_team_updated_id_idx` 在 `(teamId, updatedAt, id)` | 主管查全团队客户的分页路径 |
 
 不动 query 代码(audit 建议拆 listSelect / 改 cursor 分页是 large effort,留作下一轮)。当前 query 直接收益: 大表 ORDER BY 不再回表排序。
+
+(原计划同时加 team 维度索引,但 Customer 表自身无 teamId,团队关联是间接的,留待评估 User.teamId 侧索引。)
+
+## Round 5 续: a11y 长尾 (F13)
+
+### Commit `51abe66` — 登录表单 aria-invalid + role=alert
+
+`components/auth/login-form.tsx`:
+- input 加 `aria-invalid={Boolean(error)}` + `aria-describedby="login-error"`
+- error 容器加 `id=login-error` + `role="alert"` + `aria-live="polite"`
+
+视觉零变化,屏幕阅读器现在能把错误跟出错字段对上 (audit 维度 ux-a11y F13)。
 
 ---
 
@@ -139,11 +150,15 @@ https://crm.cclbn.com/orders/<已审核的 tradeOrderId>
 
 | HEAD | 描述 | 启动时间 |
 |---|---|---|
-| 6f7d072 | Batch 1 payments + RBAC | 凌晨 0:15 左右 |
-| 83ff0a1 | Decimal helper | 0:16 |
-| 5241670 | Lead import dedup + cleanup | 0:17 |
-| 1244966 | Phase A.1 REDUCE_QUANTITY | 0:32 |
-| 本提交 | F08 索引 | 部署后写 |
+| 6f7d072 | Batch 1 payments + RBAC | ~00:15 |
+| 83ff0a1 | Decimal helper | ~00:16 |
+| 5241670 | Lead import dedup + cleanup | ~00:17 |
+| 1244966 | Phase A.1 REDUCE_QUANTITY | 00:32 |
+| 0edd4e3 | F08 索引 + 本报告初版 | (部署中失败, 见下) |
+| acfc756 | 修 F08 索引 (Customer 无 teamId) | 00:42 |
+| 51abe66 | F13 login a11y | 00:47 |
+
+**关于 0edd4e3 → acfc756 的修复**: 我加 customer 索引时假设了 `teamId` 字段, 但 Customer 表自身没有 (团队关联是经 owner.teamId 间接的)。prisma validate 在 release-preflight 拦下了 broken schema, 服务没影响。我立即查正确字段, 删 teamId 索引保留 ownerId 索引, 重发 acfc756 通过部署。生产数据库现在含 `cust_owner_updated_id_idx` 这一个新索引。
 
 ---
 
