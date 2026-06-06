@@ -69,13 +69,10 @@ const tradeOrderCardClassName =
   "overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm";
 
 const tradeOrderHeaderClassName =
-  "flex flex-col gap-3 border-b border-border/50 bg-transparent px-4 py-3.5 lg:flex-row lg:items-start lg:justify-between";
+  "flex flex-col gap-2.5 border-b border-border/50 bg-transparent px-4 py-2.5 lg:flex-row lg:items-start lg:justify-between";
 
 const tradeOrderMetaClassName =
   "flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground";
-
-const tradeOrderInsetClassName =
-  "border-l border-border/40 pl-4";
 
 const tradeOrderQuietActionClassName =
   "inline-flex min-h-0 items-center rounded-full border border-border/60 bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-[border-color,background-color,color] hover:border-primary/40 hover:bg-primary/5 hover:text-primary";
@@ -356,16 +353,16 @@ function TradeOrderRowHeader({
 }>) {
   return (
     <div className={tradeOrderHeaderClassName}>
-      <div className="min-w-0 space-y-2">
+      <div className="min-w-0 space-y-1.5">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="font-mono text-lg font-bold text-foreground">
+          <h3 className="font-mono text-base font-bold text-foreground">
             {item.tradeNo}
           </h3>
           <StatusBadge
             label={tradeStatusMeta[item.tradeStatus].label}
             variant={tradeStatusMeta[item.tradeStatus].variant}
           />
-          <span className="rounded-full border border-border/60 bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+          <span className="rounded-full border border-border/60 bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
             子单 {subOrderCount}
           </span>
           <StatusBadge label={priorityMeta.label} variant={priorityMeta.variant} />
@@ -378,15 +375,12 @@ function TradeOrderRowHeader({
       </div>
 
       <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-        <div className={cn(tradeOrderInsetClassName, "py-1 text-right")}>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            成交金额
-          </p>
-          <p className="mt-1 font-mono text-xl font-semibold text-foreground">
+        <div className="text-right">
+          <p className="font-mono text-lg font-semibold text-foreground tabular-nums leading-none">
             {formatCurrency(item.finalAmount)}
           </p>
-          <p className="text-xs text-muted-foreground">
-            待收 {formatCurrency(item.remainingAmount)}
+          <p className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+            成交 · 待收 {formatCurrency(item.remainingAmount)}
           </p>
         </div>
 
@@ -466,7 +460,7 @@ function TradeOrderExecutionStrip({
         DESKTOP_COLUMNS,
       )}
     >
-      <div className="bg-transparent px-4 py-3.5">
+      <div className="bg-transparent px-4 py-3">
         <div className="space-y-2">
           {product.lines.map((line) => (
             <div key={line.id} className="flex items-start gap-2">
@@ -504,7 +498,7 @@ function TradeOrderExecutionStrip({
         </div>
       </div>
 
-      <div className="bg-transparent px-4 py-3.5">
+      <div className="bg-transparent px-4 py-3">
         <div className="space-y-2.5">
           <StatusBadge
             label={getSalesOrderPaymentSchemeLabel(item.paymentScheme)}
@@ -527,7 +521,7 @@ function TradeOrderExecutionStrip({
         </div>
       </div>
 
-      <div className="bg-transparent px-4 py-3.5">
+      <div className="bg-transparent px-4 py-3">
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
             <span>收件人 {item.receiverNameSnapshot || "未填写"}</span>
