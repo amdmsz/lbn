@@ -570,20 +570,37 @@ export async function confirmShippingReturnReceived(
       });
     }
 
-    // 自动触发 RefundRequest — 找该订单下所有 confirmed && 未冲账的 PaymentRecord
-    const eligibleRecords = await tx.paymentRecord.findMany({
-      where: {
-        tradeOrderId: target.tradeOrderId,
-        confirmedAt: { not: null },
-        isReversed: false,
-      },
-      select: { id: true, amount: true },
-    });
+    // 自动触发 RefundRequest — 找该订单下所有 confirmed && 未冲账的 PaymentRecord.
+    //
+    // race 修复 (wt-16): 用 SELECT ... FOR UPDATE 在事务内对候选 PaymentRecord 加行级写锁,
+    // 防止并发 recordRefundPayout (lib/payments/refunds.ts) 在我们 findMany 与
+    // refundRequest.create 之间把同样的记录 flip 到 isReversed=true. 不加锁会
+    // 造出 sourcePaymentRecordIds 指向 reversed 记录的"死单", 后续 approveRefund /
+    // recordRefundPayout 必然抛 "PaymentRecord 已被其他退款冲账, 本申请已失效",
+    // 而 ShippingReturn 已经写入 refundRequestId, 进入永久卡死状态.
+    //
+    // 注: MySQL InnoDB 下 FOR UPDATE 持有的 next-key lock 也能阻塞并发 updateMany.
+    // tx.paymentRecord.findMany 在 isReversed=false 过滤下已经天然排除"早就冲过账"
+    // 的记录, 但只挡得住 tx 之前完成的, 挡不住 tx 之后并发完成的. FOR UPDATE 把
+    // 候选行锁住, 直到本 tx commit, 任何并发 paid_out 必须排队等待.
+    type EligibleRow = { id: string; amount: Prisma.Decimal };
+    const eligibleRecords = await tx.$queryRaw<EligibleRow[]>`
+      SELECT \`id\`, \`amount\`
+      FROM \`paymentrecord\`
+      WHERE \`tradeOrderId\` = ${target.tradeOrderId}
+        AND \`confirmedAt\` IS NOT NULL
+        AND \`isReversed\` = false
+      FOR UPDATE
+    `;
 
     let refundRequestId: string | null = null;
 
-    if (eligibleRecords.length === 0) {
-      // 没有可冲账记录: 仅记说明性 OperationLog, 不建 RefundRequest, 不阻塞入库
+    // skip 路径: 把"无可冲账记录"和"被并发 race 毒化"两种情况合并到同一个 fallback,
+    // 让发货侧入库继续成功 + 写一条带 reason 的说明性 log 给财务追线索, 而不是
+    // 静默写一张永远付不出去的死退款单.
+    const writeSkipAndReturn = async (
+      reason: "NO_CONFIRMED_PAYMENT_RECORD" | "RACE_WITH_CONCURRENT_REFUND",
+    ) => {
       await tx.operationLog.create({
         data: {
           actorId: actor.id,
@@ -591,29 +608,25 @@ export async function confirmShippingReturnReceived(
           action: "shipping_return.refund_auto_skipped",
           targetType: OperationTargetType.TRADE_ORDER,
           targetId: target.tradeOrderId,
-          description: `Shipping return ${target.id} received, no confirmed payment records to reverse — finance must manually create refund`,
+          description:
+            reason === "RACE_WITH_CONCURRENT_REFUND"
+              ? `Shipping return ${target.id} received, source payment records were just reversed by a concurrent refund — finance must manually create refund`
+              : `Shipping return ${target.id} received, no confirmed payment records to reverse — finance must manually create refund`,
           afterData: {
             shippingReturnId: target.id,
             expectedRefundAmount: settledExpectedRefundAmount.toFixed(2),
-            reason: "NO_CONFIRMED_PAYMENT_RECORD",
+            reason,
           },
         },
       });
-
       return {
         shippingReturn: updatedReturn,
         refundRequestId: null as string | null,
       };
-    }
+    };
 
-    // 校验申请金额不超过可冲账总额; 超出则封顶按可冲账总额 (兜底)
-    const availableTotal = sumDecimal(eligibleRecords.map((r) => r.amount));
-    const requestedAmount = greaterThan(settledExpectedRefundAmount, availableTotal)
-      ? availableTotal
-      : settledExpectedRefundAmount;
-
-    if (!isPositiveAmount(requestedAmount)) {
-      throw new Error("可冲账金额为 0, 无法自动建退款单");
+    if (eligibleRecords.length === 0) {
+      return writeSkipAndReturn("NO_CONFIRMED_PAYMENT_RECORD");
     }
 
     // 防 race: 同 tradeOrder 不能已有 PENDING/APPROVED 退款单
@@ -633,6 +646,38 @@ export async function confirmShippingReturnReceived(
       throw new Error(
         `本订单已有进行中的退款申请 ${existingActive.id.slice(-6)} (状态 ${existingActive.status}), 请先处理后再确认退货入库`,
       );
+    }
+
+    // 进一步防 race: 排除已被 PAID_OUT 退款冲账的 sourcePaymentRecordIds.
+    // 上面的 active-refund guard 只挡 PENDING / APPROVED, 不挡刚 PAID_OUT 的;
+    // FOR UPDATE 已锁住 isReversed=false 的行 — 但若另一个 tx 提交后我们 findMany
+    // 才发起, 那条 record 已经被排除 (isReversed=true 不在候选集); 极端 case 是
+    // 候选 ids 与某条 PAID_OUT refund 的 sourcePaymentRecordIds 部分重合 (例如
+    // 该订单有多笔 PaymentRecord, 一半被先前 PAID_OUT 吃掉, 还有一半未冲账). 这里
+    // 用 JSON array_contains 直接查命中, 命中即降级到 skip 路径而不是写死单.
+    const eligibleIds = eligibleRecords.map((r) => r.id);
+    const paidOutOverlap = await tx.refundRequest.findFirst({
+      where: {
+        tradeOrderId: target.tradeOrderId,
+        status: RefundRequestStatus.PAID_OUT,
+        OR: eligibleIds.map((id) => ({
+          sourcePaymentRecordIds: { array_contains: id },
+        })),
+      },
+      select: { id: true },
+    });
+    if (paidOutOverlap) {
+      return writeSkipAndReturn("RACE_WITH_CONCURRENT_REFUND");
+    }
+
+    // 校验申请金额不超过可冲账总额; 超出则封顶按可冲账总额 (兜底)
+    const availableTotal = sumDecimal(eligibleRecords.map((r) => r.amount));
+    const requestedAmount = greaterThan(settledExpectedRefundAmount, availableTotal)
+      ? availableTotal
+      : settledExpectedRefundAmount;
+
+    if (!isPositiveAmount(requestedAmount)) {
+      throw new Error("可冲账金额为 0, 无法自动建退款单");
     }
 
     const refund = await tx.refundRequest.create({

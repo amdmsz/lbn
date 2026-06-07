@@ -114,6 +114,7 @@ type RefundRequestRow = {
   tradeOrderId: string;
   revisionRequestId: string | null;
   status: string;
+  sourcePaymentRecordIds?: string[];
 };
 
 type UserRow = { id: string; teamId: string | null };
@@ -162,6 +163,24 @@ function installPrismaStub(): void {
     $transaction: async <T>(
       callback: (tx: typeof fakeClient) => Promise<T>,
     ): Promise<T> => callback(fakeClient),
+
+    // tagged template handler — race fix uses SELECT ... FOR UPDATE on paymentrecord.
+    // 我们不解析 SQL, 只兜底返回 store.paymentRecords 中符合 confirmedAt!=null && !isReversed
+    // 的同一 tradeOrder 行 (raw 调用第一个 ${} 参数即 target.tradeOrderId).
+    $queryRaw: async (
+      _strings: TemplateStringsArray,
+      ...values: unknown[]
+    ): Promise<Array<{ id: string; amount: FakeDecimal }>> => {
+      const tradeOrderId = values[0] as string | undefined;
+      return store.paymentRecords
+        .filter((p) => {
+          if (tradeOrderId && p.tradeOrderId !== tradeOrderId) return false;
+          if (p.confirmedAt === null) return false;
+          if (p.isReversed) return false;
+          return true;
+        })
+        .map((p) => ({ id: p.id, amount: p.amount }));
+    },
 
     tradeOrder: {
       findUnique: async ({ where }: { where: { id: string } }) => {
@@ -268,14 +287,52 @@ function installPrismaStub(): void {
 
     refundRequest: {
       findFirst: async ({ where }: { where: Record<string, unknown> }) => {
-        // 注入 race: 当 blockRefundCreate=true 时假装已有 active refund 卡住新建
-        if (store.blockRefundCreate) {
+        const statusField = where.status as
+          | string
+          | { in?: string[] }
+          | undefined;
+        const isSinglePaidOutQuery =
+          typeof statusField === "string" && statusField === "PAID_OUT";
+
+        // 注入 race-A: blockRefundCreate=true 模拟已有 PENDING_FINANCE active refund.
+        // 只挡 PENDING/APPROVED 查询; PAID_OUT 二次查询走真实数据.
+        if (store.blockRefundCreate && !isSinglePaidOutQuery) {
           return { id: "blocking_refund_id", status: "PENDING_FINANCE" };
         }
+
         const wantTradeOrder = where.tradeOrderId as string | undefined;
+        // race-B: status=PAID_OUT 的 overlap 查询 — 由 store.refundRequests 提供
+        if (isSinglePaidOutQuery) {
+          const orClauses = (where.OR as Array<{
+            sourcePaymentRecordIds?: { array_contains?: string };
+          }>) ?? [];
+          const wantedIds = orClauses
+            .map((c) => c.sourcePaymentRecordIds?.array_contains)
+            .filter((x): x is string => Boolean(x));
+          return (
+            store.refundRequests.find((r) => {
+              if (wantTradeOrder && r.tradeOrderId !== wantTradeOrder)
+                return false;
+              if (r.status !== "PAID_OUT") return false;
+              if (!r.sourcePaymentRecordIds || r.sourcePaymentRecordIds.length === 0)
+                return false;
+              return r.sourcePaymentRecordIds.some((id) =>
+                wantedIds.includes(id),
+              );
+            }) ?? null
+          );
+        }
+
+        // 默认分支: 模拟 PENDING/APPROVED guard (status in [...]).
+        // 若调用方传了 status.in, 必须按白名单过滤, 否则 PAID_OUT 行会错命中.
+        const statusInList =
+          typeof statusField === "object" && statusField !== null && "in" in statusField
+            ? (statusField as { in: string[] }).in
+            : null;
         return (
           store.refundRequests.find((r) => {
             if (wantTradeOrder && r.tradeOrderId !== wantTradeOrder) return false;
+            if (statusInList && !statusInList.includes(r.status)) return false;
             return true;
           }) ?? null
         );
@@ -297,6 +354,9 @@ function installPrismaStub(): void {
           tradeOrderId: data.tradeOrderId as string,
           revisionRequestId: (data.revisionRequestId as string) ?? null,
           status: data.status as string,
+          sourcePaymentRecordIds: Array.isArray(data.sourcePaymentRecordIds)
+            ? (data.sourcePaymentRecordIds as string[])
+            : undefined,
         };
         store.refundRequests.push(row);
         return row;
@@ -960,6 +1020,65 @@ test("入库 race: 该订单已有 PENDING_FINANCE RefundRequest → 整 tx 抛�
   // 注: fake $transaction 不能真的回滚 store 已写入数据,
   // 但断言 refundRequests 仍为 0 (拒在 create 之前) — 是 tx 抛错的直接证据
   assert.equal(store.refundRequests.length, 0);
+});
+
+test("入库 race: 候选 PaymentRecord 被并发 PAID_OUT refund 部分冲账 → skip 建退款 + 留 RACE log, 入库照常成功", async () => {
+  resetStore();
+  seedHappyPath();
+
+  // 模拟: 同一 tradeOrder 还有一笔财务先前手工建的退款单, 刚刚 PAID_OUT,
+  // sourcePaymentRecordIds 包含我们 FOR UPDATE 查到的同一 pr_1.
+  // 注意 store.paymentRecords[0].isReversed 在真实场景里也会被 PAID_OUT 流程
+  // 一并 flip; 但极端 race window (T2 commit 与 T1 findMany 之间) 下 T1 看到的
+  // FOR UPDATE 行可能还是 false (取决于隔离级别), 导致 sourcePaymentRecordIds
+  // 已被 PAID_OUT 抢走但本流程未察觉. 这里只验证 returns.ts 的 overlap guard
+  // 行为, 因此不依赖 paymentRecord.isReversed.
+  store.refundRequests.push({
+    id: "manual_refund_paid_out",
+    tradeOrderId: "to_1",
+    revisionRequestId: null,
+    status: "PAID_OUT",
+    sourcePaymentRecordIds: ["pr_1"],
+  });
+
+  const sr = await requestShippingReturn(SALES, {
+    tradeOrderId: "to_1",
+    shippingTaskId: "st_1",
+    reason: "QUALITY_ISSUE",
+    reasonDetail: "已被先前 PAID_OUT refund 吃过的 race 兜底",
+  });
+  await reviewShippingReturn(SUPERVISOR, {
+    shippingReturnId: sr.id,
+    decision: "APPROVED",
+  });
+  await fillShippingReturnTracking(SHIPPER, {
+    shippingReturnId: sr.id,
+    returnTrackingNumber: "SF888",
+    returnCarrier: "顺丰",
+  });
+
+  const result = await confirmShippingReturnReceived(SHIPPER, {
+    shippingReturnId: sr.id,
+  });
+
+  // 入库本身不应失败 — fall back 到 skip 而不是抛
+  assert.equal(result.shippingReturn.status, "RETURNED_TO_WAREHOUSE");
+  assert.equal(result.refundRequestId, null);
+  // 不应该新建 RefundRequest (只剩注入的 manual paid_out 那一条)
+  assert.equal(store.refundRequests.length, 1);
+  assert.equal(store.refundRequests[0]!.id, "manual_refund_paid_out");
+
+  // skip log 必须带 RACE_WITH_CONCURRENT_REFUND 原因, 给财务追线索
+  const skipLog = store.operationLogs.find(
+    (l) => l.action === "shipping_return.refund_auto_skipped",
+  );
+  assert.ok(skipLog, "应该写入 refund_auto_skipped 日志");
+  const afterData = skipLog!.afterData as { reason?: string };
+  assert.equal(
+    afterData.reason,
+    "RACE_WITH_CONCURRENT_REFUND",
+    "skip 原因应该是 RACE_WITH_CONCURRENT_REFUND",
+  );
 });
 
 test("反例: 入库后再次入库 — refundRequestId 已写, 拒重复入库", async () => {
