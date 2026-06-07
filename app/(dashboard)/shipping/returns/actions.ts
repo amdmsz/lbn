@@ -183,12 +183,26 @@ export async function confirmShippingReturnReceivedAction(
   try {
     const actor = await getShippingReturnActionActor();
 
+    // 现场签收 (无运单) 必须同时勾选 receivedWithoutTracking 并填写理由,
+    // 否则服务端会在 PENDING_RETURN_TRACKING 状态拒绝入库. 防止退货运单丢链路.
+    const receivedWithoutTrackingRaw = getFormValue(
+      formData,
+      "receivedWithoutTracking",
+    );
+    const receivedWithoutTracking =
+      receivedWithoutTrackingRaw === "1" ||
+      receivedWithoutTrackingRaw === "true" ||
+      receivedWithoutTrackingRaw === "on";
+
     const result = await confirmShippingReturnReceived(actor, {
       shippingReturnId: getFormValue(formData, "shippingReturnId"),
       receivedPhotoUrl: getFormValue(formData, "receivedPhotoUrl") || undefined,
       receivedRemark: getFormValue(formData, "receivedRemark") || undefined,
       finalRefundAmount:
         getFormValue(formData, "finalRefundAmount") || undefined,
+      receivedWithoutTracking,
+      receivedWithoutTrackingReason:
+        getFormValue(formData, "receivedWithoutTrackingReason") || undefined,
     });
 
     invalidateAfterShippingReturnMutation(

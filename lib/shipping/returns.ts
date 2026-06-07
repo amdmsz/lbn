@@ -138,6 +138,12 @@ const confirmReceivedSchema = z.object({
   receivedRemark: z.string().trim().max(800).optional(),
   // 入库时如对期望退款金额做了调整, 允许覆盖. 不传则沿用申请时的 expectedRefundAmount.
   finalRefundAmount: z.string().optional(),
+  // 当状态为 PENDING_RETURN_TRACKING (尚未填回单) 时跳过运单, 直接现场签收入库,
+  // 必须显式 receivedWithoutTracking=true + 至少 4 字理由, 服务端会单独写 OperationLog
+  // (action=shipping_return.received_without_tracking) 留给财务事后核对.
+  // IN_RETURN_TRANSIT 状态忽略本对.
+  receivedWithoutTracking: z.boolean().optional(),
+  receivedWithoutTrackingReason: z.string().trim().max(800).optional(),
 });
 
 const cancelSchema = z.object({
@@ -477,6 +483,27 @@ export async function confirmShippingReturnReceived(
     throw new Error("该退货单已关联退款单, 不能重复入库");
   }
 
+  // 跳过运单的现场签收入库守卫 — 防止 PENDING_RETURN_TRACKING 直接入库丢失退货物流回执.
+  // 必须显式 receivedWithoutTracking=true + 至少 4 字理由 (例如 "客户上门自取, 无运单"),
+  // 否则视为数据丢失风险, 应该先走 fillShippingReturnTracking 回填运单再入库.
+  const skipsTracking =
+    target.status === ShippingReturnStatus.PENDING_RETURN_TRACKING;
+  let skipTrackingReason: string | null = null;
+  if (skipsTracking) {
+    if (!input.receivedWithoutTracking) {
+      throw new Error(
+        "该退货单尚未登记退货运单 — 请先填写运单后再入库; 若确为现场签收 (无运单), 请显式勾选『确认无运单入库』并填写理由",
+      );
+    }
+    const reason = input.receivedWithoutTrackingReason?.trim() ?? "";
+    if (reason.length < 4) {
+      throw new Error(
+        "无运单入库必须填写至少 4 个字的理由 (例如: 客户上门自提 / 司机现场卸货无回执)",
+      );
+    }
+    skipTrackingReason = reason;
+  }
+
   const receivedAt = new Date();
 
   // finalRefundAmount 优先: 入库时财务/发货人可覆盖申请阶段填写的金额
@@ -517,9 +544,31 @@ export async function confirmShippingReturnReceived(
           hasRemark: Boolean(input.receivedRemark),
           finalRefundAmount: settledExpectedRefundAmount.toFixed(2),
           overrideApplied: overrideRefund !== null,
+          receivedWithoutTracking: skipsTracking,
         },
       },
     });
+
+    // 无运单现场签收单独留 audit log — 财务侧后续核对 "为什么这笔退款没有运单回执" 时
+    // 必须能在 OperationLog 里检索到这条 reason. 没这条就视为退货物理回执缺失.
+    if (skipsTracking && skipTrackingReason) {
+      await tx.operationLog.create({
+        data: {
+          actorId: actor.id,
+          module: OperationModule.SHIPPING,
+          action: "shipping_return.received_without_tracking",
+          targetType: OperationTargetType.TRADE_ORDER,
+          targetId: target.tradeOrderId,
+          description: `Shipping return ${target.id} received WITHOUT tracking (on-site pickup / no carrier receipt) for trade order ${target.tradeOrder?.tradeNo ?? ""}`.trim(),
+          afterData: {
+            shippingReturnId: target.id,
+            reason: skipTrackingReason,
+            previousStatus: ShippingReturnStatus.PENDING_RETURN_TRACKING,
+            finalRefundAmount: settledExpectedRefundAmount.toFixed(2),
+          },
+        },
+      });
+    }
 
     // 自动触发 RefundRequest — 找该订单下所有 confirmed && 未冲账的 PaymentRecord
     const eligibleRecords = await tx.paymentRecord.findMany({
