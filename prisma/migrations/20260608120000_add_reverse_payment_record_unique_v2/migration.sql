@@ -15,7 +15,11 @@
 -- the IF EXISTS clause is only supported on the standalone `DROP INDEX ... ON tbl`
 -- form. Keep them in two statements.
 
-CREATE UNIQUE INDEX `reversepaymentrecord_sourcePaymentRecordId_key`
+-- Both statements use IF (NOT) EXISTS so the migration is idempotent —
+-- production already partially applied v1 (which created the unique index
+-- successfully before failing on DROP). Re-running plain CREATE would 1061.
+
+CREATE UNIQUE INDEX IF NOT EXISTS `reversepaymentrecord_sourcePaymentRecordId_key`
   ON `reversepaymentrecord`(`sourcePaymentRecordId`);
 
 DROP INDEX IF EXISTS `reversepaymentrecord_sourcePaymentRecordId_idx`
