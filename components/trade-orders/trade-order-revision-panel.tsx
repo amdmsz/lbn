@@ -142,7 +142,7 @@ export default function TradeOrderRevisionPanel({
                     />
                     <span>{b.message}</span>
                   </div>
-                  <BlockerActionHint code={b.code} />
+                  <BlockerActionHint code={b.code} tradeOrderId={tradeOrderId} />
                 </div>
               ))}
             </div>
@@ -349,7 +349,10 @@ function ReviewButton({
   );
 }
 
-function BlockerActionHint({ code }: Readonly<{ code: string }>) {
+function BlockerActionHint({
+  code,
+  tradeOrderId,
+}: Readonly<{ code: string; tradeOrderId: string }>) {
   if (code === "PAYMENT_CONFIRMED" || code === "COD_COLLECTED") {
     return (
       <Link
@@ -363,9 +366,13 @@ function BlockerActionHint({ code }: Readonly<{ code: string }>) {
   }
   if (code === "ALREADY_SHIPPED") {
     return (
-      <p className="ml-4.5 text-[11px] text-muted-foreground">
-        需要走退货流程 (Phase C, 待开发)
-      </p>
+      <Link
+        href={`/orders/${tradeOrderId}?openShippingReturn=1`}
+        className="ml-4.5 inline-flex items-center gap-1 text-[11px] font-medium text-primary underline-offset-2 transition hover:underline"
+      >
+        需要退货流程, 点这里申请退货
+        <ExternalLink className="h-3 w-3" aria-hidden="true" />
+      </Link>
     );
   }
   return null;

@@ -4,8 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useState, useTransition } from "react";
+import type { ShippingReturnActionResult } from "@/app/(dashboard)/shipping/returns/actions";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { StatusBadge, type StatusBadgeVariant } from "@/components/shared/status-badge";
+import ShippingReturnPanel, {
+  type ShippingReturnPanelData,
+} from "@/components/shipping/shipping-return-panel";
 import { TradeOrderRecycleDialog } from "@/components/trade-orders/trade-order-recycle-dialog";
 import { formatDateTime } from "@/lib/customers/metadata";
 import {
@@ -38,6 +42,7 @@ import {
   formatTradeOrderQuantity,
 } from "@/lib/trade-orders/display";
 import type { getTradeOrderDetail } from "@/lib/trade-orders/queries";
+import type { getActiveShippingReturnForTradeOrder } from "@/lib/shipping/returns";
 import type {
   TradeOrderRecycleGuard,
   TradeOrderRecycleReasonCode,
@@ -47,6 +52,11 @@ import type { RecycleFinalizePreview } from "@/lib/recycle-bin/types";
 type TradeOrderDetailData = NonNullable<Awaited<ReturnType<typeof getTradeOrderDetail>>>;
 type TradeOrderDetail = TradeOrderDetailData["order"];
 type OperationLogItem = TradeOrderDetailData["operationLogs"][number];
+// Phase C: SSR 透传的退货活跃记录 (Prisma findFirst → T | null).
+// page.tsx 直接传 await getActiveShippingReturnForTradeOrder(orderId) 的结果.
+export type ActiveShippingReturn = Awaited<
+  ReturnType<typeof getActiveShippingReturnForTradeOrder>
+>;
 type TradeOrderPaymentRecordItem = TradeOrderDetail["paymentRecords"][number];
 type TradeOrderCollectionTaskItem = TradeOrderDetail["collectionTasks"][number];
 type SalesOrderItem = TradeOrderDetail["salesOrders"][number];
@@ -1124,25 +1134,54 @@ function TimelineAndOperationLogSection({
   );
 }
 
-export function TradeOrderDetailSection({
-  order,
-  operationLogs,
-  canReview,
-  canContinueEdit,
-  continueEditHref,
-  reviewAction,
-  moveToRecycleBinAction,
-  revisionPanel,
-}: Readonly<{
-  order: TradeOrderDetail;
-  operationLogs: OperationLogItem[];
-  canReview: boolean;
-  canContinueEdit: boolean;
-  continueEditHref?: string;
-  reviewAction: (formData: FormData) => Promise<void>;
-  moveToRecycleBinAction: (formData: FormData) => Promise<TradeOrderRecycleActionResult>;
-  revisionPanel?: React.ReactNode;
-}>) {
+export function TradeOrderDetailSection(
+  props: Readonly<{
+    order: TradeOrderDetail;
+    operationLogs: OperationLogItem[];
+    canReview: boolean;
+    canContinueEdit: boolean;
+    continueEditHref?: string;
+    reviewAction: (formData: FormData) => Promise<void>;
+    moveToRecycleBinAction: (
+      formData: FormData,
+    ) => Promise<TradeOrderRecycleActionResult>;
+    revisionPanel?: React.ReactNode;
+    // Phase C: SSR 透传的退货活跃记录 + 权限 + actions.
+    // detail-section 内部把 Prisma 结果 normalize 成 ShippingReturnPanelData 后
+    // 喂给 <ShippingReturnPanel />. 仅在订单已发货 (任一 supplier 子单 shippedAt 非空)
+    // 或已有活跃退货时渲染.
+    activeShippingReturn?: ActiveShippingReturn;
+    canRequestShippingReturn?: boolean;
+    canReviewShippingReturn?: boolean;
+    currentUserId?: string;
+    requestShippingReturnAction?: (
+      formData: FormData,
+    ) => Promise<ShippingReturnActionResult>;
+    reviewShippingReturnAction?: (
+      formData: FormData,
+    ) => Promise<ShippingReturnActionResult>;
+    cancelShippingReturnAction?: (
+      formData: FormData,
+    ) => Promise<ShippingReturnActionResult>;
+  }>,
+) {
+  const {
+    order,
+    operationLogs,
+    canReview,
+    canContinueEdit,
+    continueEditHref,
+    reviewAction,
+    moveToRecycleBinAction,
+    revisionPanel,
+    activeShippingReturn,
+    canRequestShippingReturn,
+    canReviewShippingReturn,
+    currentUserId,
+    requestShippingReturnAction,
+    reviewShippingReturnAction,
+    cancelShippingReturnAction,
+  } = props;
   const [notice, setNotice] = useState<TradeOrderRecycleActionResult | null>(null);
   const [recycleDialogOpen, setRecycleDialogOpen] = useState(false);
   const [recycleReason, setRecycleReason] =
@@ -1352,6 +1391,48 @@ export function TradeOrderDetailSection({
     });
   }
 
+  // Phase C 退货面板上下文:
+  // 1. primaryShippingTaskId — 取第一个已发货的 supplier 子单的 shippingTask.id, 用于"申请退货".
+  // 2. shippingReturnPanelData — 把 Prisma 结果 normalize 成 panel 友好的字符串 / Date 形.
+  const primaryShippingTaskId =
+    order.salesOrders.find(
+      (salesOrder) => salesOrder.shippingTask?.shippedAt != null,
+    )?.shippingTask?.id ?? null;
+  const shippingReturnPanelData: ShippingReturnPanelData | null =
+    activeShippingReturn
+      ? {
+          id: activeShippingReturn.id,
+          status: activeShippingReturn.status,
+          reason: activeShippingReturn.reason,
+          reasonDetail: activeShippingReturn.reasonDetail,
+          expectedRefundAmount:
+            typeof activeShippingReturn.expectedRefundAmount === "string"
+              ? activeShippingReturn.expectedRefundAmount
+              : activeShippingReturn.expectedRefundAmount.toString(),
+          requestedAt: activeShippingReturn.requestedAt,
+          requester: activeShippingReturn.requester,
+          reviewedAt: activeShippingReturn.reviewedAt,
+          reviewer: activeShippingReturn.reviewer,
+          reviewNote: activeShippingReturn.reviewNote,
+          rejectReason: activeShippingReturn.rejectReason,
+          returnTrackingNumber: activeShippingReturn.returnTrackingNumber,
+          returnCarrier: activeShippingReturn.returnCarrier,
+          trackingFilledAt: activeShippingReturn.trackingFilledAt,
+          receivedAt: activeShippingReturn.receivedAt,
+          receivedRemark: activeShippingReturn.receivedRemark,
+          refundRequestId: activeShippingReturn.refundRequestId,
+          shippingTaskId: activeShippingReturn.shippingTaskId,
+        }
+      : null;
+  // 仅在订单已发货 (任一 supplier 子单有 shippedAt) 或已有活跃退货时显示面板;
+  // 同时 actions / userId 必须齐全 (page.tsx 透传).
+  const showShippingReturnPanel =
+    (primaryShippingTaskId !== null || shippingReturnPanelData !== null) &&
+    requestShippingReturnAction !== undefined &&
+    reviewShippingReturnAction !== undefined &&
+    cancelShippingReturnAction !== undefined &&
+    currentUserId !== undefined;
+
   return (
     <div className="space-y-6">
       {notice ? (
@@ -1361,6 +1442,21 @@ export function TradeOrderDetailSection({
       ) : null}
 
       {revisionPanel ?? null}
+
+      {showShippingReturnPanel ? (
+        <ShippingReturnPanel
+          tradeOrderId={order.id}
+          customerId={order.customer.id}
+          primaryShippingTaskId={primaryShippingTaskId}
+          activeShippingReturn={shippingReturnPanelData}
+          canRequest={canRequestShippingReturn ?? false}
+          canReview={canReviewShippingReturn ?? false}
+          currentUserId={currentUserId ?? ""}
+          requestAction={requestShippingReturnAction!}
+          reviewAction={reviewShippingReturnAction!}
+          cancelAction={cancelShippingReturnAction!}
+        />
+      ) : null}
 
       <section className="crm-section-card">
         <div className="flex flex-wrap items-start justify-between gap-4">

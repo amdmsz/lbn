@@ -5,6 +5,8 @@ import {
   canAccessProductModule,
   canAccessRecycleBinModule,
   canAccessSupplierModule,
+  canConfirmShippingReturnReceived,
+  canFillShippingReturnTracking,
 } from "@/lib/auth/access";
 import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 
@@ -24,6 +26,7 @@ export type NavigationIconName =
   | "collectionTasks"
   | "shipping"
   | "shippingExportBatches"
+  | "shippingReturns"
   | "reports"
   | "settings";
 
@@ -130,6 +133,7 @@ const navigationItems = {
     description: "统一承接交易单、发货执行和批次记录。",
     iconName: "orders",
     activePrefixes: ["/fulfillment", "/orders", "/shipping"],
+    excludePrefixes: ["/shipping/returns"],
   }),
   paymentRecords: createItem({
     title: "收款记录",
@@ -151,7 +155,7 @@ const navigationItems = {
     description: "兼容入口，已收口到履约中心发货视图。",
     iconName: "shipping",
     activePrefixes: ["/shipping"],
-    excludePrefixes: ["/shipping/export-batches"],
+    excludePrefixes: ["/shipping/export-batches", "/shipping/returns"],
   }),
   shippingExportBatches: createItem({
     title: "订单中心 / 批次记录",
@@ -159,6 +163,13 @@ const navigationItems = {
     description: "兼容入口，已收口到履约中心批次视图。",
     iconName: "shippingExportBatches",
     activePrefixes: ["/shipping/export-batches"],
+  }),
+  shippingReturns: createItem({
+    title: "退货物流",
+    href: "/shipping/returns",
+    description: "对接退货物流、跟踪回程进度，并在供应商签收后确认入库以触发退款。",
+    iconName: "shippingReturns",
+    activePrefixes: ["/shipping/returns"],
   }),
   reports: createItem({
     title: "报表中心",
@@ -237,6 +248,10 @@ const navigationTree: NavigationTree = {
       sections: [
         {
           items: [navigationItems.products, navigationItems.fulfillmentCenter],
+        },
+        {
+          title: "退货物流",
+          items: [navigationItems.shippingReturns],
         },
         {
           title: "收款协同",
@@ -352,7 +367,13 @@ const navigationTree: NavigationTree = {
       key: "product-collaboration",
       title: "商品协同",
       description: "商品信息协同查看与配置支持。",
-      sections: [{ items: [navigationItems.products] }],
+      sections: [
+        { items: [navigationItems.products] },
+        {
+          title: "退货物流",
+          items: [navigationItems.shippingReturns],
+        },
+      ],
     },
   ],
   SHIPPER: [
@@ -371,8 +392,14 @@ const navigationTree: NavigationTree = {
     {
       key: "fulfillment",
       title: "履约中心",
-      description: "发货执行、报单批次与履约相关主数据协同。",
-      sections: [{ items: [navigationItems.fulfillmentCenter, navigationItems.products] }],
+      description: "发货执行、报单批次、退货回仓与履约相关主数据协同。",
+      sections: [
+        { items: [navigationItems.fulfillmentCenter, navigationItems.products] },
+        {
+          title: "退货物流",
+          items: [navigationItems.shippingReturns],
+        },
+      ],
     },
   ],
   FINANCE: [
@@ -418,6 +445,13 @@ function canAccessNavigationItem(
 
   if (item.href === "/recycle-bin") {
     return canAccessRecycleBinModule(role, permissionCodes);
+  }
+
+  if (item.href === "/shipping/returns") {
+    return (
+      canFillShippingReturnTracking(role) ||
+      canConfirmShippingReturnReceived(role)
+    );
   }
 
   return true;

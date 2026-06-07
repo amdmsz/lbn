@@ -409,6 +409,28 @@ export function canManageShippingReporting(role: RoleCode) {
   return role === "ADMIN" || role === "SHIPPER";
 }
 
+// Phase C 退货链路: 4 类操作权限 (lib/shipping/returns.ts 服务层 gate).
+//   - 发起: SALES (订单负责人) / SUPERVISOR / ADMIN — 销售在跟单时最先发现退货, 财务不发起
+//   - 审核: SUPERVISOR / ADMIN — 4 眼原则, 发起人 != 审核人 (ADMIN 例外)
+//   - 填运单: SHIPPER / OPS / ADMIN — 退货物流由发货侧执行
+//   - 入库确认: SHIPPER / OPS / ADMIN — 收货签收侧
+// FINANCE 不参与退货流, 仅在退货入库自动触发的 RefundRequest 链路里处理.
+export function canRequestShippingReturn(role: RoleCode) {
+  return role === "ADMIN" || role === "SUPERVISOR" || role === "SALES";
+}
+
+export function canReviewShippingReturn(role: RoleCode) {
+  return role === "ADMIN" || role === "SUPERVISOR";
+}
+
+export function canFillShippingReturnTracking(role: RoleCode) {
+  return role === "ADMIN" || role === "SHIPPER" || role === "OPS";
+}
+
+export function canConfirmShippingReturnReceived(role: RoleCode) {
+  return role === "ADMIN" || role === "SHIPPER" || role === "OPS";
+}
+
 export function canAccessPaymentRecordModule(role: RoleCode) {
   return role === "ADMIN" || role === "SUPERVISOR" || role === "SALES";
 }

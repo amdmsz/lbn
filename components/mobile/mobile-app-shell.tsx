@@ -20,6 +20,7 @@ import {
   PackageCheck,
   PhoneCall,
   RefreshCw,
+  RotateCcw,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
@@ -273,6 +274,7 @@ function getNavigationIcon(iconName: NavigationIconName) {
     collectionTasks: WalletCards,
     shipping: Truck,
     shippingExportBatches: FileText,
+    shippingReturns: RotateCcw,
     reports: BarChart3,
     settings: Settings,
   };

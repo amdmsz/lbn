@@ -39,6 +39,24 @@ enum RefundPayoutMethod {
   OTHER
 }
 
+enum ShippingReturnStatus {
+  PENDING_REVIEW         // 销售/主管发起, 等主管复审 (如发起人是主管/admin 可直接 APPROVED)
+  PENDING_RETURN_TRACKING // 已批准, 等发货人对接物流回填运单
+  IN_RETURN_TRANSIT      // 退货物流已发出, 等供货商接货 + 入库
+  RETURNED_TO_WAREHOUSE  // 已入库 (发货人确认), 自动触发 RefundRequest
+  REJECTED               // 主管驳回 / 入库时发现货物有问题驳回
+  CANCELED               // 客户最后又收下了 / 销售撤回
+}
+
+enum ShippingReturnReason {
+  CUSTOMER_REJECT       // 客户拒收
+  QUALITY_ISSUE         // 质量问题
+  WRONG_ITEM            // 发错货
+  DELIVERY_TIMEOUT      // 物流超时
+  ADDRESS_PROBLEM       // 地址错误
+  OTHER                 // 其他
+}
+
 enum UserPermissionCode {
   LIVE_SESSION_MANAGE
   PRODUCT_MANAGE
@@ -851,6 +869,10 @@ model User {
   reviewedRefunds                           RefundRequest[]                   @relation("RefundFinanceReviewer")
   paidOutRefunds                            RefundRequest[]                   @relation("RefundPayoutBy")
   createdReversePaymentRecords              ReversePaymentRecord[]            @relation("ReversePaymentRecordCreator")
+  requestedShippingReturns                  ShippingReturn[]                  @relation("ShippingReturnRequester")
+  reviewedShippingReturns                   ShippingReturn[]                  @relation("ShippingReturnReviewer")
+  filledShippingReturnTrackings             ShippingReturn[]                  @relation("ShippingReturnTrackingFiller")
+  receivedShippingReturns                   ShippingReturn[]                  @relation("ShippingReturnReceiver")
   ownedPaymentPlans                         PaymentPlan[]                     @relation("PaymentPlanOwner")
   createdPaymentPlans                       PaymentPlan[]                     @relation("PaymentPlanCreatedBy")
   updatedPaymentPlans                       PaymentPlan[]                     @relation("PaymentPlanUpdatedBy")
@@ -1045,6 +1067,7 @@ model Customer {
   mergeLogs                    LeadCustomerMergeLog[]
   ownershipEvents              CustomerOwnershipEvent[]
   refundRequests               RefundRequest[]
+  shippingReturns              ShippingReturn[]
   historyArchives              CustomerHistoryArchive[] @relation("CustomerHistoryArchiveTargetCustomer")
   createdAt                    DateTime                 @default(now())
   updatedAt                    DateTime                 @updatedAt
@@ -1770,6 +1793,7 @@ model TradeOrder {
   exportLines             ShippingExportLine[]
   revisionRequests        TradeOrderRevisionRequest[]
   refundRequests          RefundRequest[]
+  shippingReturns         ShippingReturn[]
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime                  @updatedAt
 
@@ -1802,6 +1826,7 @@ model TradeOrderRevisionRequest {
   cancelledCollectionTaskIds  Json?
   cancelledSalesOrderIds      Json?
   refundRequest               RefundRequest?
+  shippingReturns             ShippingReturn[] @relation("RevisionShippingReturns")
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 
@@ -2115,6 +2140,7 @@ model ShippingTask {
   logisticsFollowUpTasks       LogisticsFollowUpTask[]
   codCollectionRecords         CodCollectionRecord[]
   exportLines                  ShippingExportLine[]
+  shippingReturns              ShippingReturn[]
   createdAt                    DateTime                  @default(now())
   updatedAt                    DateTime                  @updatedAt
 
@@ -2126,6 +2152,58 @@ model ShippingTask {
   @@index([trackingNumber])
   @@index([logisticsExceptionType, shippingStatus, createdAt], map: "shiptask_logistics_exception_idx")
   @@map("shippingtask")
+}
+
+model ShippingReturn {
+  id                  String               @id @default(cuid())
+  tradeOrderId        String
+  tradeOrder          TradeOrder           @relation(fields: [tradeOrderId], references: [id])
+  shippingTaskId      String
+  shippingTask        ShippingTask         @relation(fields: [shippingTaskId], references: [id])
+  customerId          String
+  customer            Customer             @relation(fields: [customerId], references: [id])
+  // 可选关联 RevisionRequest / RefundRequest 形成完整链
+  revisionRequestId   String?
+  revisionRequest     TradeOrderRevisionRequest? @relation("RevisionShippingReturns", fields: [revisionRequestId], references: [id])
+  refundRequestId     String?              @unique
+  refundRequest       RefundRequest?       @relation("RefundShippingReturn", fields: [refundRequestId], references: [id])
+  // 状态机
+  status              ShippingReturnStatus @default(PENDING_REVIEW)
+  reason              ShippingReturnReason
+  reasonDetail        String               @db.Text
+  // 角色 + 时间
+  requesterId         String
+  requester           User                 @relation("ShippingReturnRequester", fields: [requesterId], references: [id])
+  requestedAt         DateTime             @default(now())
+  reviewerId          String?
+  reviewer            User?                @relation("ShippingReturnReviewer", fields: [reviewerId], references: [id])
+  reviewedAt          DateTime?
+  reviewNote          String?              @db.Text
+  rejectReason        String?              @db.Text
+  // 退货物流
+  returnTrackingNumber String?
+  returnCarrier       String?
+  trackingFilledById  String?
+  trackingFilledBy    User?                @relation("ShippingReturnTrackingFiller", fields: [trackingFilledById], references: [id])
+  trackingFilledAt    DateTime?
+  // 入库
+  receivedAt          DateTime?
+  receivedById        String?
+  receivedBy          User?                @relation("ShippingReturnReceiver", fields: [receivedById], references: [id])
+  receivedPhotoUrl    String?              @db.Text
+  receivedRemark      String?              @db.Text
+  // 期望退款金额 (退货入库后自动建 RefundRequest 的 requestedAmount)
+  expectedRefundAmount Decimal             @default(0) @db.Decimal(10, 2)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([tradeOrderId])
+  @@index([shippingTaskId])
+  @@index([customerId])
+  @@index([status, requestedAt])
+  @@index([reviewerId])
+  @@index([requesterId])
+  @@map("shippingreturn")
 }
 
 model ShippingExportBatch {
@@ -2382,6 +2460,7 @@ model RefundRequest {
   paidOutBy                   User?                 @relation("RefundPayoutBy", fields: [paidOutById], references: [id])
   reversePaymentRecords       ReversePaymentRecord[]
   reversedPaymentRecords      PaymentRecord[]       @relation("PaymentRecordReversedBy")
+  shippingReturn              ShippingReturn?       @relation("RefundShippingReturn")
   createdAt                   DateTime              @default(now())
   updatedAt                   DateTime              @updatedAt
 

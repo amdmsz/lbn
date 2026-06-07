@@ -17,6 +17,7 @@ import {
   Settings,
   ShipWheel,
   Trash2,
+  Undo2,
   Users,
   Video,
   WalletCards,
@@ -52,6 +53,7 @@ const iconMap: Record<NavigationIconName, typeof LayoutDashboard> = {
   collectionTasks: ClipboardList,
   shipping: ShipWheel,
   shippingExportBatches: ScrollText,
+  shippingReturns: Undo2,
   reports: BarChart3,
   settings: Settings,
 };

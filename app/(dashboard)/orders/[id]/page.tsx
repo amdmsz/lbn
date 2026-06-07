@@ -16,13 +16,16 @@ import {
   canCreateSalesOrder,
   canManageCollectionTasks,
   canManageLogisticsFollowUp,
+  canRequestShippingReturn,
   canReviewSalesOrder,
+  canReviewShippingReturn,
   canSubmitPaymentRecord,
   getDefaultRouteForRole,
 } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
 import { buildFulfillmentTradeOrdersHref } from "@/lib/fulfillment/navigation";
 import { getSalesOrderDetail } from "@/lib/sales-orders/queries";
+import { getActiveShippingReturnForTradeOrder } from "@/lib/shipping/returns";
 import { getTradeOrderDetail } from "@/lib/trade-orders/queries";
 import {
   checkRevisionBlockers,
@@ -43,6 +46,11 @@ import {
   upsertCollectionTaskAction,
   withdrawTradeOrderRevisionAction,
 } from "../actions";
+import {
+  cancelShippingReturnAction,
+  requestShippingReturnAction,
+  reviewShippingReturnAction,
+} from "@/app/(dashboard)/shipping/returns/actions";
 
 function buildCustomerTradeOrderHref(customerId: string, tradeOrderId: string) {
   const params = new URLSearchParams();
@@ -99,6 +107,11 @@ export default async function SalesOrderDetailPage({
       isApprovedTrade && !activeRevision
         ? await checkRevisionBlockers(prisma, tradeOrderData.order.id)
         : { ok: true as const, blockers: [] as never[] };
+    // Phase C: 任何状态都有可能有活跃退货 (已发货 / 已入库 等); SSR 读一次,
+    // 让 detail-section 决定是否渲染退货面板.
+    const activeShippingReturn = await getActiveShippingReturnForTradeOrder(
+      tradeOrderData.order.id,
+    );
     const canRequestRevision =
       canCreateSalesOrder(session.user.role) &&
       (session.user.role !== "SALES" ||
@@ -106,6 +119,15 @@ export default async function SalesOrderDetailPage({
     const canReviewRevision = canReviewSalesOrder(session.user.role);
     const showRevisionPanel =
       (isApprovedTrade && canRequestRevision) || isRevisionPending;
+    // Phase C 退货: 发起权限 SALES 限本人单, SUPERVISOR/ADMIN 全部;
+    // 审核权限 SUPERVISOR/ADMIN; 服务端二次 gate, 这里仅控按钮可见.
+    const canRequestShippingReturnPanel =
+      canRequestShippingReturn(session.user.role) &&
+      (session.user.role !== "SALES" ||
+        tradeOrderData.order.ownerId === session.user.id);
+    const canReviewShippingReturnPanel = canReviewShippingReturn(
+      session.user.role,
+    );
 
     return (
       <div className="crm-page">
@@ -149,6 +171,13 @@ export default async function SalesOrderDetailPage({
             }
             reviewAction={reviewTradeOrderAction}
             moveToRecycleBinAction={moveTradeOrderToRecycleBinAction}
+            activeShippingReturn={activeShippingReturn ?? undefined}
+            canRequestShippingReturn={canRequestShippingReturnPanel}
+            canReviewShippingReturn={canReviewShippingReturnPanel}
+            currentUserId={session.user.id}
+            requestShippingReturnAction={requestShippingReturnAction}
+            reviewShippingReturnAction={reviewShippingReturnAction}
+            cancelShippingReturnAction={cancelShippingReturnAction}
             revisionPanel={
               showRevisionPanel ? (
                 <TradeOrderRevisionPanel
