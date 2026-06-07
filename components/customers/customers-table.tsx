@@ -1167,8 +1167,8 @@ export function CustomersTable({
                         ? `超过单次 ${MAX_BATCH_CUSTOMER_ACTION_SIZE} 位上限，请缩小范围。`
                         : manualRecycleUnavailable && canBatchMoveToRecycleBin
                           ? canBatchForceHardDelete
-                            ? "已选客户均不满足回收条件；如需删除，请走硬删确认。"
-                            : "已选客户均不满足回收条件，可继续添加标签或移交负责人。"
+                            ? "已选客户均不满足回收条件；如需彻底删除，请走硬删确认。"
+                            : "已选客户有归属或导入历史，无法自助回收。如确需删除，请联系您的主管走硬删流程；当前账号仍可批量添加标签或移交负责人。"
                           : selectionMode === "filtered"
                             ? canBatchForceHardDelete
                               ? "动作将应用到整个筛选结果；回收会逐条校验，硬删会直接清理关联记录。"
@@ -1258,8 +1258,10 @@ export function CustomersTable({
                         disabled={batchRecycleDisabled}
                         title={
                           manualRecycleUnavailable
-                            ? "已选客户均不满足回收条件"
-                            : "批量移入回收站"
+                            ? canBatchForceHardDelete
+                              ? "已选客户均不满足回收条件；如确需彻底删除，请改用右侧“硬删”入口走永久删除流程。"
+                              : "已选客户有归属或导入历史，无法自助回收。如确需删除，请联系您的主管走硬删流程。"
+                            : "批量移入回收站；服务端仍会逐条校验“误建轻客户”条件。"
                         }
                         className="inline-flex h-8 items-center gap-1.5 rounded-full border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-400"
                       >
@@ -1273,7 +1275,7 @@ export function CustomersTable({
                         type="button"
                         onClick={openBatchForceDeleteDialog}
                         disabled={batchExecutionBlockedByLimit}
-                        title="批量硬删除客户"
+                        title="永久删除已选客户，不可恢复，将触发硬删审计链；仅 ADMIN / SUPERVISOR 可执行。"
                         className="inline-flex h-8 items-center gap-1.5 rounded-full bg-destructive px-3 text-xs font-semibold text-destructive-foreground shadow-sm transition hover:bg-destructive/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
                       >
                         <Trash2 className="h-3.5 w-3.5" />

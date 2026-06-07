@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   ArrowLeftRight,
   CheckCircle2,
+  ExternalLink,
   Loader2,
   Undo2,
   X,
@@ -129,15 +131,18 @@ export default function TradeOrderRevisionPanel({
             </button>
           </div>
           {blocked ? (
-            <div className="mt-3 space-y-1 rounded-lg border border-amber-500/25 bg-amber-500/8 px-2.5 py-2 text-[11.5px] leading-4 text-amber-800 dark:text-amber-300">
+            <div className="mt-3 space-y-1.5 rounded-lg border border-amber-500/25 bg-amber-500/8 px-2.5 py-2 text-[11.5px] leading-4 text-amber-800 dark:text-amber-300">
               <div className="font-semibold">当前阶段不支持撤单:</div>
               {blockers.map((b) => (
-                <div key={b.code} className="flex items-start gap-1.5">
-                  <AlertTriangle
-                    className="mt-0.5 h-3 w-3 shrink-0"
-                    aria-hidden="true"
-                  />
-                  <span>{b.message}</span>
+                <div key={b.code} className="space-y-1">
+                  <div className="flex items-start gap-1.5">
+                    <AlertTriangle
+                      className="mt-0.5 h-3 w-3 shrink-0"
+                      aria-hidden="true"
+                    />
+                    <span>{b.message}</span>
+                  </div>
+                  <BlockerActionHint code={b.code} />
                 </div>
               ))}
             </div>
@@ -342,6 +347,28 @@ function ReviewButton({
       {label}
     </button>
   );
+}
+
+function BlockerActionHint({ code }: Readonly<{ code: string }>) {
+  if (code === "PAYMENT_CONFIRMED" || code === "COD_COLLECTED") {
+    return (
+      <Link
+        href="/finance/refunds"
+        className="ml-4.5 inline-flex items-center gap-1 text-[11px] font-medium text-primary underline-offset-2 transition hover:underline"
+      >
+        暂不支持自动撤单, 但可以走退款流程
+        <ExternalLink className="h-3 w-3" aria-hidden="true" />
+      </Link>
+    );
+  }
+  if (code === "ALREADY_SHIPPED") {
+    return (
+      <p className="ml-4.5 text-[11px] text-muted-foreground">
+        需要走退货流程 (Phase C, 待开发)
+      </p>
+    );
+  }
+  return null;
 }
 
 function NoticeRow({

@@ -111,6 +111,11 @@ export function CustomerForceDeletePanel({
             setNotice(null);
             setOpen((value) => !value);
           }}
+          title={
+            open
+              ? "收起硬删除面板"
+              : "永久删除该客户及关联记录，不进入回收站，不可恢复；将触发硬删审计链。"
+          }
           className="crm-button crm-button-secondary min-h-0 px-3.5 py-2 text-sm text-[var(--color-danger)] hover:border-[var(--tone-danger-soft-border-strong)] hover:bg-[var(--tone-danger-soft-bg)]"
         >
           <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />

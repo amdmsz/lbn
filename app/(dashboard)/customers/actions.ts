@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { ZodError, z } from "zod";
 import {
   canBatchManageCustomerTags,
@@ -9,6 +9,7 @@ import {
   canPermanentlyDeleteCustomers,
   canTransferCustomerOwner,
 } from "@/lib/auth/access";
+import { CACHE_TAGS } from "@/lib/cache-tags";
 import { auth } from "@/lib/auth/session";
 import {
   buildCustomerBatchActionError,
@@ -681,8 +682,10 @@ export async function createOwnedCustomerAction(
       parsed,
     );
 
-    revalidatePath("/customers");
-    revalidatePath(`/customers/${result.customerId}`);
+    // F17 wave-2: customer list / 单客户用 tag 失效, 避免每次创建都 revalidate
+    // /customers 整路由导致大表 cache miss.
+    updateTag(CACHE_TAGS.customerList);
+    updateTag(CACHE_TAGS.customer(result.customerId));
 
     return {
       status: "success",
@@ -737,8 +740,9 @@ export async function updateCustomerRemarkAction(
       },
     );
 
-    revalidatePath("/customers");
-    revalidatePath(`/customers/${result.customerId}`);
+    // F17 wave-2: 备注更新只影响 list 与该客户卡, 走 tag.
+    updateTag(CACHE_TAGS.customerList);
+    updateTag(CACHE_TAGS.customer(result.customerId));
 
     return {
       status: "success",
@@ -933,7 +937,12 @@ export async function batchTransferCustomerOwnerAction(
     }
 
     if (successCount > 0 || skippedCount > 0) {
-      revalidatePath("/customers");
+      // F17 wave-2: 移交触发 list 与每个被移交客户卡的 tag 失效;
+      // /dashboard 聚合页保留 revalidatePath (本波不切).
+      updateTag(CACHE_TAGS.customerList);
+      for (const customerId of customerIds) {
+        updateTag(CACHE_TAGS.customer(customerId));
+      }
       revalidatePath("/dashboard");
     }
 
@@ -1048,7 +1057,11 @@ export async function batchMoveCustomersToRecycleBinAction(
     }
 
     if (successCount > 0 || skippedCount > 0) {
-      revalidatePath("/customers");
+      // F17 wave-2: 回收只动 customer tag; /recycle-bin 是聚合页, 本波保留 path.
+      updateTag(CACHE_TAGS.customerList);
+      for (const customerId of customerIds) {
+        updateTag(CACHE_TAGS.customer(customerId));
+      }
       revalidatePath("/recycle-bin");
     }
 
@@ -1174,11 +1187,17 @@ export async function batchForceHardDeleteCustomersAction(
     }
 
     if (successCount > 0) {
-      revalidatePath("/customers");
+      // F17 wave-2: 硬删除影响面最大, customer / trade-order tag 同时失效,
+      // 配合各聚合页 revalidatePath (dashboard / fulfillment / finance / reports
+      // / recycle-bin / customers/public-pool 本波先保留, 后续 phase 再切).
+      updateTag(CACHE_TAGS.customerList);
+      updateTag(CACHE_TAGS.tradeOrderList);
+      for (const customerId of customerIds) {
+        updateTag(CACHE_TAGS.customer(customerId));
+      }
       revalidatePath("/customers/public-pool");
       revalidatePath("/dashboard");
       revalidatePath("/recycle-bin");
-      revalidatePath("/orders");
       revalidatePath("/fulfillment");
       revalidatePath("/finance");
       revalidatePath("/reports");

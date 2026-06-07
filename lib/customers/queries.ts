@@ -1,3 +1,22 @@
+/**
+ * F08 phase 2: getCustomerCenterData 迁移到 cursor 分页
+ *
+ * 当前主路径 `getCustomerCenterData` 仍依赖
+ * `CUSTOMER_CENTER_LIST_HARD_CAP = 1500` 的一次性全表加载 + 内存
+ * stateMap / scopeSnapshots / queueCounts 派生 (UI 拿 totalCount + page).
+ * Phase 1 是加上 hard cap 防 OOM, 现在 phase 1.5 暴露真正的 cursor 分页
+ * 入口 `listCustomersCursor` (server-side `[updatedAt desc, id desc]`),
+ * 走 `cust_owner_updated_id_idx` 复合索引, 不再受 1500 限制.
+ *
+ * Phase 2 (待单独 PR) 计划:
+ *   - 把 customer-center-workbench 的列表区切到 cursor (URL: `?cursor=...`),
+ *   - 顶部统计 / queue 计数另起聚合接口 (避免靠列表内存聚合),
+ *   - 切流稳定后再砍掉 `CUSTOMER_CENTER_LIST_HARD_CAP` 全表路径.
+ *
+ * 当前增量保持向后兼容: 旧函数签名 / 返回结构 / `customerSnapshotSelect`
+ * 一律不动, UI 调用方 (customers-table.tsx) 也不需要改。
+ */
+import { unstable_cache } from "next/cache";
 import {
   CallResult,
   CustomerHistoryArchiveVisibility,
@@ -19,6 +38,7 @@ import {
   canAccessCustomerModule,
   canTransferCustomerOwner,
 } from "@/lib/auth/access";
+import { CACHE_TAGS } from "@/lib/cache-tags";
 import type { CallResultOption } from "@/lib/calls/metadata";
 import {
   getEnabledCallResultOptions,
@@ -38,6 +58,7 @@ import {
   findActiveCustomerRecycleEntry,
   listActiveCustomerIds,
 } from "@/lib/customers/recycle";
+import type { CustomerListCursor } from "@/lib/customers/list-cursor";
 import { parseCustomerImportOperationLogData } from "@/lib/customers/customer-import-operation-log";
 import { resolveImportedCustomerDeletionGuard } from "@/lib/customers/imported-customer-deletion";
 import { resolveCustomerAvatarSrc } from "@/lib/customers/avatar";
@@ -2760,6 +2781,147 @@ export async function getCustomerCenterData(
   } satisfies CustomerCenterData;
 }
 
+/**
+ * Server-side cursor 分页入口 (F08 phase 1.5).
+ *
+ * 与 `getCustomerCenterData` 并存, 不改变后者签名 / 调用方:
+ *   - 排序: `[updatedAt desc, id desc]` (走 cust_owner_updated_id_idx).
+ *   - 翻页: keyset, where `(updatedAt < cursor.updatedAt)
+ *     OR (updatedAt = cursor.updatedAt AND id < cursor.id)`.
+ *   - take = pageSize + 1, 末尾 1 个仅作为 hasMore 标记, 不返回给 UI.
+ *
+ * select 在 `customerSnapshotSelect` 基础上加一个 `updatedAt` 字段以便生
+ * 成 nextCursor; `customerSnapshotSelect` 本体不动, UI 端 (CustomerListItem)
+ * 不需要兼容新字段.
+ *
+ * 仅暴露能在 SQL 直接表达的过滤字段 (search by name/phone/remark, ownerId,
+ * teamId, ownershipModes). 派生态过滤 (executionClass / queue / tag / product)
+ * 走原 `getCustomerCenterData`, 这里不重复造轮子.
+ */
+export type ListCustomersCursorFilters = {
+  /** 客户姓名 / 电话 / 备注 模糊匹配, 与 legacy `matchesCustomerSearch` 一致语义. */
+  search?: string;
+  /** 限定具体 owner (用于「我名下」/ 销售选人 / 自定义视图). */
+  ownerId?: string;
+  /** 限定所属团队 (admin / supervisor 视角). */
+  teamId?: string;
+  /** 限定 ownershipMode, 默认沿用 active 集合 (PRIVATE + LOCKED). */
+  ownershipModes?: CustomerOwnershipMode[];
+};
+
+export type ListCustomersCursorResult = {
+  items: CustomerSnapshot[];
+  nextCursor: CustomerListCursor | null;
+};
+
+export async function listCustomersCursor(
+  viewer: CustomerViewer,
+  options: {
+    cursor?: CustomerListCursor | null;
+    pageSize?: number;
+    filters?: ListCustomersCursorFilters;
+  } = {},
+): Promise<ListCustomersCursorResult> {
+  if (!canAccessCustomerModule(viewer.role)) {
+    throw new Error("You do not have access to customers.");
+  }
+
+  const actor = await getCustomerCenterActor(viewer.id);
+  const visibleWhere = getCustomerVisibilityWhereInput(actor);
+  const recycledCustomerIds = await listActiveCustomerIds(prisma);
+
+  const cursor = options.cursor ?? null;
+  // 默认 50, clamp 到 [1, 200], 避免恶意客户端请求大批量
+  const requestedSize = options.pageSize ?? 50;
+  const pageSize = Math.max(1, Math.min(200, Math.floor(requestedSize)));
+
+  const filters = options.filters ?? {};
+  const filterClauses: Prisma.CustomerWhereInput[] = [];
+
+  if (filters.search && filters.search.trim().length > 0) {
+    const term = filters.search.trim();
+    filterClauses.push({
+      OR: [
+        { name: { contains: term } },
+        { phone: { contains: term } },
+        { remark: { contains: term } },
+      ],
+    });
+  }
+
+  if (filters.ownerId) {
+    filterClauses.push({ ownerId: filters.ownerId });
+  }
+
+  if (filters.teamId) {
+    filterClauses.push({ owner: { is: { teamId: filters.teamId } } });
+  }
+
+  if (filters.ownershipModes && filters.ownershipModes.length > 0) {
+    filterClauses.push({
+      ownershipMode: { in: filters.ownershipModes },
+    });
+  }
+
+  // cursor 翻页条件: keyset `(updatedAt, id) < (cursor.updatedAt, cursor.id)`
+  if (cursor) {
+    const cursorUpdatedAt = new Date(cursor.updatedAt);
+    filterClauses.push({
+      OR: [
+        { updatedAt: { lt: cursorUpdatedAt } },
+        {
+          updatedAt: cursorUpdatedAt,
+          id: { lt: cursor.id },
+        },
+      ],
+    });
+  }
+
+  const rows = await prisma.customer.findMany({
+    where: {
+      AND: [
+        visibleWhere,
+        ...(recycledCustomerIds.length > 0
+          ? [
+              {
+                id: { notIn: recycledCustomerIds },
+              } satisfies Prisma.CustomerWhereInput,
+            ]
+          : []),
+        ...filterClauses,
+      ],
+    },
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    take: pageSize + 1,
+    select: {
+      ...customerSnapshotSelect,
+      updatedAt: true,
+    },
+  });
+
+  // 末尾 1 条仅用于判断 hasMore, 不返回给 UI
+  const hasMore = rows.length > pageSize;
+  const slice = hasMore ? rows.slice(0, pageSize) : rows;
+  const tail = slice[slice.length - 1];
+  const nextCursor: CustomerListCursor | null =
+    hasMore && tail
+      ? {
+          updatedAt: tail.updatedAt.toISOString(),
+          id: tail.id,
+        }
+      : null;
+
+  // 剥掉 cursor 用的 updatedAt 字段, 保持返回类型与 `customerSnapshotSelect`
+  // 严格一致 (CustomerSnapshot), 避免下游 UI 拿到非声明字段.
+  const items: CustomerSnapshot[] = slice.map((row) => {
+    const rest: Record<string, unknown> = { ...row };
+    delete rest.updatedAt;
+    return rest as unknown as CustomerSnapshot;
+  });
+
+  return { items, nextCursor };
+}
+
 export async function getCustomerOperatingDashboardData(
   viewer: CustomerViewer,
   rawSearchParams?: Record<string, SearchParamsValue> | undefined,
@@ -4253,6 +4415,50 @@ export async function getCustomerDetailShell(
   };
 }
 
+// F17 wave-2 phase 1 part 1: 内部 prisma.user.findMany 用 unstable_cache 包一层,
+// tag = CACHE_TAGS.customerList. 这块结果只随 (role/teamId/currentOwnerId) 变化,
+// 不依赖 viewer.id / Date, 适合长期缓存; mutation 端 (创建/移交/删除/恢复客户)
+// 通过 revalidateTag(CACHE_TAGS.customerList) 主动失效. 行为兼容: 调用方拿到
+// 的字段 / 排序与切换前完全一致, 仅当 tag 失效后才回 DB.
+const listCustomerOwnerTransferUsersCached = unstable_cache(
+  async (input: {
+    scope: "ADMIN" | "SUPERVISOR";
+    teamId: string | null;
+    currentOwnerId: string | null;
+  }): Promise<CustomerOwnerTransferOption[]> => {
+    return prisma.user.findMany({
+      where: {
+        id: input.currentOwnerId ? { not: input.currentOwnerId } : undefined,
+        userStatus: UserStatus.ACTIVE,
+        disabledAt: null,
+        role: {
+          code: "SALES",
+        },
+        ...(input.scope === "SUPERVISOR" && input.teamId
+          ? { teamId: input.teamId }
+          : {}),
+      },
+      orderBy: [{ team: { name: "asc" } }, { name: "asc" }, { username: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        team: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+        },
+      },
+    });
+  },
+  [CACHE_TAGS.customerList, "customer-owner-transfer-options"],
+  {
+    tags: [CACHE_TAGS.customerList],
+  },
+);
+
 export async function getCustomerOwnerTransferOptions(
   viewer: CustomerViewer,
   customerId: string,
@@ -4273,31 +4479,16 @@ export async function getCustomerOwnerTransferOptions(
     return [];
   }
 
+  if (actor.role !== "ADMIN" && actor.role !== "SUPERVISOR") {
+    return [];
+  }
+
   const currentOwnerId = detail.customer.owner?.id ?? null;
 
-  return prisma.user.findMany({
-    where: {
-      id: currentOwnerId ? { not: currentOwnerId } : undefined,
-      userStatus: UserStatus.ACTIVE,
-      disabledAt: null,
-      role: {
-        code: "SALES",
-      },
-      ...(actor.role === "SUPERVISOR" ? { teamId: actor.teamId } : {}),
-    },
-    orderBy: [{ team: { name: "asc" } }, { name: "asc" }, { username: "asc" }],
-    select: {
-      id: true,
-      name: true,
-      username: true,
-      team: {
-        select: {
-          id: true,
-          name: true,
-          code: true,
-        },
-      },
-    },
+  return listCustomerOwnerTransferUsersCached({
+    scope: actor.role,
+    teamId: actor.teamId ?? null,
+    currentOwnerId,
   });
 }
 

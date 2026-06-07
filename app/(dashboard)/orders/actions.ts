@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { ZodError } from "zod";
 import {
@@ -11,6 +11,7 @@ import {
 } from "@/lib/action-notice";
 import { canAccessSalesOrderModule } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
+import { CACHE_TAGS } from "@/lib/cache-tags";
 import { prisma } from "@/lib/db/prisma";
 import {
   reviewPaymentRecord,
@@ -148,10 +149,12 @@ export async function saveSalesOrderAction(formData: FormData) {
       },
     );
 
-    revalidatePath("/orders");
+    // F17 wave-2: 成交订单 / 客户 / 子单 tag 失效; fulfillment / shipping /
+    // payment-records / collection-tasks / dashboard / reports 是聚合页, 本波保留 path.
+    updateTag(CACHE_TAGS.tradeOrderList);
+    updateTag(CACHE_TAGS.tradeOrder(result.id));
+    updateTag(CACHE_TAGS.customer(result.customerId));
     revalidatePath("/fulfillment");
-    revalidatePath(`/orders/${result.id}`);
-    revalidatePath(`/customers/${result.customerId}`);
     revalidatePath("/shipping");
     revalidatePath("/payment-records");
     revalidatePath("/collection-tasks");
@@ -160,7 +163,7 @@ export async function saveSalesOrderAction(formData: FormData) {
 
     if ("salesOrderIds" in result && Array.isArray(result.salesOrderIds)) {
       for (const childSalesOrderId of result.salesOrderIds) {
-        revalidatePath(`/orders/${childSalesOrderId}`);
+        updateTag(CACHE_TAGS.tradeOrder(childSalesOrderId));
       }
     }
 
@@ -222,9 +225,10 @@ export async function reviewSalesOrderAction(formData: FormData) {
           },
     );
 
-    revalidatePath("/orders");
+    // F17 wave-2: 审核结果影响订单 list + 该订单 + 客户卡; 聚合页保留 path.
+    updateTag(CACHE_TAGS.tradeOrderList);
+    updateTag(CACHE_TAGS.customer(result.customerId));
     revalidatePath("/fulfillment");
-    revalidatePath(`/customers/${result.customerId}`);
     revalidatePath("/shipping");
     revalidatePath("/payment-records");
     revalidatePath("/collection-tasks");
@@ -232,16 +236,18 @@ export async function reviewSalesOrderAction(formData: FormData) {
     revalidatePath("/reports");
 
     if (tradeLinkedOrder?.tradeOrderId) {
-      revalidatePath(`/orders/${result.id}`);
-      revalidatePath(`/orders/${salesOrderId}`);
+      updateTag(CACHE_TAGS.tradeOrder(result.id));
+      if (salesOrderId) {
+        updateTag(CACHE_TAGS.tradeOrder(salesOrderId));
+      }
 
       if ("salesOrderIds" in result && Array.isArray(result.salesOrderIds)) {
         for (const childSalesOrderId of result.salesOrderIds) {
-          revalidatePath(`/orders/${childSalesOrderId}`);
+          updateTag(CACHE_TAGS.tradeOrder(childSalesOrderId));
         }
       }
     } else {
-      revalidatePath(`/orders/${result.id}`);
+      updateTag(CACHE_TAGS.tradeOrder(result.id));
     }
 
     redirect(
@@ -281,10 +287,11 @@ export async function reviewTradeOrderAction(formData: FormData) {
       },
     );
 
-    revalidatePath("/orders");
+    // F17 wave-2: 成交主单审核 — list + 该单 + 客户卡走 tag; 聚合页保留.
+    updateTag(CACHE_TAGS.tradeOrderList);
+    updateTag(CACHE_TAGS.tradeOrder(result.id));
+    updateTag(CACHE_TAGS.customer(result.customerId));
     revalidatePath("/fulfillment");
-    revalidatePath(`/orders/${result.id}`);
-    revalidatePath(`/customers/${result.customerId}`);
     revalidatePath("/shipping");
     revalidatePath("/payment-records");
     revalidatePath("/collection-tasks");
@@ -293,7 +300,7 @@ export async function reviewTradeOrderAction(formData: FormData) {
 
     if ("salesOrderIds" in result && Array.isArray(result.salesOrderIds)) {
       for (const childSalesOrderId of result.salesOrderIds) {
-        revalidatePath(`/orders/${childSalesOrderId}`);
+        updateTag(CACHE_TAGS.tradeOrder(childSalesOrderId));
       }
     }
 
@@ -646,11 +653,15 @@ export async function requestTradeOrderRevisionAction(
     });
 
     const customerId = getFormValue(formData, "customerId");
-    revalidatePath("/orders");
-    revalidatePath(`/orders/${getFormValue(formData, "tradeOrderId")}`);
+    const tradeOrderId = getFormValue(formData, "tradeOrderId");
+    // F17 wave-2: 撤单申请触发订单 list / 该订单 / 客户卡 tag 失效.
+    updateTag(CACHE_TAGS.tradeOrderList);
+    if (tradeOrderId) {
+      updateTag(CACHE_TAGS.tradeOrder(tradeOrderId));
+    }
     revalidatePath("/fulfillment");
     if (customerId) {
-      revalidatePath(`/customers/${customerId}`);
+      updateTag(CACHE_TAGS.customer(customerId));
     }
 
     return {
@@ -769,10 +780,12 @@ export async function requestRefundAction(
 
     const tradeOrderId = getFormValue(formData, "tradeOrderId");
     const customerId = getFormValue(formData, "customerId");
-    revalidatePath("/orders");
-    revalidatePath("/finance/refunds");
-    if (tradeOrderId) revalidatePath(`/orders/${tradeOrderId}`);
-    if (customerId) revalidatePath(`/customers/${customerId}`);
+    // F17 wave-2: 退款申请 — 订单 list / 该订单 / 客户 / refund list 全 tag 失效.
+    updateTag(CACHE_TAGS.tradeOrderList);
+    updateTag(CACHE_TAGS.refundList);
+    updateTag(CACHE_TAGS.refund(result.id));
+    if (tradeOrderId) updateTag(CACHE_TAGS.tradeOrder(tradeOrderId));
+    if (customerId) updateTag(CACHE_TAGS.customer(customerId));
 
     return {
       status: "success",

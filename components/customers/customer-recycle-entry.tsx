@@ -87,7 +87,7 @@ function getFinalizePreviewHint(preview: RecycleFinalizePreview | null) {
 }
 
 function getFallbackSuggestion() {
-  return "建议改走 public-pool / DORMANT / LOST / BLACKLISTED / merge / 订单支付履约治理。";
+  return "该客户有归属 / 导入 / 业务链历史，无法自助回收。如确需永久删除，请联系您的主管走【硬删】流程；或改走 public-pool / DORMANT / LOST / BLACKLISTED / merge / 订单支付履约治理。";
 }
 
 const recycleDialogShellClassName =
@@ -447,9 +447,14 @@ export function CustomerRecycleEntry(props: Readonly<CustomerRecycleEntryProps>)
         <button
           type="button"
           onClick={state.openDialog}
+          title={
+            state.guard.canMoveToRecycleBin
+              ? "进入 3 天冷静期，到期后由系统重算最终处理。"
+              : "当前不满足回收条件，点开查看阻断原因与下一步建议（如联系主管走硬删流程）。"
+          }
           className="crm-button crm-button-secondary min-h-0 px-3.5 py-2 text-sm"
         >
-          {state.guard.canMoveToRecycleBin ? "移入回收站" : "查看回收判断"}
+          {state.guard.canMoveToRecycleBin ? "移入回收站" : "查看回收判断与下一步"}
         </button>
       </div>
 
