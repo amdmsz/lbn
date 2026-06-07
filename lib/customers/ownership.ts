@@ -384,6 +384,17 @@ async function getOwnershipCustomerTx(tx: TransactionClient, customerId: string)
     "当前客户已移入回收站，不能继续执行公海 / 归属链路动作。",
   );
 
+  // 关键: 在 tx 内对目标客户行加 InnoDB 行锁, 把并发主管 assign / 销售 claim /
+  // 主管 release / 系统 recycle 串行化. 没有这层锁时, 两个 tx 都用普通
+  // findUnique 读到同一份 ownerId / claimLockedUntil 旧值, 都通过
+  // isPublicPoolCustomer / isProtectedCustomer 守卫, 然后双双写 update +
+  // OperationLog + CustomerOwnershipEvent — customer.ownerId 只能落一个,
+  // 但审计链会留下两条相互矛盾的 before 快照和两条对不上库表真相的 ownership
+  // event. 用 SELECT ... FOR UPDATE 让第二个 tx 阻塞直到第一个 tx 提交后,
+  // 紧跟其后的 findUnique 才会读到真正最新的 ownerId / claimLockedUntil,
+  // 守卫复算就会按事实拒绝抢占.
+  await tx.$queryRaw`SELECT id FROM customer WHERE id = ${customerId} FOR UPDATE`;
+
   const customer = await tx.customer.findUnique({
     where: { id: customerId },
     select: ownershipCustomerSelect,
