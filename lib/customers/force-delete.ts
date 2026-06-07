@@ -653,11 +653,85 @@ async function executeForceDeleteCleanupTx(
   const { dependencies } = input;
   const deleted: DeleteCountMap = {};
 
+  // Lead/LeadAssignment/CustomerHistoryArchive 走 fetch-then-detach, 同时落
+  // OperationLog. 单纯 updateMany 会留下三类悬挂记录:
+  // 1) Lead.ownerId 仍指向原 SALES → orphan lead 仍出现在 SALES /leads 视图,
+  //    且 importedCustomerDeletionGuard 在原 lead 上找不到 origin 锚点.
+  // 2) LeadAssignment 仍保留旧链, 但没有任何审计痕迹说明 customer 已强删.
+  // 3) CustomerHistoryArchive.targetCustomerId 置 null 后, source 仍在,
+  //    UI / 后续查询无法区分 "归档 → 客户重新建" vs "归档 → 客户已硬删".
+  // 解决: detach 前快照 → updateMany → 按行写 OperationLog (重要动作必留审计).
+  const detachedLeadRecords = await tx.lead.findMany({
+    where: { customerId: input.customerId },
+    select: { id: true, ownerId: true, status: true, phone: true },
+  });
+  const detachedLeadIds = uniqueStrings(detachedLeadRecords.map((record) => record.id));
+  const detachedLeadAssignments = detachedLeadIds.length
+    ? await tx.leadAssignment.findMany({
+        where: { leadId: { in: detachedLeadIds } },
+        select: { id: true, leadId: true, toUserId: true, fromUserId: true },
+      })
+    : [];
+
   const detachedLeads = await tx.lead.updateMany({
     where: { customerId: input.customerId },
-    data: { customerId: null },
+    data: {
+      customerId: null,
+      // 同步把 ownerId 清空 — 客户已强删, 原 SALES 不应再把这条孤儿 lead
+      // 当成自己客户继续跟进; 走 supervisor 复核 / 重新分配链路.
+      ownerId: null,
+    },
   });
   deleted.detachedLeads = detachedLeads.count;
+
+  if (detachedLeadRecords.length > 0) {
+    await tx.operationLog.createMany({
+      data: detachedLeadRecords.map((record) => ({
+        actorId: input.actor.id,
+        module: OperationModule.LEAD,
+        action: "lead.customer_detached_by_force_delete",
+        targetType: OperationTargetType.LEAD,
+        targetId: record.id,
+        description: `客户被强制硬删除，Lead 已自动 detach 并解除负责人，需主管复核。`,
+        beforeData: toInputJson({
+          customerId: input.customerId,
+          ownerId: record.ownerId,
+          status: record.status,
+          phone: record.phone,
+        }),
+        afterData: toInputJson({
+          customerId: null,
+          ownerId: null,
+          reason: input.reason,
+          actorRole: input.actor.role,
+        }),
+      })),
+    });
+  }
+
+  if (detachedLeadAssignments.length > 0) {
+    await tx.operationLog.createMany({
+      data: detachedLeadAssignments.map((assignment) => ({
+        actorId: input.actor.id,
+        module: OperationModule.LEAD,
+        action: "lead_assignment.customer_detached_by_force_delete",
+        targetType: OperationTargetType.LEAD_ASSIGNMENT,
+        targetId: assignment.id,
+        description: `所属客户被强制硬删除，Lead 分配链路保留作为历史审计。`,
+        beforeData: toInputJson({
+          customerId: input.customerId,
+          leadId: assignment.leadId,
+          toUserId: assignment.toUserId,
+          fromUserId: assignment.fromUserId,
+        }),
+        afterData: toInputJson({
+          reason: input.reason,
+          actorRole: input.actor.role,
+        }),
+      })),
+    });
+  }
+  deleted.detachedLeadAssignments = detachedLeadAssignments.length;
 
   const detachedMergeLogs = await tx.leadCustomerMergeLog.updateMany({
     where: { customerId: input.customerId },
@@ -665,11 +739,42 @@ async function executeForceDeleteCleanupTx(
   });
   deleted.detachedLeadCustomerMergeLogs = detachedMergeLogs.count;
 
+  const historyArchiveRecords = await tx.customerHistoryArchive.findMany({
+    where: { targetCustomerId: input.customerId },
+    select: { id: true, sourceCustomerId: true, sourceBatchId: true },
+  });
   const detachedHistoryArchives = await tx.customerHistoryArchive.updateMany({
     where: { targetCustomerId: input.customerId },
     data: { targetCustomerId: null },
   });
   deleted.detachedCustomerHistoryArchives = detachedHistoryArchives.count;
+
+  if (historyArchiveRecords.length > 0) {
+    // sourceCustomerId 是 NOT NULL 不能清, 用 OperationLog 显式标记
+    // "源客户已硬删", 让 UI/归档查询能区分 "归档已悬挂" 这一状态.
+    await tx.operationLog.createMany({
+      data: historyArchiveRecords.map((archive) => ({
+        actorId: input.actor.id,
+        module: OperationModule.CUSTOMER,
+        action: "customer_history_archive.source_customer_hard_deleted",
+        targetType: OperationTargetType.CUSTOMER,
+        targetId: archive.sourceCustomerId,
+        description: `客户已强制硬删除，关联的 CustomerHistoryArchive 仅保留快照。`,
+        beforeData: toInputJson({
+          archiveId: archive.id,
+          targetCustomerId: input.customerId,
+          sourceBatchId: archive.sourceBatchId,
+        }),
+        afterData: toInputJson({
+          archiveId: archive.id,
+          targetCustomerId: null,
+          sourceCustomerHardDeletedAt: new Date().toISOString(),
+          reason: input.reason,
+          actorRole: input.actor.role,
+        }),
+      })),
+    });
+  }
 
   const resolvedRecycleEntries = await tx.recycleBinEntry.updateMany({
     where: {
