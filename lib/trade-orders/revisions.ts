@@ -281,6 +281,31 @@ export async function requestTradeOrderRevision(
   }
 
   return prisma.$transaction(async (tx) => {
+    // 防 race: 两个销售/主管同时点 "申请撤单" 时, 外层 blocker check 都通过
+    // 但写入瞬间会出现 2 个 PENDING 的 RevisionRequest. 事务内重新 check
+    // tradeStatus + 已有 PENDING 申请, 命中即抛错.
+    const freshTradeOrder = await tx.tradeOrder.findUnique({
+      where: { id: tradeOrder.id },
+      select: { tradeStatus: true },
+    });
+    if (freshTradeOrder?.tradeStatus !== TradeOrderStatus.APPROVED) {
+      throw new Error(
+        `成交主单状态已变更 (current=${freshTradeOrder?.tradeStatus}), 无法发起撤单/减量申请`,
+      );
+    }
+    const existingPending = await tx.tradeOrderRevisionRequest.findFirst({
+      where: {
+        tradeOrderId: tradeOrder.id,
+        status: TradeOrderRevisionStatus.PENDING,
+      },
+      select: { id: true },
+    });
+    if (existingPending) {
+      throw new Error(
+        "本订单已有一个撤单/减量申请正在审批中, 请先处理完再发起新申请",
+      );
+    }
+
     const revision = await tx.tradeOrderRevisionRequest.create({
       data: {
         tradeOrderId: tradeOrder.id,
@@ -652,6 +677,12 @@ export async function reviewTradeOrderRevision(
           discountAmount: aggregateList.minus(aggregateDeal),
           finalAmount: aggregateDeal,
           remainingAmount: aggregateDeal,
+          // 收款/到付字段归零 — 所有 PaymentRecord/PaymentPlan 已删, 不能让
+          // 上一轮 APPROVED 时 sync 的残值继续显示 (否则 dashboard / reports /
+          // 重新提交审核会读到错值).
+          collectedAmount: new Prisma.Decimal(0),
+          paidAmount: new Prisma.Decimal(0),
+          codAmount: new Prisma.Decimal(0),
           // 回 DRAFT, reviewStatus 也回 PENDING_REVIEW 让销售重新提交
           tradeStatus: TradeOrderStatus.DRAFT,
           reviewStatus: SalesOrderReviewStatus.PENDING_REVIEW,
@@ -661,11 +692,16 @@ export async function reviewTradeOrderRevision(
         },
       });
     } else {
-      // CANCEL: 整单 CANCELED
+      // CANCEL: 整单 CANCELED, 收款/到付字段归零(所有未确认 PaymentRecord
+      // 已删, 残留数字会让 dashboard/reports/对账图表误算).
       await tx.tradeOrder.update({
         where: { id: revision.tradeOrderId },
         data: {
           tradeStatus: TradeOrderStatus.CANCELED,
+          collectedAmount: new Prisma.Decimal(0),
+          paidAmount: new Prisma.Decimal(0),
+          codAmount: new Prisma.Decimal(0),
+          remainingAmount: new Prisma.Decimal(0),
           updatedById: actor.id,
         },
       });

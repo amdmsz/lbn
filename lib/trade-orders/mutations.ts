@@ -834,6 +834,15 @@ function assertEditableTradeOrderForDraft(
     throw new Error("Approved trade orders cannot be edited from the draft form.");
   }
 
+  // 防绕过 revision 审批: 进入 REVISION_PENDING 后销售不能通过 customer detail
+  // 重新存 draft 把订单"打回 DRAFT" 来绕开主管复审, 必须等 revision 走完
+  // (approved / rejected / withdrawn).
+  if (existingTradeOrder.tradeStatus === TradeOrderStatus.REVISION_PENDING) {
+    throw new Error(
+      "本订单正在撤单/减量审批中, 请先等主管复审 (通过/驳回) 或撤回申请后再编辑.",
+    );
+  }
+
   if (
     existingTradeOrder.tradeStatus === TradeOrderStatus.PENDING_REVIEW &&
     existingTradeOrder.salesOrders.length > 0
@@ -851,6 +860,13 @@ function assertRebuildableTradeOrder(
 
   if (existingTradeOrder.tradeStatus === TradeOrderStatus.APPROVED) {
     throw new Error("Approved trade orders cannot rebuild supplier sub-orders.");
+  }
+
+  // 同上 — REVISION_PENDING 期间不允许重建子单, 必须先走完 revision.
+  if (existingTradeOrder.tradeStatus === TradeOrderStatus.REVISION_PENDING) {
+    throw new Error(
+      "本订单正在撤单/减量审批中, 不能重建供应商子单, 请先等主管复审或撤回申请.",
+    );
   }
 
   if (hasInitializedChildArtifacts(existingTradeOrder)) {
