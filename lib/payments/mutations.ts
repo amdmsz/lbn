@@ -27,6 +27,11 @@ import {
 } from "@/lib/auth/access";
 import { prisma } from "@/lib/db/prisma";
 import {
+  decimalToNumber,
+  roundCurrency as roundCurrencyDecimal,
+  sumDecimal,
+} from "@/lib/payments/decimal";
+import {
   buildCollectionTaskScope,
   buildPaymentPlanScope,
   buildPaymentRecordScope,
@@ -264,19 +269,30 @@ async function syncPaymentPlanAggregateState(tx: PaymentTransaction, paymentPlan
     };
   }
 
-  const submittedAmount = roundCurrency(
-    records
-      .filter(
-        (record) =>
-          record.status === PaymentRecordStatus.SUBMITTED ||
-          record.status === PaymentRecordStatus.CONFIRMED,
-      )
-      .reduce((sum, record) => sum + toNumber(record.amount), 0),
+  // F04 phase 2: 用 Decimal 链聚合避免浮点漂移. 出口仍是 number (calculate
+  // PaymentPlanProgress 接 number), 但中间累加用 Decimal — 这是 audit 推荐的
+  // "双跑过渡" 路径, helper 在 lib/payments/decimal.ts.
+  const submittedAmount = decimalToNumber(
+    roundCurrencyDecimal(
+      sumDecimal(
+        records
+          .filter(
+            (record) =>
+              record.status === PaymentRecordStatus.SUBMITTED ||
+              record.status === PaymentRecordStatus.CONFIRMED,
+          )
+          .map((record) => record.amount),
+      ),
+    ),
   );
-  const confirmedAmount = roundCurrency(
-    records
-      .filter((record) => record.status === PaymentRecordStatus.CONFIRMED)
-      .reduce((sum, record) => sum + toNumber(record.amount), 0),
+  const confirmedAmount = decimalToNumber(
+    roundCurrencyDecimal(
+      sumDecimal(
+        records
+          .filter((record) => record.status === PaymentRecordStatus.CONFIRMED)
+          .map((record) => record.amount),
+      ),
+    ),
   );
   const progress = calculatePaymentPlanProgress({
     plannedAmount: toNumber(plan.plannedAmount),
