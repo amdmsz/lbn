@@ -605,6 +605,13 @@ export async function assignCustomerToSalesTx(
 
   if (currentIsPublicPoolCustomer) {
     assertActorCanAccessPoolCustomer(input.actor, customer, resolvedPoolTeamId);
+
+    // 公海客户仍在 claim 保护期内时,只有 ADMIN 兜底可以指派 — 防止主管手动指派
+    // 或 SYSTEM 自动分配在 preview->apply 的窗口里偷走刚被 SALES 自助 release
+    // 又立即被另一名 SALES claim 走 (lock 重置) 的客户.
+    if (isProtectedCustomer(customer, now) && input.actor.role !== "ADMIN") {
+      throw new Error("Customer is still under claim protection.");
+    }
   } else {
     if (input.requireCurrentPublicPool) {
       return null;
