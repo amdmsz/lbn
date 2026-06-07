@@ -1340,9 +1340,13 @@ export async function syncShippingCollectionTasks(
     if (requestedCodStatus === CodCollectionStatus.COLLECTED) {
       // F01 修复: 用显式空值判断, 避免 `|| expectedAmount` 把空串/0/null 误当假值
       // 而用计划金额覆盖真实回收金额(财务真相红线).
+      // R07 改进: remainingAmount=0 时 (已收满) 退到 expectedAmount, 避免用户
+      // 看到 "must be greater than 0" 的误导报错.
       const rawInputAmount = input.codCollectedAmount;
       const fallbackAmount =
-        remainingAmount !== undefined && remainingAmount !== null
+        remainingAmount !== undefined &&
+        remainingAmount !== null &&
+        Number(remainingAmount) > 0
           ? remainingAmount
           : expectedAmount;
       const sourceAmount =
@@ -1605,9 +1609,12 @@ export async function syncShippingCollectionTasks(
         remark: getCodCollectionTaskRemark(requestedCodStatus),
       });
       } catch (err) {
+        // R10: 用 Error cause 链保留原 stack, 便于对账时反查根因.
+        // 同时保留 plan.id + sourceType 上下文.
         const cause = err instanceof Error ? err.message : String(err);
         throw new Error(
           `ensureCollectionTaskForPlan failed for plan=${plan.id}, sourceType=${plan.sourceType}: ${cause}`,
+          { cause: err },
         );
       }
 

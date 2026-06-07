@@ -3217,3 +3217,28 @@ html[data-theme="dark"] [class*="border-[rgba(32,24,19"] {
     height: 100dvh;
   }
 }
+
+/* F15: 触控设备 (手机/平板) 把小按钮放大到 ≥ 44px 触控热区 (Apple/Google
+   HIG 推荐). desktop pointer 不受影响, 视觉零变化. */
+@media (pointer: coarse) {
+  .crm-button {
+    min-height: 2.75rem; /* ≈ 44px */
+  }
+  /* 行内 chip / 小操作按钮 (h-7, h-8) 至少给个 hit area expansion */
+  button[class*="h-7"],
+  button[class*="h-8"],
+  a[class*="h-7"],
+  a[class*="h-8"] {
+    position: relative;
+  }
+  button[class*="h-7"]::before,
+  button[class*="h-8"]::before,
+  a[class*="h-7"]::before,
+  a[class*="h-8"]::before {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    /* 不影响布局, 仅给触控 listener 扩面积 */
+    pointer-events: auto;
+  }
+}

@@ -46,7 +46,12 @@ export async function deleteLeadImportSourceFile(input: { batchId: string }) {
   const batchDir = path.join(leadImportRuntimeRoot, input.batchId);
   try {
     await rm(batchDir, { recursive: true, force: true });
-  } catch {
-    // 文件清理失败不应阻断主流程
+  } catch (err) {
+    // R09: 失败仍不阻断主流程, 但留 warn 便于排查 runtime/imports 目录膨胀.
+    // 注意不打印完整 path 防止泄漏服务器路径布局.
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(
+      `[lead-imports/storage] orphan cleanup failed for batchId=${input.batchId}: ${msg}`,
+    );
   }
 }

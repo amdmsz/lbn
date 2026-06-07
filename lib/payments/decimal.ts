@@ -48,7 +48,11 @@ export function toDecimal(value: DecimalInput): Prisma.Decimal {
     return new Prisma.Decimal(trimmed);
   } catch {
     if (process.env.NODE_ENV !== "production") {
-      console.warn(`[payments/decimal] toDecimal: invalid input "${trimmed}", coerced to 0`);
+      // R08: 不打印输入原文 (可能含 PII), 只打类型/长度. 即便 NODE_ENV 守卫
+      // 兜底, dev/staging 日志也应该卫生.
+      console.warn(
+        `[payments/decimal] toDecimal: invalid input (typeof=${typeof value}, len=${trimmed.length}), coerced to 0`,
+      );
     }
     return new Prisma.Decimal(0);
   }
