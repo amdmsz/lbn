@@ -235,7 +235,10 @@ async function createPaymentPlanLog(
   });
 }
 
-async function syncPaymentPlanAggregateState(tx: PaymentTransaction, paymentPlanId: string) {
+export async function syncPaymentPlanAggregateState(
+  tx: PaymentTransaction,
+  paymentPlanId: string,
+) {
   const [plan, records] = await Promise.all([
     tx.paymentPlan.findUnique({
       where: { id: paymentPlanId },
@@ -250,6 +253,11 @@ async function syncPaymentPlanAggregateState(tx: PaymentTransaction, paymentPlan
       select: {
         amount: true,
         status: true,
+        // Phase B 退款链路: 已被退款冲账的 PaymentRecord (isReversed=true) 不能
+        // 再计入 submitted / confirmed 聚合, 否则 PaymentPlan.remainingAmount 会偏低
+        // 甚至为 0, CollectionTask 不会因为退款而重开, 财务对账与销售收款真相撕裂.
+        // ReversePaymentRecord 表里有对应的反向冲账记录可独立审计, 这里只剔除聚合.
+        isReversed: true,
       },
     }),
   ]);
@@ -276,8 +284,9 @@ async function syncPaymentPlanAggregateState(tx: PaymentTransaction, paymentPlan
         records
           .filter(
             (record) =>
-              record.status === PaymentRecordStatus.SUBMITTED ||
-              record.status === PaymentRecordStatus.CONFIRMED,
+              !record.isReversed &&
+              (record.status === PaymentRecordStatus.SUBMITTED ||
+                record.status === PaymentRecordStatus.CONFIRMED),
           )
           .map((record) => record.amount),
       ),
@@ -287,7 +296,11 @@ async function syncPaymentPlanAggregateState(tx: PaymentTransaction, paymentPlan
     roundCurrencyDecimal(
       sumDecimal(
         records
-          .filter((record) => record.status === PaymentRecordStatus.CONFIRMED)
+          .filter(
+            (record) =>
+              !record.isReversed &&
+              record.status === PaymentRecordStatus.CONFIRMED,
+          )
           .map((record) => record.amount),
       ),
     ),
@@ -403,7 +416,10 @@ async function ensureCollectionTaskForPlan(
   };
 }
 
-async function syncSalesOrderSummary(tx: PaymentTransaction, salesOrderId: string) {
+export async function syncSalesOrderSummary(
+  tx: PaymentTransaction,
+  salesOrderId: string,
+) {
   const plans = await tx.paymentPlan.findMany({
     where: {
       salesOrderId,

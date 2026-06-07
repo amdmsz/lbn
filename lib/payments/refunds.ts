@@ -41,6 +41,10 @@ import {
   isPositiveAmount,
   toDecimal,
 } from "@/lib/payments/decimal";
+import {
+  syncPaymentPlanAggregateState,
+  syncSalesOrderSummary,
+} from "@/lib/payments/mutations";
 
 export type RefundActor = {
   id: string;
@@ -402,7 +406,15 @@ export async function recordRefundPayout(
     }
     const sources = await tx.paymentRecord.findMany({
       where: { id: { in: sourceIds } },
-      select: { id: true, amount: true, isReversed: true },
+      select: {
+        id: true,
+        amount: true,
+        isReversed: true,
+        // Phase B 退款链路 + payment finding 修复: 后面要逐个回写
+        // PaymentPlan / SalesOrder 汇总, 必须知道 source 落在哪个 plan / order.
+        paymentPlanId: true,
+        salesOrderId: true,
+      },
     });
     if (sources.some((s) => s.isReversed)) {
       throw new Error("源 PaymentRecord 已被其他退款冲账, 本申请已失效");
@@ -470,6 +482,28 @@ export async function recordRefundPayout(
         reversedByRefundRequestId: refund.id,
       },
     });
+
+    // payment finding 修复: 退款出账后立即回写 PaymentPlan / SalesOrder 汇总.
+    // syncPaymentPlanAggregateState 已剔除 isReversed=true 的记录, 所以这里
+    // 重算后 remainingAmount 会被推高 (退款冲账后真实未收), 上游 (例如 sales
+    // order summary / collection task 重开判断) 才能拿到真相. 同 plan / 同 order
+    // 去重避免重复 update.
+    const affectedPaymentPlanIds = new Set<string>();
+    const affectedSalesOrderIds = new Set<string>();
+    for (const src of sources) {
+      if (src.paymentPlanId) {
+        affectedPaymentPlanIds.add(src.paymentPlanId);
+      }
+      if (src.salesOrderId) {
+        affectedSalesOrderIds.add(src.salesOrderId);
+      }
+    }
+    for (const planId of affectedPaymentPlanIds) {
+      await syncPaymentPlanAggregateState(tx, planId);
+    }
+    for (const salesOrderId of affectedSalesOrderIds) {
+      await syncSalesOrderSummary(tx, salesOrderId);
+    }
 
     const updated = await tx.refundRequest.update({
       where: { id: refund.id },
