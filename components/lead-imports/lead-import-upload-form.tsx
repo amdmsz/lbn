@@ -430,7 +430,14 @@ export function LeadImportUploadForm({
         <ActionBanner tone="success">{actionState.message}</ActionBanner>
       ) : null}
       {actionState.status === "error" && actionState.message ? (
-        <ActionBanner tone="danger">{actionState.message}</ActionBanner>
+        <ActionBanner tone="danger">
+          <div>
+            <p className="font-medium">{actionState.message}</p>
+            <p className="mt-1 text-[12px] leading-5 opacity-85">
+              请检查: ① 文件格式 (.xlsx / .csv) ② 表头映射是否完整 ③ 必填列 (手机号) 是否有值. 若问题持续, 联系管理员查看导入批次详情页的错误明细行.
+            </p>
+          </div>
+        </ActionBanner>
       ) : null}
 
       {queuedBatch ? (
