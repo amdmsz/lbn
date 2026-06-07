@@ -383,8 +383,23 @@ export async function recordRefundPayout(
   const occurredAt = input.occurredAt ? new Date(input.occurredAt) : new Date();
 
   return prisma.$transaction(async (tx) => {
-    // 出账金额按比例分配到每个 source PaymentRecord
+    // 出账金额按比例分配到每个 source PaymentRecord.
+    //
+    // 并发/重放保护 (兼审计金额双倍冲账防御):
+    //   1) SELECT ... FOR UPDATE 在事务内锁住 source PaymentRecord 行, 让两次
+    //      并发 recordRefundPayout 必须串行通过 isReversed 检查;
+    //   2) DB 层 ReversePaymentRecord.sourcePaymentRecordId 唯一索引 (见
+    //      20260608110000_add_reverse_payment_record_unique migration) 兜底,
+    //      即使锁被绕过 (跨连接 / 不同事务隔离) 也会被 P2002 拦下;
+    //   3) refundRequest.status -> PAID_OUT 后, 上层 status guard 自然拒绝重放.
     const sourceIds = refund.sourcePaymentRecordIds as string[];
+    if (sourceIds.length > 0) {
+      // Prisma 不支持原生 row lock; 用 $queryRaw 在 InnoDB / MariaDB 上拿
+      // FOR UPDATE 行锁. 结果集本身不用, 锁会随事务提交/回滚释放.
+      await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM paymentrecord WHERE id IN (${Prisma.join(sourceIds)}) FOR UPDATE
+      `;
+    }
     const sources = await tx.paymentRecord.findMany({
       where: { id: { in: sourceIds } },
       select: { id: true, amount: true, isReversed: true },
@@ -413,17 +428,32 @@ export async function recordRefundPayout(
         .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
       if (!isPositiveAmount(portion)) continue;
 
-      const created = await tx.reversePaymentRecord.create({
-        data: {
-          refundRequestId: refund.id,
-          sourcePaymentRecordId: src.id,
-          amount: portion,
-          occurredAt,
-          payoutMethod: input.payoutMethod,
-          payoutReference: input.payoutReference ?? null,
-          createdById: actor.id,
-        },
-      });
+      let created;
+      try {
+        created = await tx.reversePaymentRecord.create({
+          data: {
+            refundRequestId: refund.id,
+            sourcePaymentRecordId: src.id,
+            amount: portion,
+            occurredAt,
+            payoutMethod: input.payoutMethod,
+            payoutReference: input.payoutReference ?? null,
+            createdById: actor.id,
+          },
+        });
+      } catch (err) {
+        // DB 唯一索引兜底: 同一 PaymentRecord 已存在 ReversePaymentRecord.
+        // 触发原因通常是网络重放 / 并发出账穿过 isReversed 检查.
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === "P2002"
+        ) {
+          throw new Error(
+            `源 PaymentRecord ${src.id} 已被冲账过 (并发或重放), 本次出账已拒绝`,
+          );
+        }
+        throw err;
+      }
       reverseRecords.push({
         id: created.id,
         sourcePaymentRecordId: src.id,

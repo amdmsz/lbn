@@ -41,6 +41,7 @@
     "test:payments-decimal": "node --test --import tsx tests/payments/decimal.test.mts",
     "test:trade-orders-revisions": "node --test --import tsx tests/trade-orders/revisions-blockers.test.mts",
     "test:shipping-returns": "node --test --import tsx tests/shipping/returns-workflow.test.mts",
+    "test:refund-payout-uniqueness": "node --test --import tsx tests/payments/refund-payout-uniqueness.test.mts",
     "postinstall": "prisma generate",
     "admin:bootstrap": "node scripts/bootstrap-admin.mjs",
     "db:seed": "node prisma/seed.mjs",

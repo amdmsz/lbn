@@ -2476,7 +2476,7 @@ model ReversePaymentRecord {
   id                      String              @id @default(cuid())
   refundRequestId         String
   refundRequest           RefundRequest       @relation(fields: [refundRequestId], references: [id])
-  sourcePaymentRecordId   String
+  sourcePaymentRecordId   String              @unique
   sourcePaymentRecord     PaymentRecord       @relation("ReversePaymentRecordSource", fields: [sourcePaymentRecordId], references: [id])
   amount                  Decimal             @db.Decimal(10, 2)
   occurredAt              DateTime
@@ -2487,7 +2487,6 @@ model ReversePaymentRecord {
   createdAt               DateTime            @default(now())
 
   @@index([refundRequestId])
-  @@index([sourcePaymentRecordId])
   @@map("reversepaymentrecord")
 }
 
