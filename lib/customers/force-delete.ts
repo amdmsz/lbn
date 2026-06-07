@@ -99,6 +99,17 @@ function buildScopedCustomerWhere(
   }
 
   if (actor.role === "SUPERVISOR" && actor.teamId) {
+    // 公海客户的 publicPoolTeamId 是可变字段 — 每次 release / assign 都会被
+    // 覆盖, 默认 fallback 到 actor.teamId. 如果只靠 publicPoolTeamId 锚定,
+    // 主管 A 可以先把客户 release 进自己团队公海 (publicPoolTeamId 改成 A),
+    // 然后立刻硬删 — 哪怕历史归属属于团队 B. 因此把 SUPERVISOR 对公海客户的
+    // 强删范围收敛为:
+    //   - 当前 owner 在 actor 团队 (PRIVATE 客户), 或
+    //   - 公海客户的 lastOwner 在 actor 团队 (有历史归属), 或
+    //   - 公海客户没有 lastOwner (从未被任何团队认领过)
+    //     AND publicPoolTeamId === actor.teamId
+    // SYSTEM 自动回收且 SYSTEM actor 无 teamId 时, publicPoolTeamId 会被写成
+    // null. 这种 "悬空" 公海客户只允许 ADMIN 清理.
     return {
       id: customerId,
       OR: [
@@ -111,6 +122,15 @@ function buildScopedCustomerWhere(
         },
         {
           ownerId: null,
+          lastOwner: {
+            is: {
+              teamId: actor.teamId,
+            },
+          },
+        },
+        {
+          ownerId: null,
+          lastOwnerId: null,
           publicPoolTeamId: actor.teamId,
         },
       ],
@@ -120,6 +140,55 @@ function buildScopedCustomerWhere(
   return {
     id: "__force_delete_forbidden_customer__",
   };
+}
+
+/**
+ * 服务端再次校验 SUPERVISOR 对加载后的客户记录是否仍在合法 scope.
+ *
+ * 防御纵深: 即使 buildScopedCustomerWhere 漏掉边界, 拿到 customer 后也要
+ * 用真实字段重新校验. 防止以下越权:
+ *   - 主管 A release 客户进自己团队公海 (publicPoolTeamId 改成 A 团队),
+ *     此时即使 lastOwner.teamId === 团队 B, 仅靠 publicPoolTeamId 也会通过.
+ *   - SYSTEM OWNER_LEFT_TEAM 回收时 actor.teamId 为 null, publicPoolTeamId
+ *     被覆盖为 null, 但 customer.publicPoolTeamId 与 actor.teamId 凑巧相等
+ *     (都为 null) 时会绕过 (虽然 actor.role 守卫已禁 null teamId 主管,
+ *     这里仍保险一遍).
+ */
+export function assertSupervisorCanForceDeleteCustomer(
+  actor: ForceDeleteActor,
+  customer: ForceDeleteCustomerRecord,
+): void {
+  if (actor.role !== "SUPERVISOR") {
+    return;
+  }
+
+  if (!actor.teamId) {
+    throw new Error("当前主管账号未绑定团队，无法执行强制硬删除。");
+  }
+
+  // 私有客户: 必须 owner 在主管团队
+  if (customer.ownerId) {
+    if (customer.owner?.teamId !== actor.teamId) {
+      throw new Error("当前客户不在你的可管理范围内。");
+    }
+    return;
+  }
+
+  // 公海客户: lastOwner 在主管团队即可
+  if (customer.lastOwnerId && customer.lastOwner?.teamId === actor.teamId) {
+    return;
+  }
+
+  // 公海客户从未被任何 owner 持有过, 且 publicPoolTeamId 严格等于主管团队
+  if (
+    !customer.lastOwnerId
+    && customer.publicPoolTeamId
+    && customer.publicPoolTeamId === actor.teamId
+  ) {
+    return;
+  }
+
+  throw new Error("当前客户的历史归属不在你的团队范围内，请联系 ADMIN 清理。");
 }
 
 function getPostDeleteRedirect(customer: ForceDeleteCustomerRecord) {
@@ -871,6 +940,10 @@ export async function forceHardDeleteCustomer(
     if (!customer) {
       throw new Error("当前客户不存在、已删除，或不在你的可管理范围内。");
     }
+
+    // 防御纵深: buildScopedCustomerWhere 已经按字段过滤过, 这里再用加载后的
+    // 真实 record 重新校验一遍, 避免 publicPoolTeamId 这种可变字段被绕过.
+    assertSupervisorCanForceDeleteCustomer(actor, customer);
 
     const confirmation = input.confirmation.trim();
 
