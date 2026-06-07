@@ -4,12 +4,18 @@
 -- under READ COMMITTED) can insert two reverse rows for the same source
 -- PaymentRecord, double-counting refunded amount in finance reports.
 --
--- Drop the redundant non-unique sourcePaymentRecordId index first (the new
--- UNIQUE INDEX serves both uniqueness and lookup), then add the UNIQUE INDEX.
--- Compatible with MariaDB / MySQL 8.
-
-ALTER TABLE `reversepaymentrecord`
-  DROP INDEX `reversepaymentrecord_sourcePaymentRecordId_idx`;
+-- MariaDB / MySQL ordering:
+-- 1. Create the new UNIQUE INDEX FIRST. The FK constraint
+--    `reversepaymentrecord_sourcePaymentRecordId_fkey` automatically picks
+--    up the new index as its supporting index.
+-- 2. Only then can we DROP the old non-unique index without P3018
+--    "Cannot drop index needed in a foreign key constraint".
+--
+-- If the old index name doesn't exist (fresh DB), the DROP becomes a no-op
+-- via IF EXISTS — supported on MariaDB 10.0.2+ and MySQL 8.0.16+.
 
 CREATE UNIQUE INDEX `reversepaymentrecord_sourcePaymentRecordId_key`
   ON `reversepaymentrecord`(`sourcePaymentRecordId`);
+
+ALTER TABLE `reversepaymentrecord`
+  DROP INDEX IF EXISTS `reversepaymentrecord_sourcePaymentRecordId_idx`;
