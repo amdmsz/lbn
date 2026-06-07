@@ -11,11 +11,12 @@
 -- 2. Only then can we DROP the old non-unique index without P3018
 --    "Cannot drop index needed in a foreign key constraint".
 --
--- If the old index name doesn't exist (fresh DB), the DROP becomes a no-op
--- via IF EXISTS — supported on MariaDB 10.0.2+ and MySQL 8.0.16+.
+-- MariaDB note: `ALTER TABLE ... DROP INDEX IF EXISTS` is NOT valid syntax —
+-- the IF EXISTS clause is only supported on the standalone `DROP INDEX ... ON tbl`
+-- form. Keep them in two statements.
 
 CREATE UNIQUE INDEX `reversepaymentrecord_sourcePaymentRecordId_key`
   ON `reversepaymentrecord`(`sourcePaymentRecordId`);
 
-ALTER TABLE `reversepaymentrecord`
-  DROP INDEX IF EXISTS `reversepaymentrecord_sourcePaymentRecordId_idx`;
+DROP INDEX IF EXISTS `reversepaymentrecord_sourcePaymentRecordId_idx`
+  ON `reversepaymentrecord`;
