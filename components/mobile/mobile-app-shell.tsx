@@ -92,7 +92,26 @@ import type {
 import { cn } from "@/lib/utils";
 
 type MobileTab = "messages" | "customers" | "dialpad" | "search" | "apps" | "me";
-type DateLike = Date | string | null | undefined;
+// DateLike 已抽到 lib/format.ts (再 import 进来下面用), 但留这一行让旧引用兼容.
+// 后续 Phase 1 完成后可移除这行.
+import type { DateLike } from "@/components/mobile/lib/format";
+import {
+  toDate,
+  parseMobileApiDate,
+  formatNullableRelativeDate,
+  normalizeDialValue,
+  formatDialDisplayNumber,
+  splitDialMatchedDisplay,
+  normalizeSearchValue,
+  formatMoney,
+  isMaskedPhone,
+  formatCurrencyAmount,
+  formatCallDuration,
+} from "@/components/mobile/lib/format";
+import {
+  readImageFileAsDataUrl,
+  readStoredCustomerPhoto,
+} from "@/components/mobile/lib/photo-storage";
 type MobileIcon = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
 type CustomerExecutionClassValue = "A" | "B" | "C" | "D" | "E";
 type MobileModuleView =
@@ -168,7 +187,7 @@ const customerExecutionClassOptions: Array<{
 ];
 
 const RECENT_DIAL_CUSTOMER_STORAGE_KEY = "lbncrm.mobile.recent-dial-customer";
-const CUSTOMER_PHOTO_STORAGE_PREFIX = "lbncrm.mobile.customer-photo.";
+// CUSTOMER_PHOTO_STORAGE_PREFIX 已移到 components/mobile/lib/photo-storage.ts
 const MOBILE_LOCAL_CALL_MODE: MobileCallMode = "local-phone";
 
 const keypadRows = [
@@ -203,169 +222,12 @@ const roleMobileLabels: Record<RoleCode, string> = {
   FINANCE: "财务",
 };
 
-function toDate(value: DateLike) {
-  if (!value) {
-    return null;
-  }
+// 9 个纯格式化函数已抽到 components/mobile/lib/format.ts (Phase 1 第 1 步).
+// 见 import 块顶部的 mobileFormat 命名空间.
 
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
+// 5 个本地照片存储函数已抽到 lib/photo-storage.ts.
 
-function parseMobileApiDate(value: string | null | undefined) {
-  const parsed = toDate(value);
-  return parsed ?? null;
-}
-
-function formatNullableRelativeDate(value: DateLike) {
-  const date = toDate(value);
-  return date ? formatRelativeDateTime(date) : "暂无跟进";
-}
-
-function normalizeDialValue(value: string) {
-  return value.replace(/[^\d+]/g, "");
-}
-
-function formatDialDisplayNumber(value: string) {
-  const compactValue = value.replace(/\s+/g, "");
-
-  if (!compactValue || /[^\d+]/.test(compactValue.replace(/^\+/, ""))) {
-    return compactValue;
-  }
-
-  const plusPrefix = compactValue.startsWith("+") ? "+" : "";
-  let digits = plusPrefix ? compactValue.slice(1) : compactValue;
-  let countryPrefix = plusPrefix;
-
-  if (plusPrefix && digits.startsWith("86") && digits.length > 11) {
-    countryPrefix = "+86 ";
-    digits = digits.slice(2);
-  }
-
-  if (digits.length <= 3) {
-    return `${countryPrefix}${digits}`;
-  }
-
-  if (digits.length <= 7) {
-    return `${countryPrefix}${digits.slice(0, 3)} ${digits.slice(3)}`;
-  }
-
-  if (digits.length <= 11) {
-    return `${countryPrefix}${digits.slice(0, 3)} ${digits.slice(3, 7)} ${digits.slice(7)}`;
-  }
-
-  return `${countryPrefix}${digits.slice(0, 3)} ${digits.slice(3, 7)} ${digits.slice(
-    7,
-    11,
-  )} ${digits.slice(11)}`;
-}
-
-function splitDialMatchedDisplay(phone: string, dialNumber: string) {
-  const display = formatDialDisplayNumber(phone);
-  const normalizedDialNumber = normalizeDialValue(dialNumber)
-    .replace(/^\+86/, "")
-    .replace(/^\+/, "");
-
-  if (!normalizedDialNumber) {
-    return {
-      matched: "",
-      rest: display,
-    };
-  }
-
-  let digitCount = 0;
-  let splitIndex = 0;
-
-  for (let index = 0; index < display.length; index++) {
-    if (/\d/.test(display[index])) {
-      digitCount += 1;
-    }
-
-    if (digitCount >= normalizedDialNumber.length) {
-      splitIndex = index + 1;
-      break;
-    }
-  }
-
-  return {
-    matched: display.slice(0, splitIndex),
-    rest: display.slice(splitIndex),
-  };
-}
-
-function normalizeSearchValue(value: string) {
-  return value.toLowerCase().replace(/\s+/g, "");
-}
-
-function formatMoney(value: string) {
-  const amount = Number(value);
-
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return "0";
-  }
-
-  return new Intl.NumberFormat("zh-CN", {
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-function isMaskedPhone(value: string) {
-  return value.includes("*");
-}
-
-function getCustomerPhotoStorageKey(customerId: string) {
-  return `${CUSTOMER_PHOTO_STORAGE_PREFIX}${customerId}`;
-}
-
-function readStoredCustomerPhoto(customerId: string) {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    return window.localStorage.getItem(getCustomerPhotoStorageKey(customerId));
-  } catch {
-    return null;
-  }
-}
-
-function readImageFileAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        resolve(reader.result);
-        return;
-      }
-
-      reject(new Error("照片读取失败。"));
-    };
-    reader.onerror = () => reject(new Error("照片读取失败。"));
-    reader.readAsDataURL(file);
-  });
-}
-
-function formatCurrencyAmount(value: number) {
-  if (!Number.isFinite(value) || value <= 0) {
-    return "¥0";
-  }
-
-  return `¥${new Intl.NumberFormat("zh-CN", {
-    maximumFractionDigits: 0,
-  }).format(value)}`;
-}
-
-function formatCallDuration(seconds: number) {
-  const safeSeconds = Math.max(0, seconds);
-  const minutes = Math.floor(safeSeconds / 60);
-  const restSeconds = safeSeconds % 60;
-
-  return `${String(minutes).padStart(2, "0")}:${String(restSeconds).padStart(
-    2,
-    "0",
-  )}`;
-}
-
+// formatCurrencyAmount / formatCallDuration 已抽到 lib/format.ts
 function formatMobileDetailCallLabel(record: {
   result: string | null;
   resultCode: string | null;
