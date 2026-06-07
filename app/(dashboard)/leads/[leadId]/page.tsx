@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { UserRound } from "lucide-react";
 import { LeadTagsPanel } from "@/components/leads/lead-tags-panel";
-import { LeadStatusBadge } from "@/components/leads/lead-status-badge";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { DetailItem } from "@/components/shared/detail-item";
 import { EmptyState } from "@/components/shared/empty-state";
-import { PageHeader } from "@/components/shared/page-header";
+import EntityTimeline, {
+  type EntityTimelineEvent,
+} from "@/components/shared/entity-timeline";
+import { PageHero } from "@/components/shared/page-hero";
 import { StatusBadge } from "@/components/shared/status-badge";
 import {
   canAccessLeadModule,
@@ -20,8 +23,8 @@ import {
 import { getLeadDetail } from "@/lib/leads/queries";
 import {
   formatDateTime,
-  getLeadSourceLabel,
   getLeadStatusLabel,
+  getLeadStatusVariant,
 } from "@/lib/leads/metadata";
 import { parseMasterDataNotice } from "@/lib/master-data/metadata";
 
@@ -57,21 +60,71 @@ export default async function LeadDetailPage({
     notFound();
   }
 
-  const region = [lead.province, lead.city, lead.district].filter(Boolean).join(" / ");
   const canManageTags = canUseLeadTags(session.user.role);
+  const region = [lead.province, lead.city, lead.district].filter(Boolean).join(" / ");
+  const addressValue =
+    lead.address?.trim() || region || "未填写";
+
+  const timelineEvents: EntityTimelineEvent[] = [
+    ...lead.assignments.map((assignment) => {
+      const title = assignment.fromUser
+        ? `${assignment.fromUser.name} -> ${assignment.toUser.name}`
+        : `首次分配 -> ${assignment.toUser.name}`;
+      const detailParts = [`类型：${assignment.assignmentType}`];
+      const note = assignment.note?.trim();
+      if (note) {
+        detailParts.push(`备注：${note}`);
+      }
+      return {
+        id: `assignment-${assignment.id}`,
+        kind: "review" as const,
+        occurredAt: assignment.createdAt,
+        title,
+        detail: detailParts.join(" · "),
+        actor: assignment.assignedBy.name,
+      };
+    }),
+    ...lead.operationLogs.map((log) => ({
+      id: `log-${log.id}`,
+      kind: "revision" as const,
+      occurredAt: log.createdAt,
+      title: log.action,
+      detail: log.description?.trim() || undefined,
+      actor: log.actor?.name,
+    })),
+  ];
 
   return (
     <div className="crm-page">
-      <PageHeader
+      <PageHero
+        icon={{ kind: "node", node: <UserRound className="h-5 w-5" /> }}
         title={lead.name?.trim() || lead.phone}
-        description="线索详情页展示基础资料、归并结果、负责人、状态、分配记录与操作日志。"
+        subtitle={
+          <>
+            <span>{lead.phone}</span>
+            <span aria-hidden>·</span>
+            <span>创建于 {formatDateTime(lead.createdAt)}</span>
+            <span aria-hidden>·</span>
+            <span>更新于 {formatDateTime(lead.updatedAt)}</span>
+          </>
+        }
+        primaryBadge={{
+          label: lead.owner ? `负责人：${lead.owner.name}` : "未分配",
+          variant: lead.owner ? "info" : "neutral",
+        }}
         actions={
           <>
-            <LeadStatusBadge status={lead.status} />
-            <StatusBadge
-              label={lead.owner ? `负责人：${lead.owner.name}` : "未分配"}
-              variant={lead.owner ? "info" : "neutral"}
-            />
+            <Link href="/leads" className="crm-text-link">
+              返回线索列表
+            </Link>
+            {lead.customer ? (
+              <Link
+                href={`/customers/${lead.customer.id}`}
+                className="crm-text-link"
+              >
+                查看客户详情
+              </Link>
+            ) : null}
           </>
         }
       />
@@ -82,34 +135,21 @@ export default async function LeadDetailPage({
         </ActionBanner>
       ) : null}
 
-      <div className="crm-page-meta">
-        <div className="flex flex-wrap items-center gap-4">
-          <Link href="/leads" className="crm-text-link">
-            返回线索列表
-          </Link>
-          {lead.customer ? (
-            <Link href={`/customers/${lead.customer.id}`} className="crm-text-link">
-              查看客户详情
-            </Link>
-          ) : null}
-        </div>
-        <p className="text-sm text-muted-foreground">
-          创建于 {formatDateTime(lead.createdAt)}，最近更新于 {formatDateTime(lead.updatedAt)}
-        </p>
-      </div>
-
       <section className="crm-card p-6">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           <DetailItem label="手机号" value={lead.phone} />
-          <DetailItem label="导入来源" value={getLeadSourceLabel(lead.source)} />
           <DetailItem
             label="意向产品"
             value={lead.interestedProduct?.trim() || "未填写"}
           />
-          <DetailItem label="当前状态" value={getLeadStatusLabel(lead.status)} />
           <DetailItem
-            label="当前负责人"
-            value={lead.owner ? `${lead.owner.name} (@${lead.owner.username})` : "未分配"}
+            label="当前状态"
+            value={
+              <StatusBadge
+                label={getLeadStatusLabel(lead.status)}
+                variant={getLeadStatusVariant(lead.status)}
+              />
+            }
           />
           <DetailItem
             label="关联客户"
@@ -119,33 +159,29 @@ export default async function LeadDetailPage({
                 : "未关联客户"
             }
           />
-          <DetailItem label="来源详情" value={lead.sourceDetail?.trim() || "未填写"} />
-          <DetailItem label="活动标记" value={lead.campaignName?.trim() || "未填写"} />
-          <DetailItem label="区域" value={region || "未填写"} />
-          <DetailItem label="详细地址" value={lead.address?.trim() || "未填写"} />
+          <DetailItem label="地址" value={addressValue} />
           <DetailItem
-            label="最近跟进时间"
-            value={lead.lastFollowUpAt ? formatDateTime(lead.lastFollowUpAt) : "暂无"}
+            label="备注"
+            value={lead.remark?.trim() || "暂无备注"}
           />
-          <DetailItem
-            label="下次跟进时间"
-            value={lead.nextFollowUpAt ? formatDateTime(lead.nextFollowUpAt) : "暂无"}
-          />
-          <DetailItem label="分配记录数" value={String(lead._count.assignments)} />
-        </div>
-
-        <div className="crm-subtle-panel mt-4">
-          <p className="crm-detail-label">备注</p>
-          <p className="mt-2 text-sm leading-7 text-foreground/80">
-            {lead.remark?.trim() || "暂无备注"}
-          </p>
         </div>
       </section>
 
+      <LeadTagsPanel
+        leadId={lead.id}
+        redirectTo={`/leads/${lead.id}`}
+        tags={lead.leadTags}
+        availableTags={lead.availableTags}
+        canManage={canManageTags}
+      />
+
       <section className="crm-card p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-foreground">归并结果</h2>
-          <StatusBadge label={`${lead.mergeLogs.length} 条`} variant="info" />
+          <StatusBadge
+            label={`${lead.mergeLogs.length} 条`}
+            variant="info"
+          />
         </div>
 
         {lead.mergeLogs.length > 0 ? (
@@ -166,33 +202,33 @@ export default async function LeadDetailPage({
               };
 
               return (
-              <div key={record.id} className="crm-subtle-panel">
-                <div className="flex flex-wrap items-center gap-2">
-                  <StatusBadge
-                    label={getLeadCustomerMergeActionLabel(record.action)}
-                    variant="info"
-                  />
-                  <StatusBadge
-                    label={getLeadImportSourceLabel(record.source)}
-                    variant="neutral"
-                  />
-                  {customerDeleted ? (
-                    <StatusBadge label="客户已删除" variant="warning" />
-                  ) : null}
+                <div key={record.id} className="crm-subtle-panel">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge
+                      label={getLeadCustomerMergeActionLabel(record.action)}
+                      variant="info"
+                    />
+                    <StatusBadge
+                      label={getLeadImportSourceLabel(record.source)}
+                      variant="neutral"
+                    />
+                    {customerDeleted ? (
+                      <StatusBadge label="客户已删除" variant="warning" />
+                    ) : null}
+                  </div>
+                  <p className="mt-3 text-sm font-medium text-foreground">
+                    客户：{record.customer.name} ({record.customer.phone})
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    导入批次：{record.batch.fileName}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    来源标签同步：{record.tagSynced ? "已同步" : "未同步"}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    时间：{formatDateTime(record.createdAt)}
+                  </p>
                 </div>
-                <p className="mt-3 text-sm font-medium text-foreground">
-                  客户：{record.customer.name} ({record.customer.phone})
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  导入批次：{record.batch.fileName}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  来源标签同步：{record.tagSynced ? "已同步" : "未同步"}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  时间：{formatDateTime(record.createdAt)}
-                </p>
-              </div>
               );
             })}
           </div>
@@ -206,80 +242,27 @@ export default async function LeadDetailPage({
         )}
       </section>
 
-      <LeadTagsPanel
-        leadId={lead.id}
-        redirectTo={`/leads/${lead.id}`}
-        tags={lead.leadTags}
-        availableTags={lead.availableTags}
-        canManage={canManageTags}
-      />
-
-      <section className="grid gap-6 xl:grid-cols-2">
-        <div className="crm-card p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-foreground">最近分配记录</h2>
-            <StatusBadge label={`${lead.assignments.length} 条`} variant="neutral" />
-          </div>
-
-          {lead.assignments.length > 0 ? (
-            <div className="mt-4 space-y-3">
-              {lead.assignments.map((assignment) => (
-                <div key={assignment.id} className="crm-subtle-panel">
-                  <p className="text-sm font-medium text-foreground">
-                    {assignment.fromUser
-                      ? `${assignment.fromUser.name} -> ${assignment.toUser.name}`
-                      : `首次分配 -> ${assignment.toUser.name}`}
-                  </p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    执行人：{assignment.assignedBy.name} (@{assignment.assignedBy.username})
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    时间：{formatDateTime(assignment.createdAt)}
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    类型：{assignment.assignmentType}
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    备注：{assignment.note?.trim() || "无"}
-                  </p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="mt-4">
-              <EmptyState title="暂无分配记录" description="这条线索还没有分配记录。" />
-            </div>
-          )}
+      <section className="crm-card p-6">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-foreground">活动时间线</h2>
+          <StatusBadge
+            label={`${timelineEvents.length} 条`}
+            variant="neutral"
+          />
         </div>
 
-        <div className="crm-card p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-foreground">最近操作日志</h2>
-            <StatusBadge label={`${lead.operationLogs.length} 条`} variant="neutral" />
-          </div>
-
-          {lead.operationLogs.length > 0 ? (
-            <div className="mt-4 space-y-3">
-              {lead.operationLogs.map((log) => (
-                <div key={log.id} className="crm-subtle-panel">
-                  <p className="text-sm font-medium text-foreground">{log.action}</p>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    操作人：{log.actor?.name ?? "系统"}
-                    {log.actor ? ` (@${log.actor.username})` : ""}
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    时间：{formatDateTime(log.createdAt)}
-                  </p>
-                  <p className="mt-1 text-sm leading-7 text-muted-foreground">
-                    {log.description?.trim() || "无描述"}
-                  </p>
-                </div>
-              ))}
-            </div>
+        <div className="mt-4">
+          {timelineEvents.length > 0 ? (
+            <EntityTimeline
+              events={timelineEvents}
+              maxVisible={3}
+              emptyText="这条线索还没有分配记录或操作日志。"
+            />
           ) : (
-            <div className="mt-4">
-              <EmptyState title="暂无操作日志" description="这条线索还没有操作日志。" />
-            </div>
+            <EmptyState
+              title="暂无活动记录"
+              description="这条线索还没有分配记录或操作日志。"
+            />
           )}
         </div>
       </section>

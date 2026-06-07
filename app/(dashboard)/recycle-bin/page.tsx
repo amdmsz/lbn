@@ -1,11 +1,17 @@
 import { redirect } from "next/navigation";
 import { RecycleBinFilterBar } from "@/components/recycle-bin/recycle-bin-filter-bar";
+import { RecycleBinViewSegmented } from "@/components/recycle-bin/recycle-bin-view-segmented";
 import { RecycleBinWorkbench } from "@/components/recycle-bin/recycle-bin-workbench";
 import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
-import { MetricCard } from "@/components/shared/metric-card";
 import { PageHeader } from "@/components/shared/page-header";
 import { RecordTabs } from "@/components/shared/record-tabs";
-import { StatusBadge } from "@/components/shared/status-badge";
+import CompactBadgeGroup, {
+  type BadgeTone,
+  type CompactBadgeItem,
+} from "@/components/shared/compact-badge-group";
+import MetricStrip, {
+  type MetricItem,
+} from "@/components/shared/metric-strip";
 import {
   canAccessRecycleBinModule,
   getDefaultRouteForRole,
@@ -91,94 +97,75 @@ export default async function RecycleBinPage({
       ).length
     : data.summary.purgeBlockedCount;
 
+  const description = isHistoryView
+    ? `${activeTabLabel} · ${activeEntryStatusLabel} 历史终态只读视角：仅展示删除与解决审计。`
+    : isFinalizeTab
+      ? `${activeTabLabel} · finalize 视角：可按服务端最新真相直接收口 PURGE / ARCHIVE。`
+      : "统一治理已移入回收站的对象，支持恢复与基础清理。";
+
+  const headerBadges: CompactBadgeItem[] = [
+    { label: activeTabLabel, tone: "info" as BadgeTone },
+    { label: activeEntryStatusLabel, tone: "neutral" as BadgeTone },
+    { label: `当前条目 ${data.summary.totalCount}`, tone: "neutral" as BadgeTone },
+    ...(data.hasActiveFilters
+      ? [{ label: "已应用筛选", tone: "warning" as BadgeTone }]
+      : []),
+  ];
+
+  const metrics: MetricItem[] = [
+    {
+      label: isHistoryView ? "历史条目" : "当前条目",
+      value: String(data.summary.totalCount),
+      tone: "primary",
+    },
+    {
+      label: isHistoryView ? "处理人覆盖" : "可恢复",
+      value: String(
+        isHistoryView
+          ? data.summary.resolvedActorCount
+          : data.summary.restorableCount,
+      ),
+      tone: isHistoryView ? "neutral" : "success",
+    },
+    {
+      label: isHistoryView
+        ? data.filters.entryStatus === "archived"
+          ? "含 Archive Payload"
+          : `结果 / ${activeEntryStatusLabel}`
+        : isFinalizeTab
+          ? "当前终态 ARCHIVE"
+          : "清理受阻",
+      value: String(
+        isHistoryView
+          ? data.filters.entryStatus === "archived"
+            ? data.summary.archivePayloadCount
+            : data.summary.resolvedCount
+          : archiveOnlyCount,
+      ),
+      tone: isHistoryView ? "primary" : "warning",
+    },
+  ];
+
   return (
     <WorkbenchLayout
       header={
         <PageHeader
           eyebrow="回收站治理工作台"
           title="回收站"
-          description={
-            isHistoryView
-              ? `${activeTabLabel} tab 已切到 ${activeEntryStatusLabel} 历史终态视角：这里只读展示删除与解决审计，不提供历史恢复或历史 purge。`
-              : isFinalizeTab
-              ? `${activeTabLabel} tab 已切到双终态 finalize 视角：move 进入回收站后即可按最新服务端真相收口为 PURGE 或 ARCHIVE。`
-              : "统一治理已移入回收站的商品主数据、直播场次、线索、客户与交易订单。当前保留恢复、最终处理入口、基础筛选和治理详情。"
-          }
-          meta={
-            <>
-              <StatusBadge label={activeTabLabel} variant="info" />
-              <StatusBadge label={activeEntryStatusLabel} variant="neutral" />
-              <StatusBadge
-                label={`当前条目 ${data.summary.totalCount}`}
-                variant="neutral"
-              />
-              {data.hasActiveFilters ? (
-                <StatusBadge label="已应用筛选" variant="warning" />
-              ) : null}
-            </>
-          }
+          description={description}
+          meta={<CompactBadgeGroup items={headerBadges} size="sm" maxVisible={6} />}
         />
       }
-      summary={
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          <MetricCard
-            label={isHistoryView ? "历史条目" : "当前条目"}
-            value={String(data.summary.totalCount)}
-            note={
-              isHistoryView
-                ? `当前 tab 与筛选条件下，已进入 ${activeEntryStatusLabel} 的回收站历史条目数量。`
-                : isFinalizeTab
-                ? `当前 tab 与筛选条件下，仍处于 ACTIVE 的${activeTabLabel}回收站对象数量。`
-                : "当前 tab 与筛选条件下，仍处于 ACTIVE 的回收站对象数量。"
-            }
-            density="strip"
-          />
-          <MetricCard
-            label={isHistoryView ? "处理人覆盖" : "可恢复"}
-            value={String(
-              isHistoryView ? data.summary.resolvedActorCount : data.summary.restorableCount,
-            )}
-            note={
-              isHistoryView
-                ? "当前历史结果中，实际参与 resolve / finalize 的处理人数量。"
-                : "当前筛选结果中，已通过 restore guard、可直接恢复到原业务域的对象数量。"
-            }
-            density="strip"
-          />
-          <MetricCard
-            label={
-              isHistoryView
-                ? data.filters.entryStatus === "archived"
-                  ? "含 Archive Payload"
-                  : `结果 / ${activeEntryStatusLabel}`
-                : isFinalizeTab
-                  ? "当前终态"
-                  : "清理受阻"
-            }
-            value={String(
-              isHistoryView
-                ? data.filters.entryStatus === "archived"
-                  ? data.summary.archivePayloadCount
-                  : data.summary.resolvedCount
-                : archiveOnlyCount,
-            )}
-            note={
-              isHistoryView
-                ? data.filters.entryStatus === "archived"
-                  ? "当前历史结果中，包含 archivePayloadJson 的条目数量。"
-                  : `当前筛选结果中，最终结果为 ${activeEntryStatusLabel} 的历史条目数量。`
-                : isFinalizeTab
-                ? "当前筛选结果中，按最新 finalize preview 判断，最终终态为 ARCHIVE 的对象数量。"
-                : "当前筛选结果中，包含清理阻断项未通过或仅主管以上可执行的对象。"
-            }
-            density="strip"
-          />
-        </div>
-      }
+      summary={<MetricStrip metrics={metrics} ariaLabel="回收站核心指标" />}
       toolbar={
         <div className="space-y-2">
-          <RecordTabs items={data.statusTabs} activeValue={data.filters.entryStatus} />
-          <RecordTabs items={data.tabs} activeValue={data.activeTab} />
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <RecordTabs items={data.tabs} activeValue={data.activeTab} />
+            <RecycleBinViewSegmented
+              items={data.statusTabs}
+              activeValue={data.filters.entryStatus}
+            />
+          </div>
           <RecycleBinFilterBar
             activeTab={data.activeTab}
             filters={data.filters}

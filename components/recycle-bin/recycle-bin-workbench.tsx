@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { Fragment, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronDown } from "lucide-react";
 import {
   finalizeRecycleBinEntryAction,
   purgeRecycleBinEntryAction,
@@ -98,10 +99,10 @@ function getFinalizeCommandLabel(item: RecycleBinListItem) {
 }
 
 const recyclePanelClassName =
-  "space-y-3 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
+  "space-y-3 rounded-xl border border-border/60 bg-card p-4 shadow-sm";
 
 const recycleInsetPanelClassName =
-  "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2.5 shadow-[var(--color-shell-shadow-sm)]";
+  "rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5";
 
 function getDialogMeta(state: RecycleBinDialogState): RecycleBinDialogMeta | null {
   if (!state) {
@@ -220,7 +221,7 @@ function GuardSection({
           variant={blockerCount > 0 ? "warning" : "success"}
         />
       </div>
-      <p className="text-[13px] leading-5 text-[var(--color-sidebar-muted)]">{summary}</p>
+      <p className="text-[13px] leading-5 text-muted-foreground">{summary}</p>
       {groups.length > 0 ? (
         <div className="space-y-2">
           {groups.map((group) => (
@@ -229,10 +230,10 @@ function GuardSection({
               className={cn(recycleInsetPanelClassName, "space-y-2")}
             >
               <div className="space-y-1">
-                <p className="text-[13px] font-medium leading-5 text-[var(--foreground)]">
+                <p className="text-[13px] font-medium leading-5 text-foreground">
                   {group.title}
                 </p>
-                <p className="text-[12.5px] leading-5 text-[var(--color-sidebar-muted)]">
+                <p className="text-[12.5px] leading-5 text-muted-foreground">
                   {group.description}
                 </p>
               </div>
@@ -240,16 +241,16 @@ function GuardSection({
                 {group.items.map((blocker) => (
                   <div
                     key={`${title}-${group.title}-${blocker.name}`}
-                    className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-strong)] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
+                    className="rounded-md border border-border/50 bg-card px-3 py-2"
                   >
-                    <p className="text-[12.5px] font-medium leading-5 text-[var(--foreground)]">
+                    <p className="text-[12.5px] font-medium leading-5 text-foreground">
                       {blocker.name}
                     </p>
-                    <p className="mt-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                    <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
                       {blocker.description}
                     </p>
                     {blocker.suggestedAction ? (
-                      <p className="mt-1 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+                      <p className="mt-1 text-[12px] leading-5 text-muted-foreground">
                         建议动作：{blocker.suggestedAction}
                       </p>
                     ) : null}
@@ -274,7 +275,7 @@ function SummaryRow({
   return (
     <div className="space-y-1">
       <p className="crm-detail-label text-[11px]">{label}</p>
-      <p className="text-sm font-medium leading-5 text-[var(--foreground)]">{value}</p>
+      <p className="text-sm font-medium leading-5 text-foreground">{value}</p>
     </div>
   );
 }
@@ -293,7 +294,7 @@ function DetailRow({
       <p className="crm-detail-label text-[11px]">{label}</p>
       <p
         className={cn(
-          "text-sm font-medium text-[var(--foreground)]",
+          "text-sm font-medium text-foreground",
           multiline ? "leading-6" : "leading-5",
         )}
       >
@@ -303,17 +304,22 @@ function DetailRow({
   );
 }
 
-function renderFinalizeActionButtons({
+function ActionButtons({
   item,
   pending,
   onOpenDialog,
+  isFinalizeTab,
+  compact = false,
 }: {
   item: RecycleBinListItem;
   pending: boolean;
   onOpenDialog: (mode: "restore" | "purge" | "finalize", item: RecycleBinListItem) => void;
+  isFinalizeTab: boolean;
+  compact?: boolean;
 }) {
+  const btnSize = compact ? "min-h-0 px-2.5 py-1 text-xs" : "min-h-0 px-3 py-1.5 text-sm";
   return (
-    <div className="flex min-w-[12rem] flex-col items-start gap-2">
+    <div className="flex flex-wrap items-center gap-1.5">
       <button
         type="button"
         onClick={(event) => {
@@ -321,13 +327,15 @@ function renderFinalizeActionButtons({
           onOpenDialog("restore", item);
         }}
         disabled={!item.canRestore || pending}
-        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-55"
+        className={cn(
+          "crm-button crm-button-secondary disabled:cursor-not-allowed disabled:opacity-55",
+          btnSize,
+        )}
         title={item.canRestore ? "恢复对象" : item.restoreSummary}
       >
         恢复
       </button>
-
-      {item.finalActionPreview ? (
+      {isFinalizeTab && item.finalActionPreview ? (
         <button
           type="button"
           onClick={(event) => {
@@ -335,7 +343,10 @@ function renderFinalizeActionButtons({
             onOpenDialog("finalize", item);
           }}
           disabled={!item.canFinalizeNow || pending}
-          className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-55"
+          className={cn(
+            "crm-button crm-button-secondary disabled:cursor-not-allowed disabled:opacity-55",
+            btnSize,
+          )}
           title={
             item.canFinalizeNow
               ? getFinalizeCommandLabel(item)
@@ -352,57 +363,21 @@ function renderFinalizeActionButtons({
             onOpenDialog("purge", item);
           }}
           disabled={!item.canPurge || pending}
-          className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm text-[var(--color-danger)] hover:border-[var(--tone-danger-soft-border-strong)] hover:bg-[var(--tone-danger-soft-bg)] disabled:cursor-not-allowed disabled:text-[var(--color-sidebar-muted)] disabled:opacity-55"
-          title={item.canPurge ? "永久删除对象" : item.purgeSummary}
+          className={cn(
+            "crm-button crm-button-secondary text-rose-600 hover:border-rose-200 hover:bg-rose-50 disabled:cursor-not-allowed disabled:text-muted-foreground disabled:opacity-55 dark:text-rose-300 dark:hover:border-rose-500/20 dark:hover:bg-rose-500/10",
+            btnSize,
+          )}
+          title={
+            item.canPurge
+              ? "永久删除对象"
+              : item.purgeRequiresAdmin
+                ? "永久删除仅主管以上可执行"
+                : item.purgeSummary
+          }
         >
           永久删除
         </button>
       )}
-    </div>
-  );
-}
-
-function renderDefaultActionButtons({
-  item,
-  pending,
-  onOpenDialog,
-}: {
-  item: RecycleBinListItem;
-  pending: boolean;
-  onOpenDialog: (mode: "restore" | "purge" | "finalize", item: RecycleBinListItem) => void;
-}) {
-  return (
-    <div className="flex min-w-[12rem] flex-col items-start gap-2">
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          onOpenDialog("restore", item);
-        }}
-        disabled={!item.canRestore || pending}
-        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-55"
-        title={item.canRestore ? "恢复对象" : item.restoreSummary}
-      >
-        恢复
-      </button>
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          onOpenDialog("purge", item);
-        }}
-        disabled={!item.canPurge || pending}
-        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm text-[var(--color-danger)] hover:border-[var(--tone-danger-soft-border-strong)] hover:bg-[var(--tone-danger-soft-bg)] disabled:cursor-not-allowed disabled:text-[var(--color-sidebar-muted)] disabled:opacity-55"
-        title={
-          item.canPurge
-            ? "永久删除对象"
-            : item.purgeRequiresAdmin
-              ? "永久删除仅主管以上可执行"
-              : item.purgeSummary
-        }
-      >
-        永久删除
-      </button>
     </div>
   );
 }
@@ -470,6 +445,51 @@ function getHistoryAuditNote(item: RecycleBinListItem) {
   return "当前条目已接入结构化 archive contract，可稳定读取 finalAction、archive source 与 snapshotVersion。";
 }
 
+function ExpandedRowDetails({
+  item,
+  isHistoryView,
+  isFinalizeTab,
+  showStatusColumns,
+}: Readonly<{
+  item: RecycleBinListItem;
+  isHistoryView: boolean;
+  isFinalizeTab: boolean;
+  showStatusColumns: boolean;
+}>) {
+  return (
+    <div className="grid gap-3 rounded-lg border border-border/50 bg-muted/30 p-3 sm:grid-cols-2 lg:grid-cols-3">
+      <DetailRow label="次标识" value={item.secondaryLabel} />
+      {showStatusColumns ? (
+        <DetailRow label="删除前状态" value={item.statusLabel ?? "--"} />
+      ) : null}
+      {showStatusColumns ? (
+        <DetailRow label="删除前负责人" value={item.ownerLabel ?? "--"} />
+      ) : null}
+      <DetailRow label="删除原因" value={item.deleteReasonLabel} />
+      <DetailRow label="删除时间" value={item.deletedAtLabel} />
+      <DetailRow label="删除人" value={item.deletedByLabel} />
+      {isHistoryView ? (
+        <>
+          <DetailRow label="处理时间" value={item.resolvedAtLabel ?? "--"} />
+          <DetailRow label="处理人" value={item.resolvedByLabel ?? "--"} />
+        </>
+      ) : null}
+      {!isHistoryView ? (
+        <div className="space-y-1 sm:col-span-2 lg:col-span-3">
+          <p className="crm-detail-label text-[11px]">
+            {isFinalizeTab && item.finalActionPreview ? "Finalize 预览" : "blocker 摘要"}
+          </p>
+          <p className="text-sm leading-5 text-muted-foreground">
+            {isFinalizeTab && item.finalActionPreview
+              ? item.finalizeSummary ?? item.finalActionPreview.blockerSummary
+              : item.blockerSummary}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function RecycleBinWorkbench({
   activeTab,
   entryStatus,
@@ -485,6 +505,7 @@ export function RecycleBinWorkbench({
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(
     items[0]?.entryId ?? null,
   );
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(() => new Set());
   const [pending, startTransition] = useTransition();
 
   const selectedItem = useMemo(
@@ -509,20 +530,6 @@ export function RecycleBinWorkbench({
   const selectedCount = selectedItems.length;
   const allVisibleSelected =
     batchSelectableItems.length > 0 && selectedCount === batchSelectableItems.length;
-  const customerGroups = useMemo(() => {
-    if (isHistoryView || activeTab !== "customers") {
-      return [];
-    }
-
-    const groups = new Map<string, number>();
-
-    for (const item of items) {
-      const label = item.customerSummary?.ownershipLabel ?? "未分类";
-      groups.set(label, (groups.get(label) ?? 0) + 1);
-    }
-
-    return Array.from(groups.entries()).map(([label, count]) => ({ label, count }));
-  }, [activeTab, isHistoryView, items]);
 
   function closeDialog() {
     setDialogState(null);
@@ -549,6 +556,18 @@ export function RecycleBinWorkbench({
     setSelectedEntryIds(
       allVisibleSelected ? [] : batchSelectableItems.map((item) => item.entryId),
     );
+  }
+
+  function toggleRowExpand(entryId: string) {
+    setExpandedRows((current) => {
+      const next = new Set(current);
+      if (next.has(entryId)) {
+        next.delete(entryId);
+      } else {
+        next.add(entryId);
+      }
+      return next;
+    });
   }
 
   function handleConfirm() {
@@ -652,50 +671,34 @@ export function RecycleBinWorkbench({
           title={`${getTabLabel(activeTab)}回收站条目`}
           description={
             isHistoryView
-              ? `${getTabLabel(activeTab)} tab 已切到 ${entryStatus.toUpperCase()} 历史视角：左侧只读展示删除与解决结果，右侧展示对象摘要、归档载荷与最终说明。`
+              ? `${getTabLabel(activeTab)} · ${entryStatus.toUpperCase()} 历史视角：左侧只读展示删除与解决结果。`
               : isFinalizeTab
-              ? `${getTabLabel(activeTab)} tab 已切到 finalize 视角：左侧保留恢复，并可直接按最新 preview 执行 PURGE 或 ARCHIVE。`
-              : "当前保留恢复、清理动作和 blocker 摘要；点击行即可在右侧查看更完整的治理详情。"
+                ? `${getTabLabel(activeTab)} · finalize 视角：左侧保留恢复与按最新 preview 收口 PURGE / ARCHIVE。`
+                : "保留恢复 / 清理与 blocker 摘要；点击行可查看更完整治理详情。"
           }
           contentClassName="p-0"
         >
           {items.length > 0 ? (
             <div className="space-y-0">
-              <div className="border-b border-[var(--color-border-soft)] px-3 py-3">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {!isHistoryView ? (
-                      <button
-                        type="button"
-                        onClick={toggleAllVisibleSelection}
-                        className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
-                      >
-                        {allVisibleSelected ? "取消当前页" : "选择当前页"}
-                      </button>
-                    ) : null}
-                    {activeTab === "customers" && customerGroups.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {customerGroups.map((group) => (
-                          <StatusBadge
-                            key={group.label}
-                            label={`${group.label} ${group.count}`}
-                            variant="neutral"
-                          />
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {!isHistoryView && selectedCount > 0 ? (
-                    <div className="flex flex-wrap items-center gap-2 rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-3 py-2">
-                      <span className="text-xs font-medium text-[var(--color-sidebar-muted)]">
-                        已选 {selectedCount} 条
+              {!isHistoryView ? (
+                <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={toggleAllVisibleSelection}
+                    className="crm-button crm-button-secondary min-h-0 px-2.5 py-1 text-xs"
+                  >
+                    {allVisibleSelected ? "取消当前页" : "选择当前页"}
+                  </button>
+                  {selectedCount > 0 ? (
+                    <>
+                      <span className="text-xs font-medium text-muted-foreground">
+                        已选 {selectedCount}
                       </span>
                       <button
                         type="button"
                         onClick={() => handleBatchAction("restore")}
                         disabled={pending}
-                        className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-55"
+                        className="crm-button crm-button-secondary min-h-0 px-2.5 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-55"
                       >
                         批量恢复
                       </button>
@@ -704,7 +707,7 @@ export function RecycleBinWorkbench({
                           type="button"
                           onClick={() => handleBatchAction("finalize")}
                           disabled={pending}
-                          className="crm-button crm-button-primary min-h-0 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-55"
+                          className="crm-button crm-button-primary min-h-0 px-2.5 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-55"
                         >
                           批量最终处理
                         </button>
@@ -713,7 +716,7 @@ export function RecycleBinWorkbench({
                           type="button"
                           onClick={() => handleBatchAction("purge")}
                           disabled={pending}
-                          className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-xs text-[var(--color-danger)] disabled:cursor-not-allowed disabled:opacity-55"
+                          className="crm-button crm-button-secondary min-h-0 px-2.5 py-1 text-xs text-rose-600 disabled:cursor-not-allowed disabled:opacity-55 dark:text-rose-300"
                         >
                           批量永久删除
                         </button>
@@ -722,186 +725,185 @@ export function RecycleBinWorkbench({
                         type="button"
                         onClick={resetBatchSelection}
                         disabled={pending}
-                        className="crm-button crm-button-ghost min-h-0 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-55"
+                        className="crm-button crm-button-ghost min-h-0 px-2.5 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-55"
                       >
                         清空
                       </button>
-                    </div>
+                    </>
                   ) : null}
                 </div>
-              </div>
+              ) : null}
 
               <div className="crm-table-shell">
                 <table className="crm-table">
-                <thead>
-                  <tr>
-                    {!isHistoryView ? (
-                      <th className="w-[64px]">
-                        <input
-                          type="checkbox"
-                          checked={allVisibleSelected}
-                          onChange={toggleAllVisibleSelection}
-                          aria-label="选择当前页回收站条目"
-                          className="h-4 w-4 rounded border border-[var(--color-border-soft)] bg-transparent text-[var(--color-accent)]"
-                        />
-                      </th>
-                    ) : null}
-                    <th>对象类型</th>
-                    <th>名称</th>
-                    <th>次标识</th>
-                    {showStatusColumns ? <th>删除前状态</th> : null}
-                    {showStatusColumns ? <th>删除前负责人</th> : null}
-                    <th>删除原因</th>
-                    <th>删除时间</th>
-                    {isHistoryView ? <th>处理时间</th> : <th>删除人</th>}
-                    <th>{isHistoryView ? "最终结果" : isFinalizeTab ? "Finalize 预览" : "blocker 摘要"}</th>
-                    <th>{isHistoryView ? "处理人" : "操作"}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => {
-                    const selected = item.entryId === selectedItem?.entryId;
-                    const historyBadge = getHistoryResultBadge(item);
-
-                    return (
-                      <tr
-                        key={item.entryId}
-                        onClick={() => setSelectedEntryId(item.entryId)}
-                        className={cn(
-                          "cursor-pointer transition-colors",
-                          selected
-                            ? "bg-[var(--tone-info-soft-bg)]"
-                            : "hover:bg-[var(--color-shell-hover)]",
-                        )}
-                      >
-                        {!isHistoryView ? (
-                          <td>
-                            <input
-                              type="checkbox"
-                              checked={selectedEntryIds.includes(item.entryId)}
-                              onChange={(event) => {
-                                event.stopPropagation();
-                                toggleBatchSelection(item.entryId);
-                              }}
-                              onClick={(event) => event.stopPropagation()}
-                              aria-label={`选择回收站条目 ${item.name}`}
-                              className="h-4 w-4 rounded border border-[var(--color-border-soft)] bg-transparent text-[var(--color-accent)]"
-                            />
-                          </td>
-                        ) : null}
-                        <td>
-                          <StatusBadge
-                            label={item.targetTypeLabel}
-                            variant={getTargetVariant(item)}
+                  <thead>
+                    <tr>
+                      {!isHistoryView ? (
+                        <th className="w-[40px]">
+                          <input
+                            type="checkbox"
+                            checked={allVisibleSelected}
+                            onChange={toggleAllVisibleSelection}
+                            aria-label="选择当前页回收站条目"
+                            className="h-4 w-4 rounded border border-border bg-transparent text-primary"
                           />
-                        </td>
-                        <td className="text-[var(--foreground)]">
-                          <div className="space-y-1">
-                            <div className="font-medium">{item.name}</div>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setSelectedEntryId(item.entryId);
-                              }}
-                              className="text-xs font-medium text-[var(--color-accent)] transition-colors hover:text-[var(--color-accent-strong)]"
-                            >
-                              查看详情
-                            </button>
-                          </div>
-                        </td>
-                        <td className="text-[var(--color-sidebar-muted)]">{item.secondaryLabel}</td>
-                        {showStatusColumns ? (
-                          <td className="text-[var(--color-sidebar-muted)]">
-                            {item.statusLabel ?? "--"}
-                          </td>
-                        ) : null}
-                        {showStatusColumns ? (
-                          <td className="text-[var(--color-sidebar-muted)]">
-                            {item.ownerLabel ?? "--"}
-                          </td>
-                        ) : null}
-                        <td>{item.deleteReasonLabel}</td>
-                        <td className="whitespace-nowrap">{item.deletedAtLabel}</td>
-                        <td className="whitespace-nowrap">
-                          {isHistoryView ? item.resolvedAtLabel ?? "--" : item.deletedByLabel}
-                        </td>
-                        <td className="min-w-[18rem]">
-                          <div className="space-y-2">
-                            <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
-                              {isHistoryView
-                                ? item.resolutionSummary ?? "当前为历史终态只读记录。"
-                                : isFinalizeTab && item.finalActionPreview
-                                ? item.finalizeSummary ?? item.finalActionPreview.blockerSummary
-                                : item.blockerSummary}
-                            </p>
-                            {isHistoryView ? (
-                              <div className="flex flex-wrap gap-2">
-                                <StatusBadge
-                                  label={historyBadge.label}
-                                  variant={historyBadge.variant}
-                                />
-                                <StatusBadge
-                                  label={item.entryStatusLabel}
-                                  variant="neutral"
-                                />
-                              </div>
-                            ) : isFinalizeTab && item.finalActionPreview ? (
-                              <>
-                                {getFinalizeActionBadges(item)}
-                                <p className="text-xs leading-5 text-[var(--color-sidebar-muted)]">
-                                  {item.canFinalizeNow
-                                    ? `当前可执行${getFinalizeCommandLabel(item)}`
-                                    : "最终处理仅主管以上可执行"}
-                                </p>
-                              </>
-                            ) : (
-                              <div className="flex flex-wrap gap-2">
-                                <StatusBadge
-                                  label={item.canRestore ? "可恢复" : "恢复受阻"}
-                                  variant={item.canRestore ? "success" : "warning"}
-                                />
-                                <StatusBadge
-                                  label={
-                                    item.canPurge
-                                      ? "可永久删除"
-                                      : item.purgeRequiresAdmin
-                                        ? "仅主管以上可删除"
-                                        : "清理受阻"
-                                  }
-                                  variant={item.canPurge ? "danger" : "neutral"}
-                                />
-                              </div>
+                        </th>
+                      ) : null}
+                      <th>对象</th>
+                      <th>名称</th>
+                      <th>
+                        {isHistoryView
+                          ? "最终结果"
+                          : isFinalizeTab
+                            ? "Finalize 预览"
+                            : "状态"}
+                      </th>
+                      <th>{isHistoryView ? "处理 / 删除" : "删除时间"}</th>
+                      <th>{isHistoryView ? "处理人" : "操作"}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item) => {
+                      const selected = item.entryId === selectedItem?.entryId;
+                      const historyBadge = getHistoryResultBadge(item);
+                      const expanded = expandedRows.has(item.entryId);
+                      const colSpan = isHistoryView ? 6 : 7;
+
+                      return (
+                        <Fragment key={item.entryId}>
+                          <tr
+                            onClick={() => setSelectedEntryId(item.entryId)}
+                            className={cn(
+                              "cursor-pointer transition-colors",
+                              selected ? "bg-primary/5" : "hover:bg-muted/40",
                             )}
-                          </div>
-                        </td>
-                        <td className="align-top">
-                          {isHistoryView ? (
-                            <div className="space-y-2">
-                              <div className="text-sm font-medium text-[var(--foreground)]">
-                                {item.resolvedByLabel ?? "--"}
+                          >
+                            {!isHistoryView ? (
+                              <td>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedEntryIds.includes(item.entryId)}
+                                  onChange={(event) => {
+                                    event.stopPropagation();
+                                    toggleBatchSelection(item.entryId);
+                                  }}
+                                  onClick={(event) => event.stopPropagation()}
+                                  aria-label={`选择回收站条目 ${item.name}`}
+                                  className="h-4 w-4 rounded border border-border bg-transparent text-primary"
+                                />
+                              </td>
+                            ) : null}
+                            <td>
+                              <StatusBadge
+                                label={item.targetTypeLabel}
+                                variant={getTargetVariant(item)}
+                              />
+                            </td>
+                            <td className="text-foreground">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    toggleRowExpand(item.entryId);
+                                  }}
+                                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+                                  aria-expanded={expanded}
+                                  aria-label={expanded ? "收起详情" : "展开详情"}
+                                >
+                                  <ChevronDown
+                                    className={cn(
+                                      "h-3.5 w-3.5 transition-transform",
+                                      expanded ? "rotate-0" : "-rotate-90",
+                                    )}
+                                  />
+                                </button>
+                                <div className="min-w-0">
+                                  <div className="truncate font-medium">{item.name}</div>
+                                  <div className="truncate text-[11px] text-muted-foreground">
+                                    {item.secondaryLabel}
+                                  </div>
+                                </div>
                               </div>
-                              <p className="text-xs leading-5 text-[var(--color-sidebar-muted)]">
-                                只读历史
-                              </p>
-                            </div>
-                          ) : isFinalizeTab
-                            ? renderFinalizeActionButtons({
-                                item,
-                                pending,
-                                onOpenDialog: openDialog,
-                              })
-                            : renderDefaultActionButtons({
-                                item,
-                                pending,
-                                onOpenDialog: openDialog,
-                              })}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                            </td>
+                            <td className="min-w-[14rem]">
+                              {isHistoryView ? (
+                                <div className="flex flex-wrap gap-1.5">
+                                  <StatusBadge
+                                    label={historyBadge.label}
+                                    variant={historyBadge.variant}
+                                  />
+                                  <StatusBadge
+                                    label={item.entryStatusLabel}
+                                    variant="neutral"
+                                  />
+                                </div>
+                              ) : isFinalizeTab && item.finalActionPreview ? (
+                                getFinalizeActionBadges(item)
+                              ) : (
+                                <div className="flex flex-wrap gap-1.5">
+                                  <StatusBadge
+                                    label={item.canRestore ? "可恢复" : "恢复受阻"}
+                                    variant={item.canRestore ? "success" : "warning"}
+                                  />
+                                  <StatusBadge
+                                    label={
+                                      item.canPurge
+                                        ? "可永久删除"
+                                        : item.purgeRequiresAdmin
+                                          ? "仅主管以上可删除"
+                                          : "清理受阻"
+                                    }
+                                    variant={item.canPurge ? "danger" : "neutral"}
+                                  />
+                                </div>
+                              )}
+                            </td>
+                            <td className="whitespace-nowrap text-[12px] text-muted-foreground">
+                              {isHistoryView
+                                ? item.resolvedAtLabel ?? item.deletedAtLabel
+                                : item.deletedAtLabel}
+                            </td>
+                            <td className="align-middle">
+                              {isHistoryView ? (
+                                <div className="text-[12.5px] font-medium text-foreground">
+                                  {item.resolvedByLabel ?? "--"}
+                                </div>
+                              ) : (
+                                <ActionButtons
+                                  item={item}
+                                  pending={pending}
+                                  onOpenDialog={openDialog}
+                                  isFinalizeTab={isFinalizeTab}
+                                  compact
+                                />
+                              )}
+                            </td>
+                          </tr>
+                          {expanded ? (
+                            <tr
+                              className={cn(
+                                selected ? "bg-primary/5" : "bg-muted/20",
+                              )}
+                            >
+                              <td
+                                colSpan={colSpan}
+                                className="px-3 py-3"
+                              >
+                                <ExpandedRowDetails
+                                  item={item}
+                                  isHistoryView={isHistoryView}
+                                  isFinalizeTab={isFinalizeTab}
+                                  showStatusColumns={showStatusColumns}
+                                />
+                              </td>
+                            </tr>
+                          ) : null}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           ) : (
@@ -910,10 +912,10 @@ export function RecycleBinWorkbench({
                 title={`暂无${getTabLabel(activeTab)}回收站条目`}
                 description={
                   isHistoryView
-                    ? `当前范围内没有 ${entryStatus.toUpperCase()} ${getTabLabel(activeTab)}历史条目。后续处理完成的对象会在这里沉淀只读审计记录。`
+                    ? `当前范围内没有 ${entryStatus.toUpperCase()} ${getTabLabel(activeTab)}历史条目。`
                     : isFinalizeTab
-                    ? `当前范围内没有 ACTIVE ${getTabLabel(activeTab)}回收站对象。后续移入回收站的对象会在这里按 finalize 视角统一治理。`
-                    : "当前范围内没有 ACTIVE 回收站对象，后续移入回收站的对象会在这里统一治理。"
+                      ? `当前范围内没有 ACTIVE ${getTabLabel(activeTab)}回收站对象。`
+                      : "当前范围内没有 ACTIVE 回收站对象。"
                 }
               />
             </div>
@@ -926,8 +928,8 @@ export function RecycleBinWorkbench({
             isHistoryView
               ? "右侧只展示当前选中对象的删除信息、解决结果、finalAction 与 archivePayloadJson，不提供历史操作按钮。"
               : isFinalizeTab
-              ? "右侧只展示当前选中对象的 restore 与 finalize preview，不在这里扩复杂治理树。"
-              : "右侧只展示当前选中对象的恢复与清理判断，不在这里扩复杂治理流程。"
+                ? "右侧只展示当前选中对象的 restore 与 finalize preview，不在这里扩复杂治理树。"
+                : "右侧只展示当前选中对象的恢复与清理判断，不在这里扩复杂治理流程。"
           }
           className="xl:sticky xl:top-[var(--crm-sticky-top)] xl:self-start"
         >
@@ -1084,7 +1086,7 @@ export function RecycleBinWorkbench({
                       <summary className="cursor-pointer list-none crm-detail-label text-[11px]">
                         Archive Payload
                       </summary>
-                      <pre className="mt-3 overflow-x-auto rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] p-3 text-xs leading-6 text-[var(--color-sidebar-muted)]">
+                      <pre className="mt-3 overflow-x-auto rounded-lg border border-border/60 bg-muted/30 p-3 text-xs leading-6 text-muted-foreground">
                         {selectedItem.archivePayloadJsonText}
                       </pre>
                     </details>
@@ -1184,7 +1186,7 @@ export function RecycleBinWorkbench({
                 <p className="crm-detail-label text-[11px]">
                   {isHistoryView ? "对象入口快照" : "恢复目标位置"}
                 </p>
-                <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-3 py-2 text-sm font-medium text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)]">
+                <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm font-medium text-foreground">
                   {selectedItem.restoreRouteSnapshot}
                 </div>
               </div>
@@ -1249,8 +1251,8 @@ function RecycleBinConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-8">
-      <div className="w-full max-w-xl overflow-hidden rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-lg)]">
-        <div className="flex items-start justify-between gap-4 border-b border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-5 py-4">
+      <div className="w-full max-w-xl overflow-hidden rounded-xl border border-border/60 bg-card shadow-lg">
+        <div className="flex items-start justify-between gap-4 border-b border-border/60 bg-muted/30 px-5 py-4">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge label={meta.badgeLabel} variant={meta.badgeVariant} />
@@ -1267,10 +1269,10 @@ function RecycleBinConfirmDialog({
               ) : null}
             </div>
             <div>
-              <h3 className="text-[1.02rem] font-semibold text-[var(--foreground)]">
+              <h3 className="text-[1.02rem] font-semibold text-foreground">
                 {meta.title}
               </h3>
-              <p className="mt-1 text-sm leading-6 text-[var(--color-sidebar-muted)]">
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
                 {meta.description}
               </p>
             </div>
@@ -1285,7 +1287,7 @@ function RecycleBinConfirmDialog({
         </div>
 
         <div className="space-y-4 px-5 py-4">
-          <div className="grid gap-3 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:grid-cols-2">
+          <div className="grid gap-3 rounded-lg border border-border/60 bg-muted/30 p-4 sm:grid-cols-2">
             <SummaryRow label="对象名称" value={state.item.name} />
             <SummaryRow label="对象类型" value={state.item.targetTypeLabel} />
             <SummaryRow label="次标识" value={state.item.secondaryLabel} />
@@ -1300,28 +1302,28 @@ function RecycleBinConfirmDialog({
             <SummaryRow label="删除人" value={state.item.deletedByLabel} />
           </div>
 
-          <div className="space-y-2 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+          <div className="space-y-2 rounded-lg border border-border/60 bg-muted/30 p-4">
             <p className="crm-detail-label text-[11px]">当前判断</p>
-            <p className="text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
+            <p className="text-[13px] leading-5 text-muted-foreground">
               {currentSummary}
             </p>
           </div>
 
-          <div className="space-y-2 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+          <div className="space-y-2 rounded-lg border border-border/60 bg-muted/30 p-4">
             <p className="crm-detail-label text-[11px]">
               {meta.impactLabel}
             </p>
-            <p className="text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
+            <p className="text-[13px] leading-5 text-muted-foreground">
               {impactContent}
             </p>
-            <p className="text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
+            <p className="text-[12px] leading-5 text-muted-foreground">
               {meta.impactHint}
             </p>
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-[var(--color-border-soft)] bg-[var(--color-shell-surface)] px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-          <p className="text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
+        <div className="flex flex-col gap-3 border-t border-border/60 bg-muted/30 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <p className="text-[13px] leading-5 text-muted-foreground">
             {state.mode === "restore"
               ? "恢复成功后，对象会按原业务入口重新可见。"
               : state.mode === "finalize"

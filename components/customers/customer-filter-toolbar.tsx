@@ -23,7 +23,9 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import {
   customerExecutionClassOptions,
+  customerPageSizeOptions,
   type CustomerExecutionClass,
+  type CustomerPageSize,
 } from "@/lib/customers/metadata";
 import { buildCustomersHref } from "@/lib/customers/filter-url";
 import type { CustomerCenterData } from "@/lib/customers/queries";
@@ -161,32 +163,27 @@ function sortByCountDesc<T extends { count: number; label?: string; name?: strin
   });
 }
 
-const filterInputClassName =
-  "h-10 w-full rounded-xl border border-border/60 bg-background text-sm text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground/60 focus:border-primary focus:ring-1 focus:ring-primary";
-
-const filterScrollAreaClassName =
-  "space-y-1 overflow-y-auto pr-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden";
+const baseFieldClassName =
+  "h-9 rounded-lg border border-border bg-background text-sm text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-primary focus:ring-1 focus:ring-primary";
 
 function FilterChip({
   label,
   onClear,
 }: Readonly<{
   label: string;
-  onClear?: () => void;
+  onClear: () => void;
 }>) {
   return (
-    <span className="inline-flex h-8 max-w-full items-center gap-1.5 rounded-full border border-border/60 bg-background px-3 text-xs font-medium text-muted-foreground">
+    <span className="inline-flex h-6 max-w-full items-center gap-1 rounded-full border border-border bg-muted/40 pl-2 pr-1 text-[11px] font-medium text-muted-foreground">
       <span className="truncate">{label}</span>
-      {onClear ? (
-        <button
-          type="button"
-          onClick={onClear}
-          className="-mr-1 inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground/70 transition hover:bg-muted hover:text-foreground"
-          aria-label={`移除筛选 ${label}`}
-        >
-          <X className="h-3 w-3" />
-        </button>
-      ) : null}
+      <button
+        type="button"
+        onClick={onClear}
+        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground/70 hover:bg-muted hover:text-foreground"
+        aria-label={`移除筛选 ${label}`}
+      >
+        <X className="h-3 w-3" />
+      </button>
     </span>
   );
 }
@@ -209,10 +206,10 @@ function OptionRow({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex min-h-10 w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left text-sm transition",
+        "flex min-h-9 w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm",
         selected
-          ? "border-primary/30 bg-primary/10 text-primary"
-          : "border-border/60 bg-background text-muted-foreground hover:border-primary/50 hover:bg-muted/40 hover:text-foreground",
+          ? "border-primary/40 bg-primary/10 text-primary"
+          : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
       )}
     >
       <span className="min-w-0">
@@ -234,53 +231,14 @@ function OptionRow({
         ) : null}
         <span
           className={cn(
-            "inline-flex h-5 w-5 items-center justify-center rounded-full border",
-            selected
-              ? "border-primary/30 bg-card text-primary"
-              : "border-transparent text-transparent",
+            "inline-flex h-4 w-4 items-center justify-center rounded-full",
+            selected ? "bg-primary text-primary-foreground" : "text-transparent",
           )}
         >
-          <Check className="h-3.5 w-3.5" />
+          <Check className="h-3 w-3" />
         </span>
       </span>
     </button>
-  );
-}
-
-function InlineSelectControl({
-  label,
-  value,
-  placeholder,
-  options,
-  onChange,
-}: Readonly<{
-  label: string;
-  value: string;
-  placeholder: string;
-  options: Array<{ value: string; label: string }>;
-  onChange: (nextValue: string) => void;
-}>) {
-  return (
-    <label className="block space-y-1.5">
-      <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        {label}
-      </span>
-      <span className="relative block">
-        <select
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className={cn(filterInputClassName, "appearance-none px-3 pr-8 font-medium")}
-        >
-          <option value="">{placeholder}</option>
-          {options.map((option) => (
-            <option key={`${label}-${option.value}`} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-      </span>
-    </label>
   );
 }
 
@@ -333,33 +291,28 @@ function ThemedDatePicker({
           if (!open && selectedDate) {
             setViewMonth(getMonthStart(selectedDate));
           }
-
           setOpen((current) => !current);
         }}
         className={cn(
-          filterInputClassName,
-          "flex h-12 items-center justify-between gap-3 px-3 text-left",
+          baseFieldClassName,
+          "flex w-full items-center justify-between gap-2 px-3 text-left",
           value ? "text-foreground" : "text-muted-foreground",
         )}
       >
-        <span className="min-w-0">
-          <span className="block text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-            {label}
-          </span>
-          <span className="block truncate text-sm font-medium">
-            {formatDatePickerValue(value)}
-          </span>
+        <span className="min-w-0 truncate text-sm">
+          <span className="mr-1 text-[11px] text-muted-foreground">{label}</span>
+          {formatDatePickerValue(value)}
         </span>
-        <CalendarDays className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       </button>
 
       {open ? (
-        <div className="crm-animate-pop absolute left-0 top-full z-50 mt-2 w-72 rounded-xl border border-border bg-card p-3 text-foreground shadow-[0_18px_46px_rgba(15,23,42,0.16)]">
+        <div className="crm-animate-pop absolute left-0 top-full z-50 mt-2 w-72 rounded-lg border border-border bg-card p-3 text-foreground shadow-md">
           <div className="flex items-center justify-between">
             <button
               type="button"
               onClick={() => setViewMonth((current) => shiftMonth(current, -1))}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-primary/10 hover:text-primary"
               aria-label="上个月"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -370,7 +323,7 @@ function ThemedDatePicker({
             <button
               type="button"
               onClick={() => setViewMonth((current) => shiftMonth(current, 1))}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-primary/10 hover:text-primary"
               aria-label="下个月"
             >
               <ChevronRight className="h-4 w-4" />
@@ -401,15 +354,13 @@ function ThemedDatePicker({
                     setOpen(false);
                   }}
                   className={cn(
-                    "inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium outline-none transition",
+                    "inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium outline-none",
                     selected
-                      ? "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground"
+                      ? "bg-primary text-primary-foreground"
                       : currentMonth
-                        ? "text-foreground hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary"
-                        : "text-muted-foreground/35 hover:bg-primary/10 hover:text-primary focus:bg-primary/10 focus:text-primary",
-                    isToday &&
-                      !selected &&
-                      "ring-1 ring-primary/30 text-primary",
+                        ? "text-foreground hover:bg-primary/10 hover:text-primary"
+                        : "text-muted-foreground/35 hover:bg-primary/10 hover:text-primary",
+                    isToday && !selected && "ring-1 ring-primary/30 text-primary",
                   )}
                 >
                   {date.getDate()}
@@ -418,14 +369,14 @@ function ThemedDatePicker({
             })}
           </div>
 
-          <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-3">
+          <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
             <button
               type="button"
               onClick={() => {
                 onChange("");
                 setOpen(false);
               }}
-              className="text-xs font-medium text-primary transition hover:text-primary/80"
+              className="text-xs font-medium text-primary hover:text-primary/80"
             >
               清除
             </button>
@@ -436,7 +387,7 @@ function ThemedDatePicker({
                 setViewMonth(getMonthStart(today));
                 setOpen(false);
               }}
-              className="text-xs font-medium text-primary transition hover:text-primary/80"
+              className="text-xs font-medium text-primary hover:text-primary/80"
             >
               今天
             </button>
@@ -455,12 +406,54 @@ function FilterSection({
   children: ReactNode;
 }>) {
   return (
-    <section>
-      <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+    <section className="space-y-2">
+      <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
         {title}
       </h3>
       {children}
     </section>
+  );
+}
+
+function InlineNativeSelect({
+  ariaLabel,
+  value,
+  placeholder,
+  options,
+  onChange,
+  pending,
+  className,
+}: Readonly<{
+  ariaLabel: string;
+  value: string;
+  placeholder: string;
+  options: Array<{ value: string; label: string }>;
+  onChange: (nextValue: string) => void;
+  pending?: boolean;
+  className?: string;
+}>) {
+  return (
+    <span className="relative inline-block">
+      <select
+        aria-label={ariaLabel}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={cn(
+          baseFieldClassName,
+          "appearance-none px-3 pr-7 font-medium",
+          pending && "opacity-70",
+          className,
+        )}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+    </span>
   );
 }
 
@@ -484,8 +477,17 @@ export function CustomerFilterToolbar({
   const rootRef = useRef<HTMLDivElement>(null);
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
+  const [searchDraft, setSearchDraft] = useState(filters.search);
+  const [searchDraftSource, setSearchDraftSource] = useState(filters.search);
   const [productKeywordDraft, setProductKeywordDraft] = useState(filters.productKeyword);
   const [tagSearchDraft, setTagSearchDraft] = useState("");
+
+  // 当 URL 上 filters.search 被外部改写 (清空 / 链接跳转) 时, 立刻同步草稿,
+  // 不放进 useEffect 以免触发 lint 告警 + cascading render.
+  if (filters.search !== searchDraftSource) {
+    setSearchDraftSource(filters.search);
+    setSearchDraft(filters.search);
+  }
 
   const applyFilters = useCallback(
     (overrides: Partial<CustomerFilters>) => {
@@ -582,18 +584,14 @@ export function CustomerFilterToolbar({
     [filters.tagIds, tagOptions],
   );
 
-  const selectedTeam = teamOptions.find((team) => team.id === filters.teamId) ?? null;
-  const selectedSales = salesOptions.find((sales) => sales.id === filters.salesId) ?? null;
   const showTeamFilter = teamOptions.length > 0;
   const showSalesFilter = salesOptions.length > 0;
-  const activeFilterCount = [
-    Boolean(filters.search),
+  const advancedActiveCount = [
     Boolean(filters.assignedFrom || filters.assignedTo),
     filters.executionClasses.length > 0,
     filters.productKeys.length > 0 || Boolean(filters.productKeyword),
     filters.tagIds.length > 0,
-    Boolean(filters.teamId),
-    Boolean(filters.salesId),
+    filters.pageSize !== 20,
   ].filter(Boolean).length;
 
   function isTimePresetSelected(preset: TimePresetKey) {
@@ -601,14 +599,7 @@ export function CustomerFilterToolbar({
     return filters.assignedFrom === range.from && filters.assignedTo === range.to;
   }
 
-  const activeChips = [
-    filters.search
-      ? {
-          key: "search",
-          label: `搜索 ${filters.search}`,
-          onClear: () => applyFilters({ search: "" }),
-        }
-      : null,
+  const advancedChips = [
     timeFilterSummary
       ? {
           key: "time",
@@ -646,23 +637,10 @@ export function CustomerFilterToolbar({
           onClear: () => applyFilters({ tagIds: [] }),
         }
       : null,
-    selectedTeam
-      ? {
-          key: "team",
-          label: `团队 ${selectedTeam.name}`,
-          onClear: () => applyFilters({ teamId: "", salesId: "" }),
-        }
-      : null,
-    selectedSales
-      ? {
-          key: "sales",
-          label: `员工 ${selectedSales.name}`,
-          onClear: () => applyFilters({ salesId: "" }),
-        }
-      : null,
   ].filter(Boolean) as Array<{ key: string; label: string; onClear: () => void }>;
 
   function clearAllFilters() {
+    setSearchDraft("");
     setProductKeywordDraft("");
     setTagSearchDraft("");
     applyFilters({
@@ -678,75 +656,128 @@ export function CustomerFilterToolbar({
     });
   }
 
+  function commitSearch() {
+    const next = searchDraft.trim();
+    if (next === filters.search) return;
+    applyFilters({ search: next });
+  }
+
+  const hasActiveAny =
+    advancedChips.length > 0 ||
+    Boolean(filters.search) ||
+    Boolean(filters.teamId) ||
+    Boolean(filters.salesId);
+
   return (
     <div ref={rootRef} aria-busy={pending} className="relative">
-      <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-            {activeChips.length > 0 ? (
-              activeChips.map((chip) => (
-                <FilterChip key={chip.key} label={chip.label} onClear={chip.onClear} />
-              ))
-            ) : (
-              <FilterChip label="全部客户" />
-            )}
+      <div className="rounded-lg border border-border bg-card px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-0 flex-1 basis-64">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={searchDraft}
+              onChange={(event) => setSearchDraft(event.target.value)}
+              onBlur={commitSearch}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  commitSearch();
+                }
+              }}
+              placeholder="搜索客户姓名 / 手机号"
+              aria-label="搜索客户"
+              className={cn(baseFieldClassName, "w-full pl-8 pr-3")}
+            />
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
-            {exportHref ? (
-              <a
-                href={exportHref}
-                className="inline-flex h-9 items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 text-sm font-semibold text-primary shadow-sm transition hover:border-primary/30 hover:bg-primary/15"
-              >
-                <Download className="h-4 w-4" />
-                导出客户
-              </a>
+          {showTeamFilter ? (
+            <InlineNativeSelect
+              ariaLabel="按团队筛选"
+              value={filters.teamId}
+              placeholder="全部团队"
+              options={teamOptions.map((team) => ({ value: team.id, label: team.name }))}
+              onChange={(nextValue) => applyFilters({ teamId: nextValue, salesId: "" })}
+              pending={pending}
+              className="min-w-[8rem]"
+            />
+          ) : null}
+
+          {showSalesFilter ? (
+            <InlineNativeSelect
+              ariaLabel="按员工筛选"
+              value={filters.salesId}
+              placeholder="全部员工"
+              options={salesOptions.map((sales) => ({ value: sales.id, label: sales.name }))}
+              onChange={(nextValue) => applyFilters({ salesId: nextValue })}
+              pending={pending}
+              className="min-w-[8rem]"
+            />
+          ) : null}
+
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={() => setOpen((current) => !current)}
+            className={cn(
+              "inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium",
+              open || advancedActiveCount > 0
+                ? "border-primary/40 bg-primary/10 text-primary"
+                : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
+            )}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            高级筛选
+            {advancedActiveCount > 0 ? (
+              <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold leading-none text-primary-foreground">
+                {advancedActiveCount}
+              </span>
             ) : null}
-            {activeFilterCount > 0 ? (
-              <button
-                type="button"
-                onClick={clearAllFilters}
-                className="inline-flex h-9 items-center rounded-full px-3 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
-              >
-                清空
-              </button>
-            ) : null}
+          </button>
+
+          {exportHref ? (
+            <a
+              href={exportHref}
+              aria-label="导出客户"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
+            >
+              <Download className="h-3.5 w-3.5" />
+            </a>
+          ) : null}
+
+          {hasActiveAny ? (
             <button
               type="button"
-              aria-expanded={open}
-              onClick={() => setOpen((current) => !current)}
-              className={cn(
-                "inline-flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-semibold shadow-sm transition",
-                open || activeFilterCount > 0
-                  ? "border-primary/30 bg-primary/10 text-primary"
-                  : "border-border/60 bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground",
-              )}
+              onClick={clearAllFilters}
+              className="inline-flex h-9 items-center rounded-lg px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
             >
-              <SlidersHorizontal className="h-4 w-4" />
-              筛选
-              {activeFilterCount > 0 ? (
-                <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-primary-foreground">
-                  {activeFilterCount}
-                </span>
-              ) : null}
+              清空
             </button>
-          </div>
+          ) : null}
         </div>
+
+        {advancedChips.length > 0 ? (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
+            {advancedChips.map((chip) => (
+              <FilterChip key={chip.key} label={chip.label} onClear={chip.onClear} />
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {open ? (
-        <div className="crm-animate-pop absolute right-0 top-full z-40 mt-2 w-[min(54rem,calc(100vw-2rem))] rounded-xl border border-border bg-card p-4 text-foreground shadow-[0_24px_60px_rgba(15,23,42,0.14)]">
-          <div className="grid gap-5 lg:grid-cols-2">
+        <div className="crm-animate-pop absolute right-0 top-full z-40 mt-2 w-[min(52rem,calc(100vw-2rem))] rounded-lg border border-border bg-card p-4 text-foreground shadow-md">
+          <div className="grid gap-4 lg:grid-cols-2">
             <FilterSection title="分配时间">
-              <div className="flex flex-wrap gap-2">
-                {([
-                  ["today", "今天"],
-                  ["last7", "近 7 天"],
-                  ["last30", "近 30 天"],
-                  ["thisMonth", "本月"],
-                ] as Array<[TimePresetKey, string]>).map(([preset, label]) => {
+              <div className="flex flex-wrap gap-1.5">
+                {(
+                  [
+                    ["today", "今天"],
+                    ["last7", "近 7 天"],
+                    ["last30", "近 30 天"],
+                    ["thisMonth", "本月"],
+                  ] as Array<[TimePresetKey, string]>
+                ).map(([preset, label]) => {
                   const selected = isTimePresetSelected(preset);
-
                   return (
                     <button
                       key={preset}
@@ -756,10 +787,10 @@ export function CustomerFilterToolbar({
                         applyFilters({ assignedFrom: range.from, assignedTo: range.to });
                       }}
                       className={cn(
-                        "h-8 rounded-full border px-3 text-xs font-medium transition",
+                        "h-7 rounded-full border px-2.5 text-xs font-medium",
                         selected
-                          ? "border-primary/30 bg-primary/10 text-primary"
-                          : "border-border/60 bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground",
+                          ? "border-primary/40 bg-primary/10 text-primary"
+                          : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
                       )}
                     >
                       {label}
@@ -801,7 +832,7 @@ export function CustomerFilterToolbar({
 
             <FilterSection title="商品">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
                   value={productKeywordDraft}
                   onChange={(event) => setProductKeywordDraft(event.target.value)}
@@ -813,10 +844,10 @@ export function CustomerFilterToolbar({
                     }
                   }}
                   placeholder="筛选商品信号"
-                  className={cn(filterInputClassName, "pl-9 pr-3")}
+                  className={cn(baseFieldClassName, "w-full pl-8 pr-3")}
                 />
               </div>
-              <div className={cn(filterScrollAreaClassName, "max-h-72")}>
+              <div className="max-h-60 space-y-1 overflow-y-auto pr-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                 {visibleProductOptions.length > 0 ? (
                   visibleProductOptions.map((option) => (
                     <OptionRow
@@ -834,24 +865,24 @@ export function CustomerFilterToolbar({
                     />
                   ))
                 ) : (
-                  <p className="px-1 py-4 text-center text-xs text-muted-foreground/70">
+                  <p className="px-1 py-3 text-center text-xs text-muted-foreground/70">
                     暂无匹配商品
                   </p>
                 )}
               </div>
             </FilterSection>
 
-            <FilterSection title="标签 / 归属">
+            <FilterSection title="标签">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <input
                   value={tagSearchDraft}
                   onChange={(event) => setTagSearchDraft(event.target.value)}
                   placeholder="筛选标签"
-                  className={cn(filterInputClassName, "pl-9 pr-3")}
+                  className={cn(baseFieldClassName, "w-full pl-8 pr-3")}
                 />
               </div>
-              <div className={cn(filterScrollAreaClassName, "max-h-44")}>
+              <div className="max-h-40 space-y-1 overflow-y-auto pr-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                 {visibleTagOptions.length > 0 ? (
                   visibleTagOptions.map((tag) => (
                     <OptionRow
@@ -869,55 +900,50 @@ export function CustomerFilterToolbar({
                     />
                   ))
                 ) : (
-                  <p className="px-1 py-4 text-center text-xs text-muted-foreground/70">
+                  <p className="px-1 py-3 text-center text-xs text-muted-foreground/70">
                     暂无匹配标签
                   </p>
                 )}
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {showTeamFilter ? (
-                  <InlineSelectControl
-                    label="团队"
-                    value={filters.teamId}
-                    placeholder="全部团队"
-                    options={teamOptions.map((team) => ({
-                      value: team.id,
-                      label: team.name,
-                    }))}
-                    onChange={(nextValue) => applyFilters({ teamId: nextValue, salesId: "" })}
-                  />
-                ) : null}
-                {showSalesFilter ? (
-                  <InlineSelectControl
-                    label="员工"
-                    value={filters.salesId}
-                    placeholder="全部员工"
-                    options={salesOptions.map((sales) => ({
-                      value: sales.id,
-                      label: sales.name,
-                    }))}
-                    onChange={(nextValue) => applyFilters({ salesId: nextValue })}
-                  />
-                ) : null}
-              </div>
             </FilterSection>
           </div>
 
-          <div className="mt-2 flex items-center justify-between border-t border-border/50 pt-4">
-            <button
-              type="button"
-              onClick={clearAllFilters}
-              className="text-xs font-medium text-muted-foreground transition hover:text-foreground"
-            >
-              清空全部筛选
-            </button>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="inline-flex h-9 items-center rounded-full bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-sm transition-colors duration-150 hover:opacity-90"
-            >
-              完成
-            </button>
+          <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>每页</span>
+              <InlineNativeSelect
+                ariaLabel="选择每页客户数量"
+                value={String(filters.pageSize)}
+                placeholder="20"
+                options={customerPageSizeOptions.map((size) => ({
+                  value: String(size),
+                  label: String(size),
+                }))}
+                onChange={(nextValue) => {
+                  if (!nextValue) return;
+                  applyFilters({ pageSize: Number(nextValue) as CustomerPageSize });
+                }}
+                pending={pending}
+                className="h-8 w-[5rem] text-xs"
+              />
+              <span>条</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                清空全部
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="inline-flex h-8 items-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90"
+              >
+                完成
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
