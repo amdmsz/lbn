@@ -12,6 +12,31 @@ enum RoleCode {
   SALES
   OPS
   SHIPPER
+  FINANCE
+}
+
+enum RefundRequestStatus {
+  PENDING_FINANCE
+  APPROVED_FINANCE
+  PAID_OUT
+  REJECTED_FINANCE
+  WITHDRAWN
+}
+
+enum RefundReason {
+  CUSTOMER_REGRET
+  QUALITY_ISSUE
+  PRICING_DISPUTE
+  DUPLICATE_PAYMENT
+  OTHER
+}
+
+enum RefundPayoutMethod {
+  ALIPAY
+  WECHAT
+  BANK_TRANSFER
+  OFFLINE_CASH
+  OTHER
 }
 
 enum UserPermissionCode {
@@ -822,6 +847,10 @@ model User {
   reviewedSalesOrders                       SalesOrder[]                      @relation("SalesOrderReviewer")
   requestedTradeOrderRevisions              TradeOrderRevisionRequest[]       @relation("TradeOrderRevisionRequester")
   reviewedTradeOrderRevisions               TradeOrderRevisionRequest[]       @relation("TradeOrderRevisionReviewer")
+  requestedRefunds                          RefundRequest[]                   @relation("RefundRequester")
+  reviewedRefunds                           RefundRequest[]                   @relation("RefundFinanceReviewer")
+  paidOutRefunds                            RefundRequest[]                   @relation("RefundPayoutBy")
+  createdReversePaymentRecords              ReversePaymentRecord[]            @relation("ReversePaymentRecordCreator")
   ownedPaymentPlans                         PaymentPlan[]                     @relation("PaymentPlanOwner")
   createdPaymentPlans                       PaymentPlan[]                     @relation("PaymentPlanCreatedBy")
   updatedPaymentPlans                       PaymentPlan[]                     @relation("PaymentPlanUpdatedBy")
@@ -1015,6 +1044,7 @@ model Customer {
   customerTags                 CustomerTag[]
   mergeLogs                    LeadCustomerMergeLog[]
   ownershipEvents              CustomerOwnershipEvent[]
+  refundRequests               RefundRequest[]
   historyArchives              CustomerHistoryArchive[] @relation("CustomerHistoryArchiveTargetCustomer")
   createdAt                    DateTime                 @default(now())
   updatedAt                    DateTime                 @updatedAt
@@ -1739,6 +1769,7 @@ model TradeOrder {
   codCollectionRecords    CodCollectionRecord[]
   exportLines             ShippingExportLine[]
   revisionRequests        TradeOrderRevisionRequest[]
+  refundRequests          RefundRequest[]
   createdAt               DateTime                  @default(now())
   updatedAt               DateTime                  @updatedAt
 
@@ -1770,6 +1801,7 @@ model TradeOrderRevisionRequest {
   cancelledPaymentRecordIds   Json?
   cancelledCollectionTaskIds  Json?
   cancelledSalesOrderIds      Json?
+  refundRequest               RefundRequest?
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 
@@ -2292,6 +2324,14 @@ model PaymentRecord {
   confirmedAt         DateTime?
   referenceNo         String?
   remark              String?              @db.Text
+  // Phase B 退款链路: 反向冲账标记 + 关联退款单. 真删 PaymentRecord 会破坏
+  // 历史审计, 我们用 isReversed=true 表示该笔已被退款冲账, 配合 ReversePayment
+  // Record 形成完整审计链.
+  isReversed          Boolean              @default(false)
+  reversedAt          DateTime?
+  reversedByRefundRequestId String?
+  reversedByRefundRequest   RefundRequest? @relation("PaymentRecordReversedBy", fields: [reversedByRefundRequestId], references: [id])
+  reverseRecords      ReversePaymentRecord[] @relation("ReversePaymentRecordSource")
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 
@@ -2306,7 +2346,70 @@ model PaymentRecord {
   @@index([ownerId, status, occurredAt])
   @@index([submittedById, status, occurredAt])
   @@index([confirmedById, status, occurredAt])
+  @@index([reversedByRefundRequestId])
   @@map("paymentrecord")
+}
+
+model RefundRequest {
+  id                          String                @id @default(cuid())
+  // 关联源: 优先 RevisionRequest (撤单流程触发), 也可独立 (财务对账)
+  revisionRequestId           String?               @unique
+  revisionRequest             TradeOrderRevisionRequest? @relation(fields: [revisionRequestId], references: [id])
+  tradeOrderId                String
+  tradeOrder                  TradeOrder            @relation(fields: [tradeOrderId], references: [id])
+  customerId                  String
+  customer                    Customer              @relation(fields: [customerId], references: [id])
+  requestedAmount             Decimal               @db.Decimal(10, 2)
+  approvedAmount              Decimal?              @db.Decimal(10, 2)
+  paidAmount                  Decimal?              @db.Decimal(10, 2)
+  status                      RefundRequestStatus   @default(PENDING_FINANCE)
+  reason                      RefundReason
+  reasonDetail                String                @db.Text
+  // 引用的源 PaymentRecord (反向凭证基础)
+  sourcePaymentRecordIds      Json
+  requesterId                 String
+  requester                   User                  @relation("RefundRequester", fields: [requesterId], references: [id])
+  requestedAt                 DateTime              @default(now())
+  financeReviewerId           String?
+  financeReviewer             User?                 @relation("RefundFinanceReviewer", fields: [financeReviewerId], references: [id])
+  reviewedAt                  DateTime?
+  reviewNote                  String?               @db.Text
+  rejectReason                String?               @db.Text
+  payoutMethod                RefundPayoutMethod?
+  payoutReference             String?
+  paidOutAt                   DateTime?
+  paidOutById                 String?
+  paidOutBy                   User?                 @relation("RefundPayoutBy", fields: [paidOutById], references: [id])
+  reversePaymentRecords       ReversePaymentRecord[]
+  reversedPaymentRecords      PaymentRecord[]       @relation("PaymentRecordReversedBy")
+  createdAt                   DateTime              @default(now())
+  updatedAt                   DateTime              @updatedAt
+
+  @@index([tradeOrderId])
+  @@index([customerId])
+  @@index([status, requestedAt])
+  @@index([financeReviewerId])
+  @@index([requesterId])
+  @@map("refundrequest")
+}
+
+model ReversePaymentRecord {
+  id                      String              @id @default(cuid())
+  refundRequestId         String
+  refundRequest           RefundRequest       @relation(fields: [refundRequestId], references: [id])
+  sourcePaymentRecordId   String
+  sourcePaymentRecord     PaymentRecord       @relation("ReversePaymentRecordSource", fields: [sourcePaymentRecordId], references: [id])
+  amount                  Decimal             @db.Decimal(10, 2)
+  occurredAt              DateTime
+  payoutMethod            RefundPayoutMethod
+  payoutReference         String?
+  createdById             String
+  createdBy               User                @relation("ReversePaymentRecordCreator", fields: [createdById], references: [id])
+  createdAt               DateTime            @default(now())
+
+  @@index([refundRequestId])
+  @@index([sourcePaymentRecordId])
+  @@map("reversepaymentrecord")
 }
 
 model CollectionTask {
