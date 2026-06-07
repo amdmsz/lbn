@@ -237,13 +237,35 @@ export async function requestTradeOrderRevision(
     throw new Error("成交主单不存在或已被回收");
   }
 
-  // 销售只能撤自己的单 (admin / supervisor 可以撤任何单)
+  // SALES 只能撤自己的单
   if (
     actor.role === "SALES" &&
     tradeOrder.ownerId &&
     tradeOrder.ownerId !== actor.id
   ) {
     throw new Error("您只能对自己负责的成交主单发起撤单申请");
+  }
+
+  // R06: SUPERVISOR 只能撤本团队 owner 的单 (multi-team 部署下避免跨团队
+  // 干预). ADMIN 兜底不限制. single-team 部署所有 owner 同 team, 此 check 无操作.
+  if (actor.role === "SUPERVISOR" && tradeOrder.ownerId) {
+    const [actorRow, ownerRow] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: actor.id },
+        select: { teamId: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: tradeOrder.ownerId },
+        select: { teamId: true },
+      }),
+    ]);
+    const actorTeamId = actorRow?.teamId ?? null;
+    const ownerTeamId = ownerRow?.teamId ?? null;
+    if (actorTeamId && ownerTeamId && actorTeamId !== ownerTeamId) {
+      throw new Error(
+        "您只能复审本团队成员负责的成交主单, 跨团队订单请联系对方主管或 ADMIN",
+      );
+    }
   }
 
   // 验证 patchedLines: 每项 newQty 必须 < 原 qty 且 itemId 必须存在
@@ -400,6 +422,7 @@ export async function reviewTradeOrderRevision(
           tradeNo: true,
           tradeStatus: true,
           reviewStatus: true,
+          ownerId: true,
         },
       },
     },
@@ -416,6 +439,28 @@ export async function reviewTradeOrderRevision(
   // 4 眼原则: 不允许 requester 自审 (admin 例外, 因 admin 是兜底)
   if (revision.requesterId === actor.id && actor.role !== "ADMIN") {
     throw new Error("不能复审自己发起的撤单申请, 请由其他主管处理");
+  }
+
+  // R06: SUPERVISOR 只能复审本团队 owner 的申请. 跟 requestTradeOrderRevision
+  // 的 scope check 对齐, 防止跨团队主管批别人的单.
+  if (actor.role === "SUPERVISOR" && revision.tradeOrder.ownerId) {
+    const [actorRow, ownerRow] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: actor.id },
+        select: { teamId: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: revision.tradeOrder.ownerId },
+        select: { teamId: true },
+      }),
+    ]);
+    const actorTeamId = actorRow?.teamId ?? null;
+    const ownerTeamId = ownerRow?.teamId ?? null;
+    if (actorTeamId && ownerTeamId && actorTeamId !== ownerTeamId) {
+      throw new Error(
+        "您只能复审本团队成员的撤单/减量申请, 跨团队请联系对方主管或 ADMIN",
+      );
+    }
   }
 
   const reviewedAt = new Date();
