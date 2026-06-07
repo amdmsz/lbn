@@ -9,15 +9,15 @@
 
 | 类别 | 数量 | 说明 |
 |---|---:|---|
-| 提交 | 11 | 全部按"事务边界分组", 风险隔离 |
-| 部署 | 11 | 每次 commit 后跑 release-preflight + migrate deploy + smoke |
+| 提交 | 16 | 全部按"事务边界分组", 风险隔离 |
+| 部署 | 16 | 每次 commit 后跑 release-preflight + migrate deploy + smoke |
 | 新增功能 | 1 大 | 订单反悔 **阶段 A.1 — REDUCE_QUANTITY** 真落地 |
 | Bug 修复 | 5 | P0 浮点收款 + 4 个 P1 高严重度 |
 | 性能优化 | 1 | 客户中心 + 2 个复合索引 (cursor 分页准备) |
 | 工具新增 | 1 | `lib/payments/decimal.ts` 精度安全 helper |
 | 系统审计 | 1 | 5 agent 并行扫了全仓 (security/bug/perf/data/UX) |
 
-**线上 HEAD**: `9f20f43` (含 tonight commits 自审 + 3 P1 自修复)
+**线上 HEAD**: `2f53c81` (含 review + 2 轮深度 vector check + 全部修复) — 之后又写了文档 `370b45f / afa31f1 / 2f53c81` 后续 commit 见末尾时间线
 
 ---
 
@@ -163,6 +163,45 @@ https://crm.cclbn.com/orders/<已审核的 tradeOrderId>
 
 ---
 
+## Round 8-9: 深度 vector check 自审(`afa31f1` / `2f53c81` / `370b45f`)
+
+agent review 找完后, 我自己再做一轮 vector check (不靠 agent), 又找到 5 个真 bug + 1 个 UX/移动端改进:
+
+**`370b45f` — R07/R08/R09/R10 P2/P3 polish + F15 移动端触控热区**
+- R07 COD fallback remainingAmount=0 退 expectedAmount (UX)
+- R08 toDecimal warn 不打输入原文 (PII)
+- R09 孤儿文件清理失败加 warn (可观测)
+- R10 ensureCollectionTaskForPlan Error cause 链 (诊断)
+- F15 `@media (pointer: coarse)` 把 `.crm-button` ≥44px + 小按钮 `::before` 扩 hit area
+
+**`afa31f1` — REVISION_PENDING bypass + race + amount residue (3 个 P1)**
+
+| Bug | 风险 |
+|---|---|
+| `assertEditableTradeOrder` 没拦 REVISION_PENDING — 销售可重新存 draft 绕过整个审批 | 销售完全绕过主管复审, 高风险 |
+| 同订单 2 个 PENDING revision race — 两人同时点会出现 2 个待审 | 数据混乱, 中风险 |
+| CANCEL/REDUCE 后 TradeOrder.collectedAmount/paidAmount 残留上一轮 sync 值 | dashboard/reports 误算, 中风险 |
+
+**`2f53c81` — SalesOrder amount 重置 + LogisticsFollowUpTask 兜底 (2 个 sweep)**
+- SalesOrder.collectedAmount/paidAmount/codAmount/remainingAmount 同样需要归零 (跟 TradeOrder 对齐)
+- LogisticsFollowUpTask 安全网: 即使 shippedAt blocker 拦了, 若 OPS 工作流先有 trackingNumber 才有 shippedAt 的窗口, 残留 task 也要标 CANCELED
+
+**关键反思**: agent review (Round 7) 找了 10 个发现, 但都是 diff-level "你最近写的代码哪里有问题". 我自己 vector check (Round 8-9) 关注 *业务流逻辑* — "进入 REVISION_PENDING 后, 销售还能从哪些入口绕过"、"cascade clean 是否完整"、"金额聚合是否一致" — 这是 agent review 没覆盖的层. 两种 review 互补, 都必要.
+
+---
+
+## Round 10: 测试 Checklist 文档化(本提交)
+
+`docs/testing/trade-order-revision-test-checklist.md` (新文件): 15 个测试用例 + 故障兜底 + 回滚指南 + 上线后监控指标. 给业务方/QA 在 staging 或灰度环境验收用. 全跑约 15-20 min.
+
+**关键用例标 ⭐ 的必跑**:
+- 用例 8 (REVISION_PENDING 不可绕过) — 回归测今晚 `afa31f1` 的 P1 修复
+- 用例 9 (Race — 同订单 2 个 PENDING revision) — 同上
+- 用例 13 (减量后金额聚合) — 回归 R01-R02 修复
+- 用例 14 (减量后金额字段归零) — 回归 `2f53c81` 修复
+
+---
+
 ## 跳过 / 留作下一轮的项
 
 | Finding | 原因 | 建议处理时机 |
@@ -194,7 +233,11 @@ https://crm.cclbn.com/orders/<已审核的 tradeOrderId>
 | 51abe66 | F13 login a11y | 00:47 |
 | a976a10 | docs: NIGHT_SUMMARY 更新 | 00:51 |
 | 7922b56 | F16 + Phase B 蓝图 | (Round 6) |
-| **9f20f43** | **自审 R01-R05 修复** ⭐ | **09:23** |
+| 9f20f43 | 自审 R01-R05 修复 | 09:23 |
+| 370b45f | R07-R10 + F15 移动端 | 10:xx |
+| afa31f1 | REVISION_PENDING bypass + race + amount residue 3 P1 | 10:xx |
+| 2f53c81 | SalesOrder amount reset + LogisticsFollowUpTask | 10:xx |
+| **本提交** | **test checklist + 本次 README 更新** | **(部署中)** |
 
 **关于 0edd4e3 → acfc756 的修复**: 我加 customer 索引时假设了 `teamId` 字段, 但 Customer 表自身没有 (团队关联是经 owner.teamId 间接的)。prisma validate 在 release-preflight 拦下了 broken schema, 服务没影响。我立即查正确字段, 删 teamId 索引保留 ownerId 索引, 重发 acfc756 通过部署。生产数据库现在含 `cust_owner_updated_id_idx` 这一个新索引。
 
