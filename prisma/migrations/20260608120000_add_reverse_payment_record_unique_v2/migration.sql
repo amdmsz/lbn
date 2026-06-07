@@ -40,6 +40,20 @@ PREPARE reverse_create_stmt FROM @reverse_create_sql;
 EXECUTE reverse_create_stmt;
 DEALLOCATE PREPARE reverse_create_stmt;
 
--- DROP INDEX IF EXISTS is supported on MariaDB 10.0.2+ standalone form
-DROP INDEX IF EXISTS `reversepaymentrecord_sourcePaymentRecordId_idx`
-  ON `reversepaymentrecord`;
+-- Conditional DROP — also via information_schema, since this MariaDB
+-- version rejects `DROP INDEX IF EXISTS` syntax. Skip if the legacy
+-- non-unique index name doesn't exist (already migrated DB or fresh DB).
+SET @reverse_legacy_exists := (
+  SELECT COUNT(*) FROM information_schema.STATISTICS
+  WHERE table_schema = DATABASE()
+    AND table_name = 'reversepaymentrecord'
+    AND index_name = 'reversepaymentrecord_sourcePaymentRecordId_idx'
+);
+SET @reverse_drop_sql := IF(
+  @reverse_legacy_exists > 0,
+  'DROP INDEX `reversepaymentrecord_sourcePaymentRecordId_idx` ON `reversepaymentrecord`',
+  'DO 0'
+);
+PREPARE reverse_drop_stmt FROM @reverse_drop_sql;
+EXECUTE reverse_drop_stmt;
+DEALLOCATE PREPARE reverse_drop_stmt;
