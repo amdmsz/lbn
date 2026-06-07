@@ -583,8 +583,10 @@ async function processLeadImportRowTx(
       // F06 修复: existingLeadMap 是 batch 开始时的快照, 多 batch (或同一销售
       // 点两次上传) 并发时, 另一 batch 可能已在本 batch 期间写入了同 phone 的
       // lead. 创建前再 tx 内查一次, 命中则降级为 DUPLICATE 不创建.
+      // R03 修复: 必须套 withVisibleLeadWhere 跟 line 805 的 scope 对齐,
+      // 否则跨团队 lead.id 会被泄漏到本批次结果里 (信息泄漏破口).
       const liveExistingLead = await tx.lead.findFirst({
-        where: { phone: normalizedPhone },
+        where: withVisibleLeadWhere({ phone: normalizedPhone }),
         select: { id: true, phone: true, name: true },
       });
       if (liveExistingLead) {

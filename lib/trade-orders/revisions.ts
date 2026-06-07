@@ -20,9 +20,10 @@ import {
   OperationModule,
   OperationTargetType,
   Prisma,
+  SalesOrderReviewStatus,
+  SalesSubOrderStatus,
   ShippingFulfillmentStatus,
   ShippingTaskStatus,
-  SalesSubOrderStatus,
   TradeOrderRevisionKind,
   TradeOrderRevisionStatus,
   TradeOrderStatus,
@@ -249,7 +250,16 @@ export async function requestTradeOrderRevision(
   let normalizedPatchedLines: Array<{ itemId: string; newQty: number }> = [];
   if (input.kind === TradeOrderRevisionKind.REDUCE_QUANTITY && input.patchedLines) {
     const itemMap = new Map(tradeOrder.items.map((item) => [item.id, item]));
+    // R04 修复: 同 itemId 重复时直接抛错, 避免静默吞掉前一次修改
+    const seenItemIds = new Set<string>();
     for (const patch of input.patchedLines) {
+      if (seenItemIds.has(patch.itemId)) {
+        throw new Error(
+          `商品行 ${patch.itemId} 在同一申请里重复出现, 请合并为一条`,
+        );
+      }
+      seenItemIds.add(patch.itemId);
+
       const item = itemMap.get(patch.itemId);
       if (!item) {
         throw new Error(`商品行 ${patch.itemId} 不存在或不属于本订单`);
@@ -592,21 +602,27 @@ export async function reviewTradeOrderRevision(
             where: { id: item.id },
             data: { qty: patch.newQty, subtotal: newSubtotal },
           });
-          // 组件 qty 也按比例缩 (简化: 同步缩放)
-          const ratio = patch.newQty / item.qty;
+          // R01 修复: ratio 用 Prisma.Decimal, 不用 JS Number (避免 1/3 精度漂移
+          // 导致组件金额合计 != 父行 subtotal). R02 修复: newCompQty=0 时同步删
+          // 组件, 不强制 max(1) 留幻影库存.
+          const ratio = new Prisma.Decimal(patch.newQty).dividedBy(item.qty);
           const components = await tx.tradeOrderItemComponent.findMany({
             where: { tradeOrderItemId: item.id },
             select: { id: true, qty: true, allocatedSubtotal: true },
           });
           for (const comp of components) {
-            const newCompQty = Math.max(1, Math.round(comp.qty * ratio));
-            await tx.tradeOrderItemComponent.update({
-              where: { id: comp.id },
-              data: {
-                qty: newCompQty,
-                allocatedSubtotal: comp.allocatedSubtotal.mul(ratio),
-              },
-            });
+            const newCompQty = Math.max(0, Math.round(comp.qty * patch.newQty / item.qty));
+            if (newCompQty === 0) {
+              await tx.tradeOrderItemComponent.delete({ where: { id: comp.id } });
+            } else {
+              await tx.tradeOrderItemComponent.update({
+                where: { id: comp.id },
+                data: {
+                  qty: newCompQty,
+                  allocatedSubtotal: comp.allocatedSubtotal.mul(ratio),
+                },
+              });
+            }
           }
           reduceTouchedItemIds.push(item.id);
         }
@@ -638,7 +654,7 @@ export async function reviewTradeOrderRevision(
           remainingAmount: aggregateDeal,
           // 回 DRAFT, reviewStatus 也回 PENDING_REVIEW 让销售重新提交
           tradeStatus: TradeOrderStatus.DRAFT,
-          reviewStatus: "PENDING_REVIEW",
+          reviewStatus: SalesOrderReviewStatus.PENDING_REVIEW,
           reviewerId: null,
           reviewedAt: null,
           updatedById: actor.id,
