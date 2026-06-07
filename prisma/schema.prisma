@@ -1618,12 +1618,6 @@ model Supplier {
   salesOrders   SalesOrder[]
   shippingTasks ShippingTask[]        @relation("ShippingTaskSupplier")
   exportBatches ShippingExportBatch[]
-  // F09 FK 补全 (反向 relation, 配合下面 child 表的 forward relation)
-  // 注: 物理 FK constraint 尚未通过 migration 落地, 等 diagnose-fk-orphans.mjs
-  //     全部 orphan=0 后再补 SQL. 见 docs/migrations/fk-补全-plan.md
-  productBundleItems       ProductBundleItem[]
-  tradeOrderItemComponents TradeOrderItemComponent[]
-  shippingExportLines      ShippingExportLine[]
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
 
@@ -1653,9 +1647,6 @@ model Product {
   updatedBy             User?            @relation("ProductUpdatedBy", fields: [updatedById], references: [id])
   skus                  ProductSku[]
   salesOrderItems       SalesOrderItem[]
-  // F09 FK 补全 (反向 relation), 物理 FK 待 orphan diagnose 后再加.
-  productBundleItems       ProductBundleItem[]
-  tradeOrderItemComponents TradeOrderItemComponent[]
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
 
@@ -1675,9 +1666,6 @@ model ProductSku {
   defaultInsuranceAmount Decimal          @default(0) @db.Decimal(10, 2)
   enabled                Boolean          @default(true)
   salesOrderItems        SalesOrderItem[]
-  // F09 FK 补全 (反向 relation), 物理 FK 待 orphan diagnose 后再加.
-  productBundleItems       ProductBundleItem[]
-  tradeOrderItemComponents TradeOrderItemComponent[]
   createdAt              DateTime         @default(now())
   updatedAt              DateTime         @updatedAt
 
@@ -1725,14 +1713,8 @@ model ProductBundleItem {
   bundle     ProductBundle @relation(fields: [bundleId], references: [id])
   lineNo     Int
   supplierId String
-  // F09 FK 补全 forward relation. 物理 FK constraint 待 diagnose-fk-orphans.mjs
-  // 全部 orphan=0 后再补 SQL (见 docs/migrations/fk-补全-plan.md).
-  // 当前没有 DB 层外键, Prisma include 可能在历史 orphan 上返回 null.
-  supplier   Supplier      @relation(fields: [supplierId], references: [id])
   productId  String
-  product    Product       @relation(fields: [productId], references: [id])
   skuId      String
-  sku        ProductSku    @relation(fields: [skuId], references: [id])
   qty        Int
   sortOrder  Int           @default(0)
   enabled    Boolean       @default(true)
@@ -1741,9 +1723,6 @@ model ProductBundleItem {
 
   @@unique([bundleId, lineNo])
   @@index([bundleId, sortOrder], map: "productbundleitem_bundleId_sortorder_idx")
-  @@index([supplierId])
-  @@index([productId])
-  @@index([skuId])
   @@map("productbundleitem")
 }
 
@@ -1879,13 +1858,8 @@ model TradeOrderItemComponent {
   componentType                  TradeOrderComponentType
   componentSourceType            TradeOrderItemComponentSourceType
   supplierId                     String
-  // F09 FK 补全 forward relation. 物理 FK constraint 尚未通过 migration 落地.
-  // 详见 docs/migrations/fk-补全-plan.md.
-  supplier                       Supplier                          @relation(fields: [supplierId], references: [id])
   productId                      String?
-  product                        Product?                          @relation(fields: [productId], references: [id])
   skuId                          String?
-  sku                            ProductSku?                       @relation(fields: [skuId], references: [id])
   supplierNameSnapshot           String
   productNameSnapshot            String
   skuNameSnapshot                String?
@@ -1903,9 +1877,6 @@ model TradeOrderItemComponent {
 
   @@unique([tradeOrderItemId, componentSeq])
   @@index([tradeOrderId, supplierId, createdAt])
-  @@index([supplierId])
-  @@index([productId])
-  @@index([skuId])
   @@map("tradeorderitemcomponent")
 }
 
@@ -2193,9 +2164,6 @@ model ShippingExportLine {
   shippingTaskId            String?
   shippingTask              ShippingTask?       @relation(fields: [shippingTaskId], references: [id])
   supplierId                String
-  // F09 FK 补全 forward relation. 物理 FK constraint 尚未通过 migration 落地.
-  // 详见 docs/migrations/fk-补全-plan.md.
-  supplier                  Supplier            @relation(fields: [supplierId], references: [id])
   tradeNoSnapshot           String
   subOrderNoSnapshot        String
   receiverNameSnapshot      String
@@ -2213,7 +2181,6 @@ model ShippingExportLine {
   @@unique([exportBatchId, rowNo])
   @@index([shippingTaskId])
   @@index([tradeOrderId, salesOrderId])
-  @@index([supplierId])
   @@map("shippingexportline")
 }
 

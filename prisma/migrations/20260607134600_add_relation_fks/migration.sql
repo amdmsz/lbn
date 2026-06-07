@@ -4,10 +4,10 @@
 --   - audit 指出 productbundleitem / tradeorderitemcomponent / shippingexportline
 --     三张子表对 supplier / product / productsku 没有物理外键 (虽然字段命名
 --     遵循 prisma FK 习惯).
---   - 本次 PR 已经在 prisma/schema.prisma 把 forward + 反向 `@relation`
---     声明补齐 (含 `@@index([supplierId])` / `@@index([productId])` /
---     `@@index([skuId])`), Prisma client 端从此可以 `include: { supplier: true }`,
---     但 **此 migration 的 SQL 内容刻意保持为空**.
+--   - 本目录原计划同时上线 schema 反向 + forward relation, 但 prisma
+--     migrate diff 在 deploy 时检测到 schema 与真实库不同步会拒绝放行,
+--     所以 schema 端的 `@relation` 改动也撤回了, 留待业务确认 orphan 诊断后
+--     一次性 (schema relation + ADD CONSTRAINT DDL) 在新 migration 里上.
 --
 -- BLOCKED — 直接 apply 这个 migration 不会创建任何 FK constraint, 这是有意为之:
 --   1. 先在能访问目标库的环境跑 `node scripts/diagnose-fk-orphans.mjs`,
