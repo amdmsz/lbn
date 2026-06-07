@@ -455,6 +455,14 @@ async function collectForceDeleteDependenciesTx(
     select: { id: true },
   });
 
+  // 今晚新加的 TradeOrderRevisionRequest 跟 TradeOrder 是 ON DELETE RESTRICT.
+  // 强删客户时必须先清掉关联的 revision 申请, 否则 FK 违约整个事务回滚 —
+  // 用户会发现 "含 revision 历史的客户都不能强删".
+  const revisionRequests = await tx.tradeOrderRevisionRequest.findMany({
+    where: { tradeOrderId: { in: tradeOrderIds } },
+    select: { id: true },
+  });
+
   return {
     tradeOrderIds,
     tradeOrderItemIds,
@@ -474,6 +482,9 @@ async function collectForceDeleteDependenciesTx(
     liveInvitationIds,
     liveAudienceRecordIds,
     shippingExportLineIds: uniqueStrings(shippingExportLines.map((record) => record.id)),
+    tradeOrderRevisionRequestIds: uniqueStrings(
+      revisionRequests.map((record) => record.id),
+    ),
     tradeOrders: tradeOrders.map((record) => ({
       id: record.id,
       tradeNo: record.tradeNo,
@@ -488,6 +499,7 @@ async function collectForceDeleteDependenciesTx(
 function buildDependencyCounts(dependencies: ForceDeleteDependencySnapshot) {
   return {
     tradeOrders: dependencies.tradeOrderIds.length,
+    tradeOrderRevisionRequests: dependencies.tradeOrderRevisionRequestIds.length,
     salesOrders: dependencies.salesOrderIds.length,
     legacyOrders: dependencies.legacyOrderIds.length,
     giftRecords: dependencies.giftRecordIds.length,
@@ -777,6 +789,12 @@ async function executeForceDeleteCleanupTx(
   deleted.salesOrders = (
     await tx.salesOrder.deleteMany({
       where: { id: { in: dependencies.salesOrderIds } },
+    })
+  ).count;
+  // 必须在 tx.tradeOrder.deleteMany 之前清 RevisionRequest, 不然 FK RESTRICT 报错
+  deleted.tradeOrderRevisionRequests = (
+    await tx.tradeOrderRevisionRequest.deleteMany({
+      where: { id: { in: dependencies.tradeOrderRevisionRequestIds } },
     })
   ).count;
   deleted.tradeOrders = (

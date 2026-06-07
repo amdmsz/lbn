@@ -753,6 +753,12 @@ export async function purgeTradeOrderTarget(
     where: { tradeOrderId: input.targetId },
   });
 
+  // 必须在 tx.tradeOrder.delete 之前清 RevisionRequest, 否则 FK RESTRICT 违约.
+  // 回收站 30 天后真删 TradeOrder 也走这条路径.
+  await db.tradeOrderRevisionRequest.deleteMany({
+    where: { tradeOrderId: input.targetId },
+  });
+
   await db.tradeOrder.delete({
     where: { id: input.targetId },
   });
