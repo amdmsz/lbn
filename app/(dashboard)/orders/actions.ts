@@ -351,9 +351,10 @@ export async function moveTradeOrderToRecycleBinAction(
     });
 
     if (result.status !== "blocked") {
-      revalidatePath("/orders");
+      // F17 wave-3: 主单回收 — list + 该单 tag; /fulfillment + /recycle-bin 是聚合页保留 path.
+      updateTag(CACHE_TAGS.tradeOrderList);
+      updateTag(CACHE_TAGS.tradeOrder(tradeOrderId));
       revalidatePath("/fulfillment");
-      revalidatePath(`/orders/${tradeOrderId}`);
       revalidatePath("/recycle-bin");
     }
 
@@ -407,18 +408,22 @@ export async function submitPaymentRecordAction(formData: FormData) {
       },
     );
 
+    // F17 wave-3: 收款提交 — payment list tag + 关联 trade-order + 客户 tag;
+    // 聚合页 /payment-records /collection-tasks /dashboard /reports 仍走 path 失效.
+    updateTag(CACHE_TAGS.paymentList);
+    if (result.paymentRecordId) {
+      updateTag(CACHE_TAGS.payment(result.paymentRecordId));
+    }
+    if (result.salesOrderId) {
+      updateTag(CACHE_TAGS.tradeOrder(result.salesOrderId));
+    }
+    if (result.customerId) {
+      updateTag(CACHE_TAGS.customer(result.customerId));
+    }
     revalidatePath("/payment-records");
     revalidatePath("/collection-tasks");
     revalidatePath("/dashboard");
     revalidatePath("/reports");
-
-    if (result.salesOrderId) {
-      revalidatePath(`/orders/${result.salesOrderId}`);
-    }
-
-    if (result.customerId) {
-      revalidatePath(`/customers/${result.customerId}`);
-    }
 
     redirect(buildRedirectTarget(redirectTo, "success", "收款记录已提交。"));
   } catch (error) {
@@ -452,18 +457,22 @@ export async function reviewPaymentRecordAction(formData: FormData) {
       },
     );
 
+    // F17 wave-3: 收款审核 — payment list tag + 关联 trade-order + 客户 tag;
+    // 聚合页 /payment-records /collection-tasks /dashboard /reports 仍走 path 失效.
+    updateTag(CACHE_TAGS.paymentList);
+    if (result.paymentRecordId) {
+      updateTag(CACHE_TAGS.payment(result.paymentRecordId));
+    }
+    if (result.salesOrderId) {
+      updateTag(CACHE_TAGS.tradeOrder(result.salesOrderId));
+    }
+    if (result.customerId) {
+      updateTag(CACHE_TAGS.customer(result.customerId));
+    }
     revalidatePath("/payment-records");
     revalidatePath("/collection-tasks");
     revalidatePath("/dashboard");
     revalidatePath("/reports");
-
-    if (result.salesOrderId) {
-      revalidatePath(`/orders/${result.salesOrderId}`);
-    }
-
-    if (result.customerId) {
-      revalidatePath(`/customers/${result.customerId}`);
-    }
 
     redirect(buildRedirectTarget(redirectTo, "success", "收款记录已完成审核。"));
   } catch (error) {
@@ -499,18 +508,18 @@ export async function upsertCollectionTaskAction(formData: FormData) {
       },
     );
 
+    // F17 wave-3: 催收任务保存 — order list + 关联订单 + 客户 tag;
+    // 聚合页 /collection-tasks /dashboard /reports 仍走 path 失效.
+    updateTag(CACHE_TAGS.tradeOrderList);
+    if (result.salesOrderId) {
+      updateTag(CACHE_TAGS.tradeOrder(result.salesOrderId));
+    }
+    if (result.customerId) {
+      updateTag(CACHE_TAGS.customer(result.customerId));
+    }
     revalidatePath("/collection-tasks");
-    revalidatePath("/orders");
     revalidatePath("/dashboard");
     revalidatePath("/reports");
-
-    if (result.salesOrderId) {
-      revalidatePath(`/orders/${result.salesOrderId}`);
-    }
-
-    if (result.customerId) {
-      revalidatePath(`/customers/${result.customerId}`);
-    }
 
     redirect(buildRedirectTarget(redirectTo, "success", "催收任务已保存。"));
   } catch (error) {
@@ -547,17 +556,17 @@ export async function updateCollectionTaskAction(formData: FormData) {
       },
     );
 
+    // F17 wave-3: 催收任务更新 — 关联订单 + 客户 tag;
+    // 聚合页 /collection-tasks /dashboard /reports 仍走 path 失效.
+    if (result.salesOrderId) {
+      updateTag(CACHE_TAGS.tradeOrder(result.salesOrderId));
+    }
+    if (result.customerId) {
+      updateTag(CACHE_TAGS.customer(result.customerId));
+    }
     revalidatePath("/collection-tasks");
     revalidatePath("/dashboard");
     revalidatePath("/reports");
-
-    if (result.salesOrderId) {
-      revalidatePath(`/orders/${result.salesOrderId}`);
-    }
-
-    if (result.customerId) {
-      revalidatePath(`/customers/${result.customerId}`);
-    }
 
     redirect(buildRedirectTarget(redirectTo, "success", "催收任务已更新。"));
   } catch (error) {
@@ -594,11 +603,13 @@ export async function updateLogisticsFollowUpTaskAction(formData: FormData) {
       },
     );
 
+    // F17 wave-3: 物流跟进 — 关联订单 + 客户 tag;
+    // 聚合页 /shipping /dashboard /reports 仍走 path 失效.
+    updateTag(CACHE_TAGS.tradeOrder(result.salesOrderId));
+    updateTag(CACHE_TAGS.customer(result.customerId));
     revalidatePath("/shipping");
     revalidatePath("/dashboard");
     revalidatePath("/reports");
-    revalidatePath(`/orders/${result.salesOrderId}`);
-    revalidatePath(`/customers/${result.customerId}`);
 
     redirect(buildRedirectTarget(redirectTo, "success", "物流跟进任务已更新。"));
   } catch (error) {
@@ -689,17 +700,19 @@ export async function reviewTradeOrderRevisionAction(
 
     const tradeOrderId = getFormValue(formData, "tradeOrderId");
     const customerId = getFormValue(formData, "customerId");
-    revalidatePath("/orders");
+    // F17 wave-3: 撤单审核 — order list + 该单 + 客户 tag;
+    // 聚合页 /fulfillment /shipping /payment-records /collection-tasks 仍走 path 失效.
+    updateTag(CACHE_TAGS.tradeOrderList);
     if (tradeOrderId) {
-      revalidatePath(`/orders/${tradeOrderId}`);
+      updateTag(CACHE_TAGS.tradeOrder(tradeOrderId));
+    }
+    if (customerId) {
+      updateTag(CACHE_TAGS.customer(customerId));
     }
     revalidatePath("/fulfillment");
     revalidatePath("/shipping");
     revalidatePath("/payment-records");
     revalidatePath("/collection-tasks");
-    if (customerId) {
-      revalidatePath(`/customers/${customerId}`);
-    }
 
     return {
       status: "success",
@@ -724,12 +737,13 @@ export async function withdrawTradeOrderRevisionAction(
 
     const tradeOrderId = getFormValue(formData, "tradeOrderId");
     const customerId = getFormValue(formData, "customerId");
-    revalidatePath("/orders");
+    // F17 wave-3: 撤单申请撤回 — order list + 该单 + 客户 tag.
+    updateTag(CACHE_TAGS.tradeOrderList);
     if (tradeOrderId) {
-      revalidatePath(`/orders/${tradeOrderId}`);
+      updateTag(CACHE_TAGS.tradeOrder(tradeOrderId));
     }
     if (customerId) {
-      revalidatePath(`/customers/${customerId}`);
+      updateTag(CACHE_TAGS.customer(customerId));
     }
 
     return { status: "success", message: "撤单申请已撤回" };
@@ -802,15 +816,19 @@ export async function approveRefundAction(
   try {
     const actor = await getTradeOrderActionActor();
     const { approveRefund } = await import("@/lib/payments/refunds");
-    await approveRefund(actor, {
+    const refund = await approveRefund(actor, {
       refundRequestId: getFormValue(formData, "refundRequestId"),
       approvedAmount: getFormValue(formData, "approvedAmount"),
       reviewNote: getFormValue(formData, "reviewNote") || undefined,
     });
 
     const tradeOrderId = getFormValue(formData, "tradeOrderId");
+    // F17 wave-3: 退款审批 — refund list + 该申请 + 关联订单 tag;
+    // 聚合页 /finance/refunds 仍走 path 失效.
+    updateTag(CACHE_TAGS.refundList);
+    updateTag(CACHE_TAGS.refund(refund.id));
+    if (tradeOrderId) updateTag(CACHE_TAGS.tradeOrder(tradeOrderId));
     revalidatePath("/finance/refunds");
-    if (tradeOrderId) revalidatePath(`/orders/${tradeOrderId}`);
     return { status: "success", message: "退款申请已批准, 等待财务记录出账" };
   } catch (error) {
     return { status: "error", message: getErrorMessage(error) };
@@ -823,14 +841,18 @@ export async function rejectRefundAction(
   try {
     const actor = await getTradeOrderActionActor();
     const { rejectRefund } = await import("@/lib/payments/refunds");
-    await rejectRefund(actor, {
+    const refund = await rejectRefund(actor, {
       refundRequestId: getFormValue(formData, "refundRequestId"),
       rejectReason: getFormValue(formData, "rejectReason"),
     });
 
     const tradeOrderId = getFormValue(formData, "tradeOrderId");
+    // F17 wave-3: 退款驳回 — refund list + 该申请 + 关联订单 tag;
+    // 聚合页 /finance/refunds 仍走 path 失效.
+    updateTag(CACHE_TAGS.refundList);
+    updateTag(CACHE_TAGS.refund(refund.id));
+    if (tradeOrderId) updateTag(CACHE_TAGS.tradeOrder(tradeOrderId));
     revalidatePath("/finance/refunds");
-    if (tradeOrderId) revalidatePath(`/orders/${tradeOrderId}`);
     return { status: "success", message: "退款申请已驳回" };
   } catch (error) {
     return { status: "error", message: getErrorMessage(error) };
@@ -858,10 +880,15 @@ export async function recordRefundPayoutAction(
 
     const tradeOrderId = getFormValue(formData, "tradeOrderId");
     const customerId = getFormValue(formData, "customerId");
+    // F17 wave-3: 退款出账 — refund + payment 双 list + 该申请 + 订单 + 客户 tag;
+    // 聚合页 /finance/refunds /payment-records 仍走 path 失效.
+    updateTag(CACHE_TAGS.refundList);
+    updateTag(CACHE_TAGS.refund(result.refund.id));
+    updateTag(CACHE_TAGS.paymentList);
+    if (tradeOrderId) updateTag(CACHE_TAGS.tradeOrder(tradeOrderId));
+    if (customerId) updateTag(CACHE_TAGS.customer(customerId));
     revalidatePath("/finance/refunds");
     revalidatePath("/payment-records");
-    if (tradeOrderId) revalidatePath(`/orders/${tradeOrderId}`);
-    if (customerId) revalidatePath(`/customers/${customerId}`);
     return {
       status: "success",
       message: `已记录出账 ${result.reverseRecords.length} 条反向凭证, 退款流程完成`,
@@ -877,13 +904,17 @@ export async function withdrawRefundAction(
   try {
     const actor = await getTradeOrderActionActor();
     const { withdrawRefund } = await import("@/lib/payments/refunds");
-    await withdrawRefund(actor, {
+    const refund = await withdrawRefund(actor, {
       refundRequestId: getFormValue(formData, "refundRequestId"),
     });
 
     const tradeOrderId = getFormValue(formData, "tradeOrderId");
+    // F17 wave-3: 退款撤回 — refund list + 该申请 + 关联订单 tag;
+    // 聚合页 /finance/refunds 仍走 path 失效.
+    updateTag(CACHE_TAGS.refundList);
+    updateTag(CACHE_TAGS.refund(refund.id));
+    if (tradeOrderId) updateTag(CACHE_TAGS.tradeOrder(tradeOrderId));
     revalidatePath("/finance/refunds");
-    if (tradeOrderId) revalidatePath(`/orders/${tradeOrderId}`);
     return { status: "success", message: "退款申请已撤回" };
   } catch (error) {
     return { status: "error", message: getErrorMessage(error) };

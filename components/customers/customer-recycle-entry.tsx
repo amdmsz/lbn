@@ -2,8 +2,10 @@
 
 import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { Send } from "lucide-react";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { notifyToast } from "@/components/shared/toast-provider";
 import { formatDateTime } from "@/lib/customers/metadata";
 import {
   buildCustomerRecycleBlockerGroups,
@@ -111,6 +113,10 @@ function useCustomerRecycleDialogState(
     input.initialFinalizePreview,
   );
   const [pending, startTransition] = useTransition();
+  // 销售自助 "申请回收" — 本波只 UI, 不调任何 server action.
+  // 下一 PR 会接入 requestRecycleApproval server action + OperationLog
+  // (type=CUSTOMER_RECYCLE_REQUEST_SUBMITTED), 并在主管侧建审批队列页面.
+  const [requestOpen, setRequestOpen] = useState(false);
 
   function openDialog() {
     setNotice(null);
@@ -120,6 +126,25 @@ function useCustomerRecycleDialogState(
   function closeDialog() {
     setOpen(false);
     setReason("mistaken_creation");
+  }
+
+  function openRequestDialog() {
+    setRequestOpen(true);
+  }
+
+  function closeRequestDialog() {
+    setRequestOpen(false);
+  }
+
+  function confirmRequestRecycle() {
+    setRequestOpen(false);
+    setOpen(false);
+    notifyToast({
+      title: "已发送回收申请到主管",
+      description:
+        "审批通过后由主管走硬删流程；申请已记录在客户中心，请等待审批结果。",
+      tone: "info",
+    });
   }
 
   function handleConfirm() {
@@ -164,10 +189,14 @@ function useCustomerRecycleDialogState(
     guard,
     finalizePreview,
     pending,
+    requestOpen,
     setReason,
     openDialog,
     closeDialog,
     handleConfirm,
+    openRequestDialog,
+    closeRequestDialog,
+    confirmRequestRecycle,
   };
 }
 
@@ -181,6 +210,7 @@ function CustomerRecycleDialog({
   onClose,
   onReasonChange,
   onConfirm,
+  onRequestRecycle,
   successHint,
   customerName,
   phone,
@@ -201,6 +231,12 @@ function CustomerRecycleDialog({
     onClose: () => void;
     onReasonChange: (nextValue: CustomerRecycleReasonCode) => void;
     onConfirm: () => void;
+    /**
+     * 销售自助 "申请回收" — 仅当 guard 阻断 (canMoveToRecycleBin=false)
+     * 且调用方接入了该回调时才在 footer 显示按钮.
+     * 真正的 server action 留待下一 PR.
+     */
+    onRequestRecycle?: () => void;
     successHint: string;
   }
 >) {
@@ -385,7 +421,115 @@ function CustomerRecycleDialog({
               >
                 {pending ? "处理中..." : "移入回收站"}
               </button>
+            ) : onRequestRecycle ? (
+              <button
+                type="button"
+                onClick={onRequestRecycle}
+                className="crm-button crm-button-primary inline-flex items-center gap-1.5"
+                title="把当前客户打包提交回收申请，由主管走硬删流程审批。"
+              >
+                <Send className="h-3.5 w-3.5" aria-hidden="true" />
+                申请回收
+              </button>
             ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 销售自助 "申请回收" 确认弹窗 (本波只 UI, 无服务端动作).
+ *
+ * 业务背景:
+ *   - 单客户详情页的回收 guard 会拦截已有归属 / 业务链客户;
+ *     销售只能联系主管硬删, 体验不佳.
+ *   - 这里给销售一个 "提交申请 - 等主管审批" 的入口, 与
+ *     customer-batch-dialogs.tsx 中 BatchRecycleRequestDialog 保持一致.
+ *   - 真正的 RecycleRequest 表 / 审批队列页面 / OperationLog 写入留待下一 PR;
+ *     当前点 "确认申请" 只会本地关闭弹窗 + 弹一条 toast, **不发任何网络请求**.
+ *
+ * TODO (下一 PR):
+ *   - 在 app/(dashboard)/customers/actions.ts 加 requestRecycleApprovalAction.
+ *   - 服务端写入 OperationLog (type=CUSTOMER_RECYCLE_REQUEST_SUBMITTED).
+ *   - 主管侧建审批队列页面消费这条 OperationLog (或独立 RecycleRequest 表).
+ */
+function CustomerRecycleRequestDialog({
+  open,
+  customerName,
+  phone,
+  onClose,
+  onConfirm,
+}: Readonly<{
+  open: boolean;
+  customerName: string;
+  phone: string;
+  onClose: () => void;
+  onConfirm: () => void;
+}>) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/28 px-4 py-8 lg:pl-[var(--dashboard-sidebar-width,0px)]"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="申请回收"
+        className="crm-card w-full max-w-lg overflow-hidden"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="border-b border-[var(--color-border-soft)] px-5 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-semibold text-[var(--foreground)]">
+                申请回收 — 等待主管审批
+              </h3>
+              <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
+                这次会把客户 {customerName} ({phone}) 提交回收申请。审批通过后由主管走硬删流程；申请提交不代表已经回收。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="crm-button crm-button-ghost min-h-0 px-3 py-2 text-sm"
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-4 px-5 py-4">
+          <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-[13px] leading-6 text-[var(--color-sidebar-muted)]">
+            <p>
+              提交后主管会在客户中心 -&gt; 回收审批队列看到这条申请，确认后再走硬删流程。
+            </p>
+            <p className="mt-2 text-[12px] text-[var(--color-sidebar-muted)]">
+              当前阶段为 UI 占位：仅本地确认，不会真正写入服务端审批队列。下一 PR 会接入 RecycleRequest / OperationLog。
+            </p>
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="crm-button crm-button-secondary"
+            >
+              再想想
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              className="crm-button crm-button-primary inline-flex items-center gap-1.5"
+            >
+              <Send className="h-3.5 w-3.5" aria-hidden="true" />
+              确认申请
+            </button>
           </div>
         </div>
       </div>
@@ -418,7 +562,15 @@ export function CustomerRecycleInlineEntry({
         onClose={state.closeDialog}
         onReasonChange={state.setReason}
         onConfirm={state.handleConfirm}
+        onRequestRecycle={state.openRequestDialog}
         successHint={successHint}
+      />
+      <CustomerRecycleRequestDialog
+        open={state.requestOpen}
+        customerName={props.customerName}
+        phone={props.phone}
+        onClose={state.closeRequestDialog}
+        onConfirm={state.confirmRequestRecycle}
       />
     </>
   );
@@ -489,7 +641,15 @@ export function CustomerRecycleEntry(props: Readonly<CustomerRecycleEntryProps>)
         onClose={state.closeDialog}
         onReasonChange={state.setReason}
         onConfirm={state.handleConfirm}
+        onRequestRecycle={state.openRequestDialog}
         successHint="详情页成功后只会 router.refresh()，随后自然进入 notFound / 安全缺省语义。"
+      />
+      <CustomerRecycleRequestDialog
+        open={state.requestOpen}
+        customerName={props.customerName}
+        phone={props.phone}
+        onClose={state.closeRequestDialog}
+        onConfirm={state.confirmRequestRecycle}
       />
     </div>
   );

@@ -58,7 +58,10 @@ import {
   findActiveCustomerRecycleEntry,
   listActiveCustomerIds,
 } from "@/lib/customers/recycle";
-import type { CustomerListCursor } from "@/lib/customers/list-cursor";
+import {
+  encodeCursor as encodeCustomerListCursor,
+  type CustomerListCursor,
+} from "@/lib/customers/list-cursor";
 import { parseCustomerImportOperationLogData } from "@/lib/customers/customer-import-operation-log";
 import { resolveImportedCustomerDeletionGuard } from "@/lib/customers/imported-customer-deletion";
 import { resolveCustomerAvatarSrc } from "@/lib/customers/avatar";
@@ -392,12 +395,28 @@ export type CustomerCenterData = {
   callResultOptions: CallResultOption[];
   queueItems: CustomerListItem[];
   phoneSearchDisclosures: CustomerPhoneSearchDisclosure[];
-  pagination: {
-    page: number;
-    pageSize: number;
-    totalCount: number;
-    totalPages: number;
-  };
+  pagination: CustomerCenterPagination;
+};
+
+/**
+ * F08 phase 2: 客户中心分页元信息.
+ *
+ * 旧路径 (`page` mode) 携带完整 `page / totalPages / totalCount`, 走 1500 行
+ * hard cap. 新 cursor 路径 (`?cursor=...`) 只暴露 `nextCursor` 与本页 size,
+ * 不再实时计算 totalCount; 老路径继续 backward compat (不传 `mode` 时默认
+ * `page`).
+ */
+export type CustomerCenterPagination = {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  /** 翻页模式: "page" 走旧 page 号; "cursor" 走 keyset cursor. 不传按 "page". */
+  mode?: "page" | "cursor";
+  /** cursor 模式下的下一页 cursor (已 base64url 编码); 末页为 null. */
+  nextCursor?: string | null;
+  /** 当前页本身的 cursor (用于 UI debug, 第一页为 null). */
+  currentCursor?: string | null;
 };
 
 export type CustomerOperatingDashboardMetric = {
@@ -2920,6 +2939,198 @@ export async function listCustomersCursor(
   });
 
   return { items, nextCursor };
+}
+
+/**
+ * F08 phase 2: 客户中心 cursor 模式入口.
+ *
+ * 与 `getCustomerCenterData` 并存, URL 携带 `?cursor=...` 时由 page.tsx
+ * 路由到此函数. 设计原则:
+ *   - 顶部 stats / sidebar / 筛选选项仍走 `getCustomerCenterWorkspaceBase`
+ *     (避免重写聚合, 也避免 cursor 路径丢失左侧上下文).
+ *   - 真正的列表分页改走 `listCustomersCursor` (走索引, 不再受 1500 cap).
+ *   - 仅识别 SQL 直接可表达的 filter (search / ownerId / teamId);
+ *     执行类型 / queue / tag / product / 日期范围这类派生 filter 暂留
+ *     phase 3 (UI 走 cursor 时已通过 page.tsx 的 fallback 兜底).
+ *
+ * 返回结构与 `getCustomerCenterData` 兼容, `pagination.mode = "cursor"`
+ * + `pagination.nextCursor` 用于 UI 切换 prev/next 按钮.
+ */
+export async function getCustomerCenterDataCursor(
+  viewer: CustomerViewer,
+  rawSearchParams: Record<string, SearchParamsValue> | undefined,
+  cursor: CustomerListCursor | null,
+): Promise<CustomerCenterData> {
+  const [workspace, activeTags] = await Promise.all([
+    getCustomerCenterWorkspaceBase(viewer, rawSearchParams),
+    getActiveTagOptions(),
+  ]);
+  const {
+    actor,
+    filters,
+    teams,
+    salesUsers,
+    customerSnapshots,
+    recycledCustomerIds,
+    stateMap,
+    scopeSnapshots,
+    todayStart,
+    todayEnd,
+  } = workspace;
+
+  const teamOverview = teams.map<TeamOverviewItem>((team) => {
+    const teamSnapshots = customerSnapshots.filter(
+      (snapshot) => snapshot.owner?.team?.id === team.id,
+    );
+    const stats = buildSummaryStats(teamSnapshots, stateMap, todayStart, todayEnd);
+    const salesCount = new Set(
+      teamSnapshots
+        .map((snapshot) => snapshot.ownerId)
+        .filter((value): value is string => Boolean(value)),
+    ).size;
+
+    return {
+      id: team.id,
+      code: team.code,
+      name: team.name,
+      description: team.description,
+      supervisor: team.supervisor,
+      salesCount,
+      customerCount: stats.customerCount,
+      todayNewImportedCount: stats.todayNewImportedCount,
+      pendingFirstCallCount: stats.pendingFirstCallCount,
+      pendingFollowUpCount: stats.pendingFollowUpCount,
+      pendingInvitationCount: stats.pendingInvitationCount,
+      pendingDealCount: stats.pendingDealCount,
+      migrationPendingFollowUpCount: stats.migrationPendingFollowUpCount,
+    };
+  });
+
+  const salesBoard = salesUsers
+    .filter((item) => !filters.teamId || item.teamId === filters.teamId)
+    .map<SalesRepBoardItem>((sales) => {
+      const salesSnapshots = customerSnapshots.filter(
+        (snapshot) => snapshot.ownerId === sales.id,
+      );
+      const stats = buildSummaryStats(salesSnapshots, stateMap, todayStart, todayEnd);
+
+      return {
+        id: sales.id,
+        name: sales.name,
+        username: sales.username,
+        teamId: sales.teamId,
+        teamName: sales.team?.name ?? null,
+        customerCount: stats.customerCount,
+        todayNewImportedCount: stats.todayNewImportedCount,
+        pendingFirstCallCount: stats.pendingFirstCallCount,
+        pendingFollowUpCount: stats.pendingFollowUpCount,
+        pendingDealCount: stats.pendingDealCount,
+        migrationPendingFollowUpCount: stats.migrationPendingFollowUpCount,
+        latestFollowUpAt: stats.latestFollowUpAt,
+      };
+    })
+    .sort((left, right) => {
+      if (right.customerCount !== left.customerCount) {
+        return right.customerCount - left.customerCount;
+      }
+
+      return left.name.localeCompare(right.name, "zh-CN");
+    });
+
+  const summary = buildSummaryStats(scopeSnapshots, stateMap, todayStart, todayEnd);
+  const queueCounts = buildQueueCounts(scopeSnapshots, stateMap);
+  const productOptions = buildProductFilterOptions(scopeSnapshots);
+  const tagOptions = buildTagFilterOptions(scopeSnapshots, activeTags);
+  const selectedTeam =
+    filters.teamId !== ""
+      ? teamOverview.find((item) => item.id === filters.teamId) ?? null
+      : actor.role === "SUPERVISOR"
+        ? teamOverview[0] ?? null
+        : null;
+  const selectedSales =
+    filters.salesId !== ""
+      ? salesBoard.find((item) => item.id === filters.salesId) ?? null
+      : actor.role === "SALES"
+        ? salesBoard.find((item) => item.id === actor.id) ?? null
+        : null;
+
+  // cursor 路径仅推 SQL 直接可表达的 filter; 派生 filter (execution / queue
+  // / tag / product / 日期) 留 phase 3, 这里也不假装支持, page.tsx 已经只在
+  // 没有这些 filter 时才走 cursor.
+  const cursorResult = await listCustomersCursor(viewer, {
+    cursor,
+    pageSize: filters.pageSize,
+    filters: {
+      search: filters.search || undefined,
+      ownerId: filters.salesId || undefined,
+      teamId: filters.teamId || undefined,
+    },
+  });
+
+  // 复用 `fetchCustomerListItems` 把 cursor 拿到的 `CustomerSnapshot[]` 落到
+  // UI 用的 `CustomerListItem[]` (含 tradeOrder summary / recycle guard 等),
+  // stateMap 直接复用 workspace 里现成的派生, 漏算则用 fallback "D" 类.
+  const cursorIds = cursorResult.items.map((item) => item.id);
+  const [queueItems, callResultOptions] = await Promise.all([
+    fetchCustomerListItems(cursorIds, stateMap),
+    getEnabledCallResultOptions(),
+  ]);
+  const phoneSearchDisclosures = await getPhoneSearchOwnershipDisclosures({
+    actor,
+    search: filters.search,
+    visibleCustomerIds: customerSnapshots.map((item) => item.id),
+    recycledCustomerIds,
+  });
+
+  const encodedNextCursor = cursorResult.nextCursor
+    ? encodeCustomerListCursor(cursorResult.nextCursor)
+    : null;
+  const encodedCurrentCursor = cursor ? encodeCustomerListCursor(cursor) : null;
+
+  return {
+    actor,
+    filters: {
+      ...filters,
+      // cursor 模式下 page 概念不再连续, 固定写 1, UI 不展示页码.
+      page: 1,
+    },
+    scopeMode:
+      actor.role === "ADMIN"
+        ? filters.salesId
+          ? "sales"
+          : filters.teamId
+            ? "team"
+            : "organization"
+        : actor.role === "SUPERVISOR"
+          ? actor.teamId
+            ? filters.salesId
+              ? "sales"
+              : "team"
+            : "team_unassigned"
+          : "personal",
+    selectedTeam,
+    selectedSales,
+    summary,
+    queueCounts,
+    teamOverview,
+    salesBoard,
+    productOptions,
+    tagOptions,
+    callResultOptions,
+    queueItems,
+    phoneSearchDisclosures,
+    pagination: {
+      page: 1,
+      pageSize: filters.pageSize,
+      // cursor 模式不实时算 totalCount; 显示 workspace 已知的 scope 大小作
+      // 参考 (与 sidebar 一致), 不当成实际页数依据.
+      totalCount: scopeSnapshots.length,
+      totalPages: 1,
+      mode: "cursor",
+      nextCursor: encodedNextCursor,
+      currentCursor: encodedCurrentCursor,
+    },
+  } satisfies CustomerCenterData;
 }
 
 export async function getCustomerOperatingDashboardData(

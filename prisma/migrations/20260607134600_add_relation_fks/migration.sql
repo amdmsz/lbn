@@ -1,0 +1,43 @@
+-- F09 schema FK 补全 — 阶段 3 草稿 (DDL 暂留空, **请勿在生产 apply 前手填 SQL**)
+--
+-- 背景 / 决策依据:
+--   - audit 指出 productbundleitem / tradeorderitemcomponent / shippingexportline
+--     三张子表对 supplier / product / productsku 没有物理外键 (虽然字段命名
+--     遵循 prisma FK 习惯).
+--   - 本次 PR 已经在 prisma/schema.prisma 把 forward + 反向 `@relation`
+--     声明补齐 (含 `@@index([supplierId])` / `@@index([productId])` /
+--     `@@index([skuId])`), Prisma client 端从此可以 `include: { supplier: true }`,
+--     但 **此 migration 的 SQL 内容刻意保持为空**.
+--
+-- BLOCKED — 直接 apply 这个 migration 不会创建任何 FK constraint, 这是有意为之:
+--   1. 先在能访问目标库的环境跑 `node scripts/diagnose-fk-orphans.mjs`,
+--      确认 7 个候选 FK 全部 orphan=0;
+--   2. 再把诊断结果 JSON 贴到 docs/migrations/fk-补全-plan.md `## 5. 诊断结果`;
+--   3. 业务侧 / 运维确认后, 在 **新的 migration 目录** 里写正式 ADD CONSTRAINT
+--      DDL (参考 docs/migrations/fk-补全-plan.md `## 4. 迁移 SQL 草稿`).
+--
+-- 为什么不把 ADD CONSTRAINT 直接写在这里:
+--   - 加 FK 是 *不可逆* 强约束动作, MariaDB InnoDB 加 FK 会全表短锁;
+--   - 若历史 orphan 行存在 (例如 supplier 被裸删过), ALTER TABLE 会失败,
+--     变更窗口直接被卡死;
+--   - 把 "诊断" 与 "落 FK" 拆成两个 PR, 才能让数据修复 PR 与 schema PR 分开 review.
+--
+-- 当前阶段 deploy 行为:
+--   - `prisma migrate deploy` 会把这个空 migration 记为 applied (因为 dir 名
+--     入 `_prisma_migrations` 表), 但不会改任何 DB 对象.
+--   - `prisma migrate status` 仍会提示 schema drift (Prisma 期待物理 FK), 这是
+--     **预期的**, drift 提示就是给下一阶段执行人留的钩子.
+--   - schema 端的 `@@index` 是新增声明, 没有物理 SQL 在这里执行;
+--     若需要立即把索引落到生产 (FK 之前提前加索引能减少未来 ALTER 锁时间),
+--     请新开 migration 目录, 内容只 CREATE INDEX, 不要混进本目录.
+--
+-- 维护人 checklist (执行 ADD CONSTRAINT 之前):
+--   [ ] `node scripts/diagnose-fk-orphans.mjs` 在 **生产库** 和 **预发库** 都跑过
+--   [ ] 输出 JSON `allClean === true`
+--   [ ] docs/migrations/fk-补全-plan.md `## 5. 诊断结果` 章节贴了真实 JSON
+--   [ ] 业务方 / 运维知会过: 上线 FK 后不允许再裸删 supplier / product / sku 父行
+--   [ ] 新建 migration 目录 (例如 `20260620XXXXXX_apply_relation_fks_after_orphan_clean/`)
+--       写 ADD CONSTRAINT DDL, 走完整 release-preflight + migrate deploy 流程
+
+-- 故意保持空 SQL — 不要在这里追加任何 ALTER / CREATE / DROP.
+SELECT 1;

@@ -25,6 +25,7 @@ import {
   BatchForceDeleteDialog,
   BatchOwnerTransferDialog,
   BatchRecycleDialog,
+  BatchRecycleRequestDialog,
   BatchTagDialog,
   type BatchTagOption,
   type SelectionMode,
@@ -51,10 +52,13 @@ import { InlineCustomerRemarkField } from "@/components/customers/inline-custome
 import { CustomerListCard } from "@/components/customers/customer-list-card";
 import { CustomerRecycleBlockedReasonSummary } from "@/components/customers/customer-recycle-blocked-reason-summary";
 import { type MoveCustomerToRecycleBinAction } from "@/components/customers/customer-recycle-entry";
+import { CustomersTablePaginationButtons } from "@/components/customers/customers-table-pagination";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
 import { EntityTable } from "@/components/shared/entity-table";
 import { PaginationControls } from "@/components/shared/pagination-controls";
+import { notifyToast } from "@/components/shared/toast-provider";
+import { buildCursorHref, decodeCursor } from "@/lib/customers/list-cursor";
 import type { CallResultOption } from "@/lib/calls/metadata";
 import {
   createInitialCustomerBatchActionNoticeState,
@@ -115,6 +119,12 @@ type PaginationData = {
   pageSize: number;
   totalCount: number;
   totalPages: number;
+  /** F08 phase 2: "page" 走旧 page 号 (默认); "cursor" 走 keyset cursor. */
+  mode?: "page" | "cursor";
+  /** cursor 模式: 下一页 cursor (已 base64url 编码); 末页为 null. */
+  nextCursor?: string | null;
+  /** cursor 模式: 当前页 cursor; 第一页为 null. */
+  currentCursor?: string | null;
 };
 
 type PageSelectionState = {
@@ -227,6 +237,9 @@ export function CustomersTable({
   const [batchTagDialogOpen, setBatchTagDialogOpen] = useState(false);
   const [batchOwnerTransferDialogOpen, setBatchOwnerTransferDialogOpen] = useState(false);
   const [batchRecycleDialogOpen, setBatchRecycleDialogOpen] = useState(false);
+  // 销售自助"申请回收" — 本波只 UI, 无服务端动作.
+  // 真正的审批队列 + OperationLog 写入留待下一 PR.
+  const [batchRecycleRequestDialogOpen, setBatchRecycleRequestDialogOpen] = useState(false);
   const [batchForceDeleteDialogOpen, setBatchForceDeleteDialogOpen] = useState(false);
   const [selectedTagId, setSelectedTagId] = useState("");
   const [selectedTargetOwnerId, setSelectedTargetOwnerId] = useState("");
@@ -497,6 +510,29 @@ export function CustomersTable({
 
   function closeBatchRecycleDialog() {
     setBatchRecycleDialogOpen(false);
+  }
+
+  // 销售自助 "申请回收" — 本波只 UI, 不调任何 server action.
+  function openBatchRecycleRequestDialog() {
+    setBatchRecycleDialogOpen(false);
+    setBatchRecycleRequestDialogOpen(true);
+  }
+
+  function closeBatchRecycleRequestDialog() {
+    setBatchRecycleRequestDialogOpen(false);
+  }
+
+  function confirmBatchRecycleRequest() {
+    setBatchRecycleRequestDialogOpen(false);
+    // TODO (下一 PR): 接入 requestRecycleApproval server action, 写入
+    // OperationLog (type=CUSTOMER_RECYCLE_REQUEST_SUBMITTED) + 触发主管审批队列.
+    notifyToast({
+      title: "已发送回收申请到主管",
+      description:
+        "审批通过后由主管走硬删流程；申请已记录在客户中心，请等待审批结果。",
+      tone: "info",
+    });
+    resetSelection();
   }
 
   function openBatchForceDeleteDialog() {
@@ -1345,14 +1381,41 @@ export function CustomersTable({
         {items.length > 0 ? (
           <>
             <div className="[&>div]:rounded-[18px] [&>div]:border-[var(--color-border-soft)] [&>div]:bg-[var(--color-panel-soft)] [&>div]:px-4 [&>div]:py-3 [&>div]:shadow-[var(--color-shell-shadow-sm)] [&_.crm-toolbar-cluster]:gap-2 [&_a]:h-8 [&_a]:rounded-[10px] [&_a]:px-3 [&_a]:py-0 [&_a]:text-[13px] [&_a]:shadow-none [&_a]:hover:translate-y-0 [&_p]:text-[13px] [&_p]:leading-5">
-              <PaginationControls
-                page={pagination.page}
-                totalPages={pagination.totalPages}
-                summary={`当前第 ${pagination.page} / ${pagination.totalPages} 页，共 ${pagination.totalCount} 位客户`}
-                buildHref={(page) => buildCustomersHref(filters, { page })}
-                rightSlot={pageSizeControl}
-                scrollTargetId={scrollTargetId}
-              />
+              {pagination.mode === "cursor" ? (
+                <CustomersTablePaginationButtons
+                  prevHref={
+                    pagination.currentCursor
+                      ? buildCursorHref(
+                          pathname,
+                          searchParams,
+                          // F08 phase 2 简化: 没有 cursor stack, 上一页直接
+                          // 回到第一页 (移除 cursor 参数). 真实 stack 留 phase 3.
+                          null,
+                        )
+                      : null
+                  }
+                  nextHref={
+                    pagination.nextCursor
+                      ? buildCursorHref(
+                          pathname,
+                          searchParams,
+                          decodeCursor(pagination.nextCursor),
+                        )
+                      : null
+                  }
+                  summary={`本页 ${items.length} 位 · 范围内共 ${pagination.totalCount} 位`}
+                  scrollTargetId={scrollTargetId}
+                />
+              ) : (
+                <PaginationControls
+                  page={pagination.page}
+                  totalPages={pagination.totalPages}
+                  summary={`当前第 ${pagination.page} / ${pagination.totalPages} 页，共 ${pagination.totalCount} 位客户`}
+                  buildHref={(page) => buildCustomersHref(filters, { page })}
+                  rightSlot={pageSizeControl}
+                  scrollTargetId={scrollTargetId}
+                />
+              )}
             </div>
             <DailyQuote />
           </>
@@ -1417,7 +1480,16 @@ export function CustomersTable({
         pending={batchRecyclePending}
         onClose={closeBatchRecycleDialog}
         onSubmit={handleBatchRecycleSubmit}
+        onRequestRecycle={openBatchRecycleRequestDialog}
         selectedCustomerIds={manualSelectedIds}
+      />
+
+      <BatchRecycleRequestDialog
+        open={batchRecycleRequestDialogOpen}
+        selectedCount={selectedCount}
+        selectionMode={selectionMode}
+        onClose={closeBatchRecycleRequestDialog}
+        onConfirm={confirmBatchRecycleRequest}
       />
 
       <BatchForceDeleteDialog

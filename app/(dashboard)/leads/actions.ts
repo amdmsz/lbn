@@ -7,7 +7,7 @@ import {
   LeadStatus,
   UserStatus,
 } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { z } from "zod";
 import {
   canAccessLeadModule,
@@ -15,6 +15,7 @@ import {
   getLeadScope,
 } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
+import { CACHE_TAGS } from "@/lib/cache-tags";
 import {
   assignCustomerToSalesTx,
   getCustomerOwnershipActorContext,
@@ -939,16 +940,18 @@ export async function batchAssignLeadsAction(
     });
   }
 
+  // F17 wave-3: 批量分配 — customer list + 各客户 tag;
+  // /leads 与 /leads/${id} 暂无 tag (本波不动 cache-tags.ts), 保留 path;
+  // /dashboard 聚合页保留 path.
+  updateTag(CACHE_TAGS.customerList);
+  for (const customerId of updatedCustomerIds) {
+    updateTag(CACHE_TAGS.customer(customerId));
+  }
   revalidatePath("/leads");
-  revalidatePath("/customers");
   revalidatePath("/dashboard");
 
   for (const lead of leads) {
     revalidatePath(`/leads/${lead.id}`);
-  }
-
-  for (const customerId of updatedCustomerIds) {
-    revalidatePath(`/customers/${customerId}`);
   }
 
   return buildLeadBatchActionResult({
@@ -994,9 +997,11 @@ export async function moveLeadToRecycleBinAction(
     });
 
     if (result.status !== "blocked") {
+      // F17 wave-3: 线索回收 — customer list tag; /leads 与 /leads/${id} 暂无 tag;
+      // /customers/public-pool /dashboard /recycle-bin 聚合页保留 path.
+      updateTag(CACHE_TAGS.customerList);
       revalidatePath("/leads");
       revalidatePath(`/leads/${leadId}`);
-      revalidatePath("/customers");
       revalidatePath("/customers/public-pool");
       revalidatePath("/dashboard");
       revalidatePath("/recycle-bin");
@@ -1073,8 +1078,10 @@ export async function batchMoveLeadsToRecycleBinAction(
     const blockedReasonSummary = collectLeadBatchRecycleBlockedReasons(results);
 
     if (summary.successCount > 0 || summary.skippedCount > 0) {
+      // F17 wave-3: 批量线索回收 — customer list tag; /leads 暂无 tag;
+      // /customers/public-pool /dashboard /recycle-bin 聚合页保留 path.
+      updateTag(CACHE_TAGS.customerList);
       revalidatePath("/leads");
-      revalidatePath("/customers");
       revalidatePath("/customers/public-pool");
       revalidatePath("/dashboard");
       revalidatePath("/recycle-bin");

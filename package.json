@@ -38,6 +38,8 @@
     "prisma:baseline:draft": "node scripts/prisma-baseline-draft.mjs",
     "test:lead-imports": "node --test --experimental-strip-types tests/lead-imports/customer-continuation-signals.test.mts",
     "test:system-settings": "node --test --experimental-strip-types tests/system-settings/schema-and-secrets.test.mts",
+    "test:payments-decimal": "node --test --import tsx tests/payments/decimal.test.mts",
+    "test:trade-orders-revisions": "node --test --import tsx tests/trade-orders/revisions-blockers.test.mts",
     "postinstall": "prisma generate",
     "admin:bootstrap": "node scripts/bootstrap-admin.mjs",
     "db:seed": "node prisma/seed.mjs",

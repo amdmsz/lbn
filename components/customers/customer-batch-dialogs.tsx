@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { Trash2 } from "lucide-react";
+import { Send, Trash2 } from "lucide-react";
 import type {
   CustomerCenterFilters,
   SalesRepBoardItem,
@@ -310,6 +310,7 @@ export function BatchRecycleDialog({
   pending,
   onClose,
   onSubmit,
+  onRequestRecycle,
   selectedCustomerIds,
 }: Readonly<{
   open: boolean;
@@ -320,22 +321,29 @@ export function BatchRecycleDialog({
   pending: boolean;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  /**
+   * 销售自助"申请回收"入口 (本波只 UI). 当 onRequestRecycle 传入且
+   * 当前选择不满足误建轻客户回收条件时, 把禁用按钮替换为"申请回收"主按钮.
+   * 真正的审批队列 + 服务端 OperationLog 写入留待下一 PR.
+   */
+  onRequestRecycle?: () => void;
   selectedCustomerIds: string[];
 }>) {
   if (!open) {
     return null;
   }
 
-  const submitDisabled =
-    pending ||
-    (selectionMode === "manual" &&
-      selectedCount > 0 &&
-      manualRecycleEligibleCount === 0);
+  const manualBlocked =
+    selectionMode === "manual" &&
+    selectedCount > 0 &&
+    manualRecycleEligibleCount === 0;
+  const submitDisabled = pending || manualBlocked;
+  const showRequestRecycle = Boolean(onRequestRecycle) && manualBlocked;
   const scopeNotice =
     selectionMode === "filtered"
       ? `这次会按当前筛选结果检查 ${selectedCount} 位客户。已有归属历史、跟进、订单、支付或履约链的客户不会被移入回收站，会返回阻断原因。`
       : manualRecycleEligibleCount === 0
-        ? "当前已选客户都不满足回收条件，请改走客户状态、公海、移交或归档治理。"
+        ? "当前已选客户都不满足误建轻客户回收条件。如确有回收必要，可点【申请回收】把待处理客户发给主管审批，或改走客户状态、公海、移交、归档治理。"
         : manualRecycleEligibleCount !== null && manualRecycleEligibleCount < selectedCount
           ? `当前已选客户中 ${manualRecycleEligibleCount} 位可尝试移入回收站，其余会返回阻断原因。`
           : "这次会按当前页手选客户逐条检查，只处理满足误建轻客户条件的对象。";
@@ -393,17 +401,29 @@ export function BatchRecycleDialog({
             >
               取消
             </button>
-            <button
-              type="submit"
-              disabled={submitDisabled}
-              className="crm-button crm-button-primary disabled:cursor-not-allowed disabled:opacity-55"
-            >
-              {pending
-                ? "提交中..."
-                : submitDisabled
-                  ? "没有可回收客户"
-                  : "确认移入回收站"}
-            </button>
+            {showRequestRecycle ? (
+              <button
+                type="button"
+                onClick={onRequestRecycle}
+                disabled={pending}
+                className="crm-button crm-button-primary inline-flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-55"
+              >
+                <Send className="h-3.5 w-3.5" aria-hidden="true" />
+                申请回收
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={submitDisabled}
+                className="crm-button crm-button-primary disabled:cursor-not-allowed disabled:opacity-55"
+              >
+                {pending
+                  ? "提交中..."
+                  : submitDisabled
+                    ? "没有可回收客户"
+                    : "确认移入回收站"}
+              </button>
+            )}
           </div>
         </form>
       </div>
@@ -543,6 +563,109 @@ export function BatchForceDeleteDialog({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 销售自助 "申请回收" 确认弹窗 (本波只 UI, 无服务端动作).
+ *
+ * 业务背景:
+ *   - 当前 BatchRecycleDialog 的回收 guard 会拦截已有归属 / 业务链的客户,
+ *     销售只能联系主管硬删, 体验不佳.
+ *   - 这里给销售一个 "提交申请 - 等主管审批" 的入口, 替代纯禁用提示.
+ *   - 真正的 RecycleRequest 表 / 审批队列页面 / OperationLog 写入 留待下一 PR;
+ *     当前点 "确认申请" 只会本地关闭弹窗, **不发任何网络请求**.
+ *
+ * 调用方需要负责:
+ *   - 在外层把 selectedCount 算好后传进来 (我们不在弹窗内重算口径).
+ *   - 关闭弹窗后清空自身的 selectionMode / selectedCount 状态.
+ *
+ * TODO (下一 PR):
+ *   - 在 lib/customers/actions.ts 加 requestRecycleApproval action.
+ *   - 服务端写入 OperationLog (type=CUSTOMER_RECYCLE_REQUEST_SUBMITTED).
+ *   - 主管审批队列页面消费这条 OperationLog (或独立 RecycleRequest 表).
+ */
+export function BatchRecycleRequestDialog({
+  open,
+  selectedCount,
+  selectionMode,
+  onClose,
+  onConfirm,
+}: Readonly<{
+  open: boolean;
+  selectedCount: number;
+  selectionMode: SelectionMode;
+  onClose: () => void;
+  onConfirm: () => void;
+}>) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/28 px-4 py-8 lg:pl-[var(--dashboard-sidebar-width,0px)]"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="申请回收"
+        className="crm-card w-full max-w-lg overflow-hidden"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="border-b border-[var(--color-border-soft)] px-5 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-semibold text-[var(--foreground)]">
+                申请回收 — 等待主管审批
+              </h3>
+              <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
+                这次会把当前
+                {selectionMode === "filtered" ? "筛选范围内" : "手选"}
+                的 {selectedCount} 位客户打包提交回收申请。审批通过后由主管走硬删流程；申请提交不代表已经回收。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="crm-button crm-button-ghost min-h-0 px-3 py-2 text-sm"
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-4 px-5 py-4">
+          <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-[13px] leading-6 text-[var(--color-sidebar-muted)]">
+            <p>
+              提交后主管会在客户中心 -&gt; 回收审批队列看到这条申请，确认后再走硬删流程。
+            </p>
+            <p className="mt-2 text-[12px] text-[var(--color-sidebar-muted)]">
+              当前阶段为 UI 占位：仅本地确认，不会真正写入服务端审批队列。下一 PR 会接入 RecycleRequest 表和 OperationLog。
+            </p>
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="crm-button crm-button-secondary"
+            >
+              再想想
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              className="crm-button crm-button-primary inline-flex items-center gap-1.5"
+            >
+              <Send className="h-3.5 w-3.5" aria-hidden="true" />
+              确认申请
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
