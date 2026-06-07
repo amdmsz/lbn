@@ -433,6 +433,11 @@ export type CustomerOwnerTransferOption = {
   } | null;
 };
 
+// F08 (audit) 客户中心 list 硬上限. ADMIN 视图无 owner scope, 大客户量时
+// 全表加载会 OOM. 1500 是经验值: 单页可承载, 配合内存 filter 后 UI 顺畅;
+// 触发 cap 时 console.warn 让运维知道该上 cursor 分页 (完整 PR 待业务确认).
+const CUSTOMER_CENTER_LIST_HARD_CAP = 1500;
+
 const customerQueueValues = [
   "all",
   "new_imported",
@@ -1474,9 +1479,21 @@ async function getCustomerCenterWorkspaceBase(
             : []),
         ],
       },
+      // F08 part 1: 硬上限保护 + 确定性排序 (走刚加的复合索引
+      // cust_owner_updated_id_idx). 真 cursor 分页需前端 UI 改, 留作单独 PR;
+      // 这里先防 ADMIN 视图在大客户量时全表加载 OOM. 触发 cap 时 console.warn
+      // 提示运维需推 cursor 分页改造.
+      take: CUSTOMER_CENTER_LIST_HARD_CAP,
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
       select: customerSnapshotSelect,
     }),
   ]);
+
+  if (customerSnapshots.length === CUSTOMER_CENTER_LIST_HARD_CAP) {
+    console.warn(
+      `[customers/queries] customer list hit hard cap ${CUSTOMER_CENTER_LIST_HARD_CAP}; consider migrating to cursor pagination`,
+    );
+  }
   const [latestCustomerImportMap, latestCustomerAssignmentMap] = await Promise.all([
     getLatestCustomerImportMap(customerSnapshots.map((snapshot) => snapshot.id)),
     getLatestCustomerAssignmentMap(customerSnapshots),
