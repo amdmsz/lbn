@@ -2,16 +2,33 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { ReactNode } from "react";
 import { useState, useTransition } from "react";
 import type { ShippingReturnActionResult } from "@/app/(dashboard)/shipping/returns/actions";
 import { ActionBanner } from "@/components/shared/action-banner";
-import { StatusBadge, type StatusBadgeVariant } from "@/components/shared/status-badge";
 import ShippingReturnPanel, {
   type ShippingReturnPanelData,
 } from "@/components/shipping/shipping-return-panel";
 import { TradeOrderRecycleDialog } from "@/components/trade-orders/trade-order-recycle-dialog";
-import { formatDateTime } from "@/lib/customers/metadata";
+import { OrderHero } from "@/components/trade-orders/order-hero";
+import {
+  OrderActionZone,
+  type OrderActionZoneTab,
+} from "@/components/trade-orders/order-action-zone";
+import { OrderItemCard } from "@/components/trade-orders/order-item-card";
+import { OrderMetricGrid } from "@/components/trade-orders/order-metric-grid";
+import OrderProgressTrack, {
+  type OrderProgressPhase,
+} from "@/components/trade-orders/order-progress-track";
+import {
+  OrderTimeline,
+  type OrderTimelineEvent,
+  type OrderTimelineEventKind,
+} from "@/components/trade-orders/order-timeline";
+import {
+  SupplierFulfillmentAccordion,
+  type SupplierFulfillmentItem,
+  type SupplierFulfillmentSummary,
+} from "@/components/trade-orders/supplier-fulfillment-accordion";
 import {
   normalizeShippingPackageSnapshots,
   summarizeShippingPackageSnapshots,
@@ -25,7 +42,6 @@ import {
 import {
   formatCurrency,
   getSalesOrderPaymentSchemeLabel,
-  getSalesOrderPaymentSchemeVariant,
   getSalesOrderReviewStatusLabel,
   getSalesOrderReviewStatusVariant,
   getShippingFulfillmentStatusLabel,
@@ -37,10 +53,8 @@ import {
   buildTradeOrderCollectionHref,
   buildTradeOrderPaymentHref,
 } from "@/lib/trade-orders/execution-links";
-import {
-  formatTradeOrderLineSummary,
-  formatTradeOrderQuantity,
-} from "@/lib/trade-orders/display";
+import { formatTradeOrderLineSummary } from "@/lib/trade-orders/display";
+import { cn } from "@/lib/utils";
 import type { getTradeOrderDetail } from "@/lib/trade-orders/queries";
 import type { getActiveShippingReturnForTradeOrder } from "@/lib/shipping/returns";
 import type {
@@ -69,101 +83,10 @@ type TradeOrderRecycleActionResult = {
   finalizePreview?: RecycleFinalizePreview | null;
 };
 
-type BatchReference = {
-  id: string;
-  exportNo: string;
-  exportedAt: Date;
-  fileUrl: string | null;
-  supplierId: string;
-  supplierName: string;
-};
-
-type TradeStatusValue =
-  | "DRAFT"
-  | "PENDING_REVIEW"
-  | "APPROVED"
-  | "REJECTED"
-  | "CANCELED"
-  | "REVISION_PENDING";
-
-function getTradeStatusLabel(value: TradeStatusValue) {
-  switch (value) {
-    case "DRAFT":
-      return "草稿";
-    case "PENDING_REVIEW":
-      return "待审核";
-    case "APPROVED":
-      return "已审核";
-    case "REJECTED":
-      return "已拒绝";
-    case "CANCELED":
-      return "已取消";
-    case "REVISION_PENDING":
-      return "撤单审批中";
-    default:
-      return value;
-  }
-}
-
-function getTradeStatusVariant(value: TradeStatusValue): StatusBadgeVariant {
-  switch (value) {
-    case "PENDING_REVIEW":
-      return "warning";
-    case "APPROVED":
-      return "success";
-    case "REJECTED":
-      return "danger";
-    case "REVISION_PENDING":
-      return "warning";
-    default:
-      return "neutral";
-  }
-}
-
-function getTradeItemTypeLabel(value: "SKU" | "GIFT" | "BUNDLE") {
-  switch (value) {
-    case "SKU":
-      return "SKU";
-    case "GIFT":
-      return "赠品";
-    case "BUNDLE":
-      return "套餐";
-    default:
-      return value;
-  }
-}
-
-function getTradeItemTypeVariant(value: "SKU" | "GIFT" | "BUNDLE"): StatusBadgeVariant {
-  switch (value) {
-    case "SKU":
-      return "info";
-    case "BUNDLE":
-      return "warning";
-    default:
-      return "neutral";
-  }
-}
-
-function formatSubOrderStatus(value: string | null) {
-  if (!value) {
-    return "待父单审核";
-  }
-
-  switch (value) {
-    case "PENDING_PARENT_REVIEW":
-      return "待父单审核";
-    case "READY_FOR_FULFILLMENT":
-      return "待执行";
-    case "IN_FULFILLMENT":
-      return "执行中";
-    case "COMPLETED":
-      return "已完成";
-    case "CANCELED":
-      return "已取消";
-    default:
-      return value;
-  }
-}
+// TradeStatusValue + label/variant helper 已移入 <OrderHero> widget 内部.
+// getTradeItemTypeLabel / getTradeItemTypeVariant 已移入 <OrderItemCard> widget 内部.
+// BatchReference + getLatestBatchReferences 旧实现已删除, 批次时间显示由
+// <SupplierFulfillmentAccordion> 内部 panel 承担, 不再向 detail section 暴露.
 
 function getPaymentRecordStatusSummaryLabel(value: "SUBMITTED" | "CONFIRMED" | "REJECTED") {
   switch (value) {
@@ -212,6 +135,86 @@ function getCollectionTaskStatusSummaryLabel(
   }
 }
 
+/**
+ * 把内部 OperationLog.action 枚举翻译成销售/主管/发货员能直接看懂的中文事件名 +
+ * 一个 timeline kind, 用于 OrderTimeline widget 上的 icon / tone.
+ *
+ * 落地原则:
+ * - 销售/主管/发货员看到的不是 "trade_order.submitted_for_review"
+ *   而是 "销售提交审核".
+ * - 没匹配到的 action 兜底用 review tone + module/action 直显, 避免漏点.
+ */
+function mapOperationLogActionToTimelineMeta(action: string): {
+  title: string;
+  kind: OrderTimelineEventKind;
+} {
+  switch (action) {
+    case "trade_order.created":
+    case "trade_order.draft_saved":
+      return { title: "销售保存订单草稿", kind: "review" };
+    case "trade_order.submitted_for_review":
+      return { title: "销售提交审核", kind: "review" };
+    case "trade_order.approved":
+      return { title: "主管审核通过", kind: "review" };
+    case "trade_order.rejected":
+      return { title: "主管驳回订单", kind: "review" };
+    case "sales_order.created_from_trade_order":
+    case "sales_order.created":
+      return { title: "供货商子单生成", kind: "review" };
+    case "sales_order.approved_via_trade_order":
+    case "sales_order.approved":
+      return { title: "供货商子单批准", kind: "child_approved" };
+    case "sales_order.rejected_via_trade_order":
+    case "sales_order.rejected":
+      return { title: "供货商子单驳回", kind: "revision" };
+    case "sales_order.resubmitted":
+      return { title: "供货商子单重新提交", kind: "review" };
+    case "shipping_task.reported":
+      return { title: "发货员报单", kind: "report" };
+    case "shipping_task.reexported":
+      return { title: "发货员重新报单", kind: "report" };
+    case "shipping_task.v2_updated":
+      return { title: "物流状态更新", kind: "tracking" };
+    case "trade_order.revision_requested":
+      return { title: "客户调整需求", kind: "revision" };
+    case "trade_order.revision_approved_reduce":
+      return { title: "调整审核通过(减量)", kind: "revision" };
+    case "trade_order.revision_approved_cancel":
+      return { title: "调整审核通过(取消)", kind: "revision" };
+    case "trade_order.revision_rejected":
+      return { title: "调整审核驳回", kind: "revision" };
+    case "trade_order.revision_blocked":
+      return { title: "调整被阻断", kind: "revision" };
+    case "trade_order.revision_withdrawn":
+      return { title: "调整请求已撤回", kind: "revision" };
+    case "refund_request.created":
+      return { title: "财务退款单已创建", kind: "refund" };
+    case "refund_request.approved":
+      return { title: "退款单审核通过", kind: "refund" };
+    case "refund_request.rejected":
+      return { title: "退款单审核驳回", kind: "refund" };
+    case "refund_request.paid_out":
+      return { title: "退款已打款", kind: "refund" };
+    case "refund_request.withdrawn":
+      return { title: "退款申请已撤回", kind: "refund" };
+    case "trade_order.moved_to_recycle_bin":
+      return { title: "订单移入回收站", kind: "revision" };
+    case "trade_order.restored_from_recycle_bin":
+      return { title: "订单从回收站恢复", kind: "revision" };
+    case "trade_order.purged_from_recycle_bin":
+      return { title: "订单永久销毁", kind: "revision" };
+    case "trade_order.archived_from_recycle_bin":
+      return { title: "订单已归档", kind: "review" };
+    default:
+      // 兜底: 拆出最后一段, 把 underscore 转空格, 例如 shipping_task.foo_bar -> foo bar
+      {
+        const tail = action.split(".").pop() ?? action;
+        const humanTail = tail.replace(/_/g, " ");
+        return { title: humanTail, kind: "review" };
+      }
+  }
+}
+
 function isShippingCompletedLike(
   value:
     | "PENDING"
@@ -229,24 +232,6 @@ function isShippingCompletedLike(
     value === "COMPLETED" ||
     value === "REFUNDED"
   );
-}
-
-function sumCurrency(values: string[]) {
-  return values.reduce((sum, current) => sum + Number(current), 0);
-}
-
-function getBatchFileStateMeta(fileUrl: string | null) {
-  if (fileUrl) {
-    return {
-      label: "文件可下载",
-      variant: "success" as const,
-    };
-  }
-
-  return {
-    label: "待重新生成",
-    variant: "warning" as const,
-  };
 }
 
 function getSalesOrderProductSummary(items: SalesOrderItem["items"]) {
@@ -272,46 +257,7 @@ function getSalesOrderProductSummary(items: SalesOrderItem["items"]) {
   return `${heads.join(" / ")} 等 ${items.length} 项`;
 }
 
-function getTradeItemHeadline(item: TradeOrderDetail["items"][number]) {
-  return formatTradeOrderLineSummary({
-    exportDisplayNameSnapshot: item.bundleNameSnapshot || item.productNameSnapshot,
-    titleSnapshot: item.titleSnapshot,
-    productNameSnapshot: item.productNameSnapshot,
-    skuNameSnapshot: item.skuNameSnapshot,
-    specSnapshot: item.specSnapshot,
-    qty: item.qty,
-    unitSnapshot: item.unitSnapshot,
-  });
-}
-
-function getTradeItemSubline(item: TradeOrderDetail["items"][number]) {
-  const parts = [item.productNameSnapshot, item.skuNameSnapshot, item.specSnapshot].filter(Boolean);
-  return parts.length > 0 ? parts.join(" / ") : "暂无商品摘要";
-}
-
-function getLatestBatchReferences(order: TradeOrderDetail) {
-  const unique = new Map<string, BatchReference>();
-
-  for (const salesOrder of order.salesOrders) {
-    const exportBatch = salesOrder.shippingTask?.exportBatch;
-    if (!exportBatch) {
-      continue;
-    }
-
-    unique.set(exportBatch.id, {
-      id: exportBatch.id,
-      exportNo: exportBatch.exportNo,
-      exportedAt: exportBatch.exportedAt,
-      fileUrl: exportBatch.fileUrl,
-      supplierId: salesOrder.supplier.id,
-      supplierName: salesOrder.supplier.name,
-    });
-  }
-
-  return Array.from(unique.values()).sort(
-    (left, right) => right.exportedAt.getTime() - left.exportedAt.getTime(),
-  );
-}
+// getTradeItemHeadline / getTradeItemSubline 已移入 <OrderItemCard> widget 内部.
 
 function getTradeOrderShippingStage(
   summary: TradeOrderDetail["executionSummary"],
@@ -365,774 +311,215 @@ function getSalesOrderShippingStage(
   return undefined;
 }
 
-function getShippingSummaryText(salesOrder: SalesOrderItem, executionSummary?: SalesOrderExecutionItem) {
-  if (!salesOrder.shippingTask) {
-    return "待初始化发货任务";
+// 父单当前推进阶段, 用于 <OrderProgressTrack> 高亮.
+// 不再使用 nextAction 文案卡; 由 progress track 节点 + ActionZone 共同表达"下一步".
+function resolveOrderProgressPhase(
+  order: TradeOrderDetail,
+  summary: TradeOrderDetail["executionSummary"],
+): OrderProgressPhase {
+  if (order.tradeStatus === "CANCELED") {
+    return "CANCELED";
   }
-
-  const segments = [
-    getShippingReportStatusLabel(salesOrder.shippingTask.reportStatus),
-    getShippingFulfillmentStatusLabel(salesOrder.shippingTask.shippingStatus),
-  ];
-
-  if (salesOrder.shippingTask.shippingProvider || salesOrder.shippingTask.trackingNumber) {
-    segments.push(
-      [
-        salesOrder.shippingTask.shippingProvider || "物流公司待补充",
-        salesOrder.shippingTask.trackingNumber || "物流单号待回填",
-      ].join(" / "),
-    );
+  if (order.tradeStatus === "REVISION_PENDING") {
+    return "REVISION_PENDING";
   }
-
-  const packageSummary = summarizeShippingPackageSnapshots(
-    normalizeShippingPackageSnapshots(salesOrder.shippingTask.shippingPackages),
-  );
-  if (packageSummary) {
-    segments.push(packageSummary);
+  if (order.tradeStatus === "DRAFT") {
+    return "DRAFT";
   }
-
-  if (executionSummary?.hasException) {
-    segments.push("存在执行异常");
+  if (order.tradeStatus === "PENDING_REVIEW") {
+    return "PENDING_REVIEW";
   }
-
-  return segments.join(" / ");
+  if (order.tradeStatus === "REJECTED") {
+    return "PENDING_REVIEW";
+  }
+  // APPROVED 之后, 根据执行摘要落到具体节点
+  if (!summary || summary.totalSubOrderCount === 0) {
+    return "APPROVED";
+  }
+  if (summary.allShipped && Number(order.remainingAmount) <= 0) {
+    return "COMPLETED";
+  }
+  if (summary.allShipped) {
+    return "COLLECTED";
+  }
+  if (summary.shippedSubOrderCount > 0) {
+    return "SHIPPED";
+  }
+  if (summary.reportedSubOrderCount > 0) {
+    return "REPORTED";
+  }
+  return "APPROVED";
 }
 
-function getTradeOrderNextAction(summary: TradeOrderDetail["executionSummary"]) {
-  if (!summary) {
-    return {
-      label: "待审核",
-      description: "父单审核后会物化 supplier 子单，并生成履约执行摘要。",
-      variant: "neutral" as const,
-    };
-  }
-
-  if (summary.exceptionSubOrderCount > 0) {
-    return {
-      label: "异常优先",
-      description: "存在取消、文件缺失或状态冲突，建议先进入发货执行异常队列。",
-      variant: "danger" as const,
-    };
-  }
-
-  if (summary.pendingReportSubOrderCount > 0) {
-    return {
-      label: `待报单 ${summary.pendingReportSubOrderCount}`,
-      description: "还有 supplier 子单未冻结导出，下一步进入发货执行报单池。",
-      variant: "warning" as const,
-    };
-  }
-
-  if (summary.pendingTrackingSubOrderCount > 0) {
-    return {
-      label: `待填物流 ${summary.pendingTrackingSubOrderCount}`,
-      description: "已导出的 supplier 子单需要按各自物流单号分别回填。",
-      variant: "warning" as const,
-    };
-  }
-
-  if (summary.openCollectionSubOrderCount > 0) {
-    return {
-      label: `催收中 ${summary.openCollectionSubOrderCount}`,
-      description: "履约推进后仍有打开中的催收任务，建议进入催收工作面。",
-      variant: "info" as const,
-    };
-  }
-
-  if (summary.allShipped) {
-    return {
-      label: "已全部发货",
-      description: "所有 supplier 子单均已发货，可继续关注签收、COD 与回款结果。",
-      variant: "success" as const,
-    };
-  }
-
+// 把 salesOrders 中的 shippingTask 真实时间戳归集到 OrderProgressTrack 节点上.
+function resolveOrderProgressTimestamps(
+  order: TradeOrderDetail,
+): Partial<Record<OrderProgressPhase, Date | null>> {
+  const reportedAts = order.salesOrders
+    .map((salesOrder) => salesOrder.shippingTask?.reportedAt ?? null)
+    .filter((value): value is Date => value !== null);
+  const shippedAts = order.salesOrders
+    .map((salesOrder) => salesOrder.shippingTask?.shippedAt ?? null)
+    .filter((value): value is Date => value !== null);
+  const earliest = (values: Date[]) =>
+    values.length === 0
+      ? null
+      : values.reduce((min, current) => (current < min ? current : min));
   return {
-    label: "持续跟进中",
-    description: "父单已进入执行链路，请按 supplier 子单分别推进履约与收款。",
-    variant: "info" as const,
+    DRAFT: order.createdAt,
+    PENDING_REVIEW: order.createdAt,
+    APPROVED: order.reviewedAt ?? null,
+    REPORTED: earliest(reportedAts),
+    SHIPPED: earliest(shippedAts),
   };
 }
 
-const detailLabelClassName =
-  "text-xs font-medium text-muted-foreground";
-const detailValueClassName =
-  "text-sm font-medium text-foreground";
-const detailAmountClassName =
-  "font-mono text-lg font-semibold tracking-tight text-foreground";
 const detailActionClassName =
   "inline-flex items-center rounded-lg border border-border/60 bg-transparent px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary";
-const subtleInlineLinkClassName =
-  "text-xs font-medium text-muted-foreground transition-colors hover:text-primary";
 
-function DetailPair({
-  label,
-  children,
-  valueClassName = detailValueClassName,
-}: Readonly<{
-  label: string;
-  children: ReactNode;
-  valueClassName?: string;
-}>) {
-  return (
-    <div className="space-y-1">
-      <div className={detailLabelClassName}>{label}</div>
-      <div className={valueClassName}>{children}</div>
-    </div>
-  );
-}
-
-function OverviewCard({
-  eyebrow,
-  title,
-  children,
-  footer,
-}: Readonly<{
-  eyebrow: string;
-  title: string;
-  children: ReactNode;
-  footer?: ReactNode;
-}>) {
-  return (
-    <div className="rounded-xl border border-border/60 bg-card px-5 py-4 shadow-sm">
-      <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-        {eyebrow}
-      </div>
-      <div className="mt-2 font-mono text-lg font-semibold tracking-tight text-foreground">{title}</div>
-      <div className="mt-3 grid gap-2 text-sm leading-6 text-muted-foreground">
-        {children}
-      </div>
-      {footer ? (
-        <div className="mt-4 border-t border-border/40 pt-3 text-xs text-muted-foreground">
-          {footer}
-        </div>
-      ) : null}
-    </div>
-  );
-}
+// OverviewCard / DetailPair / detail* class tokens / getShippingSummaryText / getBatchFileStateMeta
+// 已由 <OrderMetricGrid> + <SupplierFulfillmentAccordion> 替代, 此处不再保留.
 
 function TradeOrderItemsSection({
   order,
-  bundleCount,
-  giftCount,
 }: Readonly<{
   order: TradeOrderDetail;
-  bundleCount: number;
-  giftCount: number;
 }>) {
   return (
     <section className="crm-section-card">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-2">
-          <h3 className="text-lg font-semibold text-[var(--foreground)]">父单商品与成交信息</h3>
-          <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
-            这里回答“这笔成交卖了什么”。页面按 TradeOrderItem 展示销售语义，套餐和赠品只做轻量识别，
-            supplier 执行拆分留在下一层查看。
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {order.discountAmount !== "0" ? (
-            <StatusBadge label={`折扣 ${formatCurrency(order.discountAmount)}`} variant="warning" />
-          ) : null}
-          {bundleCount > 0 ? <StatusBadge label={`套餐 ${bundleCount}`} variant="info" /> : null}
-          {giftCount > 0 ? <StatusBadge label={`赠品 ${giftCount}`} variant="neutral" /> : null}
-        </div>
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <h3 className="text-lg font-semibold text-foreground">商品明细</h3>
+        {order.discountAmount !== "0" ? (
+          <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+            含折扣 {formatCurrency(order.discountAmount)}
+          </span>
+        ) : null}
       </div>
 
-      <div className="mt-5 divide-y divide-border/40">
-        {order.items.map((item) => (
-          <div key={item.id} className="py-5 first:pt-0 last:pb-0">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-base font-semibold text-foreground">
-                    第 {item.lineNo} 行 / {getTradeItemHeadline(item)}
-                  </span>
-                  <StatusBadge
-                    label={getTradeItemTypeLabel(item.itemType)}
-                    variant={getTradeItemTypeVariant(item.itemType)}
-                  />
-                </div>
-                <div className="text-sm leading-6 text-muted-foreground">{getTradeItemSubline(item)}</div>
-              </div>
-              <div className="text-right">
-                <div className={detailAmountClassName}>
-                  {formatCurrency(item.subtotal)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  成交价 {formatCurrency(item.dealUnitPriceSnapshot)} / 原价{" "}
-                  {formatCurrency(item.listUnitPriceSnapshot)}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <DetailPair label="商品数量">
-                {formatTradeOrderQuantity(item.qty, item.unitSnapshot)}
-              </DetailPair>
-              <DetailPair label="折扣金额" valueClassName="font-mono text-sm font-medium text-foreground">
-                {formatCurrency(item.discountAmount)}
-              </DetailPair>
-              {item.itemType === "BUNDLE" && item.bundleCodeSnapshot ? (
-                <DetailPair label="套餐编码">{item.bundleCodeSnapshot}</DetailPair>
-              ) : null}
-              {item.itemType === "BUNDLE" && item.bundleVersionSnapshot !== null ? (
-                <DetailPair label="套餐版本">{item.bundleVersionSnapshot}</DetailPair>
-              ) : null}
-            </div>
-
-            {item.remark ? (
-              <div className="mt-4 border-l-2 border-border/50 pl-4 text-sm leading-6 text-muted-foreground">
-                {item.remark}
-              </div>
-            ) : null}
-
-            {item.components.length > 0 ? (
-              <div className="mt-5 border-l-2 border-border/50 pl-4">
-                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  {item.itemType === "BUNDLE" ? "执行组件" : "执行去向"}
-                </div>
-                <div className="mt-3 divide-y divide-border/40">
-                  {item.components.map((component) => {
-                    const mappedSalesOrder = component.salesOrderItems[0]?.salesOrder ?? null;
-                    return (
-                      <div
-                        key={component.id}
-                        className="py-3 text-xs text-muted-foreground first:pt-0 last:pb-0"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="text-sm font-medium text-foreground">
-                            {component.productNameSnapshot}
-                            {component.skuNameSnapshot ? ` / ${component.skuNameSnapshot}` : ""}
-                          </div>
-                          <div className="text-xs font-medium text-muted-foreground">
-                            {component.supplierNameSnapshot}
-                          </div>
-                        </div>
-                        <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
-                          <span>
-                            数量：{formatTradeOrderQuantity(component.qty, component.unitSnapshot)}
-                          </span>
-                          <span className="font-mono font-medium text-foreground">
-                            {formatCurrency(component.allocatedSubtotal)}
-                          </span>
-                          <span>
-                            去向：{" "}
-                            {mappedSalesOrder
-                              ? `${order.tradeNo} / ${mappedSalesOrder.subOrderNo || mappedSalesOrder.orderNo} / ${mappedSalesOrder.supplier.name}`
-                              : "待物化子单"}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ))}
+      <div className="mt-4 grid gap-3">
+        {order.items.map((item) => {
+          const supplierName =
+            item.components.length > 0
+              ? Array.from(
+                  new Set(
+                    item.components
+                      .map((c) => c.supplierNameSnapshot?.trim())
+                      .filter((v): v is string => Boolean(v)),
+                  ),
+                ).join(" / ")
+              : "";
+          return (
+            <OrderItemCard
+              key={item.id}
+              itemType={item.itemType}
+              lineNo={item.lineNo}
+              titleSnapshot={item.titleSnapshot}
+              productNameSnapshot={item.productNameSnapshot}
+              skuNameSnapshot={item.skuNameSnapshot}
+              specSnapshot={item.specSnapshot}
+              unitSnapshot={item.unitSnapshot}
+              qty={item.qty}
+              unitPrice={formatCurrency(item.dealUnitPriceSnapshot)}
+              subtotal={formatCurrency(item.subtotal)}
+              discountAmount={formatCurrency(item.discountAmount)}
+              supplierName={supplierName}
+              bundleCode={item.bundleCodeSnapshot}
+              remark={item.remark}
+            />
+          );
+        })}
       </div>
     </section>
   );
 }
 
-function SupplierExecutionSection({
-  order,
-  totalSubOrders,
-  plannedSupplierCount,
-  actualSupplierCount,
-  executionSummaryBySalesOrderId,
-  plannedSupplierGroups,
-}: Readonly<{
-  order: TradeOrderDetail;
-  totalSubOrders: number;
-  plannedSupplierCount: number;
-  actualSupplierCount: number;
-  executionSummaryBySalesOrderId: Map<string, SalesOrderExecutionItem>;
-  plannedSupplierGroups: Array<{
-    supplierId: string;
-    supplierName: string;
-    lineCount: number;
-    subtotal: number;
-  }>;
-}>) {
-  return (
-    <section className="crm-section-card">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-2">
-          <h3 className="text-lg font-semibold text-[var(--foreground)]">supplier 子单执行总览</h3>
-          <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
-            这里不展开完整子单详情，只回答“拆成了哪些 supplier 子单、各自推进到哪、下一步去哪里处理”。
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <StatusBadge label={`子单 ${totalSubOrders || plannedSupplierCount}`} variant="info" />
-          <StatusBadge label={`supplier ${actualSupplierCount || plannedSupplierCount}`} variant="neutral" />
-        </div>
-      </div>
+// NOTE: SupplierExecutionSection (旧 supplier 子单执行总览 / 兜底规划列表)
+// 已由 <SupplierFulfillmentAccordion> + 其 emptyHint 取代; 此函数删除以避免 dead code.
+// FulfillmentSummaryCards (旧支付/发货/批次三摘要卡) 同样已被 SupplierAccordion 顶部 chip 流取代.
 
-      {order.salesOrders.length > 0 ? (
-        <div className="mt-5 divide-y divide-border/40">
-          {order.salesOrders.map((salesOrder) => {
-            const salesOrderExecution = executionSummaryBySalesOrderId.get(salesOrder.id);
-            const latestSalesOrderBatch = salesOrder.shippingTask?.exportBatch ?? null;
-            const salesOrderShippingHref = buildFulfillmentShippingHref({
-              keyword: order.tradeNo,
-              supplierViewId: salesOrder.supplier.id,
-              stageView: getSalesOrderShippingStage(salesOrderExecution),
-            });
-            const salesOrderBatchHref = buildFulfillmentBatchesHref({
-              keyword: latestSalesOrderBatch?.exportNo || order.tradeNo,
-              supplierId: salesOrder.supplier.id,
-            });
-
-            return (
-              <div
-                key={salesOrder.id}
-                className="py-5 first:pt-0 last:pb-0"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="text-base font-semibold text-foreground">
-                      {salesOrder.supplier.name}
-                    </div>
-                    <div className="font-mono text-xs text-muted-foreground">
-                      {order.tradeNo} / {salesOrder.subOrderNo || salesOrder.orderNo}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <StatusBadge
-                      label={getSalesOrderReviewStatusLabel(salesOrder.reviewStatus)}
-                      variant={getSalesOrderReviewStatusVariant(salesOrder.reviewStatus)}
-                    />
-                    {salesOrder.shippingTask ? (
-                      <>
-                        <StatusBadge
-                          label={getShippingReportStatusLabel(salesOrder.shippingTask.reportStatus)}
-                          variant={getShippingReportStatusVariant(salesOrder.shippingTask.reportStatus)}
-                        />
-                        <StatusBadge
-                          label={getShippingFulfillmentStatusLabel(salesOrder.shippingTask.shippingStatus)}
-                          variant={getShippingFulfillmentStatusVariant(
-                            salesOrder.shippingTask.shippingStatus,
-                          )}
-                        />
-                      </>
-                    ) : (
-                      <StatusBadge label="待初始化发货" variant="neutral" />
-                    )}
-                    {salesOrderExecution?.hasException ? (
-                      <StatusBadge label="执行异常" variant="danger" />
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.9fr)_minmax(0,0.95fr)] lg:divide-x lg:divide-border/40">
-                  <div className="space-y-3 lg:pr-5">
-                    <DetailPair label="商品摘要">
-                      {getSalesOrderProductSummary(salesOrder.items)}
-                    </DetailPair>
-                    <DetailPair label="子单状态">
-                      {formatSubOrderStatus(salesOrder.subOrderStatus)}
-                    </DetailPair>
-                  </div>
-
-                  <div className="grid gap-3 lg:px-5">
-                    <DetailPair label="子单金额" valueClassName={detailAmountClassName}>
-                      {formatCurrency(salesOrder.finalAmount)}
-                    </DetailPair>
-                    <DetailPair label="已录金额" valueClassName="font-mono text-sm font-medium text-foreground">
-                      {formatCurrency(salesOrder.collectedAmount)}
-                    </DetailPair>
-                    <DetailPair label="待收金额" valueClassName="font-mono text-sm font-medium text-foreground">
-                      {formatCurrency(salesOrder.remainingAmount)}
-                    </DetailPair>
-                    <DetailPair label="支付方案">
-                      {getSalesOrderPaymentSchemeLabel(salesOrder.paymentScheme)}
-                    </DetailPair>
-                  </div>
-
-                  <div className="grid gap-3 lg:pl-5">
-                    <DetailPair label="发货与物流">
-                      {getShippingSummaryText(salesOrder, salesOrderExecution)}
-                    </DetailPair>
-                    <DetailPair label="收款与催收">
-                        收款记录：{salesOrderExecution?.paymentRecordCount ?? 0}
-                        <span className="mx-1 text-border">/</span>
-                        催收中：{salesOrderExecution?.openCollectionTaskCount ?? 0}
-                    </DetailPair>
-                    <DetailPair label="最近批次">
-                        {latestSalesOrderBatch
-                          ? `${latestSalesOrderBatch.exportNo} / ${formatDateTime(
-                              latestSalesOrderBatch.exportedAt,
-                            )}`
-                          : "暂无批次"}
-                    </DetailPair>
-                  </div>
-                </div>
-
-                <div className="mt-5 flex flex-wrap items-center gap-3 text-xs">
-                  <Link href={salesOrderShippingHref} className={subtleInlineLinkClassName}>
-                    去发货执行
-                  </Link>
-                  <Link href={`/orders/${salesOrder.id}`} className={subtleInlineLinkClassName}>
-                    查看子单详情
-                  </Link>
-                  <Link href={salesOrderBatchHref} className={subtleInlineLinkClassName}>
-                    {latestSalesOrderBatch ? "看最近批次" : "看批次记录"}
-                  </Link>
-                  {latestSalesOrderBatch ? (
-                    <StatusBadge
-                      label={getBatchFileStateMeta(latestSalesOrderBatch.fileUrl).label}
-                      variant={getBatchFileStateMeta(latestSalesOrderBatch.fileUrl).variant}
-                    />
-                  ) : null}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="mt-5 space-y-3">
-          <div className="border-l-2 border-dashed border-border/60 pl-4 text-sm leading-7 text-muted-foreground">
-            当前父单尚未物化 supplier 子单。通常在提交审核后，系统才会根据 supplier 规划自动拆出
-            SalesOrder 子单。
-          </div>
-          {plannedSupplierGroups.length > 0 ? (
-            <div className="divide-y divide-border/40">
-              {plannedSupplierGroups.map((group) => (
-                <div
-                  key={group.supplierId}
-                  className="py-3 first:pt-0 last:pb-0"
-                >
-                  <div className="text-sm font-medium text-foreground">{group.supplierName}</div>
-                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs leading-6 text-muted-foreground">
-                    <span>规划子单 1 张</span>
-                    <span>成交行 {group.lineCount} 行</span>
-                    <span className="font-mono font-medium text-foreground">
-                      {formatCurrency(String(group.subtotal))}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function FulfillmentSummaryCards({
-  order,
-  executionSummary,
-  totalSubOrders,
-  totalChildCollectedAmount,
-  totalChildRemainingAmount,
-  confirmedPaymentRecordCount,
-  openCollectionTaskCount,
-  primaryShippingHref,
-  batchHref,
-  latestBatch,
-  latestBatchReferences,
-}: Readonly<{
-  order: TradeOrderDetail;
-  executionSummary: TradeOrderDetail["executionSummary"];
-  totalSubOrders: number;
-  totalChildCollectedAmount: number;
-  totalChildRemainingAmount: number;
-  confirmedPaymentRecordCount: number;
-  openCollectionTaskCount: number;
-  primaryShippingHref: string;
-  batchHref: string;
-  latestBatch: BatchReference | null;
-  latestBatchReferences: BatchReference[];
-}>) {
-  return (
-    <section className="grid gap-4 xl:grid-cols-3">
-      <OverviewCard
-        eyebrow="支付与催收摘要"
-        title={formatCurrency(order.remainingAmount)}
-        footer={
-          <div className="flex flex-wrap items-center gap-3">
-            <Link href={buildTradeOrderPaymentHref(order.tradeNo)} className={subtleInlineLinkClassName}>
-              去支付记录
-            </Link>
-            <Link
-              href={buildTradeOrderCollectionHref(order.tradeNo, { statusView: "OPEN" })}
-              className={subtleInlineLinkClassName}
-            >
-              去催收任务
-            </Link>
-          </div>
-        }
-      >
-        <div>已录金额：{formatCurrency(order.collectedAmount)}</div>
-        <div>子单已录：{formatCurrency(String(totalChildCollectedAmount))}</div>
-        <div>确认收款记录：{confirmedPaymentRecordCount}</div>
-        <div>子单待收：{formatCurrency(String(totalChildRemainingAmount))}</div>
-        <div>催收中：{openCollectionTaskCount}</div>
-      </OverviewCard>
-
-      <OverviewCard
-        eyebrow="发货与物流摘要"
-        title={`${executionSummary?.reportedSubOrderCount ?? 0} / ${executionSummary?.totalSubOrderCount ?? totalSubOrders} 已报单`}
-        footer={
-          <div className="flex flex-wrap items-center gap-3">
-            <Link href={primaryShippingHref} className={subtleInlineLinkClassName}>
-              去发货执行
-            </Link>
-            <Link
-              href={buildFulfillmentShippingHref({
-                keyword: order.tradeNo,
-                stageView: "EXCEPTION",
-              })}
-              className={subtleInlineLinkClassName}
-            >
-              查看异常队列
-            </Link>
-          </div>
-        }
-      >
-        <div>待报单：{executionSummary?.pendingReportSubOrderCount ?? 0}</div>
-        <div>待物流：{executionSummary?.pendingTrackingSubOrderCount ?? 0}</div>
-        <div>已发货：{executionSummary?.shippedSubOrderCount ?? 0}</div>
-        <div>物流异常：{executionSummary?.exceptionSubOrderCount ?? 0}</div>
-      </OverviewCard>
-
-      <OverviewCard
-        eyebrow="批次记录摘要"
-        title={latestBatch ? latestBatch.exportNo : "暂无批次"}
-        footer={
-          <div className="flex flex-wrap items-center gap-3">
-            <Link href={batchHref} className={subtleInlineLinkClassName}>
-              去批次记录
-            </Link>
-            {latestBatch ? (
-              <Link
-                href={buildFulfillmentBatchesHref({ keyword: latestBatch.exportNo })}
-                className={subtleInlineLinkClassName}
-              >
-                看最近批次
-              </Link>
-            ) : null}
-          </div>
-        }
-      >
-        <div>相关批次数：{latestBatchReferences.length}</div>
-        <div>最近导出：{latestBatch ? formatDateTime(latestBatch.exportedAt) : "暂无"}</div>
-        <div>最近 supplier：{latestBatch?.supplierName || "暂无"}</div>
-        <div>
-          文件状态：{latestBatch ? getBatchFileStateMeta(latestBatch.fileUrl).label : "暂无文件"}
-        </div>
-      </OverviewCard>
-    </section>
-  );
-}
-
+// 父单级提醒: 当出现异常组合 (未报单 / 已发货未收款 / 仍催收) 时, 给一行
+// 紧凑的 alert chip 流, 默认不渲染. 把"何处去处理"挂在 chip 上, 避免独立大 section.
 function ParentOrderAlertsSection({
   order,
-  unreportedSubOrders,
-  shippedWithoutPaymentSubOrders,
-  openCollectionSubOrders,
-  isClearlySplit,
-  primaryShippingHref,
+  unreportedCount,
+  shippedWithoutPaymentCount,
+  openCollectionCount,
 }: Readonly<{
   order: TradeOrderDetail;
-  unreportedSubOrders: SalesOrderExecutionItem[];
-  shippedWithoutPaymentSubOrders: SalesOrderExecutionItem[];
-  openCollectionSubOrders: SalesOrderExecutionItem[];
-  isClearlySplit: boolean;
-  primaryShippingHref: string;
+  unreportedCount: number;
+  shippedWithoutPaymentCount: number;
+  openCollectionCount: number;
 }>) {
   if (
-    unreportedSubOrders.length === 0 &&
-    shippedWithoutPaymentSubOrders.length === 0 &&
-    openCollectionSubOrders.length === 0 &&
-    !isClearlySplit
+    unreportedCount === 0 &&
+    shippedWithoutPaymentCount === 0 &&
+    openCollectionCount === 0
   ) {
     return null;
   }
-
+  type AlertChip = {
+    key: string;
+    label: string;
+    href: string;
+    tone: "warning" | "danger";
+  };
+  const chips: AlertChip[] = [];
+  if (unreportedCount > 0) {
+    chips.push({
+      key: "unreported",
+      label: `待报单 ${unreportedCount}`,
+      href: buildFulfillmentShippingHref({
+        keyword: order.tradeNo,
+        stageView: "PENDING_REPORT",
+      }),
+      tone: "warning",
+    });
+  }
+  if (shippedWithoutPaymentCount > 0) {
+    chips.push({
+      key: "shipped-no-payment",
+      label: `已发货未收款 ${shippedWithoutPaymentCount}`,
+      href: buildTradeOrderPaymentHref(order.tradeNo),
+      tone: "danger",
+    });
+  }
+  if (openCollectionCount > 0) {
+    chips.push({
+      key: "open-collection",
+      label: `催收中 ${openCollectionCount}`,
+      href: buildTradeOrderCollectionHref(order.tradeNo, { statusView: "OPEN" }),
+      tone: "warning",
+    });
+  }
   return (
-    <section className="crm-section-card">
-      <div className="space-y-2">
-        <h3 className="text-lg font-semibold text-[var(--foreground)]">父单级提醒</h3>
-        <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
-          这里只做父单层的异常与推进提醒，真正的处理仍回到对应执行页面完成。
-        </p>
-      </div>
-      <div className="mt-5 grid gap-3">
-        {unreportedSubOrders.length > 0 ? (
-          <div className="border-l-2 border-amber-500/30 pl-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1">
-                <div className="text-sm font-medium text-foreground">仍有子单未报单</div>
-                <div className="text-xs leading-6 text-muted-foreground">
-                  {unreportedSubOrders.length} 个子单还未进入 supplier 报单批次。
-                </div>
-              </div>
-              <Link
-                href={buildFulfillmentShippingHref({
-                  keyword: order.tradeNo,
-                  stageView: "PENDING_REPORT",
-                })}
-                className={subtleInlineLinkClassName}
-              >
-                去看待报单子单
-              </Link>
-            </div>
-          </div>
-        ) : null}
-
-        {shippedWithoutPaymentSubOrders.length > 0 ? (
-          <div className="border-l-2 border-destructive/30 pl-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1">
-                <div className="text-sm font-medium text-foreground">已发货但未见收款</div>
-                <div className="text-xs leading-6 text-muted-foreground">
-                  {shippedWithoutPaymentSubOrders.length} 个子单已发货，但当前父单下还没有对应收款记录。
-                </div>
-              </div>
-              <Link href={buildTradeOrderPaymentHref(order.tradeNo)} className={subtleInlineLinkClassName}>
-                去看收款记录
-              </Link>
-            </div>
-          </div>
-        ) : null}
-
-        {openCollectionSubOrders.length > 0 ? (
-          <div className="border-l-2 border-amber-500/30 pl-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1">
-                <div className="text-sm font-medium text-foreground">仍有催收任务进行中</div>
-                <div className="text-xs leading-6 text-muted-foreground">
-                  {openCollectionSubOrders.length} 个子单仍在催收链路里，建议优先确认是否已收款未回填。
-                </div>
-              </div>
-              <Link
-                href={buildTradeOrderCollectionHref(order.tradeNo, { statusView: "OPEN" })}
-                className={subtleInlineLinkClassName}
-              >
-                去看催收任务
-              </Link>
-            </div>
-          </div>
-        ) : null}
-
-        {isClearlySplit ? (
-          <div className="border-l-2 border-border/60 pl-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1">
-                <div className="text-sm font-medium text-foreground">父单内推进状态分裂明显</div>
-                <div className="text-xs leading-6 text-muted-foreground">
-                  同一 tradeNo 下的子单已出现待报单、已发货、收款和催收状态并行的情况。
-                </div>
-              </div>
-              <Link href={primaryShippingHref} className={subtleInlineLinkClassName}>
-                去执行工作台继续看
-              </Link>
-            </div>
-          </div>
-        ) : null}
-      </div>
+    <section
+      aria-label="父单级提醒"
+      className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-card px-4 py-3 shadow-sm"
+    >
+      <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        待处理
+      </span>
+      {chips.map((chip) => (
+        <Link
+          key={chip.key}
+          href={chip.href}
+          className={cn(
+            "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+            chip.tone === "danger"
+              ? "border-[var(--tone-danger-soft-border)] bg-[var(--tone-danger-soft-bg)] text-[var(--color-danger)] hover:border-[var(--color-danger)]"
+              : "border-amber-300/70 bg-amber-50/40 text-amber-700 hover:border-amber-500 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200",
+          )}
+        >
+          {chip.label}
+        </Link>
+      ))}
     </section>
   );
 }
 
-function TimelineAndOperationLogSection({
-  timelineEntries,
-  operationLogs,
-}: Readonly<{
-  timelineEntries: Array<{
-    id: string;
-    occurredAt: Date;
-    title: string;
-    detail: string;
-    href: string;
-  }>;
-  operationLogs: OperationLogItem[];
-}>) {
-  return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,0.94fr)_minmax(0,1.06fr)]">
-      <section className="crm-section-card">
-        <div className="space-y-2">
-          <h3 className="text-lg font-semibold text-[var(--foreground)]">关键时间线</h3>
-          <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
-            这里只聚合审核、子单报单、发货、收款与催收关键事件，用来快速理解这单整体推进到哪。
-          </p>
-        </div>
-        <div className="mt-5 divide-y divide-border/40">
-          {timelineEntries.length > 0 ? (
-            timelineEntries.map((entry) => (
-              <div
-                key={entry.id}
-                className="py-4 first:pt-0 last:pb-0"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium text-foreground">{entry.title}</div>
-                    <div className="text-xs leading-6 text-muted-foreground">{entry.detail}</div>
-                  </div>
-                  <div className="space-y-1 text-right">
-                    <div className="font-mono text-xs text-muted-foreground">
-                      {formatDateTime(entry.occurredAt)}
-                    </div>
-                    <Link href={entry.href} className={subtleInlineLinkClassName}>
-                      查看上下文
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="border-l-2 border-dashed border-border/60 pl-4 text-sm text-muted-foreground">
-              当前还没有可展示的关键动作时间线。
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section className="crm-section-card">
-        <div className="space-y-2">
-          <h3 className="text-lg font-semibold text-[var(--foreground)]">操作日志</h3>
-          <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
-            这里聚合父单、supplier 子单和已生成发货任务的关键操作，保证从成交到执行的链路可追踪。
-          </p>
-        </div>
-        <div className="mt-5 divide-y divide-border/40">
-          {operationLogs.length > 0 ? (
-            operationLogs.map((record) => (
-              <div
-                key={record.id}
-                className="py-4 first:pt-0 last:pb-0"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="text-sm font-medium text-foreground">
-                    {record.module} / {record.action}
-                  </div>
-                  <div className="font-mono text-xs text-muted-foreground">
-                    {formatDateTime(record.createdAt)}
-                  </div>
-                </div>
-                <div className="mt-2 text-sm leading-6 text-muted-foreground">
-                  {record.description || "无描述"}
-                </div>
-                <div className="mt-2 text-xs text-muted-foreground">
-                  操作人：{record.actor?.name || record.actor?.username || "系统"}
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="border-l-2 border-dashed border-border/60 pl-4 text-sm text-muted-foreground">
-              当前还没有操作日志记录。
-            </div>
-          )}
-        </div>
-      </section>
-    </div>
-  );
-}
+// NOTE: TimelineAndOperationLogSection (旧关键时间线 + 操作日志双 section)
+// 已由 <OrderTimeline events={timelineEvents} /> vertical timeline 取代;
+// 此函数删除以避免 dead code.
 
 export function TradeOrderDetailSection(
   props: Readonly<{
@@ -1188,160 +575,186 @@ export function TradeOrderDetailSection(
     useState<TradeOrderRecycleReasonCode>("mistaken_creation");
   const [recyclePending, startRecycleTransition] = useTransition();
   const router = useRouter();
-  const plannedSupplierGroups = Array.from(
-    order.components.reduce<
-      Map<
-        string,
-        {
-          supplierId: string;
-          supplierName: string;
-          lineCount: number;
-          subtotal: number;
-        }
-      >
-    >((map, component) => {
-      const current = map.get(component.supplierId) ?? {
-        supplierId: component.supplierId,
-        supplierName: component.supplierNameSnapshot,
-        lineCount: 0,
-        subtotal: 0,
-      };
-      current.lineCount += 1;
-      current.subtotal += Number(component.allocatedSubtotal);
-      map.set(component.supplierId, current);
-      return map;
-    }, new Map()),
-  ).map(([, value]) => value);
 
+  // 父单成交计数: 仅用于 supplier accordion summary 兜底; 其余 SKU/套餐/赠品
+  // 计数已下沉到 <OrderItemCard> 视觉表达, 不再向上层暴露.
   const totalSubOrders = order.salesOrders.length;
-  const actualSupplierCount = new Set(order.salesOrders.map((salesOrder) => salesOrder.supplier.id))
-    .size;
-  const plannedSupplierCount = plannedSupplierGroups.length;
-  const totalItemQty = order.items.reduce((sum, item) => sum + item.qty, 0);
-  const directSkuCount = order.items.filter((item) => item.itemType === "SKU").length;
-  const giftCount = order.items.filter((item) => item.itemType === "GIFT").length;
-  const bundleCount = order.items.filter((item) => item.itemType === "BUNDLE").length;
-  const totalChildCollectedAmount = sumCurrency(
-    order.salesOrders.map((salesOrder) => salesOrder.collectedAmount),
-  );
-  const totalChildRemainingAmount = sumCurrency(
-    order.salesOrders.map((salesOrder) => salesOrder.remainingAmount),
-  );
+  const actualSupplierCount = new Set(
+    order.salesOrders.map((salesOrder) => salesOrder.supplier.id),
+  ).size;
+  const plannedSupplierCount = new Set(
+    order.components.map((component) => component.supplierId),
+  ).size;
+  // 收款/催收派生计数 (OrderMetricGrid tooltip 使用)
+  const confirmedPaymentRecordCount = order.paymentRecords.filter(
+    (record) => record.status === "CONFIRMED",
+  ).length;
   const openCollectionTaskCount = order.collectionTasks.filter(
     (task) => task.status === "PENDING" || task.status === "IN_PROGRESS",
   ).length;
-  const confirmedPaymentRecordCount = order.paymentRecords.filter(
-    (paymentRecord) => paymentRecord.status === "CONFIRMED",
-  ).length;
-  const latestBatchReferences = getLatestBatchReferences(order);
-  const latestBatch = latestBatchReferences[0] ?? null;
   const executionSummary = order.executionSummary;
   const executionSummaryBySalesOrderId = new Map(
     executionSummary?.salesOrders.map((salesOrder) => [salesOrder.id, salesOrder]) ?? [],
   );
-  const submitReviewLog = operationLogs.find(
-    (record) => record.action === "trade_order.submitted_for_review",
-  );
-  const reviewDecisionLog = operationLogs.find(
-    (record) =>
-      record.action === "trade_order.approved" || record.action === "trade_order.rejected",
-  );
-
-  const timelineEntries = [
-    submitReviewLog
-      ? {
-          id: `review-submit-${submitReviewLog.id}`,
-          occurredAt: submitReviewLog.createdAt,
-          title: "提交审核",
-          detail: `${order.tradeNo} 已提交审核`,
-          href: `/orders/${order.id}`,
-        }
-      : null,
-    reviewDecisionLog
-      ? {
-          id: `review-result-${reviewDecisionLog.id}`,
-          occurredAt: reviewDecisionLog.createdAt,
-          title: reviewDecisionLog.action === "trade_order.approved" ? "审核通过" : "审核驳回",
-          detail: reviewDecisionLog.description || `${order.tradeNo} 审核状态已更新`,
-          href: `/orders/${order.id}`,
-        }
-      : null,
+  // OrderTimeline 事件: 合并三类来源 ->
+  //   1. operationLogs (审核/调整/退款/回收 等纯日志事件)
+  //   2. salesOrders.shippingTask 的 reportedAt / shippedAt (报单 + 发货真相)
+  //   3. paymentRecords + collectionTasks (收款 + 催收真相)
+  // 让 OrderTimeline widget 自己按 occurredAt 倒序 + 默认 8 条折叠.
+  const timelineEvents: OrderTimelineEvent[] = [
+    ...operationLogs.map((record): OrderTimelineEvent => {
+      const meta = mapOperationLogActionToTimelineMeta(record.action);
+      return {
+        id: `log-${record.id}`,
+        kind: meta.kind,
+        occurredAt: record.createdAt,
+        title: meta.title,
+        detail: record.description ?? undefined,
+        actor: record.actor?.name || record.actor?.username || undefined,
+        href: `/orders/${order.id}`,
+      };
+    }),
     ...order.salesOrders
       .filter((salesOrder) => salesOrder.shippingTask?.reportedAt)
-      .map((salesOrder) => ({
-        id: `reported-${salesOrder.id}`,
-        occurredAt: salesOrder.shippingTask?.reportedAt ?? salesOrder.createdAt,
-        title: "子单报单",
-        detail: `${salesOrder.subOrderNo || salesOrder.orderNo} / ${salesOrder.supplier.name} 已报单`,
-        href: buildFulfillmentShippingHref({
-          keyword: order.tradeNo,
-          supplierViewId: salesOrder.supplier.id,
-          stageView: "PENDING_TRACKING",
+      .map(
+        (salesOrder): OrderTimelineEvent => ({
+          id: `reported-${salesOrder.id}`,
+          kind: "report",
+          occurredAt: salesOrder.shippingTask?.reportedAt ?? salesOrder.createdAt,
+          title: "发货员报单",
+          detail: `${salesOrder.supplier.name} · ${salesOrder.subOrderNo || salesOrder.orderNo}`,
+          href: buildFulfillmentShippingHref({
+            keyword: order.tradeNo,
+            supplierViewId: salesOrder.supplier.id,
+            stageView: "PENDING_TRACKING",
+          }),
         }),
-      })),
+      ),
     ...order.salesOrders
       .filter((salesOrder) => salesOrder.shippingTask?.shippedAt)
-      .map((salesOrder) => ({
-        id: `shipped-${salesOrder.id}`,
-        occurredAt: salesOrder.shippingTask?.shippedAt ?? salesOrder.createdAt,
-        title: "子单发货",
-        detail: `${salesOrder.subOrderNo || salesOrder.orderNo} / ${salesOrder.supplier.name} 已发货`,
-        href: buildFulfillmentShippingHref({
+      .map(
+        (salesOrder): OrderTimelineEvent => ({
+          id: `shipped-${salesOrder.id}`,
+          kind: "ship",
+          occurredAt: salesOrder.shippingTask?.shippedAt ?? salesOrder.createdAt,
+          title: "子单发货",
+          detail: `${salesOrder.supplier.name} · ${salesOrder.subOrderNo || salesOrder.orderNo}`,
+          href: buildFulfillmentShippingHref({
+            keyword: order.tradeNo,
+            supplierViewId: salesOrder.supplier.id,
+            stageView: "SHIPPED",
+          }),
+        }),
+      ),
+    ...order.paymentRecords.map(
+      (paymentRecord: TradeOrderPaymentRecordItem): OrderTimelineEvent => ({
+        id: `payment-${paymentRecord.id}`,
+        kind: "pay",
+        occurredAt: paymentRecord.occurredAt,
+        title: getPaymentRecordStatusSummaryLabel(paymentRecord.status),
+        detail: `${paymentRecord.salesOrder?.subOrderNo || paymentRecord.salesOrder?.orderNo || "未绑定子单"} · ${formatCurrency(paymentRecord.amount)}`,
+        href: buildTradeOrderPaymentHref(order.tradeNo),
+      }),
+    ),
+    ...order.collectionTasks.map(
+      (collectionTask: TradeOrderCollectionTaskItem): OrderTimelineEvent => ({
+        id: `collection-${collectionTask.id}`,
+        kind: "collection",
+        occurredAt: collectionTask.createdAt,
+        title: getCollectionTaskTypeSummaryLabel(collectionTask.taskType),
+        detail: `${collectionTask.salesOrder?.subOrderNo || collectionTask.salesOrder?.orderNo || "未绑定子单"} · ${getCollectionTaskStatusSummaryLabel(collectionTask.status)}`,
+        href: buildTradeOrderCollectionHref(order.tradeNo, { statusView: "OPEN" }),
+      }),
+    ),
+  ];
+
+  // SupplierFulfillmentAccordion items: 把 salesOrder 跟执行摘要 normalize 成
+  // 视觉组件友好的字符串/数字, 让组件只做渲染.
+  const supplierAccordionItems: SupplierFulfillmentItem[] = order.salesOrders.map(
+    (salesOrder) => {
+      const execution = executionSummaryBySalesOrderId.get(salesOrder.id);
+      const latestBatch = salesOrder.shippingTask?.exportBatch ?? null;
+      const packageSummary = summarizeShippingPackageSnapshots(
+        normalizeShippingPackageSnapshots(salesOrder.shippingTask?.shippingPackages ?? []),
+      );
+      return {
+        id: salesOrder.id,
+        supplierName: salesOrder.supplier.name,
+        subOrderNo: salesOrder.subOrderNo || salesOrder.orderNo,
+        finalAmount: salesOrder.finalAmount,
+        collectedAmount: salesOrder.collectedAmount,
+        remainingAmount: salesOrder.remainingAmount,
+        paymentSchemeLabel: getSalesOrderPaymentSchemeLabel(salesOrder.paymentScheme),
+        productSummary: getSalesOrderProductSummary(salesOrder.items),
+        reviewStatusLabel: getSalesOrderReviewStatusLabel(salesOrder.reviewStatus),
+        reviewStatusVariant: getSalesOrderReviewStatusVariant(salesOrder.reviewStatus),
+        reportStatusLabel: salesOrder.shippingTask
+          ? getShippingReportStatusLabel(salesOrder.shippingTask.reportStatus)
+          : undefined,
+        reportStatusVariant: salesOrder.shippingTask
+          ? getShippingReportStatusVariant(salesOrder.shippingTask.reportStatus)
+          : undefined,
+        shippingStatusLabel: salesOrder.shippingTask
+          ? getShippingFulfillmentStatusLabel(salesOrder.shippingTask.shippingStatus)
+          : "待初始化发货",
+        shippingStatusVariant: salesOrder.shippingTask
+          ? getShippingFulfillmentStatusVariant(salesOrder.shippingTask.shippingStatus)
+          : "neutral",
+        hasException: Boolean(execution?.hasException),
+        shippingProvider: salesOrder.shippingTask?.shippingProvider ?? null,
+        trackingNumber: salesOrder.shippingTask?.trackingNumber ?? null,
+        shippingPackageSummary: packageSummary || null,
+        paymentRecordCount: execution?.paymentRecordCount ?? 0,
+        openCollectionTaskCount: execution?.openCollectionTaskCount ?? 0,
+        latestBatchExportNo: latestBatch?.exportNo ?? null,
+        latestBatchExportedAt: latestBatch?.exportedAt ?? null,
+        latestBatchFileReady: latestBatch ? Boolean(latestBatch.fileUrl) : undefined,
+        shippingHref: buildFulfillmentShippingHref({
           keyword: order.tradeNo,
           supplierViewId: salesOrder.supplier.id,
-          stageView: "SHIPPED",
+          stageView: getSalesOrderShippingStage(execution),
         }),
-      })),
-    ...order.paymentRecords.map((paymentRecord: TradeOrderPaymentRecordItem) => ({
-      id: `payment-${paymentRecord.id}`,
-      occurredAt: paymentRecord.occurredAt,
-      title: "收款记录",
-      detail: `${paymentRecord.salesOrder?.subOrderNo || paymentRecord.salesOrder?.orderNo || "未绑定子单"} / ${getPaymentRecordStatusSummaryLabel(paymentRecord.status)} / ${formatCurrency(paymentRecord.amount)}`,
-      href: buildTradeOrderPaymentHref(order.tradeNo),
-    })),
-    ...order.collectionTasks.map((collectionTask: TradeOrderCollectionTaskItem) => ({
-      id: `collection-${collectionTask.id}`,
-      occurredAt: collectionTask.createdAt,
-      title: "催收任务",
-      detail: `${collectionTask.salesOrder?.subOrderNo || collectionTask.salesOrder?.orderNo || "未绑定子单"} / ${getCollectionTaskTypeSummaryLabel(collectionTask.taskType)} / ${getCollectionTaskStatusSummaryLabel(collectionTask.status)}`,
-      href: buildTradeOrderCollectionHref(order.tradeNo, { statusView: "OPEN" }),
-    })),
-  ]
-    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
-    .sort((left, right) => right.occurredAt.getTime() - left.occurredAt.getTime())
-    .slice(0, 10);
+        batchHref: buildFulfillmentBatchesHref({
+          keyword: latestBatch?.exportNo || order.tradeNo,
+          supplierId: salesOrder.supplier.id,
+        }),
+        detailHref: `/orders/${salesOrder.id}`,
+      };
+    },
+  );
 
-  const unreportedSubOrders =
-    executionSummary?.salesOrders.filter((salesOrder) => salesOrder.reportStatus !== "REPORTED") ??
-    [];
-  const shippedWithoutPaymentSubOrders =
+  const supplierAccordionSummary: SupplierFulfillmentSummary = {
+    subOrderCount: totalSubOrders || plannedSupplierCount,
+    supplierCount: actualSupplierCount || plannedSupplierCount,
+    totalAmount: order.finalAmount,
+    shippedCount: executionSummary?.shippedSubOrderCount ?? 0,
+    pendingReportCount: executionSummary?.pendingReportSubOrderCount ?? 0,
+    pendingTrackingCount: executionSummary?.pendingTrackingSubOrderCount ?? 0,
+    exceptionCount: executionSummary?.exceptionSubOrderCount ?? 0,
+  };
+
+  // 父单级提醒计数: 仅保留可执行 chip, 不再把"分裂状态"暴露成独立卡片.
+  const unreportedCount =
+    executionSummary?.salesOrders.filter(
+      (salesOrder) => salesOrder.reportStatus !== "REPORTED",
+    ).length ?? 0;
+  const shippedWithoutPaymentCount =
     executionSummary?.salesOrders.filter(
       (salesOrder) =>
         isShippingCompletedLike(salesOrder.shippingStatus) && !salesOrder.hasPaymentRecord,
-    ) ?? [];
-  const openCollectionSubOrders =
-    executionSummary?.salesOrders.filter((salesOrder) => salesOrder.openCollectionTaskCount > 0) ??
-    [];
-  const isClearlySplit =
-    executionSummary && executionSummary.totalSubOrderCount > 1
-      ? [
-          executionSummary.reportedSubOrderCount > 0 &&
-            executionSummary.reportedSubOrderCount < executionSummary.totalSubOrderCount,
-          executionSummary.shippedSubOrderCount > 0 &&
-            executionSummary.shippedSubOrderCount < executionSummary.totalSubOrderCount,
-          executionSummary.paymentRecordedSubOrderCount > 0 &&
-            executionSummary.paymentRecordedSubOrderCount < executionSummary.totalSubOrderCount,
-          executionSummary.openCollectionSubOrderCount > 0 &&
-            executionSummary.openCollectionSubOrderCount < executionSummary.totalSubOrderCount,
-        ].filter(Boolean).length >= 2
-      : false;
+    ).length ?? 0;
+  const openCollectionCount =
+    executionSummary?.salesOrders.filter(
+      (salesOrder) => salesOrder.openCollectionTaskCount > 0,
+    ).length ?? 0;
 
   const primaryShippingHref = buildFulfillmentShippingHref({
     keyword: order.tradeNo,
     stageView: getTradeOrderShippingStage(executionSummary),
   });
   const batchHref = buildFulfillmentBatchesHref({ keyword: order.tradeNo });
-  const nextAction = getTradeOrderNextAction(executionSummary);
+  const progressPhase = resolveOrderProgressPhase(order, executionSummary);
+  const progressTimestamps = resolveOrderProgressTimestamps(order);
   const recycleGuard =
     notice?.recycleStatus === "blocked" && notice.guard ? notice.guard : order.recycleGuard;
   const finalizePreview =
@@ -1441,181 +854,153 @@ export function TradeOrderDetailSection(
         </ActionBanner>
       ) : null}
 
-      {revisionPanel ?? null}
+      {/* a. OrderHero — 客户 / 订单号 / 金额 三栏, 单一主状态 chip */}
+      <OrderHero
+        tradeNo={order.tradeNo}
+        tradeStatus={order.tradeStatus}
+        reviewStatus={order.reviewStatus}
+        createdAt={order.createdAt}
+        finalAmount={order.finalAmount}
+        collectedAmount={order.collectedAmount}
+        remainingAmount={order.remainingAmount}
+        customer={{
+          name: order.customer.name,
+          owner: order.customer.owner
+            ? {
+                name: order.customer.owner.name,
+                username: order.customer.owner.username,
+              }
+            : null,
+        }}
+        hasActiveRevision={order.tradeStatus === "REVISION_PENDING"}
+        activeShippingReturnStatus={shippingReturnPanelData?.status ?? null}
+      />
 
-      {showShippingReturnPanel ? (
-        <ShippingReturnPanel
-          tradeOrderId={order.id}
-          customerId={order.customer.id}
-          primaryShippingTaskId={primaryShippingTaskId}
-          activeShippingReturn={shippingReturnPanelData}
-          canRequest={canRequestShippingReturn ?? false}
-          canReview={canReviewShippingReturn ?? false}
-          currentUserId={currentUserId ?? ""}
-          requestAction={requestShippingReturnAction!}
-          reviewAction={reviewShippingReturnAction!}
-          cancelAction={cancelShippingReturnAction!}
-        />
-      ) : null}
+      {/* 次要快捷入口 (返回列表 / 发货执行 / 批次 / 回收) - 单独 quick-link 行 */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href={buildFulfillmentTradeOrdersHref()}
+          className={detailActionClassName}
+        >
+          返回交易单列表
+        </Link>
+        <Link href={primaryShippingHref} className={detailActionClassName}>
+          去发货执行
+        </Link>
+        <Link href={batchHref} className={detailActionClassName}>
+          看批次记录
+        </Link>
+        <Link
+          href={buildTradeOrderCollectionHref(order.tradeNo, { statusView: "OPEN" })}
+          className={detailActionClassName}
+        >
+          看催收任务
+        </Link>
+        <button
+          type="button"
+          onClick={openRecycleDialog}
+          className={detailActionClassName}
+        >
+          {recycleGuard.canMoveToRecycleBin ? "移入回收站" : "查看阻断关系"}
+        </button>
+      </div>
 
-      <section className="crm-section-card">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge
-                label={getTradeStatusLabel(order.tradeStatus)}
-                variant={getTradeStatusVariant(order.tradeStatus)}
-              />
-              <StatusBadge
-                label={getSalesOrderReviewStatusLabel(order.reviewStatus)}
-                variant={getSalesOrderReviewStatusVariant(order.reviewStatus)}
-              />
-              <StatusBadge
-                label={getSalesOrderPaymentSchemeLabel(order.paymentScheme)}
-                variant={getSalesOrderPaymentSchemeVariant(order.paymentScheme)}
-              />
-              {latestBatch ? (
-                <StatusBadge
-                  label={latestBatch.exportNo}
-                  variant={getBatchFileStateMeta(latestBatch.fileUrl).variant}
+      {/* b. OrderProgressTrack — 草稿 → 待审核 → 已审核 → 已报单 → 已发货 → 已收款 → 已完结 */}
+      <OrderProgressTrack
+        currentPhase={progressPhase}
+        timestamps={progressTimestamps}
+      />
+
+      {/* c. OrderActionZone — 把 撤单 / 退货 (未来 退款) 合并到 tab 切换的行动卡 */}
+      <OrderActionZone
+        tabs={(() => {
+          const tabs: OrderActionZoneTab[] = [];
+          if (revisionPanel) {
+            tabs.push({
+              key: "revision",
+              available: true,
+              active: order.tradeStatus === "REVISION_PENDING",
+              hint:
+                order.tradeStatus === "REVISION_PENDING"
+                  ? "撤单申请正在审批中, 主管复审后会逆向所有履约/收款。"
+                  : "客户反悔或需调整数量时, 在此发起撤单 / 减量申请。",
+              content: revisionPanel,
+            });
+          }
+          if (showShippingReturnPanel) {
+            tabs.push({
+              key: "return",
+              available: true,
+              active: shippingReturnPanelData !== null,
+              hint:
+                shippingReturnPanelData !== null
+                  ? "已存在退货流程, 跟进运单回填与到仓确认。"
+                  : "客户已收货但要求退回时, 在此发起退货申请。",
+              content: (
+                <ShippingReturnPanel
+                  tradeOrderId={order.id}
+                  customerId={order.customer.id}
+                  primaryShippingTaskId={primaryShippingTaskId}
+                  activeShippingReturn={shippingReturnPanelData}
+                  canRequest={canRequestShippingReturn ?? false}
+                  canReview={canReviewShippingReturn ?? false}
+                  currentUserId={currentUserId ?? ""}
+                  requestAction={requestShippingReturnAction!}
+                  reviewAction={reviewShippingReturnAction!}
+                  cancelAction={cancelShippingReturnAction!}
                 />
-              ) : null}
-            </div>
-            <div>
-              <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                父单身份
-              </div>
-              <h2 className="mt-1 font-mono text-3xl font-semibold tracking-tight text-foreground">
-                {order.tradeNo}
-              </h2>
-              <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-sm text-muted-foreground">
-                <span>客户：{order.customer.name}</span>
-                <span>
-                  归属销售：{order.customer.owner?.name || order.customer.owner?.username || "暂无"}
-                </span>
-                <span>下单时间：{formatDateTime(order.createdAt)}</span>
-                <span>最近更新：{formatDateTime(order.updatedAt)}</span>
-                <span>parent-first / supplier-split</span>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href={buildFulfillmentTradeOrdersHref()}
-              className={detailActionClassName}
-            >
-              返回交易单列表
-            </Link>
-            <Link href={primaryShippingHref} className={detailActionClassName}>
-              去发货执行
-            </Link>
-            <Link href={batchHref} className={detailActionClassName}>
-              看批次记录
-            </Link>
-            <button
-              type="button"
-              onClick={openRecycleDialog}
-              className={detailActionClassName}
-            >
-              {recycleGuard.canMoveToRecycleBin ? "移入回收站" : "查看阻断关系"}
-            </button>
-          </div>
+              ),
+            });
+          }
+          return tabs;
+        })()}
+      />
+
+      {/* d. OrderMetricGrid — 4 张可视化指标卡 (金额 / 回款环 / 履约条 / 异常) */}
+      <OrderMetricGrid
+        totalAmount={formatCurrency(order.finalAmount)}
+        collectedAmount={formatCurrency(order.collectedAmount)}
+        remainingAmount={formatCurrency(order.remainingAmount)}
+        totalSubOrders={executionSummary?.totalSubOrderCount ?? totalSubOrders}
+        shippedSubOrders={executionSummary?.shippedSubOrderCount ?? 0}
+        pendingSubOrders={
+          (executionSummary?.pendingReportSubOrderCount ?? 0) +
+          (executionSummary?.pendingTrackingSubOrderCount ?? 0)
+        }
+        exceptionSubOrders={executionSummary?.exceptionSubOrderCount ?? 0}
+        tooltips={{
+          amount: `成交 ${order.items.length} 行 · 折扣 ${formatCurrency(order.discountAmount)} · ${getSalesOrderPaymentSchemeLabel(order.paymentScheme)}`,
+          payment: `已确认 ${confirmedPaymentRecordCount} 条 · 催收中 ${openCollectionTaskCount}`,
+          fulfillment: `待报单 ${executionSummary?.pendingReportSubOrderCount ?? 0} · 待物流 ${executionSummary?.pendingTrackingSubOrderCount ?? 0}`,
+          exception: `待报单 ${executionSummary?.pendingReportSubOrderCount ?? 0} · 待物流 ${executionSummary?.pendingTrackingSubOrderCount ?? 0}`,
+        }}
+      />
+
+      {/* 收货信息: 紧凑单行 */}
+      <section
+        className="rounded-xl border border-border/60 bg-card px-4 py-3 shadow-sm"
+        aria-label="收货信息"
+      >
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            收货
+          </span>
+          <span className="text-sm font-semibold text-foreground">
+            {order.receiverNameSnapshot}
+          </span>
+          <span className="font-mono text-xs text-muted-foreground">
+            {order.receiverPhoneSnapshot}
+          </span>
+          <span
+            className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+            title={order.receiverAddressSnapshot}
+          >
+            {order.receiverAddressSnapshot}
+          </span>
         </div>
       </section>
 
-      <section className="rounded-xl border border-border/60 bg-card px-5 py-4 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge label={nextAction.label} variant={nextAction.variant} />
-              <span className="text-xs font-medium text-muted-foreground">
-                Parent-first execution hint
-              </span>
-            </div>
-            <p className="text-sm leading-6 text-muted-foreground">
-              {nextAction.description}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link href={primaryShippingHref} className={detailActionClassName}>
-              去发货执行
-            </Link>
-            <Link
-              href={buildTradeOrderCollectionHref(order.tradeNo, { statusView: "OPEN" })}
-              className={detailActionClassName}
-            >
-              看催收任务
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-3 xl:grid-cols-4">
-        <OverviewCard
-          eyebrow="成交摘要"
-          title={formatCurrency(order.finalAmount)}
-          footer={
-            <>
-              <span>成交父单</span>
-              <span className="mx-2 text-[var(--color-border-strong)]">/</span>
-              <span>{getSalesOrderPaymentSchemeLabel(order.paymentScheme)}</span>
-            </>
-          }
-        >
-          <div>商品总数：{totalItemQty}</div>
-          <div>成交行数：{order.items.length}</div>
-          <div>折扣金额：{formatCurrency(order.discountAmount)}</div>
-          <div>已录金额：{formatCurrency(order.collectedAmount)}</div>
-        </OverviewCard>
-
-        <OverviewCard
-          eyebrow="子单摘要"
-          title={`${totalSubOrders || plannedSupplierCount} 张子单`}
-          footer={
-            <>
-              <span>supplier 数：{actualSupplierCount || plannedSupplierCount}</span>
-              <span className="mx-2 text-[var(--color-border-strong)]">/</span>
-              <span>{totalSubOrders > 0 ? "已物化执行子单" : "按规划待物化"}</span>
-            </>
-          }
-        >
-          <div>direct SKU：{directSkuCount}</div>
-          <div>赠品行：{giftCount}</div>
-          <div>套餐行：{bundleCount}</div>
-          <div>规划 supplier：{plannedSupplierCount}</div>
-        </OverviewCard>
-
-        <OverviewCard
-          eyebrow="执行摘要"
-          title={`${executionSummary?.shippedSubOrderCount ?? 0} / ${executionSummary?.totalSubOrderCount ?? totalSubOrders} 已发货`}
-          footer={
-            latestBatch ? (
-              <>
-                <span>最近批次：{latestBatch.exportNo}</span>
-                <span className="mx-2 text-[var(--color-border-strong)]">/</span>
-                <span>{formatDateTime(latestBatch.exportedAt)}</span>
-              </>
-            ) : (
-              "当前还没有导出批次"
-            )
-          }
-        >
-          <div>待报单：{executionSummary?.pendingReportSubOrderCount ?? 0}</div>
-          <div>待物流：{executionSummary?.pendingTrackingSubOrderCount ?? 0}</div>
-          <div>已发货：{executionSummary?.shippedSubOrderCount ?? 0}</div>
-          <div>异常：{executionSummary?.exceptionSubOrderCount ?? 0}</div>
-        </OverviewCard>
-
-        <OverviewCard
-          eyebrow="收货摘要"
-          title={order.receiverNameSnapshot}
-          footer={order.receiverAddressSnapshot}
-        >
-          <div>手机：{order.receiverPhoneSnapshot}</div>
-          <div>地址：{order.receiverAddressSnapshot}</div>
-        </OverviewCard>
-      </section>
-
+      {/* 备注 / 驳回原因 / 继续编辑 / 审核操作 */}
       {(order.remark ||
         order.rejectReason ||
         canContinueEdit ||
@@ -1628,15 +1013,9 @@ export function TradeOrderDetailSection(
             <div className="mt-3 space-y-2.5 text-sm leading-6 text-muted-foreground">
               {order.remark ? <div>父单备注：{order.remark}</div> : null}
               {order.rejectReason ? <div>驳回原因：{order.rejectReason}</div> : null}
-              {order.tradeStatus === "APPROVED" ? (
-                <div>
-                  当前父单已审核通过，后续发货、支付、催收与物流回看请进入对应执行上下文推进。
-                </div>
-              ) : null}
               {canContinueEdit && continueEditHref ? (
                 <div>
-                  当前父单仍可回到客户详情继续编辑；重新提交审核时，系统会按最新的 SKU / 赠品 /
-                  套餐结构刷新 supplier 子单。
+                  当前父单仍可回到客户详情继续编辑；重新提交审核会按最新结构刷新子单。
                 </div>
               ) : null}
             </div>
@@ -1666,10 +1045,7 @@ export function TradeOrderDetailSection(
                   <input type="hidden" name="tradeOrderId" value={order.id} />
                   <input type="hidden" name="reviewStatus" value="APPROVED" />
                   <input type="hidden" name="redirectTo" value={`/orders/${order.id}`} />
-                  <div className="text-sm font-medium text-[var(--foreground)]">审核通过</div>
-                  <div className="mt-1 text-xs leading-5 text-[var(--color-sidebar-muted)]">
-                    通过后会同步子单镜像状态，并只初始化一次 shipping / payment artifacts。
-                  </div>
+                  <div className="text-sm font-medium text-foreground">审核通过</div>
                   <button type="submit" className="crm-button crm-button-primary mt-3 w-full">
                     审核通过
                   </button>
@@ -1682,7 +1058,7 @@ export function TradeOrderDetailSection(
                   <input type="hidden" name="tradeOrderId" value={order.id} />
                   <input type="hidden" name="reviewStatus" value="REJECTED" />
                   <input type="hidden" name="redirectTo" value={`/orders/${order.id}`} />
-                  <div className="text-sm font-medium text-[var(--foreground)]">驳回父单</div>
+                  <div className="text-sm font-medium text-foreground">驳回父单</div>
                   <textarea
                     name="rejectReason"
                     rows={3}
@@ -1699,49 +1075,30 @@ export function TradeOrderDetailSection(
           </div>
         </section>
       )}
-      <TradeOrderItemsSection
-        order={order}
-        bundleCount={bundleCount}
-        giftCount={giftCount}
-      />
-      <SupplierExecutionSection
-        order={order}
-        totalSubOrders={totalSubOrders}
-        plannedSupplierCount={plannedSupplierCount}
-        actualSupplierCount={actualSupplierCount}
-        executionSummaryBySalesOrderId={executionSummaryBySalesOrderId}
-        plannedSupplierGroups={plannedSupplierGroups}
-      />
 
+      {/* e. 商品行 — OrderItemCard 列表 */}
+      <TradeOrderItemsSection order={order} />
 
-      <FulfillmentSummaryCards
-        order={order}
-        executionSummary={executionSummary}
-        totalSubOrders={totalSubOrders}
-        totalChildCollectedAmount={totalChildCollectedAmount}
-        totalChildRemainingAmount={totalChildRemainingAmount}
-        confirmedPaymentRecordCount={confirmedPaymentRecordCount}
-        openCollectionTaskCount={openCollectionTaskCount}
-        primaryShippingHref={primaryShippingHref}
-        batchHref={batchHref}
-        latestBatch={latestBatch}
-        latestBatchReferences={latestBatchReferences}
+      {/* f. SupplierFulfillmentAccordion — 默认折叠的供货商子单卡 */}
+      <SupplierFulfillmentAccordion
+        items={supplierAccordionItems}
+        summary={supplierAccordionSummary}
+        emptyHint={
+          plannedSupplierCount > 0
+            ? `当前父单尚未物化 supplier 子单 (规划 ${plannedSupplierCount} 个 supplier)。提交审核后自动生成。`
+            : "当前父单尚未物化 supplier 子单。"
+        }
       />
 
       <ParentOrderAlertsSection
         order={order}
-        unreportedSubOrders={unreportedSubOrders}
-        shippedWithoutPaymentSubOrders={shippedWithoutPaymentSubOrders}
-        openCollectionSubOrders={openCollectionSubOrders}
-        isClearlySplit={isClearlySplit}
-        primaryShippingHref={primaryShippingHref}
+        unreportedCount={unreportedCount}
+        shippedWithoutPaymentCount={shippedWithoutPaymentCount}
+        openCollectionCount={openCollectionCount}
       />
 
-      <TimelineAndOperationLogSection
-        timelineEntries={timelineEntries}
-        operationLogs={operationLogs}
-      />
-
+      {/* g. OrderTimeline — vertical timeline 取代关键时间线 + 操作日志 */}
+      <OrderTimeline events={timelineEvents} />
 
       <TradeOrderRecycleDialog
         open={recycleDialogOpen}
