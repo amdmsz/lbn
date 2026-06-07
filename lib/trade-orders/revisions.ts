@@ -572,6 +572,25 @@ export async function reviewTradeOrderRevision(
       });
     }
 
+    // 安全网: 任何残留的 LogisticsFollowUpTask (理论上不该有, 因为 ALREADY_SHIPPED
+    // blocker 已拦, 但 OPS 工作流顺序可能让 trackingNumber 比 shippedAt 先到位)
+    // 也标 CANCELED, 让物流追踪 OPS 视图不再误显示.
+    const logisticsFollowUpsToCancel = await tx.logisticsFollowUpTask.findMany({
+      where: {
+        tradeOrderId: revision.tradeOrderId,
+        status: {
+          in: ["PENDING", "IN_PROGRESS"],
+        },
+      },
+      select: { id: true },
+    });
+    if (logisticsFollowUpsToCancel.length > 0) {
+      await tx.logisticsFollowUpTask.updateMany({
+        where: { id: { in: logisticsFollowUpsToCancel.map((t) => t.id) } },
+        data: { status: "CANCELED", closedAt: new Date() },
+      });
+    }
+
     const salesOrders = await tx.salesOrder.findMany({
       where: { tradeOrderId: revision.tradeOrderId },
       select: { id: true },
@@ -582,6 +601,12 @@ export async function reviewTradeOrderRevision(
         where: { id: so.id },
         data: {
           subOrderStatus: SalesSubOrderStatus.CANCELED,
+          // 同样把 SalesOrder 收款字段归零(所有 PaymentPlan/Record 已删),
+          // 防 dashboard / supplier 对账图表读到上一轮 sync 的残值.
+          collectedAmount: new Prisma.Decimal(0),
+          paidAmount: new Prisma.Decimal(0),
+          codAmount: new Prisma.Decimal(0),
+          remainingAmount: new Prisma.Decimal(0),
           updatedById: actor.id,
         },
       });
