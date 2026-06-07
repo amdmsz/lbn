@@ -15,12 +15,31 @@
 -- the IF EXISTS clause is only supported on the standalone `DROP INDEX ... ON tbl`
 -- form. Keep them in two statements.
 
--- Both statements use IF (NOT) EXISTS so the migration is idempotent —
--- production already partially applied v1 (which created the unique index
--- successfully before failing on DROP). Re-running plain CREATE would 1061.
+-- IMPORTANT: production already executed `CREATE UNIQUE INDEX
+-- reversepaymentrecord_sourcePaymentRecordId_key` during v1 attempt (v1
+-- failed *afterwards* on the DROP step, so the unique index landed).
+-- v2 only needs to DROP the redundant non-unique index.
+--
+-- For a fresh DB (where v1 never ran), we conditionally CREATE the unique
+-- index using information_schema check + PREPARE/EXECUTE to stay idempotent
+-- without relying on MariaDB 10.6+ `CREATE INDEX IF NOT EXISTS`.
 
-CREATE UNIQUE INDEX IF NOT EXISTS `reversepaymentrecord_sourcePaymentRecordId_key`
-  ON `reversepaymentrecord`(`sourcePaymentRecordId`);
+-- Conditional CREATE: only if the unique key doesn't already exist
+SET @reverse_unique_exists := (
+  SELECT COUNT(*) FROM information_schema.STATISTICS
+  WHERE table_schema = DATABASE()
+    AND table_name = 'reversepaymentrecord'
+    AND index_name = 'reversepaymentrecord_sourcePaymentRecordId_key'
+);
+SET @reverse_create_sql := IF(
+  @reverse_unique_exists = 0,
+  'CREATE UNIQUE INDEX `reversepaymentrecord_sourcePaymentRecordId_key` ON `reversepaymentrecord`(`sourcePaymentRecordId`)',
+  'DO 0'
+);
+PREPARE reverse_create_stmt FROM @reverse_create_sql;
+EXECUTE reverse_create_stmt;
+DEALLOCATE PREPARE reverse_create_stmt;
 
+-- DROP INDEX IF EXISTS is supported on MariaDB 10.0.2+ standalone form
 DROP INDEX IF EXISTS `reversepaymentrecord_sourcePaymentRecordId_idx`
   ON `reversepaymentrecord`;
