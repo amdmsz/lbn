@@ -19,6 +19,7 @@ import {
   createInitialPublicOwnershipEventTx,
   touchCustomerEffectiveFollowUpFromWechatTx,
 } from "@/lib/customers/ownership";
+import { listActiveCustomerIds } from "@/lib/customers/recycle";
 import { prisma } from "@/lib/db/prisma";
 import {
   buildImportedTagLookupCandidates,
@@ -1133,73 +1134,76 @@ export async function createCustomerContinuationImportBatch(
       ),
     ];
 
-    const [existingCustomers, resolvedOwners, activeTags] = await Promise.all([
-      prisma.customer.findMany({
-        where: {
-          phone: {
-            in: uniquePhones,
+    const [existingCustomers, resolvedOwners, activeTags, recycledCustomerIds] =
+      await Promise.all([
+        prisma.customer.findMany({
+          where: {
+            phone: {
+              in: uniquePhones,
+            },
           },
-        },
-        select: {
-          id: true,
-          name: true,
-          phone: true,
-          address: true,
-          ownerId: true,
-          ownershipMode: true,
-          lastOwnerId: true,
-          publicPoolEnteredAt: true,
-          publicPoolReason: true,
-          claimLockedUntil: true,
-          publicPoolTeamId: true,
-          lastEffectiveFollowUpAt: true,
-        },
-      }),
-      ownerUsernames.length > 0
-        ? prisma.user.findMany({
-            where: {
-              username: {
-                in: ownerUsernames,
-              },
-              userStatus: UserStatus.ACTIVE,
-              role: {
-                code: "SALES",
-              },
-            },
-            select: {
-              id: true,
-              name: true,
-              username: true,
-              teamId: true,
-            },
-          })
-        : Promise.resolve([]),
-      importedTagLookupValues.length > 0
-        ? prisma.tag.findMany({
-            where: {
-              isActive: true,
-              OR: [
-                {
-                  code: {
-                    in: importedTagLookupValues.map((value) => value.toUpperCase()),
-                  },
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            address: true,
+            ownerId: true,
+            ownershipMode: true,
+            lastOwnerId: true,
+            publicPoolEnteredAt: true,
+            publicPoolReason: true,
+            claimLockedUntil: true,
+            publicPoolTeamId: true,
+            lastEffectiveFollowUpAt: true,
+          },
+        }),
+        ownerUsernames.length > 0
+          ? prisma.user.findMany({
+              where: {
+                username: {
+                  in: ownerUsernames,
                 },
-                {
-                  name: {
-                    in: importedTagLookupValues,
-                  },
+                userStatus: UserStatus.ACTIVE,
+                role: {
+                  code: "SALES",
                 },
-              ],
-            },
-            select: {
-              id: true,
-              code: true,
-              name: true,
-            },
-          })
-        : Promise.resolve([]),
-    ]);
+              },
+              select: {
+                id: true,
+                name: true,
+                username: true,
+                teamId: true,
+              },
+            })
+          : Promise.resolve([]),
+        importedTagLookupValues.length > 0
+          ? prisma.tag.findMany({
+              where: {
+                isActive: true,
+                OR: [
+                  {
+                    code: {
+                      in: importedTagLookupValues.map((value) => value.toUpperCase()),
+                    },
+                  },
+                  {
+                    name: {
+                      in: importedTagLookupValues,
+                    },
+                  },
+                ],
+              },
+              select: {
+                id: true,
+                code: true,
+                name: true,
+              },
+            })
+          : Promise.resolve([]),
+        listActiveCustomerIds(prisma),
+      ]);
 
+    const recycledCustomerIdSet = new Set(recycledCustomerIds);
     const existingCustomerMap = new Map(existingCustomers.map((item) => [item.phone, item]));
     const resolvedOwnerMap = new Map(resolvedOwners.map((item) => [item.username, item]));
     const tagByCode = new Map(activeTags.map((item) => [item.code.toUpperCase(), item]));
@@ -1255,6 +1259,14 @@ export async function createCustomerContinuationImportBatch(
         let ownerOutcome: CustomerContinuationOwnerOutcome = "UNRESOLVED";
         const unresolvedTagsForRow: string[] = [];
 
+        const existingCustomerForPhone = normalizedPhone
+          ? existingCustomerMap.get(normalizedPhone) ?? null
+          : null;
+        const existingCustomerRecycled = Boolean(
+          existingCustomerForPhone &&
+            recycledCustomerIdSet.has(existingCustomerForPhone.id),
+        );
+
         if (!phoneRaw.trim()) {
           status = LeadImportRowStatus.FAILED;
           errorReason = "手机号为空";
@@ -1267,6 +1279,10 @@ export async function createCustomerContinuationImportBatch(
           status = LeadImportRowStatus.DUPLICATE;
           errorReason = `与本批次第 ${seenPhones.get(normalizedPhone)} 行手机号重复`;
           duplicateRows += 1;
+        } else if (existingCustomerRecycled) {
+          status = LeadImportRowStatus.FAILED;
+          errorReason = "当前手机号对应客户在回收站中，请先恢复或申请删除";
+          failedRows += 1;
         } else {
           seenPhones.set(normalizedPhone, row.rowNumber);
 
@@ -1317,7 +1333,7 @@ export async function createCustomerContinuationImportBatch(
             registerWarning(unresolvedTagValues, tagValue);
           }
 
-          const existingCustomer = existingCustomerMap.get(normalizedPhone) ?? null;
+          const existingCustomer = existingCustomerForPhone;
 
           if (existingCustomer) {
             const nextData: Prisma.CustomerUpdateInput = {};
@@ -1780,6 +1796,7 @@ async function processCustomerContinuationRowTx(input: {
   tagByName: Map<string, AssignableTagRecord>;
   systemTag: AssignableTagRecord;
   existingCustomerMap: Map<string, ExistingCustomerRecord>;
+  recycledCustomerIdSet: Set<string>;
 }) {
   return prisma.$transaction(async (tx) => {
     const existingRow = await tx.leadImportRow.findUnique({
@@ -1863,6 +1880,14 @@ async function processCustomerContinuationRowTx(input: {
       if (existingSeen) {
         status = LeadImportRowStatus.DUPLICATE;
         errorReason = `与本批次第 ${existingSeen.rowNumber} 行手机号重复`;
+      }
+    }
+
+    if (status === LeadImportRowStatus.IMPORTED && normalizedPhone) {
+      const existingCandidate = input.existingCustomerMap.get(normalizedPhone) ?? null;
+      if (existingCandidate && input.recycledCustomerIdSet.has(existingCandidate.id)) {
+        status = LeadImportRowStatus.FAILED;
+        errorReason = "当前手机号对应客户在回收站中，请先恢复或申请删除";
       }
     }
 
@@ -2279,74 +2304,79 @@ export async function processCustomerContinuationImportBatchAsync(
     ...new Set(importedTagValues.flatMap((value) => buildImportedTagLookupCandidates(value))),
   ];
 
-  const [existingCustomers, resolvedOwners, activeTags, systemTag] = await Promise.all([
-    prisma.customer.findMany({
-      where: {
-        phone: {
-          in: uniquePhones,
+  const [existingCustomers, resolvedOwners, activeTags, systemTag, recycledCustomerIds] =
+    await Promise.all([
+      prisma.customer.findMany({
+        where: {
+          phone: {
+            in: uniquePhones,
+          },
         },
-      },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        address: true,
-        ownerId: true,
-        ownershipMode: true,
-        lastOwnerId: true,
-        publicPoolEnteredAt: true,
-        publicPoolReason: true,
-        claimLockedUntil: true,
-        publicPoolTeamId: true,
-        lastEffectiveFollowUpAt: true,
-      },
-    }),
-    ownerUsernames.length > 0
-      ? prisma.user.findMany({
-          where: {
-            username: {
-              in: ownerUsernames,
-            },
-            userStatus: UserStatus.ACTIVE,
-            role: {
-              code: "SALES",
-            },
-          },
-          select: {
-            id: true,
-            name: true,
-            username: true,
-            teamId: true,
-          },
-        })
-      : Promise.resolve([]),
-    importedTagLookupValues.length > 0
-      ? prisma.tag.findMany({
-          where: {
-            isActive: true,
-            OR: [
-              {
-                code: {
-                  in: importedTagLookupValues.map((value) => value.toUpperCase()),
-                },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          address: true,
+          ownerId: true,
+          ownershipMode: true,
+          lastOwnerId: true,
+          publicPoolEnteredAt: true,
+          publicPoolReason: true,
+          claimLockedUntil: true,
+          publicPoolTeamId: true,
+          lastEffectiveFollowUpAt: true,
+        },
+      }),
+      ownerUsernames.length > 0
+        ? prisma.user.findMany({
+            where: {
+              username: {
+                in: ownerUsernames,
               },
-              {
-                name: {
-                  in: importedTagLookupValues,
-                },
+              userStatus: UserStatus.ACTIVE,
+              role: {
+                code: "SALES",
               },
-            ],
-          },
-          select: {
-            id: true,
-            code: true,
-            name: true,
-          },
-        })
-      : Promise.resolve([]),
-    prisma.$transaction((tx) => ensureSystemCustomerContinuationTagTx(tx, batch.createdById)),
-  ]);
+            },
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              teamId: true,
+            },
+          })
+        : Promise.resolve([]),
+      importedTagLookupValues.length > 0
+        ? prisma.tag.findMany({
+            where: {
+              isActive: true,
+              OR: [
+                {
+                  code: {
+                    in: importedTagLookupValues.map((value) => value.toUpperCase()),
+                  },
+                },
+                {
+                  name: {
+                    in: importedTagLookupValues,
+                  },
+                },
+              ],
+            },
+            select: {
+              id: true,
+              code: true,
+              name: true,
+            },
+          })
+        : Promise.resolve([]),
+      prisma.$transaction((tx) =>
+        ensureSystemCustomerContinuationTagTx(tx, batch.createdById),
+      ),
+      listActiveCustomerIds(prisma),
+    ]);
 
+  const recycledCustomerIdSet = new Set(recycledCustomerIds);
   const existingCustomerMap = new Map(existingCustomers.map((item) => [item.phone, item]));
   const resolvedOwnerMap = new Map(resolvedOwners.map((item) => [item.username, item]));
   const tagByCode = new Map(activeTags.map((item) => [item.code.toUpperCase(), item]));
@@ -2390,6 +2420,7 @@ export async function processCustomerContinuationImportBatchAsync(
         tagByName,
         systemTag,
         existingCustomerMap,
+        recycledCustomerIdSet,
       });
 
       if (!state.processedRowNumbers.has(result.rowNumber)) {
