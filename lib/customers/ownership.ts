@@ -816,8 +816,34 @@ export async function recycleCustomerToPublicPoolTx(
     throw new Error("Customer is still under claim protection.");
   }
 
-  const nextPublicPoolTeamId =
-    customer.publicPoolTeamId ?? customer.owner?.teamId ?? customer.lastOwner?.teamId ?? input.actor.teamId;
+  // 回退链顺序: 当前 publicPoolTeamId -> 当前 owner.teamId -> lastOwner.teamId ->
+  // 历史 customerOwnershipEvent.teamId (吸收 lastOwner 已被硬删的场景) ->
+  // actor.teamId. 用 ForAssignmentTx 帮助函数复用历史事件兜底逻辑.
+  // 若全部为 null (例: SYSTEM 全局 cron sweep + lastOwner 硬删 + 历史无 teamId 事件),
+  // 不能继续写 null — 否则客户会成为 "team-less 公海" 孤儿: SUPERVISOR/SALES 看不见 (queries.ts:1182),
+  // auto-assign 也跳过 (public-pool-auto-assign.ts:441), 审计事件 teamId 也丢失溯源 (ownership.ts:482).
+  // 此时保留原 customer.publicPoolTeamId (即使仍 null) 不如直接 throw 让上游决策路径吃异常 —
+  // public-pool-recycle.ts:classifyApplyError 会把该错误归类为 failed/skipped 写回 report,
+  // 不会污染 publicPoolTeamId 字段.
+  const resolvedNextPublicPoolTeamId = await getResolvedPoolTeamIdForAssignmentTx(
+    tx,
+    customer,
+    input.actor.teamId,
+  );
+
+  if (resolvedNextPublicPoolTeamId === null) {
+    console.warn(
+      `[recycleCustomerToPublicPoolTx] cannot resolve nextPublicPoolTeamId for customer ${customer.id}; ` +
+        `publicPoolTeamId=${customer.publicPoolTeamId}, owner.teamId=${customer.owner?.teamId ?? null}, ` +
+        `lastOwner.teamId=${customer.lastOwner?.teamId ?? null}, actor.teamId=${input.actor.teamId}, ` +
+        `actor.role=${input.actor.role}. Recycle aborted to avoid creating a team-less public-pool orphan.`,
+    );
+    throw new Error(
+      "Cannot recycle customer: no team scope available for the resulting public-pool customer.",
+    );
+  }
+
+  const nextPublicPoolTeamId = resolvedNextPublicPoolTeamId;
   const operationAction =
     input.operationAction ??
     (input.reason === PublicPoolReason.OWNER_LEFT_TEAM
