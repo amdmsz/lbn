@@ -1,3 +1,5 @@
+import type { OperationModule, OperationTargetType } from "@prisma/client";
+import { FilterX, ScrollText, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import {
   saveOutboundCallSeatBindingAction,
@@ -5,6 +7,7 @@ import {
 } from "@/app/(dashboard)/settings/actions";
 import { SettingsPageHeader } from "@/components/settings/settings-page-header";
 import { ActionBanner } from "@/components/shared/action-banner";
+import { EntityTable } from "@/components/shared/entity-table";
 import { SectionCard } from "@/components/shared/section-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { formatDateTimeLabel } from "@/lib/account-management/metadata";
@@ -56,6 +59,41 @@ type OperationLogItem = {
     username: string;
   } | null;
 };
+
+type OperationLogQueryItem = {
+  id: string;
+  module: OperationModule;
+  action: string;
+  targetType: OperationTargetType;
+  targetId: string;
+  description: string | null;
+  beforeData: unknown;
+  afterData: unknown;
+  createdAt: Date;
+  actor: {
+    id: string;
+    name: string;
+    username: string;
+  } | null;
+};
+
+type OperationLogFilters = {
+  module: string;
+  actor: string;
+  action: string;
+};
+
+function formatLogJson(value: unknown) {
+  if (value === null || value === undefined) {
+    return "—";
+  }
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
 
 const providerLabelMap: Record<string, string> = {
   LOCAL_MOUNT: "LOCAL_MOUNT · 本地挂载",
@@ -1309,6 +1347,11 @@ export function SettingsAuditWorkbench({
   configuredCount,
   viewerRole,
   notice,
+  operationLogs,
+  operationLogTotal,
+  operationLogPageSize,
+  operationLogFilters,
+  operationModules,
 }: Readonly<{
   runtimeSetting: SystemSettingPublic;
   logs: OperationLogItem[];
@@ -1316,8 +1359,18 @@ export function SettingsAuditWorkbench({
   configuredCount: number;
   viewerRole: SettingsViewerRole;
   notice: ActionNotice;
+  operationLogs: OperationLogQueryItem[];
+  operationLogTotal: number;
+  operationLogPageSize: number;
+  operationLogFilters: OperationLogFilters;
+  operationModules: OperationModule[];
 }>) {
   const runtime = getValue<RuntimeWorkerSettingValue>(runtimeSetting);
+  const hasFilter = Boolean(
+    operationLogFilters.module ||
+      operationLogFilters.actor ||
+      operationLogFilters.action,
+  );
 
   return (
     <SystemSettingsLayout
@@ -1432,6 +1485,185 @@ export function SettingsAuditWorkbench({
           </div>
         )}
       </SectionCard>
+
+      <div id="operation-logs" className="scroll-mt-24">
+        <SectionCard
+          eyebrow="审计"
+          title="操作日志查询"
+          description={`按模块 / 操作人 / 动作关键字筛选 OperationLog，最多展示 ${operationLogPageSize} 条。`}
+          actions={
+            <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+              <ScrollText className="h-4 w-4" aria-hidden />
+              <span>
+                {hasFilter
+                  ? `命中 ${operationLogTotal} 条 · 展示 ${operationLogs.length}`
+                  : `共 ${operationLogTotal} 条 · 展示 ${operationLogs.length}`}
+              </span>
+            </div>
+          }
+        >
+          <form
+            method="get"
+            action="/settings/audit"
+            className="grid gap-3 xl:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_minmax(0,1fr)_auto]"
+          >
+            <label className="space-y-1.5">
+              <span className="crm-label">模块</span>
+              <select
+                name="module"
+                defaultValue={operationLogFilters.module}
+                className="crm-select"
+              >
+                <option value="">全部模块</option>
+                {operationModules.map((moduleValue) => (
+                  <option key={moduleValue} value={moduleValue}>
+                    {moduleValue}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1.5">
+              <span className="crm-label">操作人</span>
+              <input
+                name="actor"
+                defaultValue={operationLogFilters.actor}
+                maxLength={120}
+                placeholder="姓名或账号"
+                className="crm-input"
+              />
+            </label>
+            <label className="space-y-1.5">
+              <span className="crm-label">动作关键字</span>
+              <input
+                name="action"
+                defaultValue={operationLogFilters.action}
+                maxLength={120}
+                placeholder="例如 update、delete"
+                className="crm-input"
+              />
+            </label>
+            <div className="flex items-end gap-2">
+              <button
+                type="submit"
+                className="crm-button crm-button-primary inline-flex items-center gap-1.5"
+              >
+                <Search className="h-4 w-4" aria-hidden />
+                筛选
+              </button>
+              <a
+                href="/settings/audit#operation-logs"
+                className="crm-button crm-button-secondary inline-flex items-center gap-1.5"
+              >
+                <FilterX className="h-4 w-4" aria-hidden />
+                重置
+              </a>
+            </div>
+          </form>
+
+          <div className="mt-4">
+            <EntityTable<OperationLogQueryItem>
+              rows={operationLogs}
+              getRowKey={(row) => row.id}
+              emptyTitle="暂无匹配的操作日志"
+              emptyDescription={
+                hasFilter
+                  ? "试试放宽筛选条件再查询。"
+                  : "OperationLog 表暂无记录。"
+              }
+              columns={[
+                {
+                  key: "createdAt",
+                  title: "时间",
+                  className: "whitespace-nowrap text-muted-foreground",
+                  render: (row) => formatDateTimeLabel(row.createdAt),
+                },
+                {
+                  key: "module",
+                  title: "模块",
+                  className: "whitespace-nowrap",
+                  render: (row) => (
+                    <StatusBadge label={row.module} variant="info" />
+                  ),
+                },
+                {
+                  key: "action",
+                  title: "动作",
+                  render: (row) => (
+                    <span className="font-medium text-foreground">
+                      {row.action}
+                    </span>
+                  ),
+                },
+                {
+                  key: "target",
+                  title: "对象",
+                  render: (row) => (
+                    <div className="space-y-1">
+                      <div className="text-[12px] uppercase tracking-[0.08em] text-muted-foreground">
+                        {row.targetType}
+                      </div>
+                      <div className="font-mono text-[11px] text-muted-foreground/80">
+                        {row.targetId}
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  key: "actor",
+                  title: "操作人",
+                  className: "whitespace-nowrap text-muted-foreground",
+                  render: (row) =>
+                    row.actor
+                      ? `${row.actor.name} (@${row.actor.username})`
+                      : "系统",
+                },
+                {
+                  key: "description",
+                  title: "描述 / 变更",
+                  render: (row) => {
+                    const hasDiff =
+                      (row.beforeData !== null && row.beforeData !== undefined) ||
+                      (row.afterData !== null && row.afterData !== undefined);
+
+                    return (
+                      <div className="space-y-2">
+                        <div className="text-[12px] leading-5 text-foreground">
+                          {row.description ?? "无描述"}
+                        </div>
+                        {hasDiff ? (
+                          <details className="rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-[12px]">
+                            <summary className="cursor-pointer select-none text-muted-foreground">
+                              查看变更
+                            </summary>
+                            <div className="mt-2 grid gap-2 lg:grid-cols-2">
+                              <div className="space-y-1">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                                  beforeData
+                                </div>
+                                <pre className="max-h-64 overflow-auto rounded-xl border border-border/60 bg-card p-2 font-mono text-[11px] leading-4 text-foreground">
+                                  {formatLogJson(row.beforeData)}
+                                </pre>
+                              </div>
+                              <div className="space-y-1">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                                  afterData
+                                </div>
+                                <pre className="max-h-64 overflow-auto rounded-xl border border-border/60 bg-card p-2 font-mono text-[11px] leading-4 text-foreground">
+                                  {formatLogJson(row.afterData)}
+                                </pre>
+                              </div>
+                            </div>
+                          </details>
+                        ) : null}
+                      </div>
+                    );
+                  },
+                },
+              ]}
+            />
+          </div>
+        </SectionCard>
+      </div>
     </SystemSettingsLayout>
   );
 }

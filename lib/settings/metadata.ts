@@ -132,6 +132,13 @@ export const settingsWorkspaceSections = [
         description: "配置变更、队列与 worker 状态",
         access: "admin",
       },
+      {
+        value: "audit-logs",
+        label: "操作日志查询",
+        href: "/settings/audit#operation-logs",
+        description: "按模块 / 操作人 / 动作过滤 OperationLog",
+        access: "admin",
+      },
     ],
   },
 ] as const;

@@ -29,7 +29,12 @@ import {
   deleteManagedUserHistoricalReferencesTx,
   getManagedUserDeletionImpactTx,
 } from "@/lib/account-management/deletion-repository";
-import { generateTemporaryPassword, hashPassword, verifyPassword } from "@/lib/auth/password";
+import {
+  generateTemporaryPassword,
+  hashPassword,
+  passwordPolicySchema,
+  verifyPassword,
+} from "@/lib/auth/password";
 import { prisma } from "@/lib/db/prisma";
 import { recycleCustomerToPublicPoolTx } from "@/lib/customers/ownership";
 
@@ -86,8 +91,10 @@ const teamFormSchema = z.object({
 const changeOwnPasswordSchema = z
   .object({
     currentPassword: z.string().min(1, "请输入当前密码"),
-    nextPassword: z.string().trim().min(8, "新密码至少需要 8 个字符").max(100, "新密码过长"),
-    confirmPassword: z.string().trim().min(1, "请再次输入新密码"),
+    // 不 .trim()：前后空格也是合法密码字符，trim 会与 hash 时不一致。
+    // 强度由共享 passwordPolicySchema 统一校验（最低 12 位 + 至少 3 类字符）。
+    nextPassword: passwordPolicySchema,
+    confirmPassword: z.string().min(1, "请再次输入新密码"),
   })
   .superRefine((value, ctx) => {
     if (value.nextPassword !== value.confirmPassword) {
@@ -98,7 +105,7 @@ const changeOwnPasswordSchema = z
       });
     }
 
-    if (value.currentPassword.trim() === value.nextPassword.trim()) {
+    if (value.currentPassword === value.nextPassword) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["nextPassword"],

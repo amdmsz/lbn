@@ -9,6 +9,7 @@ import {
   canExecuteLeadImportBatchHardDelete,
   canExecuteLeadImportBatchRollback,
 } from "@/lib/auth/access";
+import { assertSupervisorTeamScope } from "@/lib/auth/team-scope";
 import { buildLeadImportBatchVisibilityWhere } from "@/lib/lead-imports/access";
 import {
   executeImportedCustomerDeletionTx,
@@ -238,6 +239,7 @@ const rollbackBatchSelect = {
   fileName: true,
   status: true,
   report: true,
+  createdById: true,
   rollback: {
     select: {
       id: true,
@@ -1021,6 +1023,11 @@ async function prepareBatchRollbackTx(
 
   const importKind = getLeadImportBatchKind(batch.report);
   assertRollbackPermission(actor, { mode, importKind });
+
+  // R06 扩展: SUPERVISOR 跨团队补防. visibility WHERE 已经在 loadRollbackBatchTx
+  // 里按 createdBy.teamId 过滤, 这里再用 createdById 对一次 actor.teamId, 防止
+  // 后续 visibility helper 退化或新增写路径绕过.
+  await assertSupervisorTeamScope(actor, batch.createdById);
 
   const leadIds = [
     ...new Set(

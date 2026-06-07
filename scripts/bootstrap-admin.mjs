@@ -9,7 +9,43 @@ const ROLE_SEEDS = [
   ["SALES", "Sales", "Sales user"],
   ["OPS", "Ops", "Operations user"],
   ["SHIPPER", "Shipper", "Shipping user"],
+  ["FINANCE", "Finance", "Finance/refund reviewer"],
 ];
+
+// 与 lib/auth/password.ts 的 PASSWORD_POLICY 保持一致。
+// 这里独立维护是因为本脚本是 .mjs，不便直接引用 .ts 源码；如果未来策略调整，
+// 两边需要同时改。已经在 lib/auth/password.ts 上方注释说明该一致性约束。
+const PASSWORD_POLICY = {
+  minLength: 12,
+  maxLength: 128,
+  requiredClassCount: 3,
+  message: "密码至少 12 位，含大写字母、小写字母、数字和符号中至少 3 类。",
+};
+
+function countPasswordClasses(password) {
+  let count = 0;
+  if (/[A-Z]/.test(password)) count += 1;
+  if (/[a-z]/.test(password)) count += 1;
+  if (/\d/.test(password)) count += 1;
+  if (/[^A-Za-z0-9]/.test(password)) count += 1;
+  return count;
+}
+
+function validatePasswordStrength(password) {
+  if (typeof password !== "string") {
+    return PASSWORD_POLICY.message;
+  }
+  if (password.length < PASSWORD_POLICY.minLength) {
+    return PASSWORD_POLICY.message;
+  }
+  if (password.length > PASSWORD_POLICY.maxLength) {
+    return "密码过长。";
+  }
+  if (countPasswordClasses(password) < PASSWORD_POLICY.requiredClassCount) {
+    return PASSWORD_POLICY.message;
+  }
+  return null;
+}
 
 function printUsage() {
   console.log(
@@ -22,6 +58,9 @@ function printUsage() {
       "  - Creates the first admin account when the username does not exist.",
       "  - Re-running without --force is a no-op when the username already exists.",
       "  - Re-running with --force promotes the existing user to ADMIN, resets the password, re-enables the account, and clears team/supervisor bindings.",
+      "",
+      "Password policy:",
+      `  - ${PASSWORD_POLICY.message}`,
     ].join("\n"),
   );
 }
@@ -90,8 +129,13 @@ function validateInput(input) {
     throw new Error("`--name` is required.");
   }
 
-  if (!input.password || input.password.length < 8) {
-    throw new Error("`--password` is required and must be at least 8 characters.");
+  if (!input.password) {
+    throw new Error("`--password` is required.");
+  }
+
+  const passwordError = validatePasswordStrength(input.password);
+  if (passwordError) {
+    throw new Error(`\`--password\` 不满足安全要求：${passwordError}`);
   }
 }
 

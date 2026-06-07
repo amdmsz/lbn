@@ -61,10 +61,6 @@ import {
   startMobileCallFollowUpDial,
   type MobileCallTriggerSource,
 } from "@/lib/calls/mobile-call-followup";
-import {
-  formatRegion,
-  formatRelativeDateTime,
-} from "@/lib/customers/metadata";
 import type {
   CustomerCenterData,
   CustomerListItem,
@@ -77,7 +73,6 @@ import {
   updateMobileCustomerRemark,
   type MobileApiCustomerListItem,
   type MobileApiPagination,
-  type MobileCallSource,
   type MobileCustomerDetail,
 } from "@/lib/mobile/client-api";
 import {
@@ -92,12 +87,8 @@ import type {
 import { cn } from "@/lib/utils";
 
 type MobileTab = "messages" | "customers" | "dialpad" | "search" | "apps" | "me";
-// DateLike 已抽到 lib/format.ts (再 import 进来下面用), 但留这一行让旧引用兼容.
-// 后续 Phase 1 完成后可移除这行.
-import type { DateLike } from "@/components/mobile/lib/format";
 import {
   toDate,
-  parseMobileApiDate,
   formatNullableRelativeDate,
   normalizeDialValue,
   formatDialDisplayNumber,
@@ -112,6 +103,33 @@ import {
   readImageFileAsDataUrl,
   readStoredCustomerPhoto,
 } from "@/components/mobile/lib/photo-storage";
+import {
+  createMobileApiCustomerListItem,
+  getContactAddressLabel,
+  getCustomerAssignmentLabel,
+  getCustomerDetailAddressLabel,
+  getCustomerDialProductSignal,
+  getCustomerPrimaryProduct,
+  getPhoneLocationLabel,
+  mergeMobileApiCustomerItems,
+} from "@/components/mobile/lib/customer-modeling";
+import {
+  buildPhoneHistoryEntries,
+  getCallModeLabel,
+  getPhoneResultLabel,
+  isDateInPhoneTimeFilter,
+  isDateToday,
+  type PhoneHistoryEntry,
+  type PhoneResultFilterKey,
+  type PhoneTimeFilterKey,
+} from "@/components/mobile/lib/phone-history";
+import {
+  createRecentDialCustomer,
+  getRecentDialFromRecords,
+  readRecentDialCustomer,
+  type RecentDialCustomer,
+  writeRecentDialCustomer,
+} from "@/components/mobile/lib/recent-dial";
 type MobileIcon = ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
 type CustomerExecutionClassValue = "A" | "B" | "C" | "D" | "E";
 type MobileModuleView =
@@ -139,15 +157,6 @@ type MobileCurrentUser = {
   role: RoleCode;
   roleName: string;
   teamName: string | null;
-};
-
-type RecentDialCustomer = {
-  customerId: string;
-  customerName: string;
-  phone: string;
-  calledAt: string;
-  callMode: MobileCallSource;
-  resultLabel: string | null;
 };
 
 type MobileOutboundNotice = {
@@ -186,7 +195,7 @@ const customerExecutionClassOptions: Array<{
   { value: "E", label: "E 拒加" },
 ];
 
-const RECENT_DIAL_CUSTOMER_STORAGE_KEY = "lbncrm.mobile.recent-dial-customer";
+// RECENT_DIAL_CUSTOMER_STORAGE_KEY 已移到 components/mobile/lib/recent-dial.ts
 // CUSTOMER_PHOTO_STORAGE_PREFIX 已移到 components/mobile/lib/photo-storage.ts
 const MOBILE_LOCAL_CALL_MODE: MobileCallMode = "local-phone";
 
@@ -228,250 +237,13 @@ const roleMobileLabels: Record<RoleCode, string> = {
 // 5 个本地照片存储函数已抽到 lib/photo-storage.ts.
 
 // formatCurrencyAmount / formatCallDuration 已抽到 lib/format.ts
-function formatMobileDetailCallLabel(record: {
-  result: string | null;
-  resultCode: string | null;
-  latestActionEvent?: { action: string; failureCode?: string | null } | null;
-}) {
-  if (record.resultCode || record.result) {
-    return record.resultCode || record.result || "未填写";
-  }
+// formatMobileDetailCallLabel / createMobileApiCustomerListItem / mergeMobileApiCustomerItems /
+// getCustomerPrimaryProduct / getCustomerDialProductSignal / getCustomerAssignmentLabel /
+// getPhoneLocationLabel / getContactAddressLabel / getCustomerDetailAddressLabel 已抽到 lib/customer-modeling.ts
+// getRecentDialFromRecords / readRecentDialCustomer / writeRecentDialCustomer /
+// createRecentDialCustomer 已抽到 lib/recent-dial.ts
 
-  switch (record.latestActionEvent?.action) {
-    case "call.provider_requested":
-      return "外呼提交中";
-    case "call.provider_accepted":
-      return "外呼已提交";
-    case "call.provider_ringing":
-      return "外呼振铃中";
-    case "call.provider_answered":
-      return "外呼已接通";
-    case "call.provider_ended":
-      return "外呼已结束";
-    case "call.provider_canceled":
-      return "外呼已取消";
-    case "call.provider_failed":
-      return "外呼失败";
-    case "call.recording_imported":
-      return "录音已归档";
-    case "call.recording_failed":
-      return "录音归档失败";
-    case "call.native_dispatched":
-      return "本机已拨出";
-    case "call.native_permission_denied":
-      return "本机权限不足";
-    case "call.offhook_detected":
-      return "本机已接通";
-    case "call.idle_detected":
-      return "本机已结束";
-    case "call.recording_started":
-      return "本机录音中";
-    case "call.recording_file_ready":
-      return "本机录音待上传";
-    case "call.recording_unsupported":
-      return "本机录音不支持";
-    case "call.upload_started":
-      return "录音上传中";
-    case "call.upload_completed":
-      return "录音已上传";
-    case "call.upload_failed":
-      return "录音上传失败";
-    case "call.followup_saved":
-      return "已保存跟进";
-    default:
-      return "未填写";
-  }
-}
-
-function createMobileApiCustomerListItem(
-  item: MobileApiCustomerListItem,
-  fallback?: CustomerListItem,
-) {
-  const latestCall = item.latestCall
-    ? [
-        {
-          id: item.latestCall.id,
-          callTime: new Date(item.latestCall.callTime),
-          durationSeconds: item.latestCall.durationSeconds,
-          callSource: item.latestCall.callSource,
-          result: item.latestCall.result as CustomerListItem["callRecords"][number]["result"],
-          resultCode: item.latestCall.resultCode,
-          resultLabel: formatMobileDetailCallLabel(item.latestCall),
-          remark: fallback?.callRecords.find((record) => record.id === item.latestCall?.id)
-            ?.remark ?? null,
-          nextFollowUpAt: parseMobileApiDate(item.latestCall.nextFollowUpAt),
-          sales: fallback?.owner
-            ? {
-                name: fallback.owner.name,
-                username: fallback.owner.username,
-              }
-            : {
-                name: item.owner?.name ?? "",
-                username: item.owner?.username ?? "",
-              },
-        },
-      ]
-    : (fallback?.callRecords ?? []);
-
-  return {
-    id: item.id,
-    name: item.name,
-    phone: item.phone || item.phoneMasked,
-    province: item.region || fallback?.province || null,
-    city: fallback?.city ?? null,
-    district: fallback?.district ?? null,
-    address: fallback?.address ?? null,
-    status: item.status as CustomerListItem["status"],
-    ownershipMode: item.ownershipMode as CustomerListItem["ownershipMode"],
-    createdAt: new Date(item.createdAt),
-    avatarUrl: item.avatarUrl ?? fallback?.avatarUrl ?? null,
-    assignedAt: parseMobileApiDate(item.assignedAt) ?? fallback?.assignedAt ?? null,
-    latestImportAt: fallback?.latestImportAt ?? null,
-    latestFollowUpAt: parseMobileApiDate(item.lastFollowUpAt),
-    lastEffectiveFollowUpAt: parseMobileApiDate(item.lastFollowUpAt),
-    latestTradeAt: parseMobileApiDate(item.latestOrder?.createdAt),
-    lifetimeTradeAmount:
-      fallback?.lifetimeTradeAmount ?? item.latestOrder?.finalAmount ?? "0",
-    approvedTradeOrderCount:
-      fallback?.approvedTradeOrderCount ??
-      (item.latestOrder?.tradeStatus === "APPROVED" ? 1 : 0),
-    executionClass: item.level,
-    newImported: fallback?.newImported ?? false,
-    pendingFirstCall: fallback?.pendingFirstCall ?? !item.latestCall,
-    latestInterestedProduct: fallback?.latestInterestedProduct ?? null,
-    latestPurchasedProduct:
-      fallback?.latestPurchasedProduct ?? item.latestOrder?.tradeNo ?? null,
-    remark: fallback?.remark ?? null,
-    workingStatuses:
-      fallback?.workingStatuses ??
-      (item.latestFollowUpTask ? (["pending_follow_up"] as CustomerListItem["workingStatuses"]) : []),
-    recycleGuard: fallback?.recycleGuard ?? (null as unknown as CustomerListItem["recycleGuard"]),
-    recycleFinalizePreview: fallback?.recycleFinalizePreview ?? null,
-    owner:
-      item.owner ??
-      fallback?.owner ??
-      null,
-    leads: fallback?.leads ?? [],
-    callRecords: latestCall,
-    _count: fallback?._count ?? {
-      leads: 0,
-      callRecords: latestCall.length,
-    },
-    customerTags: fallback?.customerTags ?? [],
-  } satisfies CustomerListItem;
-}
-
-function mergeMobileApiCustomerItems(
-  current: readonly MobileApiCustomerListItem[],
-  next: readonly MobileApiCustomerListItem[],
-) {
-  const itemsById = new Map<string, MobileApiCustomerListItem>();
-
-  for (const item of current) {
-    itemsById.set(item.id, item);
-  }
-
-  for (const item of next) {
-    itemsById.set(item.id, item);
-  }
-
-  return Array.from(itemsById.values());
-}
-
-function getCustomerPrimaryProduct(item: CustomerListItem) {
-  return (
-    item.latestInterestedProduct?.trim() ||
-    item.leads.find((lead) => lead.interestedProduct?.trim())?.interestedProduct?.trim() ||
-    item.latestPurchasedProduct?.trim() ||
-    ""
-  );
-}
-
-function getCustomerDialProductSignal(item: CustomerListItem) {
-  const interestedProduct =
-    item.latestInterestedProduct?.trim() ||
-    item.leads.find((lead) => lead.interestedProduct?.trim())?.interestedProduct?.trim() ||
-    "";
-
-  if (interestedProduct) {
-    return {
-      label: "意向商品",
-      value: interestedProduct,
-    };
-  }
-
-  const purchasedProduct = item.latestPurchasedProduct?.trim() || "";
-
-  if (purchasedProduct) {
-    return {
-      label: "已购商品",
-      value: purchasedProduct,
-    };
-  }
-
-  return null;
-}
-
-function getCustomerAssignmentLabel(
-  item: CustomerListItem,
-  detail?: MobileCustomerDetail | null,
-) {
-  const assignedAt = toDate(detail?.assignedAt ?? item.assignedAt);
-
-  return assignedAt ? formatRelativeDateTime(assignedAt) : "未分配";
-}
-
-function getRecentDialFromRecords(items: CustomerListItem[]) {
-  let latest: RecentDialCustomer | null = null;
-  let latestTime = 0;
-
-  for (const item of items) {
-    for (const record of item.callRecords) {
-      const callTime = toDate(record.callTime)?.getTime() ?? 0;
-
-      if (callTime > latestTime) {
-        latestTime = callTime;
-        latest = {
-          customerId: item.id,
-          customerName: item.name,
-          phone: item.phone,
-          calledAt: new Date(callTime).toISOString(),
-          callMode: record.callSource,
-          resultLabel: record.resultLabel,
-        };
-      }
-    }
-  }
-
-  return latest;
-}
-
-type PhoneHistoryEntry = {
-  id: string;
-  customer: CustomerListItem;
-  title: string;
-  phone: string;
-  callMode: MobileCallSource;
-  modeLabel: "外呼" | "本机";
-  directionMark: "↗" | "↙";
-  locationLabel: string;
-  callTime: Date | null;
-  result: CustomerListItem["callRecords"][number]["result"];
-  resultCode: string | null;
-  resultLabel: string;
-  resultFilterKey: PhoneResultFilterKey;
-  timeLabel: string;
-};
-
-type PhoneTimeFilterKey = "all" | "today" | "week" | "month";
-type PhoneResultFilterKey =
-  | "all"
-  | "unfilled"
-  | "missed"
-  | "wechat-added"
-  | "wechat-refused"
-  | "wechat-pending"
-  | "connected";
+// PhoneHistoryEntry / PhoneTimeFilterKey / PhoneResultFilterKey 已抽到 lib/phone-history.ts
 
 const phoneTimeFilterOptions: Array<{
   value: PhoneTimeFilterKey;
@@ -496,303 +268,9 @@ const phoneResultFilterOptions: Array<{
   { value: "connected", label: "已接通" },
 ];
 
-function getCallModeLabel(callMode: MobileCallSource | null | undefined): PhoneHistoryEntry["modeLabel"] {
-  return callMode === "local-phone" ? "本机" : "外呼";
-}
-
-function getPhoneResultLabel(record: {
-  result: string | null;
-  resultCode: string | null;
-  resultLabel?: string | null;
-}) {
-  if (!record.result && !record.resultCode) {
-    return "未填写";
-  }
-
-  const label = record.resultLabel?.trim();
-
-  if (!label || label === "未记录") {
-    return "未填写";
-  }
-
-  return label;
-}
-
-function getPhoneResultFilterKey(record: CustomerListItem["callRecords"][number]): PhoneResultFilterKey {
-  if (!record.result && !record.resultCode) {
-    return "unfilled";
-  }
-
-  switch (record.result) {
-    case "NOT_CONNECTED":
-    case "INVALID_NUMBER":
-    case "HUNG_UP":
-      return "missed";
-    case "WECHAT_ADDED":
-      return "wechat-added";
-    case "REFUSED_WECHAT":
-      return "wechat-refused";
-    case "WECHAT_PENDING":
-      return "wechat-pending";
-    case "CONNECTED_NO_TALK":
-    case "INTERESTED":
-    case "NEED_CALLBACK":
-      return "connected";
-    default:
-      return getPhoneResultLabel(record) === "未填写" ? "unfilled" : "connected";
-  }
-}
-
-function formatPhoneCallTime(value: DateLike) {
-  const date = toDate(value);
-
-  if (!date) {
-    return "";
-  }
-
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const startOfCallDay = new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-  ).getTime();
-
-  if (startOfCallDay === startOfToday) {
-    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(
-      2,
-      "0",
-    )}`;
-  }
-
-  if (startOfCallDay === startOfToday - 24 * 60 * 60 * 1000) {
-    return "昨天";
-  }
-
-  return `${date.getMonth() + 1}/${date.getDate()}`;
-}
-
-function getStartOfDay(value: Date) {
-  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
-}
-
-function isDateToday(value: Date | null) {
-  if (!value) {
-    return false;
-  }
-
-  return getStartOfDay(value).getTime() === getStartOfDay(new Date()).getTime();
-}
-
-function isDateInPhoneTimeFilter(value: Date | null, filter: PhoneTimeFilterKey) {
-  if (filter === "all") {
-    return true;
-  }
-
-  if (!value) {
-    return false;
-  }
-
-  const now = new Date();
-  const startOfToday = getStartOfDay(now);
-
-  if (filter === "today") {
-    return value.getTime() >= startOfToday.getTime();
-  }
-
-  if (filter === "week") {
-    const start = new Date(startOfToday);
-    start.setDate(start.getDate() - 6);
-    return value.getTime() >= start.getTime();
-  }
-
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  return value.getTime() >= startOfMonth.getTime();
-}
-
-function getPhoneLocationLabel(item: CustomerListItem) {
-  return formatRegion(item.province, item.city, item.district) || "未知";
-}
-
-function getContactAddressLabel(item: CustomerListItem) {
-  return (
-    [item.province, item.city, item.district, item.address]
-      .filter((value): value is string => Boolean(value?.trim()))
-      .join(" / ") || "未填写"
-  );
-}
-
-function getCustomerDetailAddressLabel(
-  item: CustomerListItem,
-  detail: MobileCustomerDetail | null,
-) {
-  return (
-    [
-      detail?.profile.province ?? item.province,
-      detail?.profile.city ?? item.city,
-      detail?.profile.district ?? item.district,
-      detail?.profile.address ?? item.address,
-    ]
-      .filter((value): value is string => Boolean(value?.trim()))
-      .join(" / ") || "未填写地址"
-  );
-}
-
-function buildRecentPhoneHistoryEntry(
-  items: CustomerListItem[],
-  recentDialCustomer: RecentDialCustomer | null,
-) {
-  if (!recentDialCustomer) {
-    return null;
-  }
-
-  const customer = items.find((item) => item.id === recentDialCustomer.customerId);
-  const callTime = toDate(recentDialCustomer.calledAt);
-
-  if (!customer || !callTime) {
-    return null;
-  }
-
-  const hasPersistedRecord = customer.callRecords.some((record) => {
-    const recordTime = toDate(record.callTime)?.getTime() ?? 0;
-
-    return Math.abs(recordTime - callTime.getTime()) < 2 * 60 * 1000;
-  });
-
-  if (hasPersistedRecord) {
-    return null;
-  }
-
-  const modeLabel = getCallModeLabel(recentDialCustomer.callMode);
-
-  return {
-    id: `recent-${recentDialCustomer.customerId}-${recentDialCustomer.calledAt}`,
-    customer,
-    title: recentDialCustomer.customerName || customer.name || recentDialCustomer.phone,
-    phone: recentDialCustomer.phone,
-    callMode: recentDialCustomer.callMode,
-    modeLabel,
-    directionMark: "↗" as const,
-    locationLabel: getPhoneLocationLabel(customer),
-    callTime,
-    result: null,
-    resultCode: null,
-    resultLabel: recentDialCustomer.resultLabel?.trim() || "未填写",
-    resultFilterKey: "unfilled" as const,
-    timeLabel: formatPhoneCallTime(callTime),
-  } satisfies PhoneHistoryEntry;
-}
-
-function buildPhoneHistoryEntries(
-  items: CustomerListItem[],
-  recentDialCustomer: RecentDialCustomer | null,
-) {
-  const entries: PhoneHistoryEntry[] = [];
-  const recentEntry = buildRecentPhoneHistoryEntry(items, recentDialCustomer);
-
-  if (recentEntry) {
-    entries.push(recentEntry);
-  }
-
-  for (const customer of items) {
-    for (const record of customer.callRecords.slice(0, 4)) {
-      const modeLabel = getCallModeLabel(record.callSource);
-      const callTime = toDate(record.callTime);
-
-      entries.push({
-        id: record.id,
-        customer,
-        title: customer.name || customer.phone,
-        phone: customer.phone,
-        callMode: record.callSource,
-        modeLabel,
-        directionMark: "↗",
-        locationLabel: getPhoneLocationLabel(customer),
-        callTime,
-        result: record.result,
-        resultCode: record.resultCode,
-        resultLabel: getPhoneResultLabel(record),
-        resultFilterKey: getPhoneResultFilterKey(record),
-        timeLabel: formatPhoneCallTime(record.callTime),
-      });
-    }
-  }
-
-  return entries
-    .sort((left, right) => {
-      return (right.callTime?.getTime() ?? 0) - (left.callTime?.getTime() ?? 0);
-    })
-    .slice(0, 30);
-}
-
-function readRecentDialCustomer() {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const rawValue = window.localStorage.getItem(RECENT_DIAL_CUSTOMER_STORAGE_KEY);
-    if (!rawValue) {
-      return null;
-    }
-
-    const parsed = JSON.parse(rawValue) as Partial<RecentDialCustomer>;
-
-    if (
-      typeof parsed.customerId !== "string" ||
-      typeof parsed.customerName !== "string" ||
-      typeof parsed.phone !== "string" ||
-      typeof parsed.calledAt !== "string"
-    ) {
-      return null;
-    }
-
-    const parsedResultLabel =
-      typeof parsed.resultLabel === "string" ? parsed.resultLabel.trim() : null;
-    return {
-      customerId: parsed.customerId,
-      customerName: parsed.customerName,
-      phone: parsed.phone,
-      calledAt: parsed.calledAt,
-      callMode: "local-phone",
-      resultLabel:
-        parsedResultLabel === "本机通话" ||
-        parsedResultLabel === "本机" ||
-        parsedResultLabel === "CRM 外呼" ||
-        parsedResultLabel === "外呼"
-          ? "未填写"
-          : parsedResultLabel,
-    } satisfies RecentDialCustomer;
-  } catch {
-    return null;
-  }
-}
-
-function writeRecentDialCustomer(customer: RecentDialCustomer) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(
-    RECENT_DIAL_CUSTOMER_STORAGE_KEY,
-    JSON.stringify(customer),
-  );
-}
-
-function createRecentDialCustomer(
-  item: CustomerListItem,
-  callMode: MobileCallMode,
-  resultLabel: string | null = "未填写",
-) {
-  return {
-    customerId: item.id,
-    customerName: item.name,
-    phone: item.phone,
-    calledAt: new Date().toISOString(),
-    callMode,
-    resultLabel,
-  } satisfies RecentDialCustomer;
-}
+// getCallModeLabel / getPhoneResultLabel / getPhoneResultFilterKey / formatPhoneCallTime /
+// getStartOfDay / isDateToday / isDateInPhoneTimeFilter / buildRecentPhoneHistoryEntry /
+// buildPhoneHistoryEntries 已抽到 lib/phone-history.ts
 
 function getNavigationIcon(iconName: NavigationIconName) {
   const iconMap: Record<NavigationIconName, MobileIcon> = {

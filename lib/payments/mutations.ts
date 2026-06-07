@@ -28,6 +28,9 @@ import {
 import { prisma } from "@/lib/db/prisma";
 import {
   decimalToNumber,
+  equalsDecimal,
+  greaterThan,
+  nonNegativeCurrency,
   roundCurrency as roundCurrencyDecimal,
   sumDecimal,
 } from "@/lib/payments/decimal";
@@ -136,14 +139,9 @@ const updateCollectionTaskSchema = z.object({
   remark: z.string().trim().max(1000).default(""),
 });
 
-function toNumber(value: Prisma.Decimal | number | string | null | undefined) {
-  const numeric = Number(value ?? 0);
-  return Number.isFinite(numeric) ? numeric : 0;
-}
-
-function roundCurrency(value: number) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
+// F04 phase 2 完成后, 本文件不再需要 JS 浮点 toNumber / roundCurrency 本地 helper.
+// 所有金额求和 / 比较 / round 都走 lib/payments/decimal.ts 的 Decimal 链, 仅在出口
+// (Prisma write / workflow.ts number 入参 / 审计 JSON 字段) 末端再 decimalToNumber.
 
 function parseOptionalDate(value: string) {
   if (!value.trim()) {
@@ -295,7 +293,7 @@ async function syncPaymentPlanAggregateState(tx: PaymentTransaction, paymentPlan
     ),
   );
   const progress = calculatePaymentPlanProgress({
-    plannedAmount: toNumber(plan.plannedAmount),
+    plannedAmount: decimalToNumber(plan.plannedAmount),
     submittedAmount,
     confirmedAmount,
   });
@@ -425,15 +423,18 @@ async function syncSalesOrderSummary(tx: PaymentTransaction, salesOrderId: strin
     },
   });
 
+  // F04 phase 2: 单值边界统一走 decimalToNumber, 保持与 syncPaymentPlanAggregateState
+  // 一致的 Decimal-only → number 出口口径. workflow.deriveSalesOrderPaymentSummary
+  // 仍然是 number 签名 (后续提交才会切到 Decimal-only), 这里只做出口口径统一.
   const summary = deriveSalesOrderPaymentSummary(
     plans.map((plan) => ({
       subjectType: plan.subjectType,
       stageType: plan.stageType,
       collectionChannel: plan.collectionChannel,
-      plannedAmount: toNumber(plan.plannedAmount),
-      submittedAmount: toNumber(plan.submittedAmount),
-      confirmedAmount: toNumber(plan.confirmedAmount),
-      remainingAmount: toNumber(plan.remainingAmount),
+      plannedAmount: decimalToNumber(plan.plannedAmount),
+      submittedAmount: decimalToNumber(plan.submittedAmount),
+      confirmedAmount: decimalToNumber(plan.confirmedAmount),
+      remainingAmount: decimalToNumber(plan.remainingAmount),
     })),
   );
 
@@ -647,8 +648,9 @@ export async function syncSalesOrderPaymentArtifacts(
 
   const seeds = buildSalesOrderPaymentPlanSeeds({
     paymentScheme: input.paymentScheme,
-    finalAmount: toNumber(input.finalAmount),
-    depositAmount: toNumber(input.depositAmount),
+    // F04 phase 2: 入口统一走 Decimal 安全解析, 出口再 toNumber 给 workflow.ts.
+    finalAmount: decimalToNumber(input.finalAmount),
+    depositAmount: decimalToNumber(input.depositAmount),
   });
 
   const createdPlanIds: string[] = [];
@@ -694,7 +696,7 @@ export async function syncSalesOrderPaymentArtifacts(
       subjectType: createdPlan.subjectType,
       stageType: createdPlan.stageType,
       collectionChannel: createdPlan.collectionChannel,
-      plannedAmount: toNumber(createdPlan.plannedAmount),
+      plannedAmount: decimalToNumber(createdPlan.plannedAmount),
       sequence: seed.sequence,
     });
 
@@ -707,7 +709,7 @@ export async function syncSalesOrderPaymentArtifacts(
         shippingTaskId: input.shippingTaskId ?? null,
         customerId: input.customerId,
         ownerId: input.ownerId ?? null,
-        amount: toNumber(createdPlan.plannedAmount),
+        amount: decimalToNumber(createdPlan.plannedAmount),
         actorId: input.actorId,
         remark: "Auto-submitted from order payment scheme.",
       });
@@ -827,7 +829,8 @@ export async function ensureGiftFreightPaymentArtifacts(
   }
 
   const seeds = buildGiftFreightPaymentPlanSeeds({
-    freightAmount: toNumber(input.freightAmount),
+    // F04 phase 2: 入口 Decimal 解析, 出口 toNumber 给 workflow.ts.
+    freightAmount: decimalToNumber(input.freightAmount),
   });
 
   const createdPlanIds: string[] = [];
@@ -872,7 +875,7 @@ export async function ensureGiftFreightPaymentArtifacts(
       subjectType: createdPlan.subjectType,
       stageType: createdPlan.stageType,
       collectionChannel: createdPlan.collectionChannel,
-      plannedAmount: toNumber(createdPlan.plannedAmount),
+      plannedAmount: decimalToNumber(createdPlan.plannedAmount),
       sequence: seed.sequence,
     });
 
@@ -1104,8 +1107,9 @@ export async function syncShippingCollectionTasks(
   for (const plan of plans) {
     const shippingReady = isShippingCollectionReady(input.shippingStatus);
     const customerId = plan.customerId;
-    const expectedAmount = roundCurrency(toNumber(plan.plannedAmount));
-    const remainingAmount = roundCurrency(toNumber(plan.remainingAmount));
+    // F04 phase 2: round 走 Decimal 链, 再 toNumber 给下游 Prisma write / number 比较.
+    const expectedAmount = decimalToNumber(roundCurrencyDecimal(plan.plannedAmount));
+    const remainingAmount = decimalToNumber(roundCurrencyDecimal(plan.remainingAmount));
     const requestedCodStatus = input.codCollectionStatus ?? null;
     let codCollectionRecord = plan.codCollectionRecord;
 
@@ -1168,7 +1172,7 @@ export async function syncShippingCollectionTasks(
     }
 
     if (shippingReady) {
-      if (toNumber(plan.remainingAmount) > 0 && plan.ownerId && plan.customerId) {
+      if (greaterThan(plan.remainingAmount, 0) && plan.ownerId && plan.customerId) {
         const task = await ensureCollectionTaskForPlan(tx, {
           paymentPlanId: plan.id,
           actorId: input.actorId,
@@ -1254,8 +1258,8 @@ export async function syncShippingCollectionTasks(
               salesOrderId: plan.salesOrderId ?? input.salesOrderId,
               shippingTaskId: input.shippingTaskId,
               status: codCollectionRecord.status,
-              expectedAmount: toNumber(codCollectionRecord.expectedAmount),
-              collectedAmount: toNumber(codCollectionRecord.collectedAmount),
+              expectedAmount: decimalToNumber(codCollectionRecord.expectedAmount),
+              collectedAmount: decimalToNumber(codCollectionRecord.collectedAmount),
               paymentRecordId: codCollectionRecord.paymentRecordId,
               occurredAt: codCollectionRecord.occurredAt,
               remark: codCollectionRecord.remark,
@@ -1371,7 +1375,8 @@ export async function syncShippingCollectionTasks(
         String(rawInputAmount).trim() !== ""
           ? rawInputAmount
           : fallbackAmount;
-      const collectedAmount = roundCurrency(Math.max(toNumber(sourceAmount), 0));
+      // F04 phase 2: max(., 0) + round 都走 Decimal, 收紧浮点精度后再 toNumber.
+      const collectedAmount = decimalToNumber(nonNegativeCurrency(sourceAmount));
 
       if (collectedAmount <= 0) {
         throw new Error("Collected COD amount must be greater than 0.");
@@ -1389,7 +1394,12 @@ export async function syncShippingCollectionTasks(
 
       if (codCollectionRecord.paymentRecordId && codCollectionRecord.paymentRecord) {
         if (codCollectionRecord.paymentRecord.status === PaymentRecordStatus.CONFIRMED) {
-          if (roundCurrency(toNumber(codCollectionRecord.paymentRecord.amount)) !== collectedAmount) {
+          if (
+            !equalsDecimal(
+              roundCurrencyDecimal(codCollectionRecord.paymentRecord.amount),
+              collectedAmount,
+            )
+          ) {
             throw new Error("This COD payment record is already confirmed with a different amount.");
           }
         } else {
@@ -1477,8 +1487,8 @@ export async function syncShippingCollectionTasks(
             salesOrderId: plan.salesOrderId,
             shippingTaskId: input.shippingTaskId,
             status: codCollectionRecord.status,
-            expectedAmount: toNumber(codCollectionRecord.expectedAmount),
-            collectedAmount: toNumber(codCollectionRecord.collectedAmount),
+            expectedAmount: decimalToNumber(codCollectionRecord.expectedAmount),
+            collectedAmount: decimalToNumber(codCollectionRecord.collectedAmount),
             paymentRecordId: codCollectionRecord.paymentRecordId,
             occurredAt: codCollectionRecord.occurredAt,
             remark: codCollectionRecord.remark,
@@ -1566,8 +1576,8 @@ export async function syncShippingCollectionTasks(
           salesOrderId: plan.salesOrderId,
           shippingTaskId: input.shippingTaskId,
           status: codCollectionRecord.status,
-          expectedAmount: toNumber(codCollectionRecord.expectedAmount),
-          collectedAmount: toNumber(codCollectionRecord.collectedAmount),
+          expectedAmount: decimalToNumber(codCollectionRecord.expectedAmount),
+          collectedAmount: decimalToNumber(codCollectionRecord.collectedAmount),
           paymentRecordId: codCollectionRecord.paymentRecordId,
           occurredAt: codCollectionRecord.occurredAt,
           remark: codCollectionRecord.remark,
@@ -1704,13 +1714,14 @@ export async function submitPaymentRecord(
 
   if (
     plan.status === PaymentPlanStatus.COLLECTED ||
-    toNumber(plan.remainingAmount) <= 0
+    !greaterThan(plan.remainingAmount, 0)
   ) {
     throw new Error("This payment plan is already fully submitted.");
   }
 
-  const amount = roundCurrency(input.amount);
-  if (amount > toNumber(plan.remainingAmount)) {
+  // F04 phase 2: round 走 Decimal, 出口 toNumber 给 Prisma amount 列写入.
+  const amount = decimalToNumber(roundCurrencyDecimal(input.amount));
+  if (greaterThan(amount, plan.remainingAmount)) {
     throw new Error("Submitted amount cannot exceed the remaining amount.");
   }
 
@@ -1965,8 +1976,8 @@ export async function reviewPaymentRecord(
               salesOrderId: existing.salesOrderId,
               shippingTaskId: existing.shippingTaskId ?? "",
               status: codCollectionRecord.status,
-              expectedAmount: toNumber(codCollectionRecord.expectedAmount),
-              collectedAmount: toNumber(codCollectionRecord.collectedAmount),
+              expectedAmount: decimalToNumber(codCollectionRecord.expectedAmount),
+              collectedAmount: decimalToNumber(codCollectionRecord.collectedAmount),
               paymentRecordId: existing.id,
               occurredAt: codCollectionRecord.occurredAt,
               remark: codCollectionRecord.remark,
@@ -1979,8 +1990,8 @@ export async function reviewPaymentRecord(
                 input.status === "CONFIRMED"
                   ? CodCollectionStatus.COLLECTED
                   : CodCollectionStatus.EXCEPTION,
-              expectedAmount: toNumber(codCollectionRecord.expectedAmount),
-              collectedAmount: input.status === "CONFIRMED" ? toNumber(existing.amount) : 0,
+              expectedAmount: decimalToNumber(codCollectionRecord.expectedAmount),
+              collectedAmount: input.status === "CONFIRMED" ? decimalToNumber(existing.amount) : 0,
               paymentRecordId: existing.id,
               occurredAt: existing.occurredAt,
               remark:
