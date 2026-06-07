@@ -726,3 +726,153 @@ export async function withdrawTradeOrderRevisionAction(
     return { status: "error", message: getErrorMessage(error) };
   }
 }
+
+// === Refund Request (Phase B) Actions ===
+// 跟 RevisionRequest 平行的 server actions, 复用 getTradeOrderActionActor 兜底.
+
+export type RefundActionResult = {
+  status: "success" | "error";
+  message: string;
+};
+
+export async function requestRefundAction(
+  formData: FormData,
+): Promise<RefundActionResult> {
+  try {
+    const actor = await getTradeOrderActionActor();
+    const { requestRefund } = await import("@/lib/payments/refunds");
+
+    const sourcePaymentRecordIdsRaw = getFormValue(formData, "sourcePaymentRecordIds");
+    let sourcePaymentRecordIds: string[] = [];
+    try {
+      const parsed = JSON.parse(sourcePaymentRecordIdsRaw || "[]");
+      if (Array.isArray(parsed)) {
+        sourcePaymentRecordIds = parsed.filter((x): x is string => typeof x === "string");
+      }
+    } catch {
+      return { status: "error", message: "sourcePaymentRecordIds 数据格式错误" };
+    }
+
+    const result = await requestRefund(actor, {
+      tradeOrderId: getFormValue(formData, "tradeOrderId"),
+      revisionRequestId: getFormValue(formData, "revisionRequestId") || undefined,
+      requestedAmount: getFormValue(formData, "requestedAmount"),
+      reason: getFormValue(formData, "reason") as
+        | "CUSTOMER_REGRET"
+        | "QUALITY_ISSUE"
+        | "PRICING_DISPUTE"
+        | "DUPLICATE_PAYMENT"
+        | "OTHER",
+      reasonDetail: getFormValue(formData, "reasonDetail"),
+      sourcePaymentRecordIds,
+    });
+
+    const tradeOrderId = getFormValue(formData, "tradeOrderId");
+    const customerId = getFormValue(formData, "customerId");
+    revalidatePath("/orders");
+    revalidatePath("/finance/refunds");
+    if (tradeOrderId) revalidatePath(`/orders/${tradeOrderId}`);
+    if (customerId) revalidatePath(`/customers/${customerId}`);
+
+    return {
+      status: "success",
+      message: `退款申请已提交财务审批 (申请号 ${result.id.slice(-6)})`,
+    };
+  } catch (error) {
+    return { status: "error", message: getErrorMessage(error) };
+  }
+}
+
+export async function approveRefundAction(
+  formData: FormData,
+): Promise<RefundActionResult> {
+  try {
+    const actor = await getTradeOrderActionActor();
+    const { approveRefund } = await import("@/lib/payments/refunds");
+    await approveRefund(actor, {
+      refundRequestId: getFormValue(formData, "refundRequestId"),
+      approvedAmount: getFormValue(formData, "approvedAmount"),
+      reviewNote: getFormValue(formData, "reviewNote") || undefined,
+    });
+
+    const tradeOrderId = getFormValue(formData, "tradeOrderId");
+    revalidatePath("/finance/refunds");
+    if (tradeOrderId) revalidatePath(`/orders/${tradeOrderId}`);
+    return { status: "success", message: "退款申请已批准, 等待财务记录出账" };
+  } catch (error) {
+    return { status: "error", message: getErrorMessage(error) };
+  }
+}
+
+export async function rejectRefundAction(
+  formData: FormData,
+): Promise<RefundActionResult> {
+  try {
+    const actor = await getTradeOrderActionActor();
+    const { rejectRefund } = await import("@/lib/payments/refunds");
+    await rejectRefund(actor, {
+      refundRequestId: getFormValue(formData, "refundRequestId"),
+      rejectReason: getFormValue(formData, "rejectReason"),
+    });
+
+    const tradeOrderId = getFormValue(formData, "tradeOrderId");
+    revalidatePath("/finance/refunds");
+    if (tradeOrderId) revalidatePath(`/orders/${tradeOrderId}`);
+    return { status: "success", message: "退款申请已驳回" };
+  } catch (error) {
+    return { status: "error", message: getErrorMessage(error) };
+  }
+}
+
+export async function recordRefundPayoutAction(
+  formData: FormData,
+): Promise<RefundActionResult> {
+  try {
+    const actor = await getTradeOrderActionActor();
+    const { recordRefundPayout } = await import("@/lib/payments/refunds");
+    const occurredAt = getFormValue(formData, "occurredAt");
+    const result = await recordRefundPayout(actor, {
+      refundRequestId: getFormValue(formData, "refundRequestId"),
+      payoutMethod: getFormValue(formData, "payoutMethod") as
+        | "ALIPAY"
+        | "WECHAT"
+        | "BANK_TRANSFER"
+        | "OFFLINE_CASH"
+        | "OTHER",
+      payoutReference: getFormValue(formData, "payoutReference") || undefined,
+      occurredAt: occurredAt || undefined,
+    });
+
+    const tradeOrderId = getFormValue(formData, "tradeOrderId");
+    const customerId = getFormValue(formData, "customerId");
+    revalidatePath("/finance/refunds");
+    revalidatePath("/payment-records");
+    if (tradeOrderId) revalidatePath(`/orders/${tradeOrderId}`);
+    if (customerId) revalidatePath(`/customers/${customerId}`);
+    return {
+      status: "success",
+      message: `已记录出账 ${result.reverseRecords.length} 条反向凭证, 退款流程完成`,
+    };
+  } catch (error) {
+    return { status: "error", message: getErrorMessage(error) };
+  }
+}
+
+export async function withdrawRefundAction(
+  formData: FormData,
+): Promise<RefundActionResult> {
+  try {
+    const actor = await getTradeOrderActionActor();
+    const { withdrawRefund } = await import("@/lib/payments/refunds");
+    await withdrawRefund(actor, {
+      refundRequestId: getFormValue(formData, "refundRequestId"),
+    });
+
+    const tradeOrderId = getFormValue(formData, "tradeOrderId");
+    revalidatePath("/finance/refunds");
+    if (tradeOrderId) revalidatePath(`/orders/${tradeOrderId}`);
+    return { status: "success", message: "退款申请已撤回" };
+  } catch (error) {
+    return { status: "error", message: getErrorMessage(error) };
+  }
+}
