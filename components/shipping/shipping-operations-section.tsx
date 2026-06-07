@@ -1,37 +1,41 @@
-import type { ReactNode } from "react";
+/**
+ * ShippingOperationsSection — 发货执行三阶段工作面 (Wave 6 Phase 1C 视觉升级).
+ *
+ * 视觉气质 (补做 Wave 5 跳过项):
+ * - 三 workspace 顶部摘要统一走 MetricStrip 3-4 项.
+ * - 表格列从 8 收敛到 5-6: 删 [供应商] 列 (workspace 已锁 supplier 冗余),
+ *   合并 [品名/件数] -> ProductCell, 合并 [金额/COD/保价/备注] -> CommercialCell.
+ * - 审核/报单/履约 三连 badge -> PhaseTrackBadges (mini 3 阶段进度链).
+ * - 异常 6 标签 -> CompactBadgeGroup maxVisible=3 + overflow chip.
+ * - ShippedAndExceptionWorkspace 卡片使用 OrderProgressTrack 全 7 阶段轨道.
+ *
+ * 拆分: 展示原语 + utility 抽到 sidecar shipping-operations-bits.tsx 控制本文件行数.
+ * 严格不动 trade-orders/, shared/, 其他模块. 无 gradient. 无 hover translate. dark mode token.
+ */
+
 import Link from "next/link";
+
 import { EmptyState } from "@/components/shared/empty-state";
-import { MetricCard } from "@/components/shared/metric-card";
 import { PaginationControls } from "@/components/shared/pagination-controls";
 import { RecordTabs } from "@/components/shared/record-tabs";
 import { SectionCard } from "@/components/shared/section-card";
-import {
-  StatusBadge,
-  type StatusBadgeVariant,
-} from "@/components/shared/status-badge";
+import CompactBadgeGroup from "@/components/shared/compact-badge-group";
+import MetricStrip, {
+  type MetricItem,
+} from "@/components/shared/metric-strip";
+import OrderProgressTrack from "@/components/trade-orders/order-progress-track";
 import { LogisticsTracePanel } from "@/components/shipping/logistics-trace-panel";
 import { ShippingQuickFillDrawer } from "@/components/shipping/shipping-quick-fill-drawer";
 import { ShippingSelectionToolbar } from "@/components/shipping/shipping-selection-toolbar";
 import { formatDateTime } from "@/lib/customers/metadata";
 import {
-  codCollectionStatusOptions,
-  formatCurrency,
-  getCodCollectionStatusLabel,
-  getCodCollectionStatusVariant,
   getSalesOrderPaymentSchemeLabel,
   getShippingFulfillmentStatusLabel,
   getShippingFulfillmentStatusVariant,
-  getShippingReportStatusLabel,
-  getShippingReportStatusVariant,
-  shippingFulfillmentStatusOptions,
 } from "@/lib/fulfillment/metadata";
 import { COMMON_LOGISTICS_PROVIDERS } from "@/lib/logistics/metadata";
 import { buildShippingExportBatchDownloadHref } from "@/lib/shipping/download";
-import { buildShippingProductSummary } from "@/lib/shipping/product-summary";
-import {
-  getPrimaryShippingPackageSnapshot,
-  summarizeShippingPackageSnapshots,
-} from "@/lib/shipping/package-snapshots";
+import { getPrimaryShippingPackageSnapshot } from "@/lib/shipping/package-snapshots";
 import type {
   ShippingOperationsFilters,
   ShippingOperationsItem,
@@ -41,21 +45,40 @@ import type {
 } from "@/lib/shipping/queries";
 import { cn } from "@/lib/utils";
 
-type PaginationData = {
-  page: number;
-  pageSize: number;
-  totalCount: number;
-  totalPages: number;
-};
-
-type SummaryData = {
-  totalCount: number;
-  pendingReportCount: number;
-  pendingTrackingCount: number;
-  shippedCount: number;
-  exceptionCount: number;
-  supplierCount: number;
-};
+import {
+  CommercialCell,
+  CustomerOwnerHint,
+  HiddenFields,
+  OutcomeFinalizeForms,
+  PhaseTrackBadges,
+  ProductCell,
+  ShippingUpdateDetailsForm,
+  StageWorkspaceHeader,
+  StatusBadge,
+  buildExportBatchHiddenFields,
+  buildPageHref,
+  buildSupplierMetrics,
+  canFinalizeShippingOutcome,
+  deriveOrderProgressPhase,
+  getBatchStatusMeta,
+  getCollectionFocusMeta,
+  getExceptionBadgeItems,
+  getExecutionIdentity,
+  getLatestCodRecord,
+  getOrderCommercialContext,
+  getShippingPackagesSummary,
+  getStageCount,
+  tableCellClass,
+  tableHeadCellClass,
+  tableHeaderClass,
+  workspaceHintClassName,
+  workspacePanelClassName,
+  workspaceQuietActionClassName,
+  workspaceSectionClassName,
+  workspaceTableShellClassName,
+  type PaginationData,
+  type SummaryData,
+} from "@/components/shipping/shipping-operations-bits";
 
 type StageItem = {
   value: ShippingStageView;
@@ -81,367 +104,9 @@ const PRIMARY_STAGE_ITEMS: StageItem[] = [
   },
 ];
 
-const workspaceSectionClassName =
-  "space-y-5 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4 shadow-[var(--color-shell-shadow-sm)] md:p-5";
-
-const workspacePanelClassName =
-  "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-4";
-
-const workspaceTableShellClassName =
-  "overflow-x-auto rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] shadow-[var(--color-shell-shadow-sm)]";
-
-const workspaceHintClassName =
-  "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-sm text-[var(--color-sidebar-muted)]";
-
-const workspaceQuietActionClassName =
-  "inline-flex min-h-0 items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-panel)] px-3 py-2 text-sm font-medium text-[var(--color-sidebar-muted)] transition-[border-color,background-color,color] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]";
-
-function getStageCount(summary: SummaryData, stageView: ShippingStageView) {
-  switch (stageView) {
-    case "PENDING_TRACKING":
-      return summary.pendingTrackingCount;
-    case "SHIPPED":
-      return summary.shippedCount;
-    case "EXCEPTION":
-      return summary.exceptionCount;
-    case "PENDING_REPORT":
-    default:
-      return summary.pendingReportCount;
-  }
-}
-
-function buildPageHref(
-  filters: ShippingOperationsFilters,
-  overrides: Partial<ShippingOperationsFilters> = {},
-  basePath = "/shipping",
-  baseSearchParams?: Record<string, string>,
-) {
-  const next = {
-    ...filters,
-    ...overrides,
-  };
-  const params = new URLSearchParams(baseSearchParams);
-
-  params.delete("supplierId");
-  params.delete("reportStatus");
-  params.delete("shippingStatus");
-  params.delete("shippingStage");
-  params.delete("hasTrackingNumber");
-
-  if (next.keyword) params.set("keyword", next.keyword);
-  else params.delete("keyword");
-
-  if (next.supplierKeyword) params.set("supplierKeyword", next.supplierKeyword);
-  else params.delete("supplierKeyword");
-
-  if (next.supplierViewId) params.set("supplierViewId", next.supplierViewId);
-  else params.delete("supplierViewId");
-
-  if (next.batchViewId && next.stageView === "PENDING_TRACKING") {
-    params.set("batchViewId", next.batchViewId);
-  } else {
-    params.delete("batchViewId");
-  }
-
-  params.set("stageView", next.stageView);
-
-  if (next.isCod) params.set("isCod", next.isCod);
-  else params.delete("isCod");
-
-  if (next.page > 1) params.set("page", String(next.page));
-  else params.delete("page");
-
-  const query = params.toString();
-  return query ? `${basePath}?${query}` : basePath;
-}
-
-function getLatestCodRecord(item: ShippingOperationsItem) {
-  return item.codCollectionRecords[0] ?? null;
-}
-
-function getExecutionIdentity(item: ShippingOperationsItem) {
-  const tradeNo =
-    item.tradeOrder?.tradeNo ?? item.salesOrder?.tradeOrder?.tradeNo ?? null;
-  const subOrderNo =
-    item.salesOrder?.subOrderNo || item.salesOrder?.orderNo || item.id;
-  const supplierName = item.supplier?.name || "未绑定供应商";
-
-  return {
-    tradeNo,
-    subOrderNo,
-    supplierName,
-  };
-}
-
-function normalizeOrderRemark(value: string | null | undefined) {
-  const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : null;
-}
-
-function isSameCurrencyAmount(left: string, right: string) {
-  const leftValue = Number(left);
-  const rightValue = Number(right);
-
-  if (!Number.isFinite(leftValue) || !Number.isFinite(rightValue)) {
-    return left === right;
-  }
-
-  return Math.abs(leftValue - rightValue) < 0.005;
-}
-
-function getOrderCommercialContext(item: ShippingOperationsItem) {
-  const parentTradeOrder = item.tradeOrder ?? item.salesOrder?.tradeOrder ?? null;
-  const orderAmount = item.salesOrder?.finalAmount ?? parentTradeOrder?.finalAmount ?? "0";
-  const parentAmount =
-    parentTradeOrder?.finalAmount &&
-    !isSameCurrencyAmount(parentTradeOrder.finalAmount, orderAmount)
-      ? parentTradeOrder.finalAmount
-      : null;
-  const salesOrderRemark = normalizeOrderRemark(item.salesOrder?.remark);
-  const parentRemark = normalizeOrderRemark(parentTradeOrder?.remark);
-  const remarkLines: Array<{ label: string; value: string }> = [];
-
-  if (salesOrderRemark) {
-    remarkLines.push({ label: "订单备注", value: salesOrderRemark });
-  }
-
-  if (parentRemark && parentRemark !== salesOrderRemark) {
-    remarkLines.push({
-      label: salesOrderRemark ? "父单备注" : "订单备注",
-      value: parentRemark,
-    });
-  }
-
-  return {
-    orderAmount,
-    parentAmount,
-    remarkLines,
-  };
-}
-
-function OrderCommercialCell({ item }: Readonly<{ item: ShippingOperationsItem }>) {
-  const commercialContext = getOrderCommercialContext(item);
-
-  return (
-    <div className="max-w-[16rem]">
-      <div className="font-medium text-[var(--foreground)]">
-        {formatCurrency(commercialContext.orderAmount)}
-      </div>
-      {commercialContext.parentAmount ? (
-        <div className="mt-1 text-xs text-[var(--color-sidebar-muted)]">
-          父单成交 {formatCurrency(commercialContext.parentAmount)}
-        </div>
-      ) : null}
-      <div className="mt-1 text-xs text-[var(--color-sidebar-muted)]">
-        COD {formatCurrency(item.codAmount)} / 保价{" "}
-        {item.insuranceRequired ? formatCurrency(item.insuranceAmount) : "否"}
-      </div>
-      <div className="mt-1 space-y-0.5">
-        {commercialContext.remarkLines.length > 0 ? (
-          commercialContext.remarkLines.map((remark) => (
-            <div
-              key={`${remark.label}:${remark.value}`}
-              className="line-clamp-2 text-xs leading-5 text-[var(--color-sidebar-muted)]"
-            >
-              {remark.label}：{remark.value}
-            </div>
-          ))
-        ) : (
-          <div className="text-xs text-[var(--color-sidebar-muted)]">
-            订单备注：暂无
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function getProductSummary(item: ShippingOperationsItem) {
-  return (
-    buildShippingProductSummary(item.salesOrder?.items ?? []).replace(/\+/g, " + ") ||
-    "暂无商品明细"
-  );
-}
-
-function getShippingPackagesSummary(item: ShippingOperationsItem) {
-  return summarizeShippingPackageSnapshots(item.shippingPackages);
-}
-
-function getPieceCount(item: ShippingOperationsItem) {
-  return (
-    item.salesOrder?.items.reduce(
-      (total, orderItem) => total + orderItem.qty,
-      0,
-    ) ?? 0
-  );
-}
-
-function getCustomerOwnerLabel(item: ShippingOperationsItem) {
-  return item.customer.owner
-    ? `${item.customer.owner.name} (@${item.customer.owner.username})`
-    : "暂无负责人";
-}
-
-function CustomerOwnerHint({ item }: Readonly<{ item: ShippingOperationsItem }>) {
-  return (
-    <div className="mt-1 inline-flex items-center rounded-full border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-sidebar-muted)]">
-      负责人：{getCustomerOwnerLabel(item)}
-    </div>
-  );
-}
-
-function getExceptionLabels(item: ShippingOperationsItem) {
-  const labels: string[] = [];
-  if (item.shippingStatus === "CANCELED") labels.push("已取消");
-  if (!item.tradeOrder?.tradeNo && !item.salesOrder?.tradeOrder?.tradeNo)
-    labels.push("缺少父单锚点");
-  if (item.reportStatus === "PENDING" && item.trackingNumber?.trim())
-    labels.push("未报单先有物流");
-  if (
-    item.reportStatus === "REPORTED" &&
-    item.exportBatch &&
-    !item.exportBatch.fileUrl
-  )
-    labels.push("批次文件缺失");
-  if (item.logisticsExceptionType === "ADDRESS_MISMATCH")
-    labels.push("地址异常");
-  if (item.logisticsExceptionType === "RETURN_OR_REJECTED")
-    labels.push("退回 / 拒收");
-  if (item.logisticsExceptionType === "TRACE_QUERY_FAILED")
-    labels.push("物流查询失败");
-  if (item.logisticsExceptionType === "OVERDUE_NOT_SIGNED")
-    labels.push("超 7 天未签收");
-  return labels;
-}
-
-function getBatchStatusMeta(
-  batch:
-    | ShippingSupplierSummary["currentBatch"]
-    | ShippingSupplierSummary["latestHistoryBatch"]
-    | ShippingPendingBatchSummary
-    | null,
-): {
-  label: string;
-  variant: StatusBadgeVariant;
-  note: string;
-} | null {
-  if (!batch) {
-    return null;
-  }
-
-  switch (batch.fileState) {
-    case "READY":
-      return {
-        label: "文件可下载",
-        variant: "success",
-        note: "冻结快照和导出文件都可直接使用。",
-      };
-    case "MISSING":
-      return {
-        label: "文件缺失",
-        variant: "danger",
-        note: "批次快照仍在，导出文件需要重新生成。",
-      };
-    case "PENDING":
-      return {
-        label: "待生成文件",
-        variant: "warning",
-        note: "批次已冻结，但导出文件尚未生成。",
-      };
-    case "LEGACY":
-    default:
-      return {
-        label: "历史兼容批次",
-        variant: "neutral",
-        note: "该批次仍可回看，但不代表当前待处理池。",
-      };
-  }
-}
-
-function getReviewStatusMeta(
-  reviewStatus:
-    | NonNullable<ShippingOperationsItem["salesOrder"]>["reviewStatus"]
-    | undefined,
-) {
-  switch (reviewStatus) {
-    case "APPROVED":
-      return { label: "已审核", variant: "success" as const };
-    case "REJECTED":
-      return { label: "已驳回", variant: "danger" as const };
-    case "PENDING_REVIEW":
-      return { label: "待审核", variant: "warning" as const };
-    default:
-      return { label: "未审核", variant: "neutral" as const };
-  }
-}
-
-function getCollectionFocusMeta(item: ShippingOperationsItem) {
-  const codRecord = getLatestCodRecord(item);
-  const isCod = Number(item.codAmount) > 0;
-
-  if (item.shippingStatus === "REFUNDED") {
-    return {
-      label: "退款结束",
-      variant: "neutral" as const,
-    };
-  }
-
-  if (codRecord) {
-    return {
-      label: getCodCollectionStatusLabel(codRecord.status),
-      variant: getCodCollectionStatusVariant(codRecord.status),
-    };
-  }
-
-  if (!isCod) {
-    return {
-      label: "非 COD",
-      variant: "neutral" as const,
-    };
-  }
-
-  return {
-    label: "待回款关注",
-    variant: "warning" as const,
-  };
-}
-
-function buildDefaultExportFileName() {
-  return `shipping-export-${new Date().toISOString().slice(0, 10)}.csv`;
-}
-
-function canFinalizeShippingOutcome(item: ShippingOperationsItem) {
-  return item.shippingStatus === "DELIVERED" || item.shippingStatus === "COMPLETED";
-}
-
-function StageWorkspaceHeader({
-  title,
-  description,
-  badges,
-  actions,
-}: Readonly<{
-  title: string;
-  description: string;
-  badges: ReactNode;
-  actions?: ReactNode;
-}>) {
-  return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-1.5">{badges}</div>
-        <div>
-          <h3 className="text-[1.02rem] font-semibold tracking-tight text-[var(--foreground)] md:text-[1.1rem]">
-            {title}
-          </h3>
-          <p className="mt-1 text-sm leading-6 text-[var(--color-sidebar-muted)]">
-            {description}
-          </p>
-        </div>
-      </div>
-      {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
-    </div>
-  );
-}
+// ---------------------------------------------------------------------------
+// CurrentReportWorkspace
+// ---------------------------------------------------------------------------
 
 function CurrentReportWorkspace({
   activeSupplier,
@@ -471,12 +136,6 @@ function CurrentReportWorkspace({
     );
   }
 
-  const currentHref = buildPageHref(
-    filters,
-    { page: pagination.page },
-    basePath,
-    baseSearchParams,
-  );
   const pendingTrackingHref = buildPageHref(
     filters,
     {
@@ -485,6 +144,12 @@ function CurrentReportWorkspace({
       batchViewId: "",
       page: 1,
     },
+    basePath,
+    baseSearchParams,
+  );
+  const currentHref = buildPageHref(
+    filters,
+    { page: pagination.page },
     basePath,
     baseSearchParams,
   );
@@ -504,7 +169,7 @@ function CurrentReportWorkspace({
     <section className={workspaceSectionClassName}>
       <StageWorkspaceHeader
         title={`${activeSupplier.supplier.name} · 当前报单`}
-        description="这里是当前可导出的真实待处理池。先勾选当前 supplier 下的订单，再执行本次导出。"
+        description="当前可导出的真实待处理池。先勾选当前 supplier 下的订单, 再执行本次导出。"
         badges={
           <>
             <StatusBadge label="当前报单" variant="info" />
@@ -512,33 +177,17 @@ function CurrentReportWorkspace({
               label={`${activeSupplier.stageTaskCount} 单待导出`}
               variant="success"
             />
-            {activeSupplier.latestHistoryBatch ? (
-              <StatusBadge
-                label={`最近历史批次 ${activeSupplier.latestHistoryBatch.exportNo}`}
-                variant="neutral"
-              />
-            ) : null}
           </>
         }
         actions={
           <>
             <form action={createExportBatchAction}>
-              <input
-                type="hidden"
-                name="supplierId"
-                value={activeSupplier.supplier.id}
-              />
-              <input
-                type="hidden"
-                name="fileName"
-                value={buildDefaultExportFileName()}
-              />
-              <input type="hidden" name="remark" value="" />
-              <input type="hidden" name="sourceStage" value="PENDING_REPORT" />
-              <input
-                type="hidden"
-                name="redirectTo"
-                value={pendingTrackingHref}
+              <HiddenFields
+                fields={buildExportBatchHiddenFields({
+                  supplierId: activeSupplier.supplier.id,
+                  sourceStage: "PENDING_REPORT",
+                  redirectTo: pendingTrackingHref,
+                })}
               />
               <button type="submit" className="crm-button crm-button-primary">
                 导出当前 supplier 全部
@@ -554,46 +203,41 @@ function CurrentReportWorkspace({
         }
       />
 
-      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.45fr)_minmax(0,0.95fr)]">
-        <div className={workspacePanelClassName}>
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
-            当前 supplier 摘要
-          </p>
-          <div className="mt-3 flex flex-wrap gap-4 text-sm text-[var(--color-sidebar-muted)]">
-            <span>可报单 {activeSupplier.stageTaskCount} 单</span>
-            <span>待填物流 {activeSupplier.pendingTrackingCount} 单</span>
-            <span>异常 {activeSupplier.exceptionCount} 单</span>
-          </div>
-        </div>
+      <MetricStrip
+        ariaLabel="当前 supplier 摘要"
+        metrics={buildSupplierMetrics(activeSupplier)}
+      />
 
+      {activeSupplier.latestHistoryBatch ? (
         <div className={workspacePanelClassName}>
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             最近导出批次
           </p>
-          <div className="mt-3 space-y-2 text-sm text-[var(--color-sidebar-muted)]">
-            <div>
-              {activeSupplier.latestHistoryBatch
-                ? `${activeSupplier.latestHistoryBatch.exportNo} · ${formatDateTime(activeSupplier.latestHistoryBatch.exportedAt)}`
-                : "当前 supplier 暂无历史批次"}
-            </div>
-            <div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">
+              {activeSupplier.latestHistoryBatch.exportNo}
+            </span>
+            <span>
+              {formatDateTime(activeSupplier.latestHistoryBatch.exportedAt)}
+            </span>
+            <span className="text-[11px]">
               {latestHistoryBatchMeta?.note ??
-                "历史批次只作为冻结记录回看，不代表当前待导出集合。"}
-            </div>
-            {activeSupplier.latestHistoryBatch?.canDownload &&
+                "历史批次只作回看, 不代表当前待导出集合。"}
+            </span>
+            {activeSupplier.latestHistoryBatch.canDownload &&
             activeSupplier.latestHistoryBatch.fileUrl ? (
               <a
                 href={buildShippingExportBatchDownloadHref(
                   activeSupplier.latestHistoryBatch.id,
                 )}
-                className="inline-flex text-sm font-medium text-[var(--color-info)] hover:underline"
+                className="text-sm font-medium text-[var(--color-info)] hover:underline"
               >
-                下载最近历史批次文件
+                下载文件
               </a>
             ) : null}
           </div>
         </div>
-      </div>
+      ) : null}
 
       {items.length === 0 ? (
         <EmptyState
@@ -603,126 +247,78 @@ function CurrentReportWorkspace({
       ) : (
         <>
           <form id="current-report-selection-form" className="space-y-3">
-            <input
-              type="hidden"
-              name="supplierId"
-              value={activeSupplier.supplier.id}
+            <HiddenFields
+              fields={buildExportBatchHiddenFields({
+                supplierId: activeSupplier.supplier.id,
+                sourceStage: "PENDING_REPORT",
+                redirectTo: pendingTrackingHref,
+              })}
             />
-            <input
-              type="hidden"
-              name="fileName"
-              value={buildDefaultExportFileName()}
-            />
-            <input type="hidden" name="remark" value="" />
-            <input type="hidden" name="sourceStage" value="PENDING_REPORT" />
-            <input
-              type="hidden"
-              name="redirectTo"
-              value={pendingTrackingHref}
-            />
-
             <ShippingSelectionToolbar
               formId="current-report-selection-form"
               inputName="selectedShippingTaskId"
-              summary={`当前 supplier 本页 ${pageStart} - ${pageEnd} / 共 ${pagination.totalCount} 单，默认已勾选当前页。`}
+              summary={`本页 ${pageStart} - ${pageEnd} / 共 ${pagination.totalCount} 单, 默认勾选当前页。`}
             />
 
             <div className={workspaceTableShellClassName}>
-              <table className="min-w-full divide-y divide-[var(--color-border-soft)] text-sm">
-                <thead className="bg-[var(--color-shell-surface-soft)] text-left text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
+              <table className="min-w-full divide-y divide-border/60 text-sm">
+                <thead className={tableHeaderClass}>
                   <tr>
-                    <th className="px-4 py-3">选择</th>
-                    <th className="px-4 py-3">子单 / 父单</th>
-                    <th className="px-4 py-3">收件人</th>
-                    <th className="px-4 py-3">电话</th>
-                    <th className="px-4 py-3">地址摘要</th>
-                    <th className="px-4 py-3">品名 / 件数</th>
-                    <th className="px-4 py-3">金额 / 备注</th>
-                    <th className="px-4 py-3">审核 / 履约</th>
+                    <th className={tableHeadCellClass}>选</th>
+                    <th className={tableHeadCellClass}>子单 / 父单</th>
+                    <th className={tableHeadCellClass}>收件人 / 地址</th>
+                    <th className={tableHeadCellClass}>商品</th>
+                    <th className={tableHeadCellClass}>金额</th>
+                    <th className={tableHeadCellClass}>进度</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[var(--color-border-soft)]">
+                <tbody className="divide-y divide-border/40">
                   {items.map((item) => {
                     const identity = getExecutionIdentity(item);
-                    const reviewMeta = getReviewStatusMeta(
-                      item.salesOrder?.reviewStatus,
-                    );
-
                     return (
-                      <tr
-                        key={item.id}
-                        className="align-top text-[var(--color-sidebar-muted)]"
-                      >
-                        <td className="px-4 py-3">
+                      <tr key={item.id} className="text-muted-foreground">
+                        <td className={tableCellClass}>
                           <input
                             type="checkbox"
                             name="selectedShippingTaskId"
                             value={item.id}
                             defaultChecked
-                            className="mt-1 h-4 w-4 rounded border-[var(--color-border-strong)]"
+                            className="mt-0.5 h-4 w-4 rounded border-border"
                           />
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-[var(--foreground)]">
+                        <td className={tableCellClass}>
+                          <div className="font-medium text-foreground">
                             {identity.subOrderNo}
                           </div>
-                          <div className="mt-1 text-xs text-[var(--color-sidebar-muted)]">
+                          <div className="mt-0.5 text-[11px] text-muted-foreground">
                             {identity.tradeNo
                               ? `父单 ${identity.tradeNo}`
                               : "缺少父单锚点"}
                           </div>
                         </td>
-                        <td className="px-4 py-3">
-                          <div>
+                        <td className={tableCellClass}>
+                          <div className="text-foreground">
                             {item.salesOrder?.receiverNameSnapshot ||
                               item.customer.name}
+                            <span className="ml-1.5 text-[11px] text-muted-foreground">
+                              {item.salesOrder?.receiverPhoneSnapshot ||
+                                item.customer.phone}
+                            </span>
                           </div>
-                          <CustomerOwnerHint item={item} />
-                        </td>
-                        <td className="px-4 py-3">
-                          {item.salesOrder?.receiverPhoneSnapshot ||
-                            item.customer.phone}
-                        </td>
-                        <td className="max-w-[18rem] px-4 py-3 text-[var(--color-sidebar-muted)]">
-                          <div className="line-clamp-2">
+                          <div className="mt-0.5 line-clamp-1 max-w-[16rem] text-[11px] text-muted-foreground">
                             {item.salesOrder?.receiverAddressSnapshot ||
                               "暂无地址快照"}
                           </div>
+                          <CustomerOwnerHint item={item} />
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="max-w-[15rem] text-[var(--color-sidebar-muted)]">
-                            {getProductSummary(item)}
-                          </div>
-                          <div className="mt-1 text-xs text-[var(--color-sidebar-muted)]">
-                            {getPieceCount(item)} 件
-                          </div>
+                        <td className={tableCellClass}>
+                          <ProductCell item={item} />
                         </td>
-                        <td className="px-4 py-3">
-                          <OrderCommercialCell item={item} />
+                        <td className={tableCellClass}>
+                          <CommercialCell item={item} />
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap gap-2">
-                            <StatusBadge
-                              label={reviewMeta.label}
-                              variant={reviewMeta.variant}
-                            />
-                            <StatusBadge
-                              label={getShippingReportStatusLabel(
-                                item.reportStatus,
-                              )}
-                              variant={getShippingReportStatusVariant(
-                                item.reportStatus,
-                              )}
-                            />
-                            <StatusBadge
-                              label={getShippingFulfillmentStatusLabel(
-                                item.shippingStatus,
-                              )}
-                              variant={getShippingFulfillmentStatusVariant(
-                                item.shippingStatus,
-                              )}
-                            />
-                          </div>
+                        <td className={tableCellClass}>
+                          <PhaseTrackBadges item={item} />
                         </td>
                       </tr>
                     );
@@ -750,7 +346,7 @@ function CurrentReportWorkspace({
           <PaginationControls
             page={pagination.page}
             totalPages={pagination.totalPages}
-            summary={`当前 supplier 显示 ${pageStart} - ${pageEnd} / 共 ${pagination.totalCount} 单可报单记录`}
+            summary={`显示 ${pageStart} - ${pageEnd} / 共 ${pagination.totalCount} 单`}
             buildHref={(pageNumber) =>
               buildPageHref(
                 filters,
@@ -765,6 +361,10 @@ function CurrentReportWorkspace({
     </section>
   );
 }
+
+// ---------------------------------------------------------------------------
+// PendingLogisticsWorkspace
+// ---------------------------------------------------------------------------
 
 function PendingLogisticsWorkspace({
   activeSupplier,
@@ -826,7 +426,7 @@ function PendingLogisticsWorkspace({
     <section className={workspaceSectionClassName}>
       <StageWorkspaceHeader
         title={`${activeSupplier.supplier.name} · 待填物流`}
-        description="这里承接已导出但尚未填写物流的订单。可以按批次切换、逐单回填，也可以对当前批次再次导出。"
+        description="承接已导出但尚未填写物流的订单。按批次切换、逐单回填, 也可对当前批次再次导出。"
         badges={
           <>
             <StatusBadge label="待填物流" variant="info" />
@@ -852,152 +452,123 @@ function PendingLogisticsWorkspace({
         }
       />
 
-      {pendingBatchSummaries.length > 0 ? (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h4 className="text-base font-semibold text-[var(--foreground)]">
-                批次切换
-              </h4>
-              <p className="text-sm text-[var(--color-sidebar-muted)]">
-                按当前 supplier 的待填物流批次切换工作面。
-              </p>
-            </div>
-            <div className="text-sm text-[var(--color-sidebar-muted)]">
-              共 {pendingBatchSummaries.length} 个待处理批次
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {pendingBatchSummaries.map((batch) => {
-              const batchMeta = getBatchStatusMeta(batch);
-              const isActive = batch.id === activeBatch?.id;
+      <MetricStrip
+        ariaLabel="当前 supplier 摘要"
+        metrics={buildSupplierMetrics(activeSupplier)}
+      />
 
-              return (
-                <Link
-                  key={batch.id}
-                  href={buildPageHref(
-                    filters,
-                    {
-                      supplierViewId: activeSupplier.supplier.id,
-                      batchViewId: batch.id,
-                      page: 1,
-                    },
-                    basePath,
-                    baseSearchParams,
-                  )}
-                  className={cn(
-                    workspaceQuietActionClassName,
-                    isActive &&
-                      "border-[rgba(20,118,92,0.22)] bg-[rgba(240,251,247,0.85)] text-[var(--color-success)]",
-                  )}
-                >
-                  {batch.exportNo} · {batch.taskCount} 单
-                  {batchMeta ? ` · ${batchMeta.label}` : ""}
-                </Link>
-              );
-            })}
-          </div>
+      {pendingBatchSummaries.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            批次切换
+          </span>
+          {pendingBatchSummaries.map((batch) => {
+            const batchMeta = getBatchStatusMeta(batch);
+            const isActive = batch.id === activeBatch?.id;
+            return (
+              <Link
+                key={batch.id}
+                href={buildPageHref(
+                  filters,
+                  {
+                    supplierViewId: activeSupplier.supplier.id,
+                    batchViewId: batch.id,
+                    page: 1,
+                  },
+                  basePath,
+                  baseSearchParams,
+                )}
+                className={cn(
+                  workspaceQuietActionClassName,
+                  isActive &&
+                    "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
+                )}
+              >
+                {batch.exportNo} · {batch.taskCount} 单
+                {batchMeta ? ` · ${batchMeta.label}` : ""}
+              </Link>
+            );
+          })}
         </div>
       ) : (
         <div className={workspaceHintClassName}>
-          当前 supplier 暂无可切换的待填物流批次。若有遗留待填物流订单但未挂到批次，请在异常队列核对。
+          当前 supplier 暂无可切换的待填物流批次。
         </div>
       )}
 
-      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.45fr)_minmax(0,0.95fr)]">
+      {activeBatch ? (
         <div className={workspacePanelClassName}>
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
-            当前批次摘要
-          </p>
-          <div className="mt-3 space-y-2 text-sm text-[var(--color-sidebar-muted)]">
-            <div>当前 supplier：{activeSupplier.supplier.name}</div>
-            <div>当前待填物流：{activeSupplier.pendingTrackingCount} 单</div>
-            <div>
-              当前批次：
-              {activeBatch
-                ? `${activeBatch.exportNo} · ${formatDateTime(activeBatch.exportedAt)}`
-                : "暂无已选批次"}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">
+                {activeBatch.exportNo}
+              </span>
+              <span className="ml-2 text-[11px]">
+                {formatDateTime(activeBatch.exportedAt)} ·{" "}
+                {activeBatchMeta?.note ?? "可再次导出。"}
+              </span>
             </div>
-            <div>
-              {activeBatchMeta?.note ??
-                "待填物流支持再次导出，但请通过明确动作重新生成新的批次文件。"}
-            </div>
-          </div>
-        </div>
-
-        <div className={workspacePanelClassName}>
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
-            当前批次动作
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {activeBatch?.canDownload && activeBatch.fileUrl ? (
-              <a
-                href={buildShippingExportBatchDownloadHref(activeBatch.id)}
-                className="crm-button crm-button-secondary"
-              >
-                下载当前批次文件
-              </a>
-            ) : null}
-
-            {activeBatch?.canRegenerate ? (
-              <form action={regenerateFileAction}>
-                <input
-                  type="hidden"
-                  name="exportBatchId"
-                  value={activeBatch.id}
-                />
-                <input type="hidden" name="redirectTo" value={currentHref} />
-                <button
-                  type="submit"
+            <div className="flex flex-wrap items-center gap-2">
+              {activeBatch.canDownload && activeBatch.fileUrl ? (
+                <a
+                  href={buildShippingExportBatchDownloadHref(activeBatch.id)}
                   className="crm-button crm-button-secondary"
                 >
-                  {activeBatch.fileState === "READY"
-                    ? "重新生成当前批次文件"
-                    : "生成当前批次文件"}
-                </button>
-              </form>
-            ) : null}
-
-            {activeBatchItems.length > 0 ? (
-              <form action={createExportBatchAction}>
-                <input
-                  type="hidden"
-                  name="supplierId"
-                  value={activeSupplier.supplier.id}
-                />
-                <input
-                  type="hidden"
-                  name="fileName"
-                  value={buildDefaultExportFileName()}
-                />
-                <input type="hidden" name="remark" value="" />
-                <input
-                  type="hidden"
-                  name="sourceStage"
-                  value="PENDING_TRACKING"
-                />
-                <input type="hidden" name="redirectTo" value={currentHref} />
-                {activeBatchItems.map((item) => (
-                  <input
-                    key={item.id}
-                    type="hidden"
-                    name="shippingTaskId"
-                    value={item.id}
+                  下载文件
+                </a>
+              ) : null}
+              {activeBatch.canRegenerate ? (
+                <form action={regenerateFileAction}>
+                  <HiddenFields
+                    fields={{
+                      exportBatchId: activeBatch.id,
+                      redirectTo: currentHref,
+                    }}
                   />
-                ))}
-                <button type="submit" className="crm-button crm-button-primary">
-                  重新导出当前批次
-                </button>
-              </form>
-            ) : null}
+                  <button
+                    type="submit"
+                    className="crm-button crm-button-secondary"
+                  >
+                    {activeBatch.fileState === "READY"
+                      ? "重新生成文件"
+                      : "生成文件"}
+                  </button>
+                </form>
+              ) : null}
+              {activeBatchItems.length > 0 ? (
+                <form action={createExportBatchAction}>
+                  <HiddenFields
+                    fields={buildExportBatchHiddenFields({
+                      supplierId: activeSupplier.supplier.id,
+                      sourceStage: "PENDING_TRACKING",
+                      redirectTo: currentHref,
+                    })}
+                  />
+                  {activeBatchItems.map((item) => (
+                    <input
+                      key={item.id}
+                      type="hidden"
+                      name="shippingTaskId"
+                      value={item.id}
+                    />
+                  ))}
+                  <button
+                    type="submit"
+                    className="crm-button crm-button-primary"
+                  >
+                    重新导出当前批次
+                  </button>
+                </form>
+              ) : null}
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
 
       {items.length === 0 ? (
         <EmptyState
           title="当前批次暂无待填物流订单"
-          description="尝试切换批次、切换 supplier，或去异常队列核对未挂批次的记录。"
+          description="尝试切换批次、切换 supplier, 或去异常队列核对未挂批次的记录。"
         />
       ) : (
         <>
@@ -1006,44 +577,32 @@ function PendingLogisticsWorkspace({
             action={bulkUpdateShippingAction}
             className="space-y-3"
           >
-            <input type="hidden" name="redirectTo" value={currentHref} />
-            <input
-              type="hidden"
-              name="supplierId"
-              value={activeSupplier.supplier.id}
+            <HiddenFields
+              fields={buildExportBatchHiddenFields({
+                supplierId: activeSupplier.supplier.id,
+                sourceStage: "PENDING_TRACKING",
+                redirectTo: currentHref,
+              })}
             />
-            <input
-              type="hidden"
-              name="fileName"
-              value={buildDefaultExportFileName()}
-            />
-            <input type="hidden" name="remark" value="" />
-            <input type="hidden" name="sourceStage" value="PENDING_TRACKING" />
 
             <ShippingSelectionToolbar
               formId="pending-logistics-form"
               inputName="selectedShippingTaskId"
-              summary={`当前批次本页 ${pageStart} - ${pageEnd} / 共 ${pagination.totalCount} 单，默认已勾选当前页。`}
+              summary={`本页 ${pageStart} - ${pageEnd} / 共 ${pagination.totalCount} 单, 默认勾选当前页。`}
             />
 
             <div className={workspaceTableShellClassName}>
-              <table className="min-w-full divide-y divide-[var(--color-border-soft)] text-sm">
-                <thead className="bg-[var(--color-shell-surface-soft)] text-left text-xs font-semibold uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
+              <table className="min-w-full divide-y divide-border/60 text-sm">
+                <thead className={tableHeaderClass}>
                   <tr>
-                    <th className="px-4 py-3">选择</th>
-                    <th className="px-4 py-3">子单</th>
-                    <th className="px-4 py-3">收件人 / 电话</th>
-                    <th className="px-4 py-3">地址</th>
-                    <th className="px-4 py-3">品名 / 件数</th>
-                    <th className="px-4 py-3">金额 / 备注</th>
-                    <th className="px-4 py-3">最近导出批次</th>
-                    <th className="px-4 py-3">最近导出时间</th>
-                    <th className="px-4 py-3">承运商</th>
-                    <th className="px-4 py-3">物流单号</th>
-                    <th className="px-4 py-3">动作</th>
+                    <th className={tableHeadCellClass}>选</th>
+                    <th className={tableHeadCellClass}>子单 / 收件人</th>
+                    <th className={tableHeadCellClass}>商品 / 金额</th>
+                    <th className={tableHeadCellClass}>承运商 / 物流单号</th>
+                    <th className={tableHeadCellClass}>动作</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[var(--color-border-soft)]">
+                <tbody className="divide-y divide-border/40">
                   {items.map((item) => {
                     const identity = getExecutionIdentity(item);
                     const receiverName =
@@ -1057,17 +616,14 @@ function PendingLogisticsWorkspace({
                       "暂无地址快照";
 
                     return (
-                      <tr
-                        key={item.id}
-                        className="align-top text-[var(--color-sidebar-muted)]"
-                      >
-                        <td className="px-4 py-3">
+                      <tr key={item.id} className="text-muted-foreground">
+                        <td className={tableCellClass}>
                           <input
                             type="checkbox"
                             name="selectedShippingTaskId"
                             value={item.id}
                             defaultChecked
-                            className="mt-1 h-4 w-4 rounded border-[var(--color-border-strong)]"
+                            className="mt-0.5 h-4 w-4 rounded border-border"
                           />
                           <input
                             type="hidden"
@@ -1075,64 +631,58 @@ function PendingLogisticsWorkspace({
                             value={item.id}
                           />
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="font-medium text-[var(--foreground)]">
+                        <td className={tableCellClass}>
+                          <div className="font-medium text-foreground">
                             {identity.subOrderNo}
                           </div>
-                          <div className="mt-1 text-xs text-[var(--color-sidebar-muted)]">
+                          <div className="mt-0.5 text-[11px] text-muted-foreground">
                             {identity.tradeNo
                               ? `父单 ${identity.tradeNo}`
                               : "缺少父单锚点"}
                           </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div>{receiverName}</div>
-                          <div className="mt-1 text-xs text-[var(--color-sidebar-muted)]">
-                            {receiverPhone}
+                          <div className="mt-1 text-foreground">
+                            {receiverName}
+                            <span className="ml-1.5 text-[11px] text-muted-foreground">
+                              {receiverPhone}
+                            </span>
                           </div>
-                          <CustomerOwnerHint item={item} />
-                        </td>
-                        <td className="max-w-[16rem] px-4 py-3 text-[var(--color-sidebar-muted)]">
-                          <div className="line-clamp-2">{receiverAddress}</div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="max-w-[13rem] text-[var(--color-sidebar-muted)]">
-                            {getProductSummary(item)}
+                          <div className="mt-0.5 line-clamp-1 max-w-[16rem] text-[11px] text-muted-foreground">
+                            {receiverAddress}
                           </div>
-                          <div className="mt-1 text-xs text-[var(--color-sidebar-muted)]">
-                            {getPieceCount(item)} 件
+                          {item.exportBatch?.exportNo ? (
+                            <div className="mt-1 text-[11px] text-muted-foreground">
+                              批次 {item.exportBatch.exportNo}
+                              {item.reportedAt
+                                ? ` · ${formatDateTime(item.reportedAt)}`
+                                : ""}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className={tableCellClass}>
+                          <div className="space-y-1.5">
+                            <ProductCell item={item} />
+                            <CommercialCell item={item} />
                           </div>
                         </td>
-                        <td className="px-4 py-3">
-                          <OrderCommercialCell item={item} />
+                        <td className={tableCellClass}>
+                          <div className="flex flex-col gap-1.5">
+                            <input
+                              name="shippingProvider"
+                              defaultValue={item.shippingProvider ?? ""}
+                              placeholder="承运商"
+                              list="shipping-provider-options"
+                              className="crm-input min-w-[7.5rem]"
+                            />
+                            <input
+                              name="trackingNumber"
+                              defaultValue={item.trackingNumber ?? ""}
+                              placeholder="物流单号"
+                              className="crm-input min-w-[9.5rem]"
+                            />
+                          </div>
                         </td>
-                        <td className="px-4 py-3">
-                          {item.exportBatch?.exportNo || "-"}
-                        </td>
-                        <td className="px-4 py-3">
-                          {item.reportedAt
-                            ? formatDateTime(item.reportedAt)
-                            : "未导出"}
-                        </td>
-                        <td className="px-4 py-3">
-                          <input
-                            name="shippingProvider"
-                            defaultValue={item.shippingProvider ?? ""}
-                            placeholder="承运商"
-                            list="shipping-provider-options"
-                            className="crm-input min-w-[7.5rem]"
-                          />
-                        </td>
-                        <td className="px-4 py-3">
-                          <input
-                            name="trackingNumber"
-                            defaultValue={item.trackingNumber ?? ""}
-                            placeholder="物流单号"
-                            className="crm-input min-w-[9.5rem]"
-                          />
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-col items-start gap-2">
+                        <td className={tableCellClass}>
+                          <div className="flex flex-col items-start gap-1.5">
                             <ShippingQuickFillDrawer
                               shippingTaskId={item.id}
                               supplierName={identity.supplierName}
@@ -1146,7 +696,7 @@ function PendingLogisticsWorkspace({
                             />
                             <Link
                               href={`/orders/${item.salesOrder?.id || item.tradeOrder?.id || item.id}`}
-                              className="text-sm font-medium text-[var(--color-info)] hover:underline"
+                              className="text-[12px] font-medium text-[var(--color-info)] hover:underline"
                             >
                               查看详情
                             </Link>
@@ -1175,7 +725,7 @@ function PendingLogisticsWorkspace({
           <PaginationControls
             page={pagination.page}
             totalPages={pagination.totalPages}
-            summary={`当前批次显示 ${pageStart} - ${pageEnd} / 共 ${pagination.totalCount} 单待填物流记录`}
+            summary={`显示 ${pageStart} - ${pageEnd} / 共 ${pagination.totalCount} 单`}
             buildHref={(pageNumber) =>
               buildPageHref(
                 filters,
@@ -1190,6 +740,10 @@ function PendingLogisticsWorkspace({
     </section>
   );
 }
+
+// ---------------------------------------------------------------------------
+// ShippedAndExceptionWorkspace
+// ---------------------------------------------------------------------------
 
 function ShippedAndExceptionWorkspace({
   activeSupplier,
@@ -1236,8 +790,8 @@ function ShippedAndExceptionWorkspace({
         }
         description={
           isExceptionStage
-            ? "异常单独收口，不和主流程混用。优先处理取消、文件缺失、状态冲突等问题。"
-            : "这里承接已填写物流并已发货的订单，重点关注签收、COD 与回款状态。"
+            ? "异常单独收口。优先处理取消、文件缺失、状态冲突等问题。"
+            : "承接已填写物流并已发货的订单, 重点关注签收、COD 与回款。"
         }
         badges={
           <>
@@ -1255,6 +809,13 @@ function ShippedAndExceptionWorkspace({
         }
       />
 
+      {activeSupplier ? (
+        <MetricStrip
+          ariaLabel="当前 supplier 摘要"
+          metrics={buildSupplierMetrics(activeSupplier)}
+        />
+      ) : null}
+
       {items.length === 0 ? (
         <EmptyState
           title={
@@ -1262,7 +823,7 @@ function ShippedAndExceptionWorkspace({
               ? "当前 supplier 暂无履约异常"
               : "当前 supplier 暂无已发货记录"
           }
-          description="尝试切换 supplier、切换阶段，或清空搜索条件。"
+          description="尝试切换 supplier、切换阶段, 或清空搜索条件。"
         />
       ) : (
         <>
@@ -1272,22 +833,23 @@ function ShippedAndExceptionWorkspace({
               const isCod = Number(item.codAmount) > 0;
               const codRecord = getLatestCodRecord(item);
               const focusMeta = getCollectionFocusMeta(item);
-              const exceptionLabels = getExceptionLabels(item);
+              const exceptionBadges = getExceptionBadgeItems(item);
               const receiverName =
                 item.salesOrder?.receiverNameSnapshot || item.customer.name;
               const canFinalizeOutcome = canFinalizeShippingOutcome(item);
               const commercialContext = getOrderCommercialContext(item);
+              const progressPhase = deriveOrderProgressPhase(item);
 
               return (
                 <div
                   key={item.id}
                   className={cn(
-                    "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4 shadow-[var(--color-shell-shadow-sm)]",
+                    "rounded-xl border border-border/60 bg-card p-4 shadow-sm",
                     isExceptionStage &&
-                      "border-[rgba(177,63,45,0.16)] bg-[linear-gradient(180deg,rgba(255,246,244,0.72),rgba(255,255,255,0.96))]",
+                      "border-rose-200/70 dark:border-rose-500/30",
                   )}
                 >
-                  <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.35fr)_minmax(0,0.95fr)_auto]">
+                  <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
                     <div className="space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <StatusBadge
@@ -1306,57 +868,48 @@ function ShippedAndExceptionWorkspace({
                           label={isCod ? "COD" : "非 COD"}
                           variant={isCod ? "warning" : "neutral"}
                         />
-                        {exceptionLabels.map((label) => (
-                          <StatusBadge
-                            key={label}
-                            label={label}
-                            variant="danger"
+                        {exceptionBadges.length > 0 ? (
+                          <CompactBadgeGroup
+                            items={exceptionBadges}
+                            maxVisible={3}
+                            size="sm"
+                            overflowTone="danger"
                           />
-                        ))}
+                        ) : null}
                       </div>
+
                       {item.logisticsExceptionMessage ? (
-                        <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs leading-5 text-destructive">
+                        <div className="rounded-lg border border-rose-200/70 bg-rose-50/60 px-3 py-1.5 text-[12px] leading-5 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300">
                           {item.logisticsExceptionMessage}
                         </div>
                       ) : null}
+
                       <div>
-                        <div className="text-xs uppercase tracking-[0.12em] text-[var(--color-sidebar-muted)]">
+                        <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                           {identity.tradeNo
                             ? `父单 ${identity.tradeNo}`
                             : "缺少父单锚点"}
                         </div>
-                        <h4 className="mt-1 text-lg font-semibold text-[var(--foreground)]">
+                        <h4 className="mt-0.5 text-[15px] font-semibold text-foreground">
                           {identity.subOrderNo}
                         </h4>
-                        <div className="mt-1 text-sm text-[var(--color-sidebar-muted)]">
+                        <div className="mt-0.5 text-[12.5px] text-muted-foreground">
                           {receiverName}
                         </div>
                         <CustomerOwnerHint item={item} />
                       </div>
-                      <div className="grid gap-3 text-sm text-[var(--color-sidebar-muted)] md:grid-cols-3">
+
+                      <OrderProgressTrack currentPhase={progressPhase} />
+
+                      <div className="grid gap-2 text-[12.5px] text-muted-foreground sm:grid-cols-2">
                         <div>承运商：{item.shippingProvider || "未填写"}</div>
                         <div>物流单号：{item.trackingNumber || "未填写"}</div>
-                        <div className="md:col-span-3 text-xs text-[var(--color-sidebar-muted)]">
-                          {getShippingPackagesSummary(item)}
-                        </div>
                         <div>
                           发货时间：
                           {item.shippedAt
                             ? formatDateTime(item.shippedAt)
                             : "未发货"}
                         </div>
-                        <div>代收金额：{formatCurrency(item.codAmount)}</div>
-                        <div>当前回款关注：{focusMeta.label}</div>
-                        <div>
-                          订单金额：
-                          {formatCurrency(commercialContext.orderAmount)}
-                        </div>
-                        {commercialContext.parentAmount ? (
-                          <div>
-                            父单成交：
-                            {formatCurrency(commercialContext.parentAmount)}
-                          </div>
-                        ) : null}
                         <div>
                           支付方案：
                           {item.salesOrder
@@ -1365,105 +918,58 @@ function ShippedAndExceptionWorkspace({
                               )
                             : "未知"}
                         </div>
-                        <div className="space-y-1 md:col-span-3">
-                          {commercialContext.remarkLines.length > 0 ? (
-                            commercialContext.remarkLines.map((remark) => (
+                        <div className="sm:col-span-2">
+                          <CommercialCell item={item} />
+                        </div>
+                        <div className="sm:col-span-2 text-[11px]">
+                          {getShippingPackagesSummary(item)}
+                        </div>
+                        {commercialContext.remarkLines.length > 0 ? (
+                          <div className="sm:col-span-2 space-y-0.5 text-[11px]">
+                            {commercialContext.remarkLines.map((remark) => (
                               <div
                                 key={`${remark.label}:${remark.value}`}
                                 className="line-clamp-2"
                               >
                                 {remark.label}：{remark.value}
                               </div>
-                            ))
-                          ) : (
-                            <div>订单备注：暂无</div>
-                          )}
-                        </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-2.5">
                       <LogisticsTracePanel
                         shippingTaskId={item.id}
                         shippingProvider={
-                          getPrimaryShippingPackageSnapshot(item.shippingPackages)?.shippingProvider ??
-                          item.shippingProvider
+                          getPrimaryShippingPackageSnapshot(
+                            item.shippingPackages,
+                          )?.shippingProvider ?? item.shippingProvider
                         }
                         trackingNumber={
-                          getPrimaryShippingPackageSnapshot(item.shippingPackages)?.trackingNumber ??
-                          item.trackingNumber
+                          getPrimaryShippingPackageSnapshot(
+                            item.shippingPackages,
+                          )?.trackingNumber ?? item.trackingNumber
                         }
                         title="查看物流轨迹"
                       />
                       {canFinalizeOutcome ? (
-                        <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] p-3">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div>
-                              <div className="text-sm font-medium text-[var(--foreground)]">
-                                物流后确认
-                              </div>
-                              <div className="text-xs text-[var(--color-sidebar-muted)]">
-                                选择本单最终计入完成或退款。
-                              </div>
-                            </div>
-                            <form action={updateShippingAction}>
-                              <input type="hidden" name="shippingTaskId" value={item.id} />
-                              <input type="hidden" name="redirectTo" value={currentHref} />
-                              <input
-                                type="hidden"
-                                name="shippingProvider"
-                                value={item.shippingProvider ?? ""}
-                              />
-                              <input
-                                type="hidden"
-                                name="trackingNumber"
-                                value={item.trackingNumber ?? ""}
-                              />
-                              <input type="hidden" name="shippingStatus" value="COMPLETED" />
-                              <input type="hidden" name="settlementRemark" value="物流后确认完成。" />
-                              <input type="hidden" name="codCollectionStatus" value="" />
-                              <input type="hidden" name="codCollectedAmount" value="" />
-                              <input type="hidden" name="codRemark" value="" />
-                              <button
-                                type="submit"
-                                className="crm-button crm-button-primary px-3 py-1.5 text-xs"
-                              >
-                                完成
-                              </button>
-                            </form>
-                          </div>
-                          <form action={updateShippingAction} className="mt-3 space-y-2">
-                            <input type="hidden" name="shippingTaskId" value={item.id} />
-                            <input type="hidden" name="redirectTo" value={currentHref} />
-                            <input
-                              type="hidden"
-                              name="shippingProvider"
-                              value={item.shippingProvider ?? ""}
-                            />
-                            <input
-                              type="hidden"
-                              name="trackingNumber"
-                              value={item.trackingNumber ?? ""}
-                            />
-                            <input type="hidden" name="shippingStatus" value="REFUNDED" />
-                            <input type="hidden" name="codCollectionStatus" value="" />
-                            <input type="hidden" name="codCollectedAmount" value="" />
-                            <input type="hidden" name="codRemark" value="" />
-                            <input
-                              name="settlementRemark"
-                              placeholder="退款原因 / 处理说明"
-                              className="crm-input h-9 text-xs"
-                              required
-                            />
-                            <button
-                              type="submit"
-                              className="crm-button crm-button-secondary w-full justify-center px-3 py-1.5 text-xs"
-                            >
-                              标记退款
-                            </button>
-                          </form>
-                        </div>
+                        <OutcomeFinalizeForms
+                          item={item}
+                          currentHref={currentHref}
+                          updateShippingAction={updateShippingAction}
+                        />
                       ) : null}
+
+                      <ShippingUpdateDetailsForm
+                        item={item}
+                        currentHref={currentHref}
+                        isCod={isCod}
+                        codRecord={codRecord}
+                        updateShippingAction={updateShippingAction}
+                      />
+
                       <Link
                         href={`/orders/${item.salesOrder?.id || item.tradeOrder?.id || item.id}`}
                         className="crm-button crm-button-secondary w-full justify-center"
@@ -1471,127 +977,6 @@ function ShippedAndExceptionWorkspace({
                         查看详情
                       </Link>
                     </div>
-
-                    <details className={workspacePanelClassName}>
-                      <summary className="cursor-pointer text-sm font-medium text-[var(--foreground)]">
-                        更多更新
-                      </summary>
-                      <form
-                        action={updateShippingAction}
-                        className="mt-4 space-y-3"
-                      >
-                        <input
-                          type="hidden"
-                          name="shippingTaskId"
-                          value={item.id}
-                        />
-                        <input
-                          type="hidden"
-                          name="redirectTo"
-                          value={currentHref}
-                        />
-                        <input type="hidden" name="settlementRemark" value="" />
-
-                        <label className="space-y-2">
-                          <span className="crm-label">承运商</span>
-                          <input
-                            name="shippingProvider"
-                            defaultValue={item.shippingProvider ?? ""}
-                            list="shipping-provider-options"
-                            className="crm-input"
-                          />
-                        </label>
-
-                        <label className="space-y-2">
-                          <span className="crm-label">物流单号</span>
-                          <input
-                            name="trackingNumber"
-                            defaultValue={item.trackingNumber ?? ""}
-                            className="crm-input"
-                          />
-                        </label>
-
-                        <label className="space-y-2">
-                          <span className="crm-label">发货状态</span>
-                          <select
-                            name="shippingStatus"
-                            defaultValue={item.shippingStatus}
-                            className="crm-select"
-                          >
-                            {shippingFulfillmentStatusOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-
-                        {isCod ? (
-                          <div className="grid gap-3">
-                            <label className="space-y-2">
-                              <span className="crm-label">COD 回款状态</span>
-                              <select
-                                name="codCollectionStatus"
-                                defaultValue={codRecord?.status ?? ""}
-                                className="crm-select"
-                              >
-                                <option value="">不更新</option>
-                                {codCollectionStatusOptions.map((option) => (
-                                  <option
-                                    key={option.value}
-                                    value={option.value}
-                                  >
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label className="space-y-2">
-                              <span className="crm-label">COD 回款金额</span>
-                              <input
-                                name="codCollectedAmount"
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                defaultValue={
-                                  codRecord?.collectedAmount ?? item.codAmount
-                                }
-                                className="crm-input"
-                              />
-                            </label>
-                            <label className="space-y-2">
-                              <span className="crm-label">COD 备注</span>
-                              <input
-                                name="codRemark"
-                                defaultValue={codRecord?.remark ?? ""}
-                                className="crm-input"
-                              />
-                            </label>
-                          </div>
-                        ) : (
-                          <>
-                            <input
-                              type="hidden"
-                              name="codCollectionStatus"
-                              value=""
-                            />
-                            <input
-                              type="hidden"
-                              name="codCollectedAmount"
-                              value=""
-                            />
-                            <input type="hidden" name="codRemark" value="" />
-                          </>
-                        )}
-
-                        <button
-                          type="submit"
-                          className="crm-button crm-button-primary w-full justify-center"
-                        >
-                          保存更新
-                        </button>
-                      </form>
-                    </details>
                   </div>
                 </div>
               );
@@ -1601,7 +986,7 @@ function ShippedAndExceptionWorkspace({
           <PaginationControls
             page={pagination.page}
             totalPages={pagination.totalPages}
-            summary={`当前阶段显示 ${pageStart} - ${pageEnd} / 共 ${pagination.totalCount} 单`}
+            summary={`显示 ${pageStart} - ${pageEnd} / 共 ${pagination.totalCount} 单`}
             buildHref={(pageNumber) =>
               buildPageHref(
                 filters,
@@ -1616,6 +1001,10 @@ function ShippedAndExceptionWorkspace({
     </section>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Top-level: ShippingOperationsSection
+// ---------------------------------------------------------------------------
 
 export function ShippingOperationsSection({
   summary,
@@ -1669,19 +1058,36 @@ export function ShippingOperationsSection({
     baseSearchParams,
   );
 
+  const topMetrics: MetricItem[] = [
+    { label: "当前阶段", value: String(currentStageCount), tone: "primary" },
+    { label: "supplier 池", value: String(summary.supplierCount), tone: "neutral" },
+    {
+      label: "待填物流",
+      value: String(summary.pendingTrackingCount),
+      tone: "warning",
+    },
+    {
+      label: "履约异常",
+      value: String(summary.exceptionCount),
+      tone: summary.exceptionCount > 0 ? "danger" : "neutral",
+    },
+  ];
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <datalist id="shipping-provider-options">
         {COMMON_LOGISTICS_PROVIDERS.map((provider) => (
           <option key={provider.code} value={provider.label} />
         ))}
       </datalist>
 
+      <MetricStrip ariaLabel="发货执行核心指标" metrics={topMetrics} />
+
       <SectionCard
         title="发货执行工作面"
         density="compact"
         actions={
-          <div className="flex flex-wrap items-center gap-2 text-[12px] text-[var(--color-sidebar-muted)]">
+          <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
             <span>
               {filters.stageView === "EXCEPTION"
                 ? "当前在异常视图"
@@ -1694,41 +1100,14 @@ export function ShippingOperationsSection({
             </span>
             <Link
               href={exportBatchesHref}
-              className="crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm"
+              className="crm-button crm-button-secondary min-h-0 px-3 py-1.5 text-sm"
             >
-              历史批次记录
+              历史批次
             </Link>
           </div>
         }
       >
-        <div className="space-y-4">
-          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
-            <MetricCard
-              label="当前阶段"
-              value={String(currentStageCount)}
-              note="当前 stage 下待继续处理的执行记录"
-              density="strip"
-            />
-            <MetricCard
-              label="supplier 池"
-              value={String(summary.supplierCount)}
-              note="当前筛选范围内可见 supplier 数量"
-              density="strip"
-            />
-            <MetricCard
-              label="待填物流"
-              value={String(summary.pendingTrackingCount)}
-              note="已导出但尚未回填物流单号"
-              density="strip"
-            />
-            <MetricCard
-              label="履约异常"
-              value={String(summary.exceptionCount)}
-              note="优先处理取消、文件异常和状态冲突"
-              density="strip"
-            />
-          </div>
-
+        <div className="space-y-3.5">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <RecordTabs
               activeValue={stageTabsValue}
@@ -1752,18 +1131,14 @@ export function ShippingOperationsSection({
             <Link
               href={buildPageHref(
                 filters,
-                {
-                  stageView: "EXCEPTION",
-                  batchViewId: "",
-                  page: 1,
-                },
+                { stageView: "EXCEPTION", batchViewId: "", page: 1 },
                 basePath,
                 baseSearchParams,
               )}
               className={cn(
                 workspaceQuietActionClassName,
                 filters.stageView === "EXCEPTION" &&
-                  "border-[rgba(177,63,45,0.16)] bg-[rgba(255,245,244,0.82)] text-[var(--color-danger)]",
+                  "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300",
               )}
             >
               履约异常 {summary.exceptionCount}
@@ -1826,11 +1201,7 @@ export function ShippingOperationsSection({
                     supplierKeyword: "",
                     page: 1,
                   },
-                  {
-                    keyword: "",
-                    supplierKeyword: "",
-                    page: 1,
-                  },
+                  { keyword: "", supplierKeyword: "", page: 1 },
                   basePath,
                   baseSearchParams,
                 )}
@@ -1846,7 +1217,7 @@ export function ShippingOperationsSection({
       {supplierSummaries.length === 0 ? (
         <EmptyState
           title="当前阶段没有可处理的供应商"
-          description="尝试切换主阶段，或清空供应商 / 订单搜索条件。"
+          description="尝试切换主阶段, 或清空供应商 / 订单搜索条件。"
           action={
             <Link href={pageBaseHref} className="crm-button crm-button-primary">
               回到当前工作面
@@ -1859,12 +1230,12 @@ export function ShippingOperationsSection({
             title="当前阶段 supplier 池"
             density="compact"
             actions={
-              <p className="text-[12px] text-[var(--color-sidebar-muted)]">
-                当前阶段可见 {supplierSummaries.length} 个 supplier
+              <p className="text-[12px] text-muted-foreground">
+                共 {supplierSummaries.length} 个 supplier
               </p>
             }
           >
-            <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-4">
+            <div className="grid gap-2.5 lg:grid-cols-2 2xl:grid-cols-4">
               {supplierSummaries.map((supplierSummary) => {
                 const isActive =
                   supplierSummary.supplier.id === activeSupplier?.supplier.id;
@@ -1886,29 +1257,32 @@ export function ShippingOperationsSection({
                       baseSearchParams,
                     )}
                     className={cn(
-                      "rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-panel)] p-4 transition hover:border-[var(--color-border-strong)] hover:bg-[var(--color-shell-hover)] hover:shadow-[var(--color-shell-shadow-sm)]",
+                      "rounded-xl border border-border/60 bg-card p-3 transition-colors hover:border-border hover:bg-muted/30",
                       isActive &&
-                        "border-[rgba(20,118,92,0.22)] bg-[linear-gradient(180deg,rgba(240,251,247,0.72),rgba(255,255,255,0.96))]",
+                        "border-emerald-200 bg-emerald-50/60 dark:border-emerald-500/30 dark:bg-emerald-500/10",
                     )}
                   >
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <div className="truncate font-medium text-[var(--foreground)]">
+                        <div className="truncate text-[13.5px] font-medium text-foreground">
                           {supplierSummary.supplier.name}
                         </div>
-                        <div className="mt-1 text-xs text-[var(--color-sidebar-muted)]">
-                          当前阶段 {supplierSummary.stageTaskCount} 单
+                        <div className="mt-0.5 text-[11px] text-muted-foreground">
+                          当前阶段 {supplierSummary.stageTaskCount} 单 · 最近{" "}
+                          {supplierSummary.latestHistoryBatch
+                            ? supplierSummary.latestHistoryBatch.exportNo
+                            : "无批次"}
                         </div>
                       </div>
                       {isActive ? (
-                        <StatusBadge label="当前 supplier" variant="success" />
+                        <StatusBadge label="当前" variant="success" />
                       ) : null}
                     </div>
 
-                    <div className="mt-3 flex flex-wrap gap-2">
+                    <div className="mt-2 flex flex-wrap gap-1.5">
                       {supplierSummary.pendingTrackingCount > 0 ? (
                         <StatusBadge
-                          label={`待填物流 ${supplierSummary.pendingTrackingCount}`}
+                          label={`待填 ${supplierSummary.pendingTrackingCount}`}
                           variant="warning"
                         />
                       ) : null}
@@ -1920,19 +1294,10 @@ export function ShippingOperationsSection({
                       ) : null}
                       {currentBatchMeta && supplierSummary.currentBatch ? (
                         <StatusBadge
-                          label={`当前批次 ${supplierSummary.currentBatch.exportNo}`}
+                          label={`批次 ${supplierSummary.currentBatch.exportNo}`}
                           variant={currentBatchMeta.variant}
                         />
                       ) : null}
-                    </div>
-
-                    <div className="mt-3 text-xs text-[var(--color-sidebar-muted)]">
-                      最近历史批次：
-                      {supplierSummary.latestHistoryBatch
-                        ? `${supplierSummary.latestHistoryBatch.exportNo} · ${formatDateTime(
-                            supplierSummary.latestHistoryBatch.exportedAt,
-                          )}`
-                        : "暂无"}
                     </div>
                   </Link>
                 );

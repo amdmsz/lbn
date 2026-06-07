@@ -44,38 +44,40 @@ export type MetricStripProps = {
   ariaLabel?: string;
 };
 
+// tone 配色: 全部走 globals.css 的 4 状态 token (--color-success / --color-warning /
+// --color-danger / --color-info), light/dark 共用同一抽象, 避免硬编码 tailwind 调色.
 const toneStyles: Record<
   MetricTone,
   {
-    ringStroke: string;
-    barFill: string;
-    accent: string;
+    ringStrokeStyle: string;
+    barFillStyle: string;
+    accentStyle: string;
   }
 > = {
   primary: {
-    ringStroke: "stroke-primary",
-    barFill: "bg-primary",
-    accent: "text-primary",
+    ringStrokeStyle: "hsl(var(--primary))",
+    barFillStyle: "hsl(var(--primary))",
+    accentStyle: "hsl(var(--primary))",
   },
   success: {
-    ringStroke: "stroke-emerald-500 dark:stroke-emerald-400",
-    barFill: "bg-emerald-500 dark:bg-emerald-400",
-    accent: "text-emerald-600 dark:text-emerald-300",
+    ringStrokeStyle: "var(--color-success)",
+    barFillStyle: "var(--color-success)",
+    accentStyle: "var(--color-success)",
   },
   warning: {
-    ringStroke: "stroke-amber-500 dark:stroke-amber-400",
-    barFill: "bg-amber-500 dark:bg-amber-400",
-    accent: "text-amber-600 dark:text-amber-300",
+    ringStrokeStyle: "var(--color-warning)",
+    barFillStyle: "var(--color-warning)",
+    accentStyle: "var(--color-warning)",
   },
   danger: {
-    ringStroke: "stroke-rose-500 dark:stroke-rose-400",
-    barFill: "bg-rose-500 dark:bg-rose-400",
-    accent: "text-rose-600 dark:text-rose-300",
+    ringStrokeStyle: "var(--color-danger)",
+    barFillStyle: "var(--color-danger)",
+    accentStyle: "var(--color-danger)",
   },
   neutral: {
-    ringStroke: "stroke-muted-foreground/60",
-    barFill: "bg-muted-foreground/60",
-    accent: "text-muted-foreground",
+    ringStrokeStyle: "hsl(var(--muted-foreground) / 0.6)",
+    barFillStyle: "hsl(var(--muted-foreground) / 0.6)",
+    accentStyle: "hsl(var(--muted-foreground))",
   },
 };
 
@@ -117,10 +119,11 @@ function MiniRing({
           cx="20"
           cy="20"
           r={radius}
-          className={cn("fill-none transition-all", styles.ringStroke)}
+          className="fill-none transition-all"
           strokeWidth="3.5"
           strokeLinecap="round"
           strokeDasharray={`${dash} ${remainder}`}
+          style={{ stroke: styles.ringStrokeStyle }}
         />
       </svg>
       <span className="absolute inset-0 flex items-center justify-center text-[9px] font-semibold text-foreground">
@@ -140,8 +143,8 @@ function MiniBar({
     <div className="mt-2 w-full" aria-hidden="true">
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-border/60">
         <div
-          className={cn("h-full rounded-full transition-all", styles.barFill)}
-          style={{ width: `${pct}%` }}
+          className="h-full rounded-full transition-all"
+          style={{ width: `${pct}%`, background: styles.barFillStyle }}
         />
       </div>
     </div>
@@ -168,15 +171,23 @@ function MetricTile({
     >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
+          {/* label: 删 uppercase tracking, 走 body 13px 灰字 */}
           <div
-            className={cn(
-              "text-[10px] font-semibold uppercase tracking-[0.14em]",
-              tone === "neutral" ? "text-muted-foreground" : styles.accent,
-            )}
+            className="text-[0.8125rem] font-medium"
+            style={{
+              color:
+                tone === "neutral"
+                  ? "hsl(var(--muted-foreground))"
+                  : styles.accentStyle,
+            }}
           >
             {item.label}
           </div>
-          <div className="mt-1 truncate font-mono text-[1.35rem] font-semibold leading-tight tracking-tight text-foreground">
+          {/* value: display 大字, tabular-nums (data 类等宽) */}
+          <div
+            className="mt-1 truncate text-[1.625rem] font-semibold leading-tight tracking-tight text-foreground"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
             {item.value}
           </div>
         </div>
@@ -209,7 +220,7 @@ export default function MetricStrip({
     <section
       aria-label={ariaLabel}
       className={cn(
-        "grid gap-4 rounded-xl border border-border/60 bg-card p-4 shadow-sm",
+        "grid gap-6 rounded-xl border border-border/60 bg-card p-6",
         "sm:grid-cols-2",
         lgColsClass,
         className,

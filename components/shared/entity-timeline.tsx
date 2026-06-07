@@ -77,21 +77,25 @@ const KIND_META: Record<TimelineKind, KindMeta> = {
   collection: { icon: Users, tone: "warning" },
   revision: { icon: ArrowLeftRight, tone: "warning" },
   refund: { icon: Undo2, tone: "danger" },
-  return: { icon: RotateCcw, tone: "amber" },
+  // return 历史叫 amber, 收敛到 warning, 不再多一档橙色
+  return: { icon: RotateCcw, tone: "warning" },
 };
 
+// 全部走 globals.css 4 状态 tone token (--tone-*-soft-bg / -border / -text).
+// primary 复用 --primary; neutral 走 muted 灰. 不再硬编码 sky/blue/emerald/amber/rose/orange.
 const TONE_DOT_CLASSES: Record<Tone, string> = {
-  info: "border-sky-300/60 bg-sky-50 text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/15 dark:text-sky-300",
+  info: "border-[var(--tone-info-soft-border-strong)] bg-[var(--tone-info-soft-bg)] text-[var(--tone-info-soft-text)]",
   primary:
-    "border-blue-300/60 bg-blue-50 text-blue-700 dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-300",
+    "border-primary/30 bg-primary/10 text-primary",
   success:
-    "border-emerald-300/60 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300",
+    "border-[var(--tone-success-soft-border-strong)] bg-[var(--tone-success-soft-bg)] text-[var(--tone-success-soft-text)]",
   warning:
-    "border-amber-300/70 bg-amber-50 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/15 dark:text-amber-300",
+    "border-[var(--tone-warning-soft-border-strong)] bg-[var(--tone-warning-soft-bg)] text-[var(--tone-warning-soft-text)]",
   danger:
-    "border-rose-300/60 bg-rose-50 text-rose-700 dark:border-rose-500/40 dark:bg-rose-500/15 dark:text-rose-300",
+    "border-[var(--tone-danger-soft-border-strong)] bg-[var(--tone-danger-soft-bg)] text-[var(--tone-danger-soft-text)]",
+  // amber 继续暴露给历史调用方, 实质收敛到 warning token
   amber:
-    "border-orange-300/60 bg-orange-50 text-orange-700 dark:border-orange-500/40 dark:bg-orange-500/15 dark:text-orange-300",
+    "border-[var(--tone-warning-soft-border-strong)] bg-[var(--tone-warning-soft-bg)] text-[var(--tone-warning-soft-text)]",
   neutral: "border-border bg-muted/40 text-muted-foreground",
 };
 
@@ -138,12 +142,12 @@ function TimelineNode({
   );
 
   return (
-    <li className="relative flex gap-3 pb-5 last:pb-0">
+    <li className="relative flex gap-4 pb-6 last:pb-0">
       {/* 竖线 (除最后一条) */}
       {!isLast ? (
         <span
           aria-hidden
-          className="absolute left-[15px] top-8 bottom-0 w-px bg-border/70"
+          className="absolute left-[15px] top-8 bottom-0 w-px bg-border/60"
         />
       ) : null}
 
@@ -160,17 +164,20 @@ function TimelineNode({
       <div className="min-w-0 flex-1 pt-0.5">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
           {titleNode}
-          <span className="font-mono text-[11px] text-muted-foreground">
+          <span
+            className="text-xs text-muted-foreground"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
             {formatOccurredAt(event.occurredAt)}
           </span>
         </div>
         {event.detail ? (
-          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+          <p className="mt-1 text-[0.8125rem] leading-relaxed text-muted-foreground">
             {event.detail}
           </p>
         ) : null}
         {event.actor ? (
-          <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
             <span
               aria-hidden
               className="flex h-4 w-4 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-foreground/70"
@@ -229,11 +236,11 @@ export default function EntityTimeline({
       </ol>
 
       {hasMore ? (
-        <div className="mt-3 flex justify-center">
+        <div className="mt-4 flex justify-center">
           <button
             type="button"
             onClick={() => setExpanded((value) => !value)}
-            className="rounded-full border border-border/60 px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+            className="rounded-md border border-border/60 bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
           >
             {expanded ? "收起" : `展开全部 ${sorted.length} 条`}
           </button>

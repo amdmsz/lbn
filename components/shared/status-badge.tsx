@@ -1,15 +1,17 @@
 import { cn } from "@/lib/utils";
 
+// 全部 variant 走 globals.css 的 4 状态 tone token (--tone-*-soft-bg/-border/-text).
+// light/dark 同一抽象, 不再混 emerald-50 直 hex.
 const badgeVariants = {
   neutral:
-    "bg-muted/30 text-muted-foreground border-border/50",
-  info: "bg-[rgba(61,124,255,0.08)] text-[var(--color-info)] border-[rgba(61,124,255,0.12)]",
+    "bg-muted/40 text-muted-foreground border-border/60",
+  info: "bg-[var(--tone-info-soft-bg)] text-[var(--tone-info-soft-text)] border-[var(--tone-info-soft-border)]",
   success:
-    "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300",
+    "bg-[var(--tone-success-soft-bg)] text-[var(--tone-success-soft-text)] border-[var(--tone-success-soft-border)]",
   warning:
-    "bg-[rgba(201,138,30,0.08)] text-[var(--color-warning)] border-[rgba(201,138,30,0.12)]",
+    "bg-[var(--tone-warning-soft-bg)] text-[var(--tone-warning-soft-text)] border-[var(--tone-warning-soft-border)]",
   danger:
-    "bg-[rgba(209,91,118,0.08)] text-[var(--color-danger)] border-[rgba(209,91,118,0.12)]",
+    "bg-[var(--tone-danger-soft-bg)] text-[var(--tone-danger-soft-text)] border-[var(--tone-danger-soft-border)]",
 } as const;
 
 export type StatusBadgeVariant = keyof typeof badgeVariants;
@@ -23,16 +25,18 @@ export function StatusBadge({
 }>) {
   const showIndicator = variant !== "neutral";
 
+  // 字号收敛: 10px → 12px (text-xs), 取消 tracking 0.04em caption.
+  // 圆角 pill, padding 紧凑.
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border px-2 py-[0.22rem] text-[10px] font-medium tracking-[0.04em]",
-        showIndicator ? "gap-1" : "",
+        "inline-flex items-center rounded-full border px-2 py-[0.18rem] text-xs font-medium leading-4",
+        showIndicator ? "gap-1.5" : "",
         badgeVariants[variant],
       )}
     >
       {showIndicator ? (
-        <span className="h-[0.22rem] w-[0.22rem] rounded-full bg-current opacity-75" />
+        <span className="h-1.5 w-1.5 rounded-full bg-current opacity-85" />
       ) : null}
       {label}
     </span>

@@ -50,7 +50,7 @@ function AvatarIcon({ text }: { text: string }) {
   return (
     <div
       aria-hidden="true"
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/40 text-base font-semibold text-foreground"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/30 text-sm font-semibold text-foreground"
     >
       {ch}
     </div>
@@ -61,7 +61,7 @@ function NodeIcon({ children }: { children: ReactNode }) {
   return (
     <div
       aria-hidden="true"
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/40 text-foreground"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/30 text-foreground"
     >
       {children}
     </div>
@@ -92,24 +92,24 @@ export function PageHero({
   return (
     <section
       className={cn(
-        "rounded-xl border border-border/60 bg-card p-6 shadow-sm",
+        "rounded-xl border border-border/60 bg-card p-6",
         className,
       )}
     >
       <div className={cn("grid gap-6 lg:items-center", gridCols)}>
-        {/* 左: icon + title + subtitle */}
-        <div className="flex min-w-0 items-center gap-3">
+        {/* 左: icon + title + subtitle (title 用 type-title 18px) */}
+        <div className="flex min-w-0 items-center gap-4">
           {icon.kind === "avatar" ? (
             <AvatarIcon text={icon.text} />
           ) : (
             <NodeIcon>{icon.node}</NodeIcon>
           )}
           <div className="min-w-0 space-y-1">
-            <div className="truncate text-base font-semibold text-foreground">
+            <div className="truncate text-[1.125rem] font-semibold leading-tight tracking-tight text-foreground">
               {title}
             </div>
             {subtitle ? (
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.8125rem] leading-normal text-muted-foreground">
                 {subtitle}
               </div>
             ) : null}
@@ -133,17 +133,20 @@ export function PageHero({
           </div>
         ) : null}
 
-        {/* 右: rightMetric */}
+        {/* 右: rightMetric — label 删 uppercase, value 用 display 30px tabular-nums */}
         {hasRight && rightMetric ? (
           <div className="lg:text-right">
-            <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="text-xs font-medium text-muted-foreground">
               {rightMetric.label}
             </div>
-            <div className="mt-1 font-mono text-3xl font-semibold tracking-tight text-foreground">
+            <div
+              className="mt-1.5 text-[1.875rem] font-semibold leading-none tracking-tight text-foreground"
+              style={{ fontVariantNumeric: "tabular-nums" }}
+            >
               {rightMetric.value}
             </div>
             {rightMetric.hint ? (
-              <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground lg:justify-end">
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground lg:justify-end">
                 {rightMetric.hint}
               </div>
             ) : null}

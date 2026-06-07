@@ -28,8 +28,7 @@ export default function CollapsibleSection({
   return (
     <section
       className={cn(
-        "rounded-xl border border-border bg-card p-4 shadow-sm transition-colors",
-        "dark:border-border dark:bg-card",
+        "rounded-xl border border-border/60 bg-card p-6 transition-colors",
         className,
       )}
     >
@@ -38,7 +37,7 @@ export default function CollapsibleSection({
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
         className={cn(
-          "flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left",
+          "-m-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-md p-2 text-left",
           "transition-colors hover:bg-muted/40 focus-visible:outline-none",
           "focus-visible:ring-2 focus-visible:ring-ring",
         )}
@@ -52,20 +51,21 @@ export default function CollapsibleSection({
         />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="flex min-w-0 items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-foreground">
+            {/* title: 收敛到 title 18px, 14px 太小且和 body 撞档 */}
+            <h3 className="truncate text-[1.0625rem] font-semibold leading-tight tracking-tight text-foreground">
               {title}
             </h3>
             {badge ? <span className="shrink-0">{badge}</span> : null}
           </div>
           {description ? (
-            <p className="truncate text-xs text-muted-foreground">
+            <p className="truncate text-[0.8125rem] text-muted-foreground">
               {description}
             </p>
           ) : null}
         </div>
       </button>
       {open ? (
-        <div className={cn("mt-3 border-t border-border pt-3", contentClassName)}>
+        <div className={cn("mt-4 border-t border-border/60 pt-4", contentClassName)}>
           {children}
         </div>
       ) : null}

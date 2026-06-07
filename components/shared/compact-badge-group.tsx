@@ -18,24 +18,27 @@ export type CompactBadgeItem = {
 
 type CompactBadgeSize = "sm" | "md";
 
+// 全部走 globals.css 的 --tone-* 软色块 + 主色 / muted, 不再混 6 套 tailwind 调色板.
+// light/dark 同一抽象, ring-inset 收敛到 1px.
 const toneClassMap: Record<BadgeTone, string> = {
   primary:
-    "bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-100 dark:bg-blue-500/10 dark:text-blue-300 dark:ring-blue-500/20",
+    "bg-primary/10 text-primary ring-1 ring-inset ring-primary/20",
   success:
-    "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20",
+    "bg-[var(--tone-success-soft-bg)] text-[var(--tone-success-soft-text)] ring-1 ring-inset ring-[var(--tone-success-soft-border)]",
   warning:
-    "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-100 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20",
+    "bg-[var(--tone-warning-soft-bg)] text-[var(--tone-warning-soft-text)] ring-1 ring-inset ring-[var(--tone-warning-soft-border)]",
   danger:
-    "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-100 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/20",
+    "bg-[var(--tone-danger-soft-bg)] text-[var(--tone-danger-soft-text)] ring-1 ring-inset ring-[var(--tone-danger-soft-border)]",
   info:
-    "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-100 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-500/20",
+    "bg-[var(--tone-info-soft-bg)] text-[var(--tone-info-soft-text)] ring-1 ring-inset ring-[var(--tone-info-soft-border)]",
   neutral:
-    "bg-slate-50 text-slate-700 ring-1 ring-inset ring-slate-200/70 dark:bg-slate-500/10 dark:text-slate-300 dark:ring-slate-500/20",
+    "bg-muted/50 text-muted-foreground ring-1 ring-inset ring-border/70",
 };
 
+// 12px 起步 (text-xs), 不再用 11px caption. md 走 13px body 档.
 const sizeClassMap: Record<CompactBadgeSize, string> = {
-  sm: "px-2.5 py-0.5 text-[11px] leading-4",
-  md: "px-3 py-1 text-xs leading-5",
+  sm: "px-2.5 py-0.5 text-xs leading-5",
+  md: "px-3 py-1 text-[0.8125rem] leading-5",
 };
 
 const iconSizeClassMap: Record<CompactBadgeSize, string> = {
