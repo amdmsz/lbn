@@ -86,6 +86,13 @@ function getRoleMeta(role: RoleCode) {
         roleNote: "履约执行",
         boundary: "不进入客户经营和收款确认主链。",
       };
+    case "FINANCE":
+      return {
+        eyebrow: "财务工作台",
+        title: "财务工作台",
+        roleNote: "财务审批",
+        boundary: "退款审批与反向凭证管理, 不进入销售/履约主链。",
+      };
   }
 }
 
@@ -222,6 +229,19 @@ function getQuickEntries(
           title: "订单中心 / 批次记录",
           description: "回看导出批次与供货商报单。",
           href: buildOrderFulfillmentHref("batches"),
+        },
+      ]);
+    case "FINANCE":
+      return appendGrantedQuickEntries(role, permissionCodes, [
+        {
+          title: "退款审批工作台",
+          description: "处理待审批的退款申请, 录入实际出账流水。",
+          href: "/finance/refunds",
+        },
+        {
+          title: "收款记录",
+          description: "查看 / 确认销售提交的 PaymentRecord。",
+          href: "/payment-records",
         },
       ]);
   }

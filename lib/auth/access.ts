@@ -22,6 +22,7 @@ export const roleLabels: Record<RoleCode, string> = {
   SALES: "销售",
   OPS: "运营",
   SHIPPER: "发货员",
+  FINANCE: "财务",
 };
 
 export function getDefaultRouteForRole(role: RoleCode) {
@@ -30,6 +31,8 @@ export function getDefaultRouteForRole(role: RoleCode) {
       return "/customers";
     case "SHIPPER":
       return "/fulfillment?tab=shipping";
+    case "FINANCE":
+      return "/finance/refunds";
     case "ADMIN":
     case "SUPERVISOR":
     case "OPS":
@@ -415,7 +418,28 @@ export function canAccessCollectionTaskModule(role: RoleCode) {
 }
 
 export function canAccessFinanceModule(role: RoleCode) {
-  return role === "ADMIN" || role === "SUPERVISOR";
+  return role === "ADMIN" || role === "SUPERVISOR" || role === "FINANCE";
+}
+
+// Phase B 退款链路: 发起、审批、出账 3 类权限.
+// 发起: 销售/主管/财务/admin 都可 (任何人都能发现"客户要退钱"场景)
+// 审批: 仅财务/admin (4 眼原则, 主管不能审 — 因为主管可能就是发起人)
+// 出账: 仅财务/admin (登记真实转账流水)
+export function canRequestRefund(role: RoleCode) {
+  return (
+    role === "ADMIN" ||
+    role === "SUPERVISOR" ||
+    role === "SALES" ||
+    role === "FINANCE"
+  );
+}
+
+export function canApproveRefund(role: RoleCode) {
+  return role === "ADMIN" || role === "FINANCE";
+}
+
+export function canRecordRefundPayout(role: RoleCode) {
+  return role === "ADMIN" || role === "FINANCE";
 }
 
 export function canSubmitPaymentRecord(role: RoleCode) {

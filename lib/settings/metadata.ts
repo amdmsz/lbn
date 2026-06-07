@@ -145,7 +145,8 @@ export type SettingsViewerRole =
   | "SUPERVISOR"
   | "SALES"
   | "OPS"
-  | "SHIPPER";
+  | "SHIPPER"
+  | "FINANCE";
 
 export type SettingsWorkspaceItem =
   (typeof settingsWorkspaceSections)[number]["items"][number];

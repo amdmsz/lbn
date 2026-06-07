@@ -200,6 +200,7 @@ const roleMobileLabels: Record<RoleCode, string> = {
   SALES: "销售",
   OPS: "运营",
   SHIPPER: "发货员",
+  FINANCE: "财务",
 };
 
 function toDate(value: DateLike) {

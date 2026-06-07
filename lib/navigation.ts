@@ -375,6 +375,24 @@ const navigationTree: NavigationTree = {
       sections: [{ items: [navigationItems.fulfillmentCenter, navigationItems.products] }],
     },
   ],
+  FINANCE: [
+    {
+      key: "workspace",
+      title: "工作台",
+      description: "财务摘要和待办入口。",
+      sections: [{ items: [navigationItems.dashboard] }],
+    },
+    {
+      key: "finance",
+      title: "财务中心",
+      description: "退款审批与收款记录确认。",
+      sections: [
+        {
+          items: [navigationItems.paymentRecords, navigationItems.collectionTasks],
+        },
+      ],
+    },
+  ],
 };
 
 function canAccessNavigationItem(

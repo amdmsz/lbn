@@ -198,6 +198,11 @@ export const customerRoleHeaderMeta: Record<
     title: "客户中心",
     description: "当前角色不开放客户中心。",
   },
+  FINANCE: {
+    eyebrow: "客户中心",
+    title: "客户中心",
+    description: "当前角色不开放客户中心。",
+  },
 };
 
 export const customerDetailTabs = [
