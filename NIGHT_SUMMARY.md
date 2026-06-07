@@ -9,15 +9,15 @@
 
 | 类别 | 数量 | 说明 |
 |---|---:|---|
-| 提交 | 8 | 全部按"事务边界分组", 风险隔离 |
-| 部署 | 8 | 每次 commit 后跑 release-preflight + migrate deploy + smoke |
+| 提交 | 11 | 全部按"事务边界分组", 风险隔离 |
+| 部署 | 11 | 每次 commit 后跑 release-preflight + migrate deploy + smoke |
 | 新增功能 | 1 大 | 订单反悔 **阶段 A.1 — REDUCE_QUANTITY** 真落地 |
 | Bug 修复 | 5 | P0 浮点收款 + 4 个 P1 高严重度 |
 | 性能优化 | 1 | 客户中心 + 2 个复合索引 (cursor 分页准备) |
 | 工具新增 | 1 | `lib/payments/decimal.ts` 精度安全 helper |
 | 系统审计 | 1 | 5 agent 并行扫了全仓 (security/bug/perf/data/UX) |
 
-**线上 HEAD**: `51abe66` (a11y login-form, 含本报告最新更新)
+**线上 HEAD**: `9f20f43` (含 tonight commits 自审 + 3 P1 自修复)
 
 ---
 
@@ -128,6 +128,41 @@ https://crm.cclbn.com/orders/<已审核的 tradeOrderId>
 
 ---
 
+## Round 6: F16 + Phase B 蓝图 (`7922b56`)
+
+- F16: lead-import 错误 banner 加恢复指引 (3 个排查点 + 联系入口)
+- `plans/2026-06-trade-order-revision-phase-b-refund.md`: 退款链路完整蓝图
+  (schema/状态机/权限/5 PR 拆分/6 业务决策点/8 测试用例). 没自动上代码,
+  等用户白天定 FINANCE 角色等关键决策点.
+
+---
+
+## Round 7: 自审自修 (`9f20f43`) ⭐ 关键
+
+启动 3 agent 并行复审今晚 11 commits 的 diff (workflow wyvoyxz85,
+5.5 分钟, 4 agent, 330K tokens). 找到 10 个 finding, 其中 3 P1 都是我引入的:
+
+| ID | 严重 | 我引入的位置 | 修复 |
+|---|---|---|---|
+| **R01** | P1 | `revisions.ts:596` ratio 用 JS Number 导致 1/3 精度漂移 | 改 `Prisma.Decimal.dividedBy()`, 全程 Decimal 算术 |
+| **R02** | P1 | `revisions.ts:602` `Math.max(1, round(...))` 留幻影组件 | 改 `Math.max(0)`, =0 时同步 `delete`, 不再保留 1 件被履约误打包 |
+| **R03** | P1 | `lead-imports/mutations.ts:586` F06 race check 没套 visibility scope | 改用 `withVisibleLeadWhere`, 跟外层 line 805 对齐 |
+| R04 | P2 | `revisions.ts:248` patchedLines 重复 itemId 静默覆盖 | 加 Set 去重, 重复直接 throw |
+| R05 | P2 | `revisions.ts:657` 'PENDING_REVIEW' 裸字符串 | 改 `SalesOrderReviewStatus.PENDING_REVIEW` enum |
+
+剩余 5 个 P2/P3 不阻塞上线:
+- R06 (SUPERVISOR 跨团队隔离) — 需业务确认
+- R07 (COD UX) — 不写脏数据, UX 改进
+- R08 (dev 日志卫生) — 仅非 prod 环境
+- R09 (文件清理可观测性) — 增加 warn 即可
+- R10 (错误堆栈保留) — 诊断辅助
+
+**关键认知**: 我自己写的代码自己审不出来 — 必须用独立 agent 反向 attack 才能 catch
+到 R01-R02 (REDUCE_QUANTITY 一旦销售用就出错, 财务核账会出尾差). 这一轮自审
+让 Phase A.1 从 "可上线" 变成 "可被销售放心用".
+
+---
+
 ## 跳过 / 留作下一轮的项
 
 | Finding | 原因 | 建议处理时机 |
@@ -154,9 +189,12 @@ https://crm.cclbn.com/orders/<已审核的 tradeOrderId>
 | 83ff0a1 | Decimal helper | ~00:16 |
 | 5241670 | Lead import dedup + cleanup | ~00:17 |
 | 1244966 | Phase A.1 REDUCE_QUANTITY | 00:32 |
-| 0edd4e3 | F08 索引 + 本报告初版 | (部署中失败, 见下) |
+| 0edd4e3 | F08 索引 + 本报告初版 | (部署失败, 见下) |
 | acfc756 | 修 F08 索引 (Customer 无 teamId) | 00:42 |
 | 51abe66 | F13 login a11y | 00:47 |
+| a976a10 | docs: NIGHT_SUMMARY 更新 | 00:51 |
+| 7922b56 | F16 + Phase B 蓝图 | (Round 6) |
+| **9f20f43** | **自审 R01-R05 修复** ⭐ | **09:23** |
 
 **关于 0edd4e3 → acfc756 的修复**: 我加 customer 索引时假设了 `teamId` 字段, 但 Customer 表自身没有 (团队关联是经 owner.teamId 间接的)。prisma validate 在 release-preflight 拦下了 broken schema, 服务没影响。我立即查正确字段, 删 teamId 索引保留 ownerId 索引, 重发 acfc756 通过部署。生产数据库现在含 `cust_owner_updated_id_idx` 这一个新索引。
 
