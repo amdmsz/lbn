@@ -624,6 +624,8 @@ const customerSnapshotSelect = {
   },
   leads: {
     where: buildVisibleLeadWhereInput(),
+    orderBy: { createdAt: "desc" },
+    take: 5,
     select: {
       id: true,
       createdAt: true,
@@ -635,6 +637,8 @@ const customerSnapshotSelect = {
     },
   },
   followUpTasks: {
+    orderBy: { createdAt: "desc" },
+    take: 10,
     select: {
       id: true,
       createdAt: true,
@@ -645,6 +649,8 @@ const customerSnapshotSelect = {
     },
   },
   callRecords: {
+    orderBy: { callTime: "desc" },
+    take: 20,
     select: {
       id: true,
       callTime: true,
@@ -655,6 +661,8 @@ const customerSnapshotSelect = {
     },
   },
   wechatRecords: {
+    orderBy: { createdAt: "desc" },
+    take: 5,
     select: {
       id: true,
       createdAt: true,
@@ -664,6 +672,8 @@ const customerSnapshotSelect = {
     },
   },
   liveInvitations: {
+    orderBy: { createdAt: "desc" },
+    take: 5,
     select: {
       id: true,
       createdAt: true,
@@ -671,6 +681,8 @@ const customerSnapshotSelect = {
     },
   },
   salesOrders: {
+    orderBy: { createdAt: "desc" },
+    take: 20,
     select: {
       id: true,
       createdAt: true,
@@ -683,6 +695,8 @@ const customerSnapshotSelect = {
     },
   },
   tradeOrders: {
+    orderBy: { createdAt: "desc" },
+    take: 20,
     select: {
       tradeStatus: true,
     },
@@ -701,6 +715,8 @@ const customerDashboardSnapshotSelect = {
   ownerId: true,
   leads: {
     where: buildVisibleLeadWhereInput(),
+    orderBy: { createdAt: "desc" },
+    take: 5,
     select: {
       id: true,
       createdAt: true,
@@ -709,6 +725,8 @@ const customerDashboardSnapshotSelect = {
     },
   },
   followUpTasks: {
+    orderBy: { createdAt: "desc" },
+    take: 10,
     select: {
       createdAt: true,
       dueAt: true,
@@ -717,6 +735,8 @@ const customerDashboardSnapshotSelect = {
     },
   },
   callRecords: {
+    orderBy: { callTime: "desc" },
+    take: 20,
     select: {
       callTime: true,
       result: true,
@@ -725,6 +745,8 @@ const customerDashboardSnapshotSelect = {
     },
   },
   wechatRecords: {
+    orderBy: { createdAt: "desc" },
+    take: 5,
     select: {
       createdAt: true,
       addedAt: true,
@@ -733,17 +755,23 @@ const customerDashboardSnapshotSelect = {
     },
   },
   liveInvitations: {
+    orderBy: { createdAt: "desc" },
+    take: 5,
     select: {
       createdAt: true,
       invitedAt: true,
     },
   },
   salesOrders: {
+    orderBy: { createdAt: "desc" },
+    take: 20,
     select: {
       reviewStatus: true,
     },
   },
   tradeOrders: {
+    orderBy: { createdAt: "desc" },
+    take: 20,
     select: {
       tradeStatus: true,
     },
