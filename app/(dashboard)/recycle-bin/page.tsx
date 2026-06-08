@@ -184,6 +184,8 @@ export default async function RecycleBinPage({
         activeTab={data.activeTab}
         entryStatus={data.filters.entryStatus}
         items={data.items}
+        viewerRole={session.user.role}
+        targetTypeFilter={data.filters.targetType}
       />
     </WorkbenchLayout>
   );

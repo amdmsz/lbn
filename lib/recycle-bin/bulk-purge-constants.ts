@@ -1,0 +1,1 @@
+export const RECYCLE_BIN_PURGE_ALL_CONFIRMATION = "永久清空";

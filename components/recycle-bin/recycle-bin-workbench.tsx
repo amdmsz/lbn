@@ -2,13 +2,16 @@
 
 import { Fragment, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Trash2 } from "lucide-react";
+import type { RecycleTargetType, RoleCode } from "@prisma/client";
 import {
   finalizeRecycleBinEntryAction,
+  purgeAllRecycleBinEntriesAction,
   purgeRecycleBinEntryAction,
   restoreRecycleBinEntryAction,
   type RecycleBinActionResult,
 } from "@/app/(dashboard)/recycle-bin/actions";
+import { RECYCLE_BIN_PURGE_ALL_CONFIRMATION } from "@/lib/recycle-bin/bulk-purge-constants";
 import { RecycleBinHistorySummary } from "@/components/recycle-bin/recycle-bin-history-summary";
 import { ActionBanner } from "@/components/shared/action-banner";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
@@ -23,6 +26,7 @@ import type {
   RecycleBinEntryStatusValue,
   RecycleBinListItem,
   RecycleBinTabValue,
+  RecycleBinTargetFilterValue,
 } from "@/lib/recycle-bin/queries";
 import { cn } from "@/lib/utils";
 
@@ -57,6 +61,50 @@ function getTabLabel(activeTab: RecycleBinTabValue) {
       return "交易订单";
     default:
       return "回收站";
+  }
+}
+
+function getPurgeAllTargetType(
+  activeTab: RecycleBinTabValue,
+  targetTypeFilter: RecycleBinTargetFilterValue,
+): RecycleTargetType | null {
+  switch (activeTab) {
+    case "customers":
+      return "CUSTOMER";
+    case "leads":
+      return "LEAD";
+    case "trade-orders":
+      return "TRADE_ORDER";
+    case "live-sessions":
+      return "LIVE_SESSION";
+    case "master-data":
+      if (targetTypeFilter === "product") return "PRODUCT";
+      if (targetTypeFilter === "product_sku") return "PRODUCT_SKU";
+      if (targetTypeFilter === "supplier") return "SUPPLIER";
+      return null;
+    default:
+      return null;
+  }
+}
+
+function getPurgeAllTargetLabel(targetType: RecycleTargetType): string {
+  switch (targetType) {
+    case "PRODUCT":
+      return "商品";
+    case "PRODUCT_SKU":
+      return "商品 SKU";
+    case "SUPPLIER":
+      return "供应商";
+    case "LIVE_SESSION":
+      return "直播场次";
+    case "LEAD":
+      return "线索";
+    case "TRADE_ORDER":
+      return "成交主单";
+    case "CUSTOMER":
+      return "客户";
+    default:
+      return "对象";
   }
 }
 
@@ -494,19 +542,28 @@ export function RecycleBinWorkbench({
   activeTab,
   entryStatus,
   items,
+  viewerRole,
+  targetTypeFilter,
 }: Readonly<{
   activeTab: RecycleBinTabValue;
   entryStatus: RecycleBinEntryStatusValue;
   items: RecycleBinListItem[];
+  viewerRole: RoleCode;
+  targetTypeFilter: RecycleBinTargetFilterValue;
 }>) {
   const router = useRouter();
   const [notice, setNotice] = useState<RecycleBinActionResult | null>(null);
   const [dialogState, setDialogState] = useState<RecycleBinDialogState>(null);
+  const [purgeAllDialogOpen, setPurgeAllDialogOpen] = useState(false);
+  const [purgeAllReason, setPurgeAllReason] = useState("");
+  const [purgeAllConfirmation, setPurgeAllConfirmation] = useState("");
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(
     items[0]?.entryId ?? null,
   );
   const [expandedRows, setExpandedRows] = useState<Set<string>>(() => new Set());
   const [pending, startTransition] = useTransition();
+  const canPurgeAll = viewerRole === "ADMIN" || viewerRole === "SUPERVISOR";
+  const purgeAllTargetType = getPurgeAllTargetType(activeTab, targetTypeFilter);
 
   const selectedItem = useMemo(
     () => items.find((item) => item.entryId === selectedEntryId) ?? items[0] ?? null,
@@ -588,6 +645,56 @@ export function RecycleBinWorkbench({
 
       setNotice(result);
       closeDialog();
+      router.refresh();
+    });
+  }
+
+  function openPurgeAllDialog() {
+    setPurgeAllReason("");
+    setPurgeAllConfirmation("");
+    setPurgeAllDialogOpen(true);
+  }
+
+  function closePurgeAllDialog() {
+    if (pending) {
+      return;
+    }
+    setPurgeAllDialogOpen(false);
+  }
+
+  function handlePurgeAllConfirm() {
+    if (!purgeAllTargetType) {
+      return;
+    }
+
+    if (purgeAllConfirmation !== RECYCLE_BIN_PURGE_ALL_CONFIRMATION) {
+      setNotice({
+        status: "error",
+        message: `请输入确认短语「${RECYCLE_BIN_PURGE_ALL_CONFIRMATION}」后再点击确认。`,
+      });
+      return;
+    }
+
+    if (purgeAllReason.trim().length < 10) {
+      setNotice({
+        status: "error",
+        message: "请填写至少 10 个字符的删除原因。",
+      });
+      return;
+    }
+
+    const formData = new FormData();
+    formData.set("targetType", purgeAllTargetType);
+    formData.set("reason", purgeAllReason.trim());
+    formData.set("confirmation", purgeAllConfirmation);
+
+    startTransition(async () => {
+      const result = await purgeAllRecycleBinEntriesAction(formData);
+      setNotice({
+        status: result.status,
+        message: result.message,
+      });
+      setPurgeAllDialogOpen(false);
       router.refresh();
     });
   }
@@ -730,6 +837,29 @@ export function RecycleBinWorkbench({
                         清空
                       </button>
                     </>
+                  ) : null}
+                  {canPurgeAll && !isFinalizeTab ? (
+                    <div className="ml-auto flex items-center gap-2">
+                      {!purgeAllTargetType && activeTab === "master-data" ? (
+                        <span className="text-[11px] leading-4 text-muted-foreground">
+                          先在筛选中选择「商品 / SKU / 供应商」后才能一键清空
+                        </span>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={openPurgeAllDialog}
+                        disabled={pending || !purgeAllTargetType}
+                        title={
+                          purgeAllTargetType
+                            ? `一键清空当前可见范围内所有 ACTIVE ${getPurgeAllTargetLabel(purgeAllTargetType)}回收站条目`
+                            : "请先在筛选中选择具体对象类型后再使用一键清空"
+                        }
+                        className="crm-button crm-button-secondary min-h-0 gap-1.5 border-rose-200 px-2.5 py-1 text-xs text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:border-border disabled:text-muted-foreground disabled:opacity-55 dark:border-rose-500/30 dark:text-rose-300 dark:hover:bg-rose-500/10"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        一键清空全部
+                      </button>
+                    </div>
                   ) : null}
                 </div>
               ) : null}
@@ -1210,6 +1340,22 @@ export function RecycleBinWorkbench({
         onClose={closeDialog}
         onConfirm={handleConfirm}
       />
+
+      {purgeAllDialogOpen && purgeAllTargetType ? (
+        <RecycleBinPurgeAllDialog
+          tabLabel={getTabLabel(activeTab)}
+          targetLabel={getPurgeAllTargetLabel(purgeAllTargetType)}
+          visibleCount={items.length}
+          reason={purgeAllReason}
+          confirmation={purgeAllConfirmation}
+          confirmationPhrase={RECYCLE_BIN_PURGE_ALL_CONFIRMATION}
+          pending={pending}
+          onReasonChange={setPurgeAllReason}
+          onConfirmationChange={setPurgeAllConfirmation}
+          onClose={closePurgeAllDialog}
+          onConfirm={handlePurgeAllConfirm}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1349,6 +1495,151 @@ function RecycleBinConfirmDialog({
               className="crm-button crm-button-primary disabled:cursor-not-allowed disabled:opacity-55"
             >
               {pending ? "处理中..." : meta.primaryLabel}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RecycleBinPurgeAllDialog({
+  tabLabel,
+  targetLabel,
+  visibleCount,
+  reason,
+  confirmation,
+  confirmationPhrase,
+  pending,
+  onReasonChange,
+  onConfirmationChange,
+  onClose,
+  onConfirm,
+}: Readonly<{
+  tabLabel: string;
+  targetLabel: string;
+  visibleCount: number;
+  reason: string;
+  confirmation: string;
+  confirmationPhrase: string;
+  pending: boolean;
+  onReasonChange: (value: string) => void;
+  onConfirmationChange: (value: string) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}>) {
+  const reasonValid = reason.trim().length >= 10;
+  const phraseValid = confirmation === confirmationPhrase;
+  const canConfirm = reasonValid && phraseValid && !pending;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-8">
+      <div className="w-full max-w-xl overflow-hidden rounded-xl border border-border/60 bg-card shadow-lg">
+        <div className="flex items-start justify-between gap-4 border-b border-border/60 bg-muted/30 px-5 py-4">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge label="一键清空 / PURGE" variant="danger" />
+              <StatusBadge label={targetLabel} variant="neutral" />
+            </div>
+            <div>
+              <h3 className="text-[1.02rem] font-semibold text-foreground">
+                一键清空 {tabLabel} 回收站
+              </h3>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                将永久删除当前可见范围内所有可清理的 {targetLabel} 条目，此操作不可恢复。
+                阻断项（有未解决依赖的）会自动跳过。
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={pending}
+            className="crm-button crm-button-ghost min-h-0 px-2.5 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-55"
+          >
+            关闭
+          </button>
+        </div>
+
+        <div className="space-y-4 px-5 py-4">
+          <div className="space-y-2 rounded-lg border border-border/60 bg-muted/30 p-4">
+            <p className="crm-detail-label text-[11px]">清理范围估算</p>
+            <p className="text-[13px] leading-5 text-muted-foreground">
+              当前页可见 {visibleCount} 条；实际清理时服务端会重新扫描当前可见范围内所有
+              ACTIVE 条目（ADMIN 看全量，SUPERVISOR 看本团队范围）。
+            </p>
+            <p className="text-[12px] leading-5 text-muted-foreground">
+              进入支付 / 履约 / 审计链等阻断项会自动跳过，不会强制删除。
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label
+              htmlFor="recycle-bin-purge-all-reason"
+              className="crm-detail-label text-[11px]"
+            >
+              删除原因（必填，至少 10 个字符）
+            </label>
+            <textarea
+              id="recycle-bin-purge-all-reason"
+              value={reason}
+              onChange={(event) => onReasonChange(event.target.value)}
+              disabled={pending}
+              rows={3}
+              placeholder="例如：清理本月误建测试数据 / 处理批量错误导入残留 ..."
+              className="crm-input min-h-[80px] w-full resize-y px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-55"
+            />
+            {!reasonValid && reason.length > 0 ? (
+              <p className="text-[12px] leading-5 text-rose-600 dark:text-rose-300">
+                请至少填写 10 个字符的删除原因。
+              </p>
+            ) : null}
+          </div>
+
+          <div className="space-y-2">
+            <label
+              htmlFor="recycle-bin-purge-all-confirmation"
+              className="crm-detail-label text-[11px]"
+            >
+              确认短语（必须输入「{confirmationPhrase}」）
+            </label>
+            <input
+              id="recycle-bin-purge-all-confirmation"
+              type="text"
+              value={confirmation}
+              onChange={(event) => onConfirmationChange(event.target.value)}
+              disabled={pending}
+              placeholder={confirmationPhrase}
+              className="crm-input w-full px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-55"
+            />
+            {!phraseValid && confirmation.length > 0 ? (
+              <p className="text-[12px] leading-5 text-rose-600 dark:text-rose-300">
+                确认短语不匹配，请输入「{confirmationPhrase}」。
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-border/60 bg-muted/30 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <p className="text-[13px] leading-5 text-muted-foreground">
+            服务端会再次校验权限与可见范围；操作日志会汇总记录本次一键清空。
+          </p>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={pending}
+              className="crm-button crm-button-secondary disabled:cursor-not-allowed disabled:opacity-55"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={!canConfirm}
+              className="crm-button crm-button-primary bg-rose-600 text-white hover:bg-rose-500 disabled:cursor-not-allowed disabled:bg-rose-300 disabled:opacity-70 dark:bg-rose-500 dark:hover:bg-rose-400"
+            >
+              {pending ? "清理中..." : "确认清空"}
             </button>
           </div>
         </div>
