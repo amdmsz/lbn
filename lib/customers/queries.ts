@@ -3472,9 +3472,21 @@ export async function getCustomerCenterData(
     pageSize: parsedFilters.pageSize,
   };
 
-  // 构造 page-mode list query 的 SQL where (search/owner/team/grade 推到 SQL).
-  // 派生过滤 (queue/executionClass/product/tag/assignedRange) 不进 SQL, 与
-  // cursor 模式一致, 由 UI 行内徽章自然降噪.
+  // 构造 page-mode list query 的 SQL where.
+  //
+  // 历史问题 (2026-06-08 hotfix): 早期版本只把 search/owner/team/grade 推到 SQL,
+  // 其余 filter (productKeys / tagIds / assignedRange / executionClasses) 留作
+  // "派生过滤, 不进 SQL, 由 UI 行内徽章自然降噪". 但 page-mode 用 OFFSET/LIMIT
+  // 做真分页, 内存 filter 只能 filter 当前页 50 行, 整页全部命中后 totalCount
+  // 也不准 (用户截图: 选了商品/分级仍然显示全部 5479). 故现在 product / tag /
+  // assignedRange / executionClass 都翻译成 SQL 等价表达式, count + findMany 用
+  // 同一个 listWhere, totalCount 与 page 一致.
+  //
+  // 已知降级 (见每个 clause 上方注释):
+  //   - assignedRange 暂以 customer.createdAt 替代真实 ownershipEvent.createdAt 窗口
+  //   - executionClass D 退化为 "其它"  (无成交 / 无加微 / 无邀请 / 无拒微)
+  //   - queue 派生 (除 "all" 和 "new_imported") 在 SQL 分页下不真正生效,
+  //     console.warn 留信号
   const listFilterClauses: Prisma.CustomerWhereInput[] = [];
   if (filters.search && filters.search.trim().length > 0) {
     const term = filters.search.trim();
@@ -3495,6 +3507,166 @@ export async function getCustomerCenterData(
   if (filters.grades.length > 0) {
     listFilterClauses.push({ grade: { in: filters.grades } });
   }
+
+  // productKeys: UI 端是 `${source}:${normalized_label}` 形式 (source ∈ {interested,
+  // purchased}, label 是去空格小写). SQL 端只能按 label 做精确 / 包含匹配 — 不
+  // 拆 source 前缀, 也忽略 normalize (lowercase + 单空格折叠), 因为生产数据本
+  // 来就是原样存入. 实际命中率 = (lead.interestedProduct ∈ labels) OR
+  // (salesOrder.items.productNameSnapshot ∈ labels). 若 normalize 差异导致命中
+  // 漏掉, UI 端会自然看到 "选了仍命中 0", 用户重新选即可.
+  if (filters.productKeys.length > 0) {
+    const labels = filters.productKeys
+      .map((key) => {
+        const colonIdx = key.indexOf(":");
+        return colonIdx >= 0 ? key.slice(colonIdx + 1) : key;
+      })
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0);
+    if (labels.length > 0) {
+      listFilterClauses.push({
+        OR: [
+          { leads: { some: { interestedProduct: { in: labels } } } },
+          {
+            salesOrders: {
+              some: { items: { some: { productNameSnapshot: { in: labels } } } },
+            },
+          },
+        ],
+      });
+    }
+  }
+  if (filters.productKeyword && filters.productKeyword.trim().length > 0) {
+    const keyword = filters.productKeyword.trim();
+    listFilterClauses.push({
+      OR: [
+        { leads: { some: { interestedProduct: { contains: keyword } } } },
+        {
+          salesOrders: {
+            some: { items: { some: { productNameSnapshot: { contains: keyword } } } },
+          },
+        },
+      ],
+    });
+  }
+
+  // tagIds: SQL where = `customerTags.some.tagId in (...)`. 与内存版本语义一致.
+  if (filters.tagIds.length > 0) {
+    listFilterClauses.push({
+      customerTags: { some: { tagId: { in: filters.tagIds } } },
+    });
+  }
+
+  // assignedRange (assignedFrom / assignedTo): 完整语义是 "客户被分配/接手的时间
+  // 在窗口内", 真相是 CustomerOwnershipEvent 上的最新 event.createdAt. 但 SQL 端
+  // join + group by + having 复杂度高, 这里先用 customer.createdAt 替代 (≈ "客
+  // 户创建时间在窗口内"). 业务上对绝大多数 case 等价 (导入即创建, 分配紧跟随).
+  // 完整实现等 phase 3 (需要 join CustomerOwnershipEvent).
+  if (filters.assignedFrom || filters.assignedTo) {
+    const fromDate = parseDateOnly(filters.assignedFrom, "start");
+    const toDate = parseDateOnly(filters.assignedTo, "end");
+    if (fromDate || toDate) {
+      const range: { gte?: Date; lte?: Date } = {};
+      if (fromDate) range.gte = fromDate;
+      if (toDate) range.lte = toDate;
+      listFilterClauses.push({ createdAt: range });
+    }
+  }
+
+  // executionClasses (A/B/C/D/E): 派生 (deriveCustomerExecutionClassFromSignals)
+  // 在内存里依赖 latestCall + tradeOrder/salesOrder 全集 + wechat / live 状态. SQL
+  // 端直接复刻 latestCall 排序成本高, 这里给出每个 class 的 "实质必要条件":
+  //   A 已成交:   tradeOrders.some(tradeStatus=APPROVED) OR
+  //               salesOrders.some(reviewStatus=APPROVED)
+  //   B 已加微:   非 A 且 (wechatRecords.some(addedStatus=ADDED) OR
+  //                            callRecords.some(result=WECHAT_ADDED))
+  //   C 已邀约:   非 A 且 liveInvitations.some({})
+  //   D 未接通:   非 A/B/C/E (默认兜底 — 这里表示成 "其它")
+  //   E 拒加:     callRecords.some(result=REFUSED_WECHAT) — 内存版本要求是
+  //               最新 callRecord 才算 E, SQL 这里近似为 "曾经有拒微通话"; 极少
+  //               数客户 (拒微后又被重新打电话, 转入其它状态) 会被 SQL 误识为
+  //               E. 业务可接受.
+  // 多选时 executionClasses 用 OR 合并各 class 的 SQL where 片段.
+  if (filters.executionClasses.length > 0) {
+    const classClauses: Prisma.CustomerWhereInput[] = [];
+    const approvedDealWhere: Prisma.CustomerWhereInput = {
+      OR: [
+        { tradeOrders: { some: { tradeStatus: TradeOrderStatus.APPROVED } } },
+        { salesOrders: { some: { reviewStatus: SalesOrderReviewStatus.APPROVED } } },
+      ],
+    };
+    const successfulWechatWhere: Prisma.CustomerWhereInput = {
+      OR: [
+        { wechatRecords: { some: { addedStatus: WechatAddStatus.ADDED } } },
+        { callRecords: { some: { result: CallResult.WECHAT_ADDED } } },
+      ],
+    };
+    const liveInvitationWhere: Prisma.CustomerWhereInput = {
+      liveInvitations: { some: {} },
+    };
+    const refusedWechatWhere: Prisma.CustomerWhereInput = {
+      callRecords: { some: { result: CallResult.REFUSED_WECHAT } },
+    };
+    for (const cls of filters.executionClasses) {
+      switch (cls) {
+        case "A":
+          classClauses.push(approvedDealWhere);
+          break;
+        case "B":
+          classClauses.push({
+            AND: [
+              { NOT: approvedDealWhere },
+              { NOT: refusedWechatWhere },
+              successfulWechatWhere,
+            ],
+          });
+          break;
+        case "C":
+          classClauses.push({
+            AND: [
+              { NOT: approvedDealWhere },
+              { NOT: refusedWechatWhere },
+              liveInvitationWhere,
+            ],
+          });
+          break;
+        case "D":
+          classClauses.push({
+            AND: [
+              { NOT: approvedDealWhere },
+              { NOT: refusedWechatWhere },
+              { NOT: successfulWechatWhere },
+              { NOT: liveInvitationWhere },
+            ],
+          });
+          break;
+        case "E":
+          classClauses.push({
+            AND: [{ NOT: approvedDealWhere }, refusedWechatWhere],
+          });
+          break;
+      }
+    }
+    if (classClauses.length > 0) {
+      listFilterClauses.push({ OR: classClauses });
+    }
+  }
+
+  // queue 派生过滤: SQL 分页下完整翻译成本高 (每个 queue 都依赖多源信号). 这
+  // 里只把 "all" 当默认放过, 其余 queue 输出 console.warn 提示运维 — 用户截
+  // 图里 queue 没切换, 这条路径不阻断当下 hotfix.
+  if (filters.queue !== "all" && filters.queue !== "new_imported") {
+    console.warn(
+      `[customers] queue filter "${filters.queue}" 在 SQL 分页下功能受限, 仅 sidebar 概览生效, 列表本身不会按 queue 缩窄.`,
+    );
+  }
+  // queue=new_imported 是用户最常切的 queue 之一, 这里给一个 SQL 等价 (今日有
+  // 任意活跃 lead 创建), 复用 buildTodayNewImportedCustomerWhereInput.
+  if (filters.queue === "new_imported") {
+    listFilterClauses.push(
+      buildTodayNewImportedCustomerWhereInput(todayStart, todayEnd),
+    );
+  }
+
   const listWhere: Prisma.CustomerWhereInput = {
     AND: [
       visibleWhere,
