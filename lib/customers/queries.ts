@@ -3364,6 +3364,588 @@ export function parseCustomerDetailTab(
 }
 
 /**
+ * F19 customers/streaming: 列表分片 (split of `getCustomerCenterData`).
+ *
+ * 与 `getCustomerCenterData` 共享 SQL where + 视图模型, 但只返回 "用户最关心"
+ * 的列表数据 (queueItems / pagination / phoneSearchDisclosures / productOptions /
+ * tagOptions / callResultOptions). 顶部 stats / sidebar / 筛选 dropdown 走
+ * `getCustomerCenterDataStats` 独立 Suspense, 不阻塞列表 SSR.
+ *
+ * 重叠成本: actor / teams / salesUsers / recycledIds / visibleIds / activeTags
+ * 已 60s `unstable_cache`, 两边各调一次是 cache hit, 实际只多一次 (小) 字典
+ * 查找.
+ */
+export type CustomerCenterListData = {
+  actor: CustomerCenterActor;
+  filters: CustomerCenterFilters;
+  scopeMode: CustomerCenterData["scopeMode"];
+  productOptions: CustomerCenterData["productOptions"];
+  tagOptions: CustomerCenterData["tagOptions"];
+  callResultOptions: CustomerCenterData["callResultOptions"];
+  queueItems: CustomerCenterData["queueItems"];
+  phoneSearchDisclosures: CustomerCenterData["phoneSearchDisclosures"];
+  pagination: CustomerCenterData["pagination"];
+};
+
+/**
+ * F19 customers/streaming: stats 分片 (split of `getCustomerCenterData`).
+ *
+ * 重计算: `getCustomerCenterStatsAggregate` (多个 groupBy/count). 这里独立暴露,
+ * 让 UI 在 Suspense 内部填充, 不阻塞列表本身.
+ */
+export type CustomerCenterStatsData = {
+  scopeMode: CustomerCenterData["scopeMode"];
+  selectedTeam: CustomerCenterData["selectedTeam"];
+  selectedSales: CustomerCenterData["selectedSales"];
+  summary: CustomerCenterData["summary"];
+  queueCounts: CustomerCenterData["queueCounts"];
+  teamOverview: CustomerCenterData["teamOverview"];
+  salesBoard: CustomerCenterData["salesBoard"];
+};
+
+/**
+ * 共享 base loader: actor / teams / salesUsers / recycledIds / visibleIds /
+ * activeTags + 校验后的 filters. 所有底层调用都已 60s `unstable_cache`, 列表
+ * 与 stats 两条 Suspense 路径各调一次走 cache hit, 不重复 SQL.
+ */
+async function loadCustomerCenterBase(
+  viewer: CustomerViewer,
+  rawSearchParams: Record<string, SearchParamsValue> | undefined,
+) {
+  if (!canAccessCustomerModule(viewer.role)) {
+    throw new Error("You do not have access to customers.");
+  }
+
+  const actor = await getCustomerCenterActor(viewer.id);
+  const visibleWhere = getCustomerVisibilityWhereInput(actor);
+  const parsedFilters = parseCustomerCenterFilters(rawSearchParams);
+
+  const now = new Date();
+  const todayStart = startOfDay(now);
+  const todayEnd = endOfDay(now);
+
+  const [
+    teams,
+    salesUsers,
+    recycledCustomerIds,
+    visibleCustomerIds,
+    activeTags,
+  ] = await Promise.all([
+    loadCustomerCenterTeamsCached({
+      scope: actor.role === "ADMIN" ? "ADMIN" : "OWN_TEAM",
+      teamId: actor.role === "ADMIN" ? null : actor.teamId,
+    }),
+    loadCustomerCenterSalesUsersCached({
+      scope:
+        actor.role === "ADMIN"
+          ? "ADMIN"
+          : actor.role === "SUPERVISOR"
+            ? "SUPERVISOR"
+            : "SALES",
+      teamId: actor.role === "SUPERVISOR" ? actor.teamId : null,
+      viewerId: actor.role === "SALES" ? actor.id : null,
+    }),
+    loadRecycledCustomerIdsCached(),
+    loadVisibleCustomerIdsCached({
+      scope:
+        actor.role === "ADMIN"
+          ? "ADMIN"
+          : actor.role === "SUPERVISOR"
+            ? "SUPERVISOR"
+            : "SALES",
+      teamId: actor.role === "SUPERVISOR" ? actor.teamId : null,
+      ownerId: actor.role === "SALES" ? actor.id : null,
+    }),
+    getActiveTagOptions(),
+  ]);
+
+  const salesById = new Map(salesUsers.map((item) => [item.id, item]));
+  const teamsById = new Map(teams.map((item) => [item.id, item]));
+  const teamId =
+    actor.role === "ADMIN"
+      ? teamsById.has(parsedFilters.teamId)
+        ? parsedFilters.teamId
+        : salesById.get(parsedFilters.salesId)?.teamId ?? ""
+      : actor.teamId ?? "";
+  const salesId = (() => {
+    if (actor.role === "SALES") {
+      return actor.id;
+    }
+    const selectedSales = salesById.get(parsedFilters.salesId);
+    if (!selectedSales) return "";
+    if (teamId && selectedSales.teamId !== teamId) return "";
+    return selectedSales.id;
+  })();
+  const filters: CustomerCenterFilters = {
+    queue: parsedFilters.queue,
+    executionClasses: parsedFilters.executionClasses,
+    grades: parsedFilters.grades,
+    teamId,
+    salesId,
+    search: parsedFilters.search,
+    productKeys: parsedFilters.productKeys,
+    productKeyword: parsedFilters.productKeyword,
+    tagIds: parsedFilters.tagIds,
+    assignedFrom: parsedFilters.assignedFrom,
+    assignedTo: parsedFilters.assignedTo,
+    page: parsedFilters.page,
+    pageSize: parsedFilters.pageSize,
+  };
+
+  const scopeMode: CustomerCenterData["scopeMode"] =
+    actor.role === "ADMIN"
+      ? filters.salesId
+        ? "sales"
+        : filters.teamId
+          ? "team"
+          : "organization"
+      : actor.role === "SUPERVISOR"
+        ? actor.teamId
+          ? filters.salesId
+            ? "sales"
+            : "team"
+          : "team_unassigned"
+        : "personal";
+
+  return {
+    actor,
+    visibleWhere,
+    teams,
+    salesUsers,
+    recycledCustomerIds,
+    visibleCustomerIds,
+    activeTags,
+    filters,
+    scopeMode,
+    now,
+    todayStart,
+    todayEnd,
+  };
+}
+
+/**
+ * 构造 page-mode list query 的 SQL where (与 `getCustomerCenterData` 同源).
+ * 已知降级与历史注释见 getCustomerCenterData 内部. 抽出后两个 split 路径共用.
+ */
+function buildCustomerCenterListWhere(input: {
+  filters: CustomerCenterFilters;
+  visibleWhere: Prisma.CustomerWhereInput;
+  recycledCustomerIds: string[];
+  todayStart: Date;
+  todayEnd: Date;
+}): Prisma.CustomerWhereInput {
+  const { filters, visibleWhere, recycledCustomerIds, todayStart, todayEnd } =
+    input;
+  const listFilterClauses: Prisma.CustomerWhereInput[] = [];
+  if (filters.search && filters.search.trim().length > 0) {
+    const term = filters.search.trim();
+    listFilterClauses.push({
+      OR: [
+        { name: { contains: term } },
+        { phone: { contains: term } },
+        { remark: { contains: term } },
+      ],
+    });
+  }
+  if (filters.salesId) {
+    listFilterClauses.push({ ownerId: filters.salesId });
+  }
+  if (filters.teamId) {
+    listFilterClauses.push({ owner: { is: { teamId: filters.teamId } } });
+  }
+  if (filters.grades.length > 0) {
+    listFilterClauses.push({ grade: { in: filters.grades } });
+  }
+  if (filters.productKeys.length > 0) {
+    const labels = filters.productKeys
+      .map((key) => {
+        const colonIdx = key.indexOf(":");
+        return colonIdx >= 0 ? key.slice(colonIdx + 1) : key;
+      })
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0);
+    if (labels.length > 0) {
+      listFilterClauses.push({
+        OR: [
+          { leads: { some: { interestedProduct: { in: labels } } } },
+          {
+            salesOrders: {
+              some: { items: { some: { productNameSnapshot: { in: labels } } } },
+            },
+          },
+        ],
+      });
+    }
+  }
+  if (filters.productKeyword && filters.productKeyword.trim().length > 0) {
+    const keyword = filters.productKeyword.trim();
+    listFilterClauses.push({
+      OR: [
+        { leads: { some: { interestedProduct: { contains: keyword } } } },
+        {
+          salesOrders: {
+            some: { items: { some: { productNameSnapshot: { contains: keyword } } } },
+          },
+        },
+      ],
+    });
+  }
+  if (filters.tagIds.length > 0) {
+    listFilterClauses.push({
+      customerTags: { some: { tagId: { in: filters.tagIds } } },
+    });
+  }
+  if (filters.assignedFrom || filters.assignedTo) {
+    const fromDate = parseDateOnly(filters.assignedFrom, "start");
+    const toDate = parseDateOnly(filters.assignedTo, "end");
+    if (fromDate || toDate) {
+      const range: { gte?: Date; lte?: Date } = {};
+      if (fromDate) range.gte = fromDate;
+      if (toDate) range.lte = toDate;
+      listFilterClauses.push({ createdAt: range });
+    }
+  }
+  if (filters.executionClasses.length > 0) {
+    const classClauses: Prisma.CustomerWhereInput[] = [];
+    const approvedDealWhere: Prisma.CustomerWhereInput = {
+      OR: [
+        { tradeOrders: { some: { tradeStatus: TradeOrderStatus.APPROVED } } },
+        { salesOrders: { some: { reviewStatus: SalesOrderReviewStatus.APPROVED } } },
+      ],
+    };
+    const successfulWechatWhere: Prisma.CustomerWhereInput = {
+      OR: [
+        { wechatRecords: { some: { addedStatus: WechatAddStatus.ADDED } } },
+        { callRecords: { some: { result: CallResult.WECHAT_ADDED } } },
+      ],
+    };
+    const liveInvitationWhere: Prisma.CustomerWhereInput = {
+      liveInvitations: { some: {} },
+    };
+    const refusedWechatWhere: Prisma.CustomerWhereInput = {
+      callRecords: { some: { result: CallResult.REFUSED_WECHAT } },
+    };
+    for (const cls of filters.executionClasses) {
+      switch (cls) {
+        case "A":
+          classClauses.push(approvedDealWhere);
+          break;
+        case "B":
+          classClauses.push({
+            AND: [
+              { NOT: approvedDealWhere },
+              { NOT: refusedWechatWhere },
+              successfulWechatWhere,
+            ],
+          });
+          break;
+        case "C":
+          classClauses.push({
+            AND: [
+              { NOT: approvedDealWhere },
+              { NOT: refusedWechatWhere },
+              liveInvitationWhere,
+            ],
+          });
+          break;
+        case "D":
+          classClauses.push({
+            AND: [
+              { NOT: approvedDealWhere },
+              { NOT: refusedWechatWhere },
+              { NOT: successfulWechatWhere },
+              { NOT: liveInvitationWhere },
+            ],
+          });
+          break;
+        case "E":
+          classClauses.push({
+            AND: [{ NOT: approvedDealWhere }, refusedWechatWhere],
+          });
+          break;
+      }
+    }
+    if (classClauses.length > 0) {
+      listFilterClauses.push({ OR: classClauses });
+    }
+  }
+  if (filters.queue !== "all" && filters.queue !== "new_imported") {
+    console.warn(
+      `[customers] queue filter "${filters.queue}" 在 SQL 分页下功能受限, 仅 sidebar 概览生效, 列表本身不会按 queue 缩窄.`,
+    );
+  }
+  if (filters.queue === "new_imported") {
+    listFilterClauses.push(
+      buildTodayNewImportedCustomerWhereInput(todayStart, todayEnd),
+    );
+  }
+
+  return {
+    AND: [
+      visibleWhere,
+      ...(recycledCustomerIds.length > 0
+        ? [
+            {
+              id: { notIn: recycledCustomerIds },
+            } satisfies Prisma.CustomerWhereInput,
+          ]
+        : []),
+      ...listFilterClauses,
+    ],
+  };
+}
+
+/**
+ * F19 customers/streaming: 列表分片入口.
+ *
+ * 与 `getCustomerCenterData` 行为等价 (page mode), 但不算 SQL aggregate, 也不
+ * 构造 summary / queueCounts / teamOverview / salesBoard. 这些走
+ * `getCustomerCenterDataStats` 在第二个 Suspense 边界异步填充.
+ */
+export async function getCustomerCenterDataList(
+  viewer: CustomerViewer,
+  rawSearchParams: Record<string, SearchParamsValue> | undefined,
+): Promise<CustomerCenterListData> {
+  const base = await loadCustomerCenterBase(viewer, rawSearchParams);
+  const {
+    actor,
+    visibleWhere,
+    recycledCustomerIds,
+    visibleCustomerIds,
+    activeTags,
+    filters,
+    scopeMode,
+    now,
+    todayStart,
+    todayEnd,
+  } = base;
+
+  const listWhere = buildCustomerCenterListWhere({
+    filters,
+    visibleWhere,
+    recycledCustomerIds,
+    todayStart,
+    todayEnd,
+  });
+
+  const pageSize = filters.pageSize;
+  const requestedPage = filters.page;
+  const listTotalCount = await prisma.customer.count({ where: listWhere });
+  const totalPages = Math.max(1, Math.ceil(listTotalCount / pageSize));
+  const currentPage = Math.max(1, Math.min(requestedPage, totalPages));
+  const skip = (currentPage - 1) * pageSize;
+
+  const pageSnapshots: CustomerSnapshot[] = await prisma.customer.findMany({
+    where: listWhere,
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    skip,
+    take: pageSize,
+    select: customerSnapshotSelect,
+  });
+
+  const [pageImportMap, pageAssignmentMap] = await Promise.all([
+    getLatestCustomerImportMap(pageSnapshots.map((s) => s.id)),
+    getLatestCustomerAssignmentMap(pageSnapshots),
+  ]);
+  const stateMap = new Map<string, CustomerSnapshotState>(
+    pageSnapshots.map((snapshot) => [
+      snapshot.id,
+      getCustomerSnapshotState(
+        snapshot,
+        pageImportMap.get(snapshot.id)?.createdAt ?? null,
+        pageAssignmentMap.get(snapshot.id) ?? null,
+        now,
+        todayStart,
+        todayEnd,
+      ),
+    ]),
+  );
+
+  const productOptions = buildProductFilterOptions(pageSnapshots);
+  const tagOptions = buildTagFilterOptions(pageSnapshots, activeTags);
+
+  const pageCustomerIds = pageSnapshots.map((item) => item.id);
+  const [queueItems, callResultOptions] = await Promise.all([
+    fetchCustomerListItems(pageCustomerIds, stateMap),
+    getEnabledCallResultOptions(),
+  ]);
+  const phoneSearchDisclosures = await getPhoneSearchOwnershipDisclosures({
+    actor,
+    search: filters.search,
+    visibleCustomerIds,
+    recycledCustomerIds,
+  });
+
+  return {
+    actor,
+    filters: {
+      ...filters,
+      page: currentPage,
+    },
+    scopeMode,
+    productOptions,
+    tagOptions,
+    callResultOptions,
+    queueItems,
+    phoneSearchDisclosures,
+    pagination: {
+      page: currentPage,
+      pageSize,
+      totalCount: listTotalCount,
+      totalPages,
+      mode: "page",
+    },
+  };
+}
+
+/**
+ * F19 customers/streaming: stats 分片入口.
+ *
+ * 走 SQL aggregate (`getCustomerCenterStatsAggregate`) + 派生 summary /
+ * queueCounts / teamOverview / salesBoard / selectedTeam / selectedSales.
+ * UI 在列表 SSR 完成后, 通过 Suspense 在顶部 / sidebar 异步填充.
+ */
+export async function getCustomerCenterDataStats(
+  viewer: CustomerViewer,
+  rawSearchParams: Record<string, SearchParamsValue> | undefined,
+): Promise<CustomerCenterStatsData> {
+  const base = await loadCustomerCenterBase(viewer, rawSearchParams);
+  const {
+    actor,
+    visibleWhere,
+    teams,
+    salesUsers,
+    recycledCustomerIds,
+    filters,
+    scopeMode,
+    now,
+    todayStart,
+    todayEnd,
+  } = base;
+
+  const aggregate = await getCustomerCenterStatsAggregate({
+    actor,
+    visibleWhere,
+    recycledCustomerIds,
+    now,
+    todayStart,
+    todayEnd,
+  });
+
+  const emptyScope: CustomerCenterStatsScope = {
+    customerCount: 0,
+    todayNewCustomerCount: 0,
+    todayNewImportedCount: 0,
+    pendingFirstCallCount: 0,
+    pendingFollowUpCount: 0,
+    pendingWechatCount: 0,
+    pendingInvitationCount: 0,
+    pendingDealCount: 0,
+    latestFollowUpAt: null,
+  };
+  const scopeStats: CustomerCenterStatsScope = filters.salesId
+    ? aggregate.byOwner.get(filters.salesId) ?? emptyScope
+    : filters.teamId
+      ? aggregate.byTeam.get(filters.teamId) ?? emptyScope
+      : aggregate.global;
+
+  const summary: CustomerSummaryStats = {
+    customerCount: scopeStats.customerCount,
+    todayNewCustomerCount: scopeStats.todayNewCustomerCount,
+    todayNewImportedCount: scopeStats.todayNewImportedCount,
+    todayAssignedCount: 0,
+    pendingFirstCallCount: scopeStats.pendingFirstCallCount,
+    pendingFollowUpCount: scopeStats.pendingFollowUpCount,
+    pendingWechatCount: scopeStats.pendingWechatCount,
+    pendingInvitationCount: scopeStats.pendingInvitationCount,
+    pendingDealCount: scopeStats.pendingDealCount,
+    migrationPendingFollowUpCount: 0,
+    executionClassCounts: aggregate.executionClassCounts,
+    latestFollowUpAt: scopeStats.latestFollowUpAt,
+  };
+
+  const queueCounts: Record<CustomerQueueKey, number> = {
+    all: scopeStats.customerCount,
+    new_imported: scopeStats.todayNewImportedCount,
+    pending_first_call: scopeStats.pendingFirstCallCount,
+    pending_follow_up: scopeStats.pendingFollowUpCount,
+    pending_wechat: scopeStats.pendingWechatCount,
+    pending_invitation: scopeStats.pendingInvitationCount,
+    pending_deal: scopeStats.pendingDealCount,
+    migration_pending_follow_up: 0,
+  };
+
+  const teamOverview: TeamOverviewItem[] = teams.map((team) => {
+    const stats = aggregate.byTeam.get(team.id) ?? emptyScope;
+    const salesCount = salesUsers.filter((s) => s.teamId === team.id).length;
+    return {
+      id: team.id,
+      code: team.code,
+      name: team.name,
+      description: team.description,
+      supervisor: team.supervisor,
+      salesCount,
+      customerCount: stats.customerCount,
+      todayNewImportedCount: stats.todayNewImportedCount,
+      pendingFirstCallCount: stats.pendingFirstCallCount,
+      pendingFollowUpCount: stats.pendingFollowUpCount,
+      pendingInvitationCount: stats.pendingInvitationCount,
+      pendingDealCount: stats.pendingDealCount,
+      migrationPendingFollowUpCount: 0,
+    };
+  });
+
+  const salesBoard: SalesRepBoardItem[] = salesUsers
+    .filter((item) => !filters.teamId || item.teamId === filters.teamId)
+    .map((sales) => {
+      const stats = aggregate.byOwner.get(sales.id) ?? emptyScope;
+      return {
+        id: sales.id,
+        name: sales.name,
+        username: sales.username,
+        teamId: sales.teamId,
+        teamName: sales.team?.name ?? null,
+        customerCount: stats.customerCount,
+        todayNewImportedCount: stats.todayNewImportedCount,
+        pendingFirstCallCount: stats.pendingFirstCallCount,
+        pendingFollowUpCount: stats.pendingFollowUpCount,
+        pendingDealCount: stats.pendingDealCount,
+        migrationPendingFollowUpCount: 0,
+        latestFollowUpAt: stats.latestFollowUpAt,
+      };
+    })
+    .sort((left, right) => {
+      if (right.customerCount !== left.customerCount) {
+        return right.customerCount - left.customerCount;
+      }
+      return left.name.localeCompare(right.name, "zh-CN");
+    });
+
+  const selectedTeam =
+    filters.teamId !== ""
+      ? teamOverview.find((item) => item.id === filters.teamId) ?? null
+      : actor.role === "SUPERVISOR"
+        ? teamOverview[0] ?? null
+        : null;
+  const selectedSales =
+    filters.salesId !== ""
+      ? salesBoard.find((item) => item.id === filters.salesId) ?? null
+      : actor.role === "SALES"
+        ? salesBoard.find((item) => item.id === actor.id) ?? null
+        : null;
+
+  return {
+    scopeMode,
+    selectedTeam,
+    selectedSales,
+    summary,
+    queueCounts,
+    teamOverview,
+    salesBoard,
+  };
+}
+
+/**
  * F18 customers/perf phase 3: /customers 主路径 page-mode 入口.
  *
  * 销售业务习惯保留页码 + 每页显示数量, 同时不能回到 5826 内存全表加载.

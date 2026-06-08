@@ -184,9 +184,9 @@ function PagePagination({
             onNavStart();
           }}
           className={cn(
-            "crm-button crm-button-secondary hidden min-h-0 px-2 py-2 text-sm sm:inline-flex",
+            "crm-button crm-button-secondary hidden min-h-0 px-2 py-2 text-sm transition-colors duration-200 ease-out hover:bg-primary/10 sm:inline-flex",
             prevDisabled &&
-              "pointer-events-none border-[var(--color-border-soft)] bg-[var(--color-shell-active)] text-[var(--color-sidebar-muted)]",
+              "pointer-events-none border-[var(--color-border-soft)] bg-[var(--color-shell-active)] text-[var(--color-sidebar-muted)] hover:bg-[var(--color-shell-active)]",
           )}
         >
           <ChevronsLeft className="size-4" aria-hidden />
@@ -205,9 +205,9 @@ function PagePagination({
             onNavStart();
           }}
           className={cn(
-            "crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm",
+            "crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm transition-colors duration-200 ease-out hover:bg-primary/10",
             prevDisabled &&
-              "pointer-events-none border-[var(--color-border-soft)] bg-[var(--color-shell-active)] text-[var(--color-sidebar-muted)]",
+              "pointer-events-none border-[var(--color-border-soft)] bg-[var(--color-shell-active)] text-[var(--color-sidebar-muted)] hover:bg-[var(--color-shell-active)]",
           )}
         >
           {pending ? (
@@ -246,10 +246,10 @@ function PagePagination({
                 onNavStart();
               }}
               className={cn(
-                "crm-button min-h-0 px-3 py-2 text-sm tabular-nums",
+                "crm-button min-h-0 px-3 py-2 text-sm tabular-nums transition-[background-color,color,font-weight,box-shadow] duration-200 ease-out",
                 isCurrent
-                  ? "border-primary bg-primary text-primary-foreground shadow-sm hover:border-primary hover:bg-primary/90 hover:text-primary-foreground"
-                  : "crm-button-secondary",
+                  ? "border-primary bg-primary font-bold text-primary-foreground shadow-sm hover:border-primary hover:bg-primary/90 hover:text-primary-foreground"
+                  : "crm-button-secondary hover:bg-primary/10 hover:font-bold",
                 pending && !isCurrent && "opacity-70",
               )}
             >
@@ -271,9 +271,9 @@ function PagePagination({
             onNavStart();
           }}
           className={cn(
-            "crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm",
+            "crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm transition-colors duration-200 ease-out hover:bg-primary/10",
             nextDisabled &&
-              "pointer-events-none border-[var(--color-border-soft)] bg-[var(--color-shell-active)] text-[var(--color-sidebar-muted)]",
+              "pointer-events-none border-[var(--color-border-soft)] bg-[var(--color-shell-active)] text-[var(--color-sidebar-muted)] hover:bg-[var(--color-shell-active)]",
           )}
         >
           下一页
@@ -297,9 +297,9 @@ function PagePagination({
             onNavStart();
           }}
           className={cn(
-            "crm-button crm-button-secondary hidden min-h-0 px-2 py-2 text-sm sm:inline-flex",
+            "crm-button crm-button-secondary hidden min-h-0 px-2 py-2 text-sm transition-colors duration-200 ease-out hover:bg-primary/10 sm:inline-flex",
             nextDisabled &&
-              "pointer-events-none border-[var(--color-border-soft)] bg-[var(--color-shell-active)] text-[var(--color-sidebar-muted)]",
+              "pointer-events-none border-[var(--color-border-soft)] bg-[var(--color-shell-active)] text-[var(--color-sidebar-muted)] hover:bg-[var(--color-shell-active)]",
           )}
         >
           <ChevronsRight className="size-4" aria-hidden />
@@ -384,9 +384,9 @@ function CursorPagination({
             setPending(true);
           }}
           className={cn(
-            "crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm",
+            "crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm transition-colors duration-200 ease-out hover:bg-primary/10",
             (prevDisabled || pending) &&
-              "pointer-events-none border-[var(--color-border-soft)] bg-[var(--color-shell-active)] text-[var(--color-sidebar-muted)]",
+              "pointer-events-none border-[var(--color-border-soft)] bg-[var(--color-shell-active)] text-[var(--color-sidebar-muted)] hover:bg-[var(--color-shell-active)]",
           )}
         >
           {pending ? (
@@ -410,9 +410,9 @@ function CursorPagination({
             setPending(true);
           }}
           className={cn(
-            "crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm",
+            "crm-button crm-button-secondary min-h-0 px-3 py-2 text-sm transition-colors duration-200 ease-out hover:bg-primary/10",
             (nextDisabled || pending) &&
-              "pointer-events-none border-[var(--color-border-soft)] bg-[var(--color-shell-active)] text-[var(--color-sidebar-muted)]",
+              "pointer-events-none border-[var(--color-border-soft)] bg-[var(--color-shell-active)] text-[var(--color-sidebar-muted)] hover:bg-[var(--color-shell-active)]",
           )}
         >
           下一页

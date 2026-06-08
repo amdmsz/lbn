@@ -14,8 +14,10 @@ import { cn } from "@/lib/utils";
 // - 左侧客户身份卡片 (头像占位 + 客户名 + 销售名 + 创建时间小灰字)
 // - 中间订单号 (mono 大字) + 1 个主状态 chip
 // - 右侧大字金额 + 已收/待收小字
-// - 单卡 rounded-xl, 不堆叠 5-7 个徽章
-// - 二级状态全部交给 OrderProgressTrack / SupplierFulfillmentAccordion 处理
+// - 单卡 rounded-xl + 极淡 primary 渐变光晕 (与 PageHero 统一气质)
+// - 头像 ring + 一次性入场旋转, primary badge 旁 dot 慢 pulse
+// - 不堆叠 5-7 个徽章, 二级状态全部交给 OrderProgressTrack / SupplierFulfillmentAccordion
+// - server component, 走 globals.css 的 .crm-page-hero / .crm-hero-* 原语
 //
 // 主状态优先级 (高 → 低): 撤单审批中 / 退货审批中 / 草稿 / 待审核 / 已拒绝 / 已取消 / 已审核
 
@@ -97,7 +99,7 @@ function CustomerAvatar({ name }: { name: string }) {
   return (
     <div
       aria-hidden="true"
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/40 text-base font-semibold text-foreground"
+      className="crm-hero-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/40 text-base font-semibold text-foreground"
     >
       {ch}
     </div>
@@ -138,7 +140,7 @@ export function OrderHero({
   return (
     <section
       className={cn(
-        "rounded-xl border border-border/60 bg-card px-5 py-5 shadow-sm",
+        "crm-page-hero rounded-xl border border-border/60 bg-card px-5 py-5 shadow-sm",
       )}
     >
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_auto] lg:items-center">
@@ -146,7 +148,7 @@ export function OrderHero({
         <div className="flex min-w-0 items-center gap-3">
           <CustomerAvatar name={customer.name} />
           <div className="min-w-0 space-y-1">
-            <div className="truncate text-base font-semibold text-foreground">
+            <div className="truncate text-base font-semibold leading-[1.15] tracking-[-0.012em] text-foreground">
               {customer.name}
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -162,16 +164,19 @@ export function OrderHero({
           </div>
         </div>
 
-        {/* 中: 订单号 + 主状态 */}
+        {/* 中: 订单号 + 主状态 (mobile 时 chip 一行折叠) */}
         <div className="min-w-0 space-y-2">
           <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
             交易单号
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="font-mono text-2xl font-semibold tracking-tight text-foreground">
+          <div className="-mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-wrap sm:gap-3 sm:overflow-visible sm:px-0">
+            <span className="font-mono text-2xl font-semibold leading-none tracking-[-0.018em] text-foreground">
               {tradeNo}
             </span>
-            <StatusBadge label={primaryBadge.label} variant={primaryBadge.variant} />
+            <span className="inline-flex items-center gap-2">
+              <span aria-hidden="true" className="crm-hero-dot" />
+              <StatusBadge label={primaryBadge.label} variant={primaryBadge.variant} />
+            </span>
             {showReviewAux ? (
               <StatusBadge
                 label={getSalesOrderReviewStatusLabel(reviewStatus)}
@@ -181,12 +186,15 @@ export function OrderHero({
           </div>
         </div>
 
-        {/* 右: 金额 */}
+        {/* 右: 金额 — hover 微深化 */}
         <div className="lg:text-right">
           <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
             订单金额
           </div>
-          <div className="mt-1 font-mono text-3xl font-semibold tracking-tight text-foreground">
+          <div
+            className="crm-hero-metric-value mt-1 font-mono text-3xl font-semibold leading-none tracking-[-0.018em]"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
             {formatCurrency(finalAmount)}
           </div>
           <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground lg:justify-end">

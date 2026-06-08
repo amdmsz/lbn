@@ -812,8 +812,10 @@ export function CustomersTable({
               id={`customer-row-${row.id}`}
               onClick={(event) => handleSpaciousRowClick(event, row)}
               className={cn(
-                "group/customer-row grid cursor-pointer grid-cols-12 items-center gap-3 bg-card px-5 py-3 transition-colors duration-150 xl:px-6",
-                "hover:bg-muted/40",
+                "group/customer-row grid cursor-pointer grid-cols-12 items-center gap-3 bg-card px-5 py-3 ring-1 ring-inset ring-transparent outline-none transition-[background-color,box-shadow,transform] duration-200 ease-out xl:px-6",
+                "hover:bg-muted/40 hover:ring-primary/10",
+                "active:scale-[0.998] active:ring-primary/30 active:duration-[50ms]",
+                "focus-within:ring-primary/40",
                 focusedCustomer?.id === row.id &&
                   "scroll-mt-28 bg-primary/10 shadow-[inset_3px_0_0_hsl(var(--primary))]",
               )}
@@ -838,7 +840,7 @@ export function CustomersTable({
                   </label>
                 ) : null}
 
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/15 bg-primary/10 text-sm font-bold text-primary">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/15 bg-primary/10 text-sm font-bold text-primary transition-transform duration-200 ease-out group-hover/customer-row:scale-105">
                   {getCustomerInitial(row)}
                 </div>
 

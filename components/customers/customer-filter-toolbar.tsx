@@ -745,7 +745,7 @@ export function CustomerFilterToolbar({
             aria-expanded={open}
             onClick={() => setOpen((current) => !current)}
             className={cn(
-              "inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors duration-200 ease-out",
+              "inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-[background-color,color,border-color,box-shadow] duration-200 ease-out hover:shadow-[0_4px_12px_hsl(var(--primary)/0.15)]",
               open || advancedActiveCount > 0
                 ? "border-primary/40 bg-primary/10 text-primary"
                 : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",

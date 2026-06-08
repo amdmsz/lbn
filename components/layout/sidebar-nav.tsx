@@ -221,7 +221,7 @@ function DesktopNavItem({
       scroll={false}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "crm-motion-pill desktop-no-drag relative rounded-full px-3 py-2 text-[12px] font-medium tracking-[-0.01em] transition-[background-color,color,box-shadow] duration-200",
+        "crm-motion-pill crm-interactive crm-focus-ring desktop-no-drag relative rounded-full px-3 py-2 text-[12px] font-medium tracking-[-0.01em]",
         active
           ? "bg-[var(--color-shell-active)] text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)] after:absolute after:bottom-[-0.72rem] after:left-1/2 after:h-[2px] after:w-7 after:-translate-x-1/2 after:rounded-full after:bg-[var(--color-accent)]"
           : "text-[var(--color-sidebar-muted)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]",
@@ -287,7 +287,7 @@ function OverflowMenu({
         aria-expanded={open}
         onClick={onToggle}
         className={cn(
-          "crm-motion-pill inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-[12px] font-medium tracking-[-0.01em] transition-[background-color,color,box-shadow] duration-200",
+          "crm-motion-pill crm-interactive crm-focus-ring inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-[12px] font-medium tracking-[-0.01em]",
           open || overflowActive
             ? "bg-[var(--color-shell-active)] text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)]"
             : "text-[var(--color-sidebar-muted)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]",
@@ -428,7 +428,7 @@ function MobileNavigationSheet({
                   aria-current={active ? "page" : undefined}
                   onClick={onClose}
                   className={cn(
-                    "crm-motion-pill flex items-center gap-3 rounded-xl px-3 py-3 text-[14px] font-medium transition-[background-color,color,box-shadow] duration-200",
+                    "crm-motion-pill crm-interactive crm-focus-ring flex items-center gap-3 rounded-xl px-3 py-3 text-[14px] font-medium",
                     active
                       ? "bg-[var(--color-shell-active)] text-[var(--foreground)] shadow-[var(--color-shell-shadow-sm)]"
                       : "text-[var(--foreground)]/88 hover:bg-[var(--color-shell-hover)]",
@@ -491,7 +491,7 @@ function MobileNavigationSheet({
                                 aria-current={active ? "page" : undefined}
                                 onClick={onClose}
                                 className={cn(
-                                  "crm-motion-pill flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-[background-color,color,box-shadow] duration-200",
+                                  "crm-motion-pill crm-interactive crm-focus-ring flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px]",
                                   active
                                     ? "bg-[rgba(79,125,247,0.1)] text-[var(--foreground)] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                                     : "text-[var(--color-sidebar-muted)] hover:bg-[var(--color-shell-hover)] hover:text-[var(--foreground)]",

@@ -9,9 +9,10 @@ import { cn } from "@/lib/utils";
 // - 中: primaryBadge (1 个最重要状态, 不堆叠 5-7 个徽章)
 // - 右: rightMetric (label 小灰 + value 大字)
 // - 顶部 actions slot (可选, 一般放 1-2 个主操作按钮)
-// - bg-card rounded-xl border, 不做渐变, 不做 hover translate
+// - bg-card rounded-xl border + 极淡 primary 渐变光晕 ::before
 // - 适配 customer / lead / dashboard / 通用详情页
-// - server component 即可, 走 globals.css token
+// - server component, 走 globals.css token + 纯 CSS keyframes
+// - 动画一律 mount-once / 慢 pulse, 不引入 framer-motion
 
 export type PageHeroIcon =
   | { kind: "avatar"; text: string }
@@ -50,7 +51,7 @@ function AvatarIcon({ text }: { text: string }) {
   return (
     <div
       aria-hidden="true"
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/30 text-sm font-semibold text-foreground"
+      className="crm-hero-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/30 text-sm font-semibold text-foreground"
     >
       {ch}
     </div>
@@ -61,7 +62,7 @@ function NodeIcon({ children }: { children: ReactNode }) {
   return (
     <div
       aria-hidden="true"
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/30 text-foreground"
+      className="crm-hero-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border/60 bg-muted/30 text-foreground"
     >
       {children}
     </div>
@@ -92,12 +93,12 @@ export function PageHero({
   return (
     <section
       className={cn(
-        "rounded-xl border border-border/60 bg-card p-6",
+        "crm-page-hero rounded-xl border border-border/60 bg-card p-6",
         className,
       )}
     >
       <div className={cn("grid gap-6 lg:items-center", gridCols)}>
-        {/* 左: icon + title + subtitle (title 用 type-title 18px) */}
+        {/* 左: icon + title + subtitle (title 用 type-title 18px, tighter tracking + leading-tight) */}
         <div className="flex min-w-0 items-center gap-4">
           {icon.kind === "avatar" ? (
             <AvatarIcon text={icon.text} />
@@ -105,7 +106,7 @@ export function PageHero({
             <NodeIcon>{icon.node}</NodeIcon>
           )}
           <div className="min-w-0 space-y-1">
-            <div className="truncate text-[1.125rem] font-semibold leading-tight tracking-tight text-foreground">
+            <div className="truncate text-[1.125rem] font-semibold leading-[1.15] tracking-[-0.012em] text-foreground">
               {title}
             </div>
             {subtitle ? (
@@ -116,11 +117,15 @@ export function PageHero({
           </div>
         </div>
 
-        {/* 中: primaryBadge + actions */}
+        {/* 中: primaryBadge + actions (mobile 时 actions chip 流, 一行折叠) */}
         {hasMiddle ? (
           <div className="min-w-0 space-y-2">
             {primaryBadge ? (
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="crm-hero-dot"
+                />
                 <StatusBadge
                   label={primaryBadge.label}
                   variant={primaryBadge.variant ?? "neutral"}
@@ -128,19 +133,21 @@ export function PageHero({
               </div>
             ) : null}
             {actions ? (
-              <div className="flex flex-wrap items-center gap-2">{actions}</div>
+              <div className="-mx-1 flex flex-nowrap items-center gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:flex-wrap sm:gap-2 sm:overflow-visible sm:px-0">
+                {actions}
+              </div>
             ) : null}
           </div>
         ) : null}
 
-        {/* 右: rightMetric — label 删 uppercase, value 用 display 30px tabular-nums */}
+        {/* 右: rightMetric — label 小灰, value tabular-nums display 30px + hover 微深化 */}
         {hasRight && rightMetric ? (
           <div className="lg:text-right">
             <div className="text-xs font-medium text-muted-foreground">
               {rightMetric.label}
             </div>
             <div
-              className="mt-1.5 text-[1.875rem] font-semibold leading-none tracking-tight text-foreground"
+              className="crm-hero-metric-value mt-1.5 text-[1.875rem] font-semibold leading-none tracking-[-0.018em]"
               style={{ fontVariantNumeric: "tabular-nums" }}
             >
               {rightMetric.value}

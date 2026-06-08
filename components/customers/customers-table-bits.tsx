@@ -76,14 +76,14 @@ const customerGradeToneClassMap: Record<
   string
 > = {
   primary:
-    "bg-primary/10 text-primary ring-1 ring-inset ring-primary/20",
+    "bg-primary/10 text-primary ring-1 ring-inset ring-primary/20 transition-colors duration-200 ease-out hover:bg-primary/15 hover:ring-primary/30",
   success:
-    "bg-[var(--tone-success-soft-bg)] text-[var(--tone-success-soft-text)] ring-1 ring-inset ring-[var(--tone-success-soft-border)]",
-  info: "bg-[var(--tone-info-soft-bg)] text-[var(--tone-info-soft-text)] ring-1 ring-inset ring-[var(--tone-info-soft-border)]",
+    "bg-[var(--tone-success-soft-bg)] text-[var(--tone-success-soft-text)] ring-1 ring-inset ring-[var(--tone-success-soft-border)] transition-colors duration-200 ease-out hover:brightness-[0.97]",
+  info: "bg-[var(--tone-info-soft-bg)] text-[var(--tone-info-soft-text)] ring-1 ring-inset ring-[var(--tone-info-soft-border)] transition-colors duration-200 ease-out hover:brightness-[0.97]",
   warning:
-    "bg-[var(--tone-warning-soft-bg)] text-[var(--tone-warning-soft-text)] ring-1 ring-inset ring-[var(--tone-warning-soft-border)]",
+    "bg-[var(--tone-warning-soft-bg)] text-[var(--tone-warning-soft-text)] ring-1 ring-inset ring-[var(--tone-warning-soft-border)] transition-colors duration-200 ease-out hover:brightness-[0.97]",
   danger:
-    "bg-[var(--tone-danger-soft-bg)] text-[var(--tone-danger-soft-text)] ring-1 ring-inset ring-[var(--tone-danger-soft-border)]",
+    "bg-[var(--tone-danger-soft-bg)] text-[var(--tone-danger-soft-text)] ring-1 ring-inset ring-[var(--tone-danger-soft-border)] transition-colors duration-200 ease-out hover:brightness-[0.97]",
 };
 
 export function CustomerGradeBadge({
@@ -136,7 +136,7 @@ export function ExecutionBadge({
   variantClass?: string;
 }>) {
   const className = cn(
-    "inline-flex items-center rounded-full border font-medium tracking-tight outline-none transition-colors focus-visible:ring-2 focus-visible:ring-black/8",
+    "inline-flex items-center rounded-full border font-medium tracking-tight outline-none transition-[background-color,color,filter,box-shadow] duration-200 ease-out hover:brightness-[0.95] focus-visible:ring-2 focus-visible:ring-primary/40",
     compact ? "h-5 px-2 text-[11px]" : "h-6 px-2.5 text-[11px]",
     variantClass ??
       executionBadgeClassNames[
@@ -173,8 +173,8 @@ export function RowActions({
 }>) {
   const isSpacious = variant === "spacious";
   const btn = isSpacious
-    ? "inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
-    : "crm-button crm-button-secondary inline-flex h-8 w-8 items-center rounded-[10px] px-0 text-[var(--color-sidebar-muted)] hover:text-foreground";
+    ? "inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground ring-1 ring-inset ring-transparent outline-none transition-[background-color,color,box-shadow] duration-200 ease-out hover:bg-muted hover:text-primary hover:ring-primary/20 focus-visible:ring-primary/40"
+    : "crm-button crm-button-secondary inline-flex h-8 w-8 items-center rounded-[10px] px-0 text-[var(--color-sidebar-muted)] transition-colors duration-200 ease-out hover:text-foreground";
   const iconSize = isSpacious ? "h-4 w-4" : "h-3.5 w-3.5";
   return (
     <div
