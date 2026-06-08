@@ -479,9 +479,13 @@ export type CustomerOwnerTransferOption = {
 };
 
 // F08 (audit) 客户中心 list 硬上限. ADMIN 视图无 owner scope, 大客户量时
-// 全表加载会 OOM. 1500 是经验值: 单页可承载, 配合内存 filter 后 UI 顺畅;
-// 触发 cap 时 console.warn 让运维知道该上 cursor 分页 (完整 PR 待业务确认).
-const CUSTOMER_CENTER_LIST_HARD_CAP = 1500;
+// 全表加载会 OOM. 旧值 1500 在 2026-06-08 真实数据 5826 ACTIVE 客户场景下
+// 触发截断, 主管/ADMIN 报告 "客户不见了". hotfix 提到 10000 — 实测每个
+// snapshot 内存占用约 1-2KB, 10000 约 10-20MB, 远低于 node heap.
+// 真正的修复仍然是 F08 phase 2 cursor 分页 (lib/customers/list-cursor.ts +
+// listCustomersCursor 已就绪), 后续切流; 此值临时上调到 10000 保证 UI 完整性.
+// 触发 cap 时 console.warn 仍然保留作为 cursor 切流压力的早期信号.
+const CUSTOMER_CENTER_LIST_HARD_CAP = 10000;
 
 const customerQueueValues = [
   "all",
