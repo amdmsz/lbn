@@ -1484,66 +1484,240 @@ async function getCustomerOwnershipHistoryArchives(
   });
 }
 
-async function getCustomerCenterWorkspaceBase(
-  viewer: CustomerViewer,
-  rawSearchParams: Record<string, SearchParamsValue> | undefined,
-) {
-  if (!canAccessCustomerModule(viewer.role)) {
-    throw new Error("You do not have access to customers.");
-  }
+// F17 customers/perf phase 1: SSR cache for the four heavy queries that
+// `getCustomerCenterWorkspaceBase` runs on every /customers navigation.
+//
+// 背景: 单次 SSR 全表加载 5826 ACTIVE 客户 (+ 8 关系表 select) + teams +
+// salesUsers + recycled-id set 让用户在 sidebar 来回切到 /customers 时
+// "卡 1-3 秒". CPU 闲, mysql 9%, 不是 DB 瓶颈, 是无意义的重复 round-trip.
+// 这里把那 4 个 query 各自 unstable_cache 60s, tag = CACHE_TAGS.customerList,
+// 任何 mutation (新增/移交/删/打标签 等) 都会通过现有 revalidateTag 路径清掉.
+//
+// 缓存 key 设计:
+//   - ADMIN:     共享同一 key (visibleWhere 全开, 所有 ADMIN 看到相同集合)
+//   - SUPERVISOR 按 teamId 分 key
+//   - SALES      按 viewerId 分 key
+// stateMap / scopeSnapshots 是从 customerSnapshots 内存派生, 不进缓存.
+//
+// 由于 unstable_cache 内部走 JSON.stringify/parse (Next 16
+// node_modules/next/.../unstable-cache.js), Prisma 的 Date 字段会被序列化成
+// ISO string. 缓存回流时需要 revive 为 Date, 否则 downstream 大量的
+// `.getTime()` 调用会爆. `reviveCustomerSnapshotDates` 只针对
+// `customerSnapshotSelect` 里能出现 Date 的字段路径, teams / salesUsers /
+// recycledCustomerIds 不含 Date, 不需要 revive.
 
-  const actor = await getCustomerCenterActor(viewer.id);
-  const visibleWhere = getCustomerVisibilityWhereInput(actor);
-  const recycledCustomerIds = await listActiveCustomerIds(prisma);
-  const [teams, salesUsers, customerSnapshots] = await Promise.all([
-    actor.role === "ADMIN"
-      ? prisma.team.findMany({
-          orderBy: [{ name: "asc" }, { createdAt: "asc" }],
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            description: true,
-            supervisor: {
-              select: {
-                id: true,
-                name: true,
-                username: true,
-              },
-            },
-          },
-        })
-      : actor.teamId
-        ? prisma.team.findMany({
-            where: { id: actor.teamId },
+type CustomerCenterListSnapshot = CustomerSnapshot;
+
+type CustomerCenterTeamRow = {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  supervisor: {
+    id: string;
+    name: string;
+    username: string;
+  } | null;
+};
+
+type CustomerCenterSalesUserRow = {
+  id: string;
+  name: string;
+  username: string;
+  teamId: string | null;
+  team: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
+};
+
+const CUSTOMER_CENTER_CACHE_TTL_SECONDS = 60;
+
+function reviveDate(value: unknown): Date | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
+function reviveRequiredDate(value: unknown): Date {
+  const revived = reviveDate(value);
+  if (!revived) {
+    // 应当不可能, 但保留兜底以避免 downstream `.getTime()` 崩溃.
+    return new Date(0);
+  }
+  return revived;
+}
+
+function reviveCustomerSnapshotDates(
+  rows: CustomerCenterListSnapshot[],
+): CustomerCenterListSnapshot[] {
+  for (const row of rows) {
+    row.createdAt = reviveRequiredDate(row.createdAt);
+    row.lastEffectiveFollowUpAt = reviveDate(row.lastEffectiveFollowUpAt);
+    for (const lead of row.leads) {
+      lead.createdAt = reviveRequiredDate(lead.createdAt);
+      lead.nextFollowUpAt = reviveDate(lead.nextFollowUpAt);
+    }
+    for (const task of row.followUpTasks) {
+      task.createdAt = reviveRequiredDate(task.createdAt);
+      task.dueAt = reviveRequiredDate(task.dueAt);
+      task.completedAt = reviveDate(task.completedAt);
+    }
+    for (const call of row.callRecords) {
+      call.callTime = reviveRequiredDate(call.callTime);
+      call.nextFollowUpAt = reviveDate(call.nextFollowUpAt);
+    }
+    for (const wechat of row.wechatRecords) {
+      wechat.createdAt = reviveRequiredDate(wechat.createdAt);
+      wechat.addedAt = reviveDate(wechat.addedAt);
+      wechat.nextFollowUpAt = reviveDate(wechat.nextFollowUpAt);
+    }
+    for (const invite of row.liveInvitations) {
+      invite.createdAt = reviveRequiredDate(invite.createdAt);
+      invite.invitedAt = reviveDate(invite.invitedAt);
+    }
+    for (const order of row.salesOrders) {
+      order.createdAt = reviveRequiredDate(order.createdAt);
+    }
+  }
+  return rows;
+}
+
+const loadCustomerCenterListSnapshotsCached = unstable_cache(
+  async (input: {
+    scope: "ADMIN" | "SUPERVISOR" | "SALES";
+    teamId: string | null;
+    ownerId: string | null;
+  }): Promise<CustomerCenterListSnapshot[]> => {
+    // 在 cached fn 里重建 visibleWhere, 避免把 Prisma JSON 当 cache key.
+    let visibleWhere: Prisma.CustomerWhereInput;
+    if (input.scope === "ADMIN") {
+      visibleWhere = {
+        ownerId: { not: null },
+        ownershipMode: { in: [...activeCustomerOwnershipModes] },
+      };
+    } else if (input.scope === "SUPERVISOR") {
+      if (!input.teamId) {
+        visibleWhere = { id: "__missing_team_scope__" };
+      } else {
+        visibleWhere = {
+          ownerId: { not: null },
+          ownershipMode: { in: [...activeCustomerOwnershipModes] },
+          owner: { is: { teamId: input.teamId } },
+        };
+      }
+    } else if (input.scope === "SALES") {
+      if (!input.ownerId) {
+        visibleWhere = { id: "__missing_sales_scope__" };
+      } else {
+        visibleWhere = {
+          ownershipMode: { in: [...activeCustomerOwnershipModes] },
+          ownerId: input.ownerId,
+        };
+      }
+    } else {
+      visibleWhere = { id: "__forbidden_customer_scope__" };
+    }
+
+    // 注意: 故意不把 recycledCustomerIds 合并进 SQL where —— 它是动态的, 进
+    // SQL 会让 cache 命中率塌方. 让 caller 拿到全集后用内存过滤 (recycled
+    // 集合本身也走 60s 缓存, 再叠加另一个 60s 过滤窗口可接受).
+    return prisma.customer.findMany({
+      where: visibleWhere,
+      take: CUSTOMER_CENTER_LIST_HARD_CAP,
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      select: customerSnapshotSelect,
+    });
+  },
+  [CACHE_TAGS.customerList, "customer-center-list-snapshots"],
+  {
+    tags: [CACHE_TAGS.customerList],
+    revalidate: CUSTOMER_CENTER_CACHE_TTL_SECONDS,
+  },
+);
+
+const loadCustomerCenterTeamsCached = unstable_cache(
+  async (input: {
+    scope: "ADMIN" | "OWN_TEAM";
+    teamId: string | null;
+  }): Promise<CustomerCenterTeamRow[]> => {
+    if (input.scope === "ADMIN") {
+      return prisma.team.findMany({
+        orderBy: [{ name: "asc" }, { createdAt: "asc" }],
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          description: true,
+          supervisor: {
             select: {
               id: true,
-              code: true,
               name: true,
-              description: true,
-              supervisor: {
-                select: {
-                  id: true,
-                  name: true,
-                  username: true,
-                },
-              },
+              username: true,
             },
-          })
-        : Promise.resolve([]),
-    prisma.user.findMany({
-      where: {
-        role: {
-          code: "SALES",
+          },
         },
+      });
+    }
+    if (!input.teamId) {
+      return [];
+    }
+    return prisma.team.findMany({
+      where: { id: input.teamId },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        description: true,
+        supervisor: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
+      },
+    });
+  },
+  [CACHE_TAGS.customerList, "customer-center-teams"],
+  {
+    tags: [CACHE_TAGS.customerList],
+    revalidate: CUSTOMER_CENTER_CACHE_TTL_SECONDS,
+  },
+);
+
+const loadCustomerCenterSalesUsersCached = unstable_cache(
+  async (input: {
+    scope: "ADMIN" | "SUPERVISOR" | "SALES";
+    teamId: string | null;
+    viewerId: string | null;
+  }): Promise<CustomerCenterSalesUserRow[]> => {
+    let where: Prisma.UserWhereInput;
+    if (input.scope === "ADMIN") {
+      where = {};
+    } else if (input.scope === "SUPERVISOR") {
+      where = input.teamId
+        ? { teamId: input.teamId }
+        : { id: "__missing_team_scope__" };
+    } else {
+      where = input.viewerId
+        ? { id: input.viewerId }
+        : { id: "__missing_viewer__" };
+    }
+    return prisma.user.findMany({
+      where: {
+        role: { code: "SALES" },
         userStatus: "ACTIVE",
-        ...(actor.role === "ADMIN"
-          ? {}
-          : actor.role === "SUPERVISOR"
-            ? actor.teamId
-              ? { teamId: actor.teamId }
-              : { id: "__missing_team_scope__" }
-            : { id: actor.id }),
+        ...where,
       },
       orderBy: [{ name: "asc" }, { username: "asc" }],
       select: {
@@ -1559,31 +1733,70 @@ async function getCustomerCenterWorkspaceBase(
           },
         },
       },
+    });
+  },
+  [CACHE_TAGS.customerList, "customer-center-sales-users"],
+  {
+    tags: [CACHE_TAGS.customerList],
+    revalidate: CUSTOMER_CENTER_CACHE_TTL_SECONDS,
+  },
+);
+
+const loadRecycledCustomerIdsCached = unstable_cache(
+  async (): Promise<string[]> => listActiveCustomerIds(prisma),
+  [CACHE_TAGS.customerList, "customer-center-recycled-ids"],
+  {
+    tags: [CACHE_TAGS.customerList],
+    revalidate: CUSTOMER_CENTER_CACHE_TTL_SECONDS,
+  },
+);
+
+async function getCustomerCenterWorkspaceBase(
+  viewer: CustomerViewer,
+  rawSearchParams: Record<string, SearchParamsValue> | undefined,
+) {
+  if (!canAccessCustomerModule(viewer.role)) {
+    throw new Error("You do not have access to customers.");
+  }
+
+  const actor = await getCustomerCenterActor(viewer.id);
+  const [teams, salesUsers, snapshotRows, recycledCustomerIds] = await Promise.all([
+    loadCustomerCenterTeamsCached({
+      scope: actor.role === "ADMIN" ? "ADMIN" : "OWN_TEAM",
+      teamId: actor.role === "ADMIN" ? null : actor.teamId,
     }),
-    prisma.customer.findMany({
-      where: {
-        AND: [
-          visibleWhere,
-          ...(recycledCustomerIds.length > 0
-            ? [
-                {
-                  id: {
-                    notIn: recycledCustomerIds,
-                  },
-                } satisfies Prisma.CustomerWhereInput,
-              ]
-            : []),
-        ],
-      },
-      // F08 part 1: 硬上限保护 + 确定性排序 (走刚加的复合索引
-      // cust_owner_updated_id_idx). 真 cursor 分页需前端 UI 改, 留作单独 PR;
-      // 这里先防 ADMIN 视图在大客户量时全表加载 OOM. 触发 cap 时 console.warn
-      // 提示运维需推 cursor 分页改造.
-      take: CUSTOMER_CENTER_LIST_HARD_CAP,
-      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-      select: customerSnapshotSelect,
+    loadCustomerCenterSalesUsersCached({
+      scope:
+        actor.role === "ADMIN"
+          ? "ADMIN"
+          : actor.role === "SUPERVISOR"
+            ? "SUPERVISOR"
+            : "SALES",
+      teamId: actor.role === "SUPERVISOR" ? actor.teamId : null,
+      viewerId: actor.role === "SALES" ? actor.id : null,
     }),
+    loadCustomerCenterListSnapshotsCached({
+      scope:
+        actor.role === "ADMIN"
+          ? "ADMIN"
+          : actor.role === "SUPERVISOR"
+            ? "SUPERVISOR"
+            : "SALES",
+      teamId: actor.role === "SUPERVISOR" ? actor.teamId : null,
+      ownerId: actor.role === "SALES" ? actor.id : null,
+    }),
+    loadRecycledCustomerIdsCached(),
   ]);
+
+  // Cache 经过 JSON round-trip 后 Date 会变 string, 这里就地 revive.
+  // 第一次 cache miss 时拿到的是真 Date 对象, 这个函数对 Date 是 no-op.
+  reviveCustomerSnapshotDates(snapshotRows);
+
+  // recycled 过滤改为内存执行 — 见 loadCustomerCenterListSnapshotsCached 注释.
+  const recycledIdSet = new Set(recycledCustomerIds);
+  const customerSnapshots = recycledIdSet.size
+    ? snapshotRows.filter((snapshot) => !recycledIdSet.has(snapshot.id))
+    : snapshotRows;
 
   if (customerSnapshots.length === CUSTOMER_CENTER_LIST_HARD_CAP) {
     console.warn(
