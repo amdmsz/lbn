@@ -45,7 +45,6 @@ import {
   ExecutionBadge,
   executionBadgeClassNames,
   ListTopBar,
-  RemarkPreviewTrigger,
   RowActions,
 } from "@/components/customers/customers-table-bits";
 import { CustomersTablePaginationButtons } from "@/components/customers/customers-table-pagination";
@@ -902,35 +901,34 @@ export function CustomersTable({
                 </p>
               </div>
 
-              {/* 通话单行 + 备注 preview popover */}
-              <div className="col-span-12 flex min-w-0 items-start gap-3 lg:col-span-3">
-                <div className="min-w-0 flex-1">
-                  <p
-                    className="truncate text-[13px] text-foreground/80"
-                    title={
-                      row.latestFollowUpAt
-                        ? `最近跟进 ${formatDateTime(row.latestFollowUpAt)}`
-                        : "暂无跟进记录"
-                    }
-                  >
-                    {callsText}
-                  </p>
-                  <p
-                    className="mt-0.5 truncate text-xs text-muted-foreground"
-                    title={
-                      latestCallRecord ? latestCallRecord.resultLabel : "暂无通话结果"
-                    }
-                  >
-                    {latestCallRecord ? latestCallRecord.resultLabel : "暂无通话结果"}
-                  </p>
-                </div>
-                <RemarkPreviewTrigger
-                  hasRemark={remarkText.length > 0}
-                  remarkText={remarkText}
-                  onOpenEditor={() =>
-                    openFollowUpDialog(row, { remarkAutoFocus: true })
+              {/* 通话 + 跟进结果 + 备注 inline 小字 (与跟进编辑入口冲突, 删除独立 popover trigger) */}
+              <div className="col-span-12 min-w-0 lg:col-span-3">
+                <p
+                  className="truncate text-[13px] text-foreground/80"
+                  title={
+                    row.latestFollowUpAt
+                      ? `最近跟进 ${formatDateTime(row.latestFollowUpAt)}`
+                      : "暂无跟进记录"
                   }
-                />
+                >
+                  {callsText}
+                </p>
+                <p
+                  className="mt-0.5 truncate text-xs text-muted-foreground"
+                  title={
+                    latestCallRecord ? latestCallRecord.resultLabel : "暂无通话结果"
+                  }
+                >
+                  {latestCallRecord ? latestCallRecord.resultLabel : "暂无通话结果"}
+                </p>
+                {remarkText.length > 0 ? (
+                  <p
+                    className="mt-1 truncate text-xs text-muted-foreground/80"
+                    title={remarkText}
+                  >
+                    备注 · {remarkText}
+                  </p>
+                ) : null}
               </div>
 
               {/* 动作 */}
