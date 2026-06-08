@@ -9,14 +9,19 @@ const p = new PrismaClient({ adapter: new PrismaMariaDb(databaseUrl) });
 
 const total = await p.customer.count();
 const archived = await p.customer.count({ where: { phone: { startsWith: "ARCHIVED:" } } });
-const active = await p.customer.count({ where: { status: "ACTIVE" } });
-const recycled = await p.customer.count({ where: { status: "RECYCLED" } });
+
+const statusBreakdown = await p.customer.groupBy({ by: ["status"], _count: { _all: true } });
+
 const today = await p.customer.count({ where: { createdAt: { gte: new Date("2026-06-08T00:00:00+08:00") } } });
 const yesterdayCreated = await p.customer.count({
   where: { createdAt: { gte: new Date("2026-06-07T00:00:00+08:00"), lt: new Date("2026-06-08T00:00:00+08:00") } },
 });
 const beforeYesterday = await p.customer.count({
   where: { createdAt: { lt: new Date("2026-06-07T00:00:00+08:00") } },
+});
+
+const recycleBinCustomers = await p.recycleBinEntry.count({
+  where: { targetType: "CUSTOMER", status: "ACTIVE" },
 });
 
 const todayHardDelete = await p.operationLog.count({
@@ -38,9 +43,8 @@ const last30 = await p.operationLog.findMany({
   where: {
     OR: [
       { action: { contains: "delete" } },
-      { action: { contains: "hard_delete" } },
       { action: { contains: "recycle" } },
-      { action: { contains: "force_delete" } },
+      { action: { contains: "force" } },
     ],
     createdAt: { gte: new Date("2026-06-07T00:00:00+08:00") },
   },
@@ -49,13 +53,16 @@ const last30 = await p.operationLog.findMany({
   select: { action: true, actorId: true, createdAt: true, targetType: true, description: true },
 });
 
-console.log("=== Customer counts ===");
-console.log(JSON.stringify({ total, active, archived, recycled, todayCreated: today, yesterdayCreated, beforeYesterday }, null, 2));
+console.log("=== Customer table counts ===");
+console.log(JSON.stringify({ total, archivedPhone: archived, todayCreated: today, yesterdayCreated, beforeYesterday, recycleBinActiveCustomers: recycleBinCustomers }, null, 2));
 console.log("");
-console.log(`=== Today hard_delete OperationLog: ${todayHardDelete} ===`);
-console.log(`=== Today CUSTOMER delete OperationLog: ${todayCustomerDelete} ===`);
+console.log("=== Customer.status breakdown ===");
+for (const r of statusBreakdown) console.log(`  ${r.status}: ${r._count._all}`);
 console.log("");
-console.log("=== Last 30 delete-related OperationLog (since yesterday 00:00) ===");
+console.log(`=== OperationLog: action like %hard_delete% today: ${todayHardDelete} ===`);
+console.log(`=== OperationLog: targetType=CUSTOMER + delete today: ${todayCustomerDelete} ===`);
+console.log("");
+console.log("=== Last 30 delete/recycle/force OperationLog (since yesterday) ===");
 for (const r of last30) {
   console.log(r.createdAt.toISOString(), "|", r.targetType, "|", r.action, "|", r.actorId, "|", (r.description || "").slice(0, 80));
 }
