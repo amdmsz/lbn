@@ -592,13 +592,15 @@ export function CustomerFilterToolbar({
 
   const showTeamFilter = teamOptions.length > 0;
   const showSalesFilter = salesOptions.length > 0;
+  // pageSize 是 "每页显示" 偏好, 不是数据过滤维度, 不算进 advanced active count.
+  // 旧实现 `filters.pageSize !== 20` 在 default pageSize 改成 10 后会一直为 true,
+  // 导致红色徽标显示 "1" 但用户找不到对应的高亮 chip — 误导.
   const advancedActiveCount = [
     Boolean(filters.assignedFrom || filters.assignedTo),
     filters.executionClasses.length > 0,
     filters.grades.length > 0,
     filters.productKeys.length > 0 || Boolean(filters.productKeyword),
     filters.tagIds.length > 0,
-    filters.pageSize !== 20,
   ].filter(Boolean).length;
 
   function isTimePresetSelected(preset: TimePresetKey) {
