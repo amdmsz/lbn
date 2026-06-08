@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { FormEvent, MouseEvent as ReactMouseEvent, ReactNode } from "react";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { CheckSquare2 } from "lucide-react";
 import {
   batchAddCustomerTagAction,
@@ -234,7 +234,70 @@ export function CustomersTable({
   const router = useRouter();
   const pathname = usePathname() || "/customers";
   const searchParams = useSearchParams();
-  const scrollStateKey = `${SCROLL_STORAGE_PREFIX}${pathname}?${searchParams.toString()}`;
+  const searchParamsKey = searchParams.toString();
+  const scrollStateKey = `${SCROLL_STORAGE_PREFIX}${pathname}?${searchParamsKey}`;
+
+  // 客户列表 navigation pending — 监听本组件作用域内的 anchor click 作为
+  // navigation start, URL 变化即结束. 主要让用户在翻页 / 改 filter / 改
+  // pageSize 期间, 表格立即变 dim, 避免连点 + frozen 假象.
+  const tableRef = useRef<HTMLDivElement>(null);
+  const [navPending, setNavPending] = useState(false);
+  const [navPendingKey, setNavPendingKey] = useState<string | null>(null);
+  const currentNavKey = `${pathname}?${searchParamsKey}`;
+
+  // render-phase 比对: pending 期间 URL 变化即认为 navigation 完成. 写法对齐
+  // customer-filter-toolbar 的 searchDraft 同步; 避免 effect 内 setState 触发
+  // cascading render (react-hooks/set-state-in-effect).
+  if (navPending && navPendingKey !== null && navPendingKey !== currentNavKey) {
+    setNavPending(false);
+    setNavPendingKey(null);
+  }
+
+  useEffect(() => {
+    const container = tableRef.current;
+    if (!container) return undefined;
+    const scopedContainer = container;
+    function handleClick(event: MouseEvent) {
+      if (
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey ||
+        event.button !== 0 ||
+        event.defaultPrevented
+      ) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest("a");
+      if (!anchor || !scopedContainer.contains(anchor)) return;
+      if (
+        anchor.target === "_blank" ||
+        anchor.hasAttribute("download") ||
+        anchor.getAttribute("aria-disabled") === "true"
+      ) {
+        return;
+      }
+      const href = anchor.getAttribute("href");
+      if (!href || href === "#" || href.startsWith("javascript:")) return;
+      try {
+        const url = new URL(anchor.href, window.location.href);
+        if (url.origin !== window.location.origin) return;
+        if (
+          url.pathname === window.location.pathname &&
+          url.search === window.location.search
+        ) {
+          return;
+        }
+      } catch {
+        return;
+      }
+      setNavPending(true);
+      setNavPendingKey(`${window.location.pathname}?${window.location.search.replace(/^\?/, "")}`);
+    }
+    container.addEventListener("click", handleClick, true);
+    return () => container.removeEventListener("click", handleClick, true);
+  }, []);
 
   const manualSelectedIds =
     pageSelection.pageKey === currentPageSelectionKey ? pageSelection.ids : [];
@@ -889,7 +952,15 @@ export function CustomersTable({
 
   return (
     <>
-      <div id={scrollTargetId} className="space-y-4">
+      <div
+        ref={tableRef}
+        id={scrollTargetId}
+        aria-busy={navPending}
+        className={cn(
+          "space-y-4 transition-opacity duration-200 ease-out",
+          navPending && "pointer-events-none opacity-50",
+        )}
+      >
         <DataTableWrapper
           title="客户列表"
           headerMode="hidden"

@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  Loader2,
   Search,
   SlidersHorizontal,
   X,
@@ -684,10 +685,19 @@ export function CustomerFilterToolbar({
 
   return (
     <div ref={rootRef} aria-busy={pending} className="relative">
-      <div className="rounded-lg border border-border bg-card px-3 py-2">
+      <div
+        className={cn(
+          "rounded-lg border border-border bg-card px-3 py-2 transition-opacity duration-200 ease-out",
+          pending && "opacity-80",
+        )}
+      >
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative min-w-0 flex-1 basis-64">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            {pending ? (
+              <Loader2 className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-primary" />
+            ) : (
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            )}
             <input
               value={searchDraft}
               onChange={(event) => setSearchDraft(event.target.value)}
@@ -700,7 +710,7 @@ export function CustomerFilterToolbar({
               }}
               placeholder="搜索客户姓名 / 手机号"
               aria-label="搜索客户"
-              className={cn(baseFieldClassName, "w-full pl-8 pr-3")}
+              className={cn(baseFieldClassName, "w-full pl-8 pr-3", pending && "opacity-70")}
             />
           </div>
 
@@ -733,13 +743,17 @@ export function CustomerFilterToolbar({
             aria-expanded={open}
             onClick={() => setOpen((current) => !current)}
             className={cn(
-              "inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium",
+              "inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors duration-200 ease-out",
               open || advancedActiveCount > 0
                 ? "border-primary/40 bg-primary/10 text-primary"
                 : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
             )}
           >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
+            {pending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+            )}
             高级筛选
             {advancedActiveCount > 0 ? (
               <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold leading-none text-primary-foreground">
