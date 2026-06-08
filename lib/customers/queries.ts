@@ -2659,28 +2659,6 @@ function getCustomerSnapshotState(
   };
 }
 
-function getQueueMatch(state: CustomerSnapshotState, queue: CustomerQueueKey) {
-  switch (queue) {
-    case "new_imported":
-      return state.newImported;
-    case "pending_first_call":
-      return state.pendingFirstCall;
-    case "pending_follow_up":
-      return state.pendingFollowUp;
-    case "pending_wechat":
-      return state.pendingWechat;
-    case "pending_invitation":
-      return state.pendingInvitation;
-    case "pending_deal":
-      return state.pendingDeal;
-    case "migration_pending_follow_up":
-      return state.migrationPendingFollowUp;
-    case "all":
-    default:
-      return true;
-  }
-}
-
 function buildSummaryStats<T extends Pick<CustomerStateSource, "id" | "createdAt">>(
   snapshots: T[],
   stateMap: Map<string, CustomerDashboardState | CustomerSnapshotState>,
@@ -2725,18 +2703,9 @@ function buildSummaryStats<T extends Pick<CustomerStateSource, "id" | "createdAt
   };
 }
 
-function buildQueueCounts(
-  snapshots: CustomerSnapshot[],
-  stateMap: Map<string, CustomerSnapshotState>,
-) {
-  return customerQueueValues.reduce<Record<CustomerQueueKey, number>>((result, queue) => {
-    result[queue] = snapshots.filter((item) => {
-      const state = stateMap.get(item.id);
-      return state ? getQueueMatch(state, queue) : false;
-    }).length;
-    return result;
-  }, {} as Record<CustomerQueueKey, number>);
-}
+// F18 customers/perf phase 3: buildQueueCounts(全表内存版) 已不再被任何主路径
+// 引用 — page mode + cursor mode 都从 SQL aggregate (`getCustomerCenterStatsAggregate`)
+// 取 queueCounts. 此处删除避免长期吸引误用.
 
 function matchesCustomerExecutionClasses(
   state: CustomerSnapshotState | undefined,
@@ -3395,43 +3364,243 @@ export function parseCustomerDetailTab(
 }
 
 /**
- * @deprecated F17 customers/perf phase 2: /customers 主路径已切到
- * `getCustomerCenterDataCursor` (走 SQL aggregate, 不再全量加载 5826 客户).
- * 本函数保留兼容 (`app/mobile/page.tsx`, `listFilteredCustomerCenterCustomerIds`
- * 等), 但 phase 3 计划清理. 不要在新代码里调用.
+ * F18 customers/perf phase 3: /customers 主路径 page-mode 入口.
+ *
+ * 销售业务习惯保留页码 + 每页显示数量, 同时不能回到 5826 内存全表加载.
+ * 这里复用 Wave 8 的 SQL aggregate (`getCustomerCenterStatsAggregate`), 列表
+ * 通过 `prisma.customer.findMany` + `take/skip` (OFFSET/LIMIT) 真分页. 排序与
+ * cursor 模式保持一致 (`[updatedAt desc, id desc]`), 走 `cust_owner_updated_id_idx`.
+ *
+ * 与 `getCustomerCenterDataCursor` 行为差异:
+ *   - pagination.mode = "page", 提供 totalPages / page / pageSize, UI 展示页码.
+ *   - totalCount = SQL where (search/owner/team/grade) 命中数; 派生过滤
+ *     (executionClass / queue / product / tag) 不进 totalCount, 与 cursor 模
+ *     式定位一致.
+ *
+ * 与旧 `getCustomerCenterData` (基于 `getCustomerCenterWorkspaceBase` 全量加载)
+ * 差异 (可接受):
+ *   - sidebar / teamOverview / salesBoard 概览的 pendingInvitation / pendingDeal
+ *     不再排除派生 D/E 类客户 (≈ <1% 偏大), 列表行内徽章仍精确.
+ *   - migration_pending_follow_up 概览暂为 0, 行内派生仍可用.
+ *   - productOptions / tagOptions 是当前页 (≤pageSize 行) 视野; filter 下拉本来就
+ *     截取 top 10, 影响几乎为 0.
  */
 export async function getCustomerCenterData(
   viewer: CustomerViewer,
   rawSearchParams: Record<string, SearchParamsValue> | undefined,
-) {
-  const [workspace, activeTags] = await Promise.all([
-    getCustomerCenterWorkspaceBase(viewer, rawSearchParams),
-    getActiveTagOptions(),
-  ]);
-  const {
-    actor,
-    filters,
+): Promise<CustomerCenterData> {
+  if (!canAccessCustomerModule(viewer.role)) {
+    throw new Error("You do not have access to customers.");
+  }
+
+  const actor = await getCustomerCenterActor(viewer.id);
+  const visibleWhere = getCustomerVisibilityWhereInput(actor);
+  const parsedFilters = parseCustomerCenterFilters(rawSearchParams);
+
+  const now = new Date();
+  const todayStart = startOfDay(now);
+  const todayEnd = endOfDay(now);
+
+  // 并行: teams / salesUsers / recycled-ids / visible-ids / activeTags.
+  // 都已经独立 60s 缓存, 不再走 5826 全量 snapshot.
+  const [
     teams,
     salesUsers,
-    customerSnapshots,
     recycledCustomerIds,
-    stateMap,
-    scopeSnapshots,
-    todayStart,
-    todayEnd,
-  } = workspace;
+    visibleCustomerIds,
+    activeTags,
+  ] = await Promise.all([
+    loadCustomerCenterTeamsCached({
+      scope: actor.role === "ADMIN" ? "ADMIN" : "OWN_TEAM",
+      teamId: actor.role === "ADMIN" ? null : actor.teamId,
+    }),
+    loadCustomerCenterSalesUsersCached({
+      scope:
+        actor.role === "ADMIN"
+          ? "ADMIN"
+          : actor.role === "SUPERVISOR"
+            ? "SUPERVISOR"
+            : "SALES",
+      teamId: actor.role === "SUPERVISOR" ? actor.teamId : null,
+      viewerId: actor.role === "SALES" ? actor.id : null,
+    }),
+    loadRecycledCustomerIdsCached(),
+    loadVisibleCustomerIdsCached({
+      scope:
+        actor.role === "ADMIN"
+          ? "ADMIN"
+          : actor.role === "SUPERVISOR"
+            ? "SUPERVISOR"
+            : "SALES",
+      teamId: actor.role === "SUPERVISOR" ? actor.teamId : null,
+      ownerId: actor.role === "SALES" ? actor.id : null,
+    }),
+    getActiveTagOptions(),
+  ]);
 
-  const teamOverview = teams.map<TeamOverviewItem>((team) => {
-    const teamSnapshots = customerSnapshots.filter(
-      (snapshot) => snapshot.owner?.team?.id === team.id,
-    );
-    const stats = buildSummaryStats(teamSnapshots, stateMap, todayStart, todayEnd);
-    const salesCount = new Set(
-      teamSnapshots
-        .map((snapshot) => snapshot.ownerId)
-        .filter((value): value is string => Boolean(value)),
-    ).size;
+  // filter 校验 (teamId / salesId 必须落在 viewer 视野). 与 cursor 模式同源.
+  const salesById = new Map(salesUsers.map((item) => [item.id, item]));
+  const teamsById = new Map(teams.map((item) => [item.id, item]));
+  const teamId =
+    actor.role === "ADMIN"
+      ? teamsById.has(parsedFilters.teamId)
+        ? parsedFilters.teamId
+        : salesById.get(parsedFilters.salesId)?.teamId ?? ""
+      : actor.teamId ?? "";
+  const salesId = (() => {
+    if (actor.role === "SALES") {
+      return actor.id;
+    }
+    const selectedSales = salesById.get(parsedFilters.salesId);
+    if (!selectedSales) return "";
+    if (teamId && selectedSales.teamId !== teamId) return "";
+    return selectedSales.id;
+  })();
+  const filters: CustomerCenterFilters = {
+    queue: parsedFilters.queue,
+    executionClasses: parsedFilters.executionClasses,
+    grades: parsedFilters.grades,
+    teamId,
+    salesId,
+    search: parsedFilters.search,
+    productKeys: parsedFilters.productKeys,
+    productKeyword: parsedFilters.productKeyword,
+    tagIds: parsedFilters.tagIds,
+    assignedFrom: parsedFilters.assignedFrom,
+    assignedTo: parsedFilters.assignedTo,
+    page: parsedFilters.page,
+    pageSize: parsedFilters.pageSize,
+  };
 
+  // 构造 page-mode list query 的 SQL where (search/owner/team/grade 推到 SQL).
+  // 派生过滤 (queue/executionClass/product/tag/assignedRange) 不进 SQL, 与
+  // cursor 模式一致, 由 UI 行内徽章自然降噪.
+  const listFilterClauses: Prisma.CustomerWhereInput[] = [];
+  if (filters.search && filters.search.trim().length > 0) {
+    const term = filters.search.trim();
+    listFilterClauses.push({
+      OR: [
+        { name: { contains: term } },
+        { phone: { contains: term } },
+        { remark: { contains: term } },
+      ],
+    });
+  }
+  if (filters.salesId) {
+    listFilterClauses.push({ ownerId: filters.salesId });
+  }
+  if (filters.teamId) {
+    listFilterClauses.push({ owner: { is: { teamId: filters.teamId } } });
+  }
+  if (filters.grades.length > 0) {
+    listFilterClauses.push({ grade: { in: filters.grades } });
+  }
+  const listWhere: Prisma.CustomerWhereInput = {
+    AND: [
+      visibleWhere,
+      ...(recycledCustomerIds.length > 0
+        ? [
+            {
+              id: { notIn: recycledCustomerIds },
+            } satisfies Prisma.CustomerWhereInput,
+          ]
+        : []),
+      ...listFilterClauses,
+    ],
+  };
+
+  // SQL aggregate + 总数 + 当前页并行.
+  const pageSize = filters.pageSize;
+  const requestedPage = filters.page;
+  const [aggregate, listTotalCount] = await Promise.all([
+    getCustomerCenterStatsAggregate({
+      actor,
+      visibleWhere,
+      recycledCustomerIds,
+      now,
+      todayStart,
+      todayEnd,
+    }),
+    prisma.customer.count({ where: listWhere }),
+  ]);
+  const totalPages = Math.max(1, Math.ceil(listTotalCount / pageSize));
+  const currentPage = Math.max(1, Math.min(requestedPage, totalPages));
+  const skip = (currentPage - 1) * pageSize;
+
+  const pageSnapshots: CustomerSnapshot[] = await prisma.customer.findMany({
+    where: listWhere,
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    skip,
+    take: pageSize,
+    select: customerSnapshotSelect,
+  });
+
+  // scope stats 派生 (ADMIN salesId/teamId / SUPERVISOR salesId|team / SALES self).
+  const emptyScope: CustomerCenterStatsScope = {
+    customerCount: 0,
+    todayNewCustomerCount: 0,
+    todayNewImportedCount: 0,
+    pendingFirstCallCount: 0,
+    pendingFollowUpCount: 0,
+    pendingWechatCount: 0,
+    pendingInvitationCount: 0,
+    pendingDealCount: 0,
+    latestFollowUpAt: null,
+  };
+  const scopeStats: CustomerCenterStatsScope = filters.salesId
+    ? aggregate.byOwner.get(filters.salesId) ?? emptyScope
+    : filters.teamId
+      ? aggregate.byTeam.get(filters.teamId) ?? emptyScope
+      : aggregate.global;
+
+  // 当前页 stateMap (只算页内 ≤pageSize, 不再 5826).
+  const [pageImportMap, pageAssignmentMap] = await Promise.all([
+    getLatestCustomerImportMap(pageSnapshots.map((s) => s.id)),
+    getLatestCustomerAssignmentMap(pageSnapshots),
+  ]);
+  const stateMap = new Map<string, CustomerSnapshotState>(
+    pageSnapshots.map((snapshot) => [
+      snapshot.id,
+      getCustomerSnapshotState(
+        snapshot,
+        pageImportMap.get(snapshot.id)?.createdAt ?? null,
+        pageAssignmentMap.get(snapshot.id) ?? null,
+        now,
+        todayStart,
+        todayEnd,
+      ),
+    ]),
+  );
+
+  const summary: CustomerSummaryStats = {
+    customerCount: scopeStats.customerCount,
+    todayNewCustomerCount: scopeStats.todayNewCustomerCount,
+    todayNewImportedCount: scopeStats.todayNewImportedCount,
+    todayAssignedCount: 0,
+    pendingFirstCallCount: scopeStats.pendingFirstCallCount,
+    pendingFollowUpCount: scopeStats.pendingFollowUpCount,
+    pendingWechatCount: scopeStats.pendingWechatCount,
+    pendingInvitationCount: scopeStats.pendingInvitationCount,
+    pendingDealCount: scopeStats.pendingDealCount,
+    migrationPendingFollowUpCount: 0,
+    executionClassCounts: aggregate.executionClassCounts,
+    latestFollowUpAt: scopeStats.latestFollowUpAt,
+  };
+
+  const queueCounts: Record<CustomerQueueKey, number> = {
+    all: scopeStats.customerCount,
+    new_imported: scopeStats.todayNewImportedCount,
+    pending_first_call: scopeStats.pendingFirstCallCount,
+    pending_follow_up: scopeStats.pendingFollowUpCount,
+    pending_wechat: scopeStats.pendingWechatCount,
+    pending_invitation: scopeStats.pendingInvitationCount,
+    pending_deal: scopeStats.pendingDealCount,
+    migration_pending_follow_up: 0,
+  };
+
+  const teamOverview: TeamOverviewItem[] = teams.map((team) => {
+    const stats = aggregate.byTeam.get(team.id) ?? emptyScope;
+    const salesCount = salesUsers.filter((s) => s.teamId === team.id).length;
     return {
       id: team.id,
       code: team.code,
@@ -3445,16 +3614,14 @@ export async function getCustomerCenterData(
       pendingFollowUpCount: stats.pendingFollowUpCount,
       pendingInvitationCount: stats.pendingInvitationCount,
       pendingDealCount: stats.pendingDealCount,
-      migrationPendingFollowUpCount: stats.migrationPendingFollowUpCount,
+      migrationPendingFollowUpCount: 0,
     };
   });
 
-  const salesBoard = salesUsers
+  const salesBoard: SalesRepBoardItem[] = salesUsers
     .filter((item) => !filters.teamId || item.teamId === filters.teamId)
-    .map<SalesRepBoardItem>((sales) => {
-      const salesSnapshots = customerSnapshots.filter((snapshot) => snapshot.ownerId === sales.id);
-      const stats = buildSummaryStats(salesSnapshots, stateMap, todayStart, todayEnd);
-
+    .map((sales) => {
+      const stats = aggregate.byOwner.get(sales.id) ?? emptyScope;
       return {
         id: sales.id,
         name: sales.name,
@@ -3466,7 +3633,7 @@ export async function getCustomerCenterData(
         pendingFirstCallCount: stats.pendingFirstCallCount,
         pendingFollowUpCount: stats.pendingFollowUpCount,
         pendingDealCount: stats.pendingDealCount,
-        migrationPendingFollowUpCount: stats.migrationPendingFollowUpCount,
+        migrationPendingFollowUpCount: 0,
         latestFollowUpAt: stats.latestFollowUpAt,
       };
     })
@@ -3474,14 +3641,13 @@ export async function getCustomerCenterData(
       if (right.customerCount !== left.customerCount) {
         return right.customerCount - left.customerCount;
       }
-
       return left.name.localeCompare(right.name, "zh-CN");
     });
 
-  const summary = buildSummaryStats(scopeSnapshots, stateMap, todayStart, todayEnd);
-  const queueCounts = buildQueueCounts(scopeSnapshots, stateMap);
-  const productOptions = buildProductFilterOptions(scopeSnapshots);
-  const tagOptions = buildTagFilterOptions(scopeSnapshots, activeTags);
+  // productOptions / tagOptions 走当前页 snapshot (≤pageSize). UI 下拉再 top 10.
+  const productOptions = buildProductFilterOptions(pageSnapshots);
+  const tagOptions = buildTagFilterOptions(pageSnapshots, activeTags);
+
   const selectedTeam =
     filters.teamId !== ""
       ? teamOverview.find((item) => item.id === filters.teamId) ?? null
@@ -3494,17 +3660,8 @@ export async function getCustomerCenterData(
       : actor.role === "SALES"
         ? salesBoard.find((item) => item.id === actor.id) ?? null
         : null;
-  const filteredQueueSnapshots = getCustomerCenterFilteredSnapshots({
-    scopeSnapshots,
-    stateMap,
-    filters,
-  });
-  const totalCount = filteredQueueSnapshots.length;
-  const totalPages = Math.max(1, Math.ceil(totalCount / filters.pageSize));
-  const currentPage = Math.min(filters.page, totalPages);
-  const pageCustomerIds = filteredQueueSnapshots
-    .slice((currentPage - 1) * filters.pageSize, currentPage * filters.pageSize)
-    .map((item) => item.id);
+
+  const pageCustomerIds = pageSnapshots.map((item) => item.id);
   const [queueItems, callResultOptions] = await Promise.all([
     fetchCustomerListItems(pageCustomerIds, stateMap),
     getEnabledCallResultOptions(),
@@ -3512,7 +3669,7 @@ export async function getCustomerCenterData(
   const phoneSearchDisclosures = await getPhoneSearchOwnershipDisclosures({
     actor,
     search: filters.search,
-    visibleCustomerIds: customerSnapshots.map((item) => item.id),
+    visibleCustomerIds,
     recycledCustomerIds,
   });
 
@@ -3549,9 +3706,10 @@ export async function getCustomerCenterData(
     phoneSearchDisclosures,
     pagination: {
       page: currentPage,
-      pageSize: filters.pageSize,
-      totalCount,
+      pageSize,
+      totalCount: listTotalCount,
       totalPages,
+      mode: "page",
     },
   } satisfies CustomerCenterData;
 }

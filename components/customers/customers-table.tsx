@@ -47,11 +47,10 @@ import {
   ListTopBar,
   RowActions,
 } from "@/components/customers/customers-table-bits";
-import { CustomersTablePaginationButtons } from "@/components/customers/customers-table-pagination";
+import { CustomersTablePagination } from "@/components/customers/customers-table-pagination";
 import { DataTableWrapper } from "@/components/shared/data-table-wrapper";
 import { EmptyState } from "@/components/shared/empty-state";
 import { EntityTable } from "@/components/shared/entity-table";
-import { PaginationControls } from "@/components/shared/pagination-controls";
 import { notifyToast } from "@/components/shared/toast-provider";
 import { buildCursorHref, decodeCursor } from "@/lib/customers/list-cursor";
 import type { CallResultOption } from "@/lib/calls/metadata";
@@ -172,7 +171,6 @@ export function CustomersTable({
   emptyTitle,
   emptyDescription,
   filters,
-  pageSizeControl,
   headerAction,
   scrollTargetId,
 }: Readonly<{
@@ -192,7 +190,6 @@ export function CustomersTable({
   emptyTitle: string;
   emptyDescription: string;
   filters: CustomerCenterFilters;
-  pageSizeControl?: ReactNode;
   headerAction?: ReactNode;
   scrollTargetId?: string;
 }>) {
@@ -1115,9 +1112,10 @@ export function CustomersTable({
         ) : null}
 
         {items.length > 0 ? (
-          <div className="[&>div]:rounded-[18px] [&>div]:border-[var(--color-border-soft)] [&>div]:bg-[var(--color-panel-soft)] [&>div]:px-4 [&>div]:py-3 [&>div]:shadow-[var(--color-shell-shadow-sm)] [&_.crm-toolbar-cluster]:gap-2 [&_a]:h-8 [&_a]:rounded-[10px] [&_a]:px-3 [&_a]:py-0 [&_a]:text-[13px] [&_a]:shadow-none [&_a]:hover:translate-y-0 [&_p]:text-[13px] [&_p]:leading-5">
+          <div className="[&>div]:rounded-[18px] [&>div]:border-[var(--color-border-soft)] [&>div]:bg-[var(--color-panel-soft)] [&>div]:px-4 [&>div]:py-3 [&>div]:shadow-[var(--color-shell-shadow-sm)] [&_.crm-toolbar-cluster]:gap-2 [&_.crm-button]:h-8 [&_.crm-button]:rounded-[10px] [&_.crm-button]:px-3 [&_.crm-button]:py-0 [&_.crm-button]:text-[13px] [&_.crm-button]:shadow-none [&_.crm-button]:hover:translate-y-0 [&_p]:text-[13px] [&_p]:leading-5">
             {pagination.mode === "cursor" ? (
-              <CustomersTablePaginationButtons
+              <CustomersTablePagination
+                mode="cursor"
                 prevHref={
                   pagination.currentCursor
                     ? buildCursorHref(pathname, searchParams, null)
@@ -1140,12 +1138,13 @@ export function CustomersTable({
                 scrollTargetId={scrollTargetId}
               />
             ) : (
-              <PaginationControls
+              <CustomersTablePagination
+                mode="page"
                 page={pagination.page}
+                pageSize={pagination.pageSize}
+                totalCount={pagination.totalCount}
                 totalPages={pagination.totalPages}
-                summary={`当前第 ${pagination.page} / ${pagination.totalPages} 页，共 ${pagination.totalCount} 位客户`}
-                buildHref={(page) => buildCustomersHref(filters, { page })}
-                rightSlot={pageSizeControl}
+                filters={filters}
                 scrollTargetId={scrollTargetId}
               />
             )}
