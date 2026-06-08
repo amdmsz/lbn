@@ -112,6 +112,8 @@ export function createMobileApiCustomerListItem(
     district: fallback?.district ?? null,
     address: fallback?.address ?? null,
     status: item.status as CustomerListItem["status"],
+    // Wave 7-B: 移动端 API 暂未透传 grade, 用 fallback. null 表示 "暂不显示分级 chip".
+    grade: fallback?.grade ?? null,
     ownershipMode: item.ownershipMode as CustomerListItem["ownershipMode"],
     createdAt: new Date(item.createdAt),
     avatarUrl: item.avatarUrl ?? fallback?.avatarUrl ?? null,

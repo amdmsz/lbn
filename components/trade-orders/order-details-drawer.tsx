@@ -28,7 +28,7 @@ export type OrderDetailsDrawerProps = Readonly<{
 }>;
 
 export function OrderDetailsDrawer({
-  triggerLabel = "查看订单元信息 / 时间线 / 行动区",
+  triggerLabel = "更多",
   defaultOpen = false,
   children,
   hint,
@@ -43,7 +43,7 @@ export function OrderDetailsDrawer({
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+        className="flex w-full items-center justify-between gap-3 px-6 py-3 text-left"
       >
         <span className="text-sm font-medium text-foreground">{triggerLabel}</span>
         <span className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -58,7 +58,7 @@ export function OrderDetailsDrawer({
         </span>
       </button>
       {open ? (
-        <div className="space-y-4 border-t border-border/60 px-4 py-4">{children}</div>
+        <div className="space-y-6 border-t border-border/60 px-6 py-6">{children}</div>
       ) : null}
     </section>
   );

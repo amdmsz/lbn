@@ -41,6 +41,7 @@ import { type MoveCustomerToRecycleBinAction } from "@/components/customers/cust
 import { CustomersTableBatchActionBar } from "@/components/customers/customers-table-batch-action-bar";
 import {
   BlockedReasonStrip,
+  CustomerGradeBadge,
   ExecutionBadge,
   executionBadgeClassNames,
   ListTopBar,
@@ -611,6 +612,7 @@ export function CustomersTable({
             >
               {row.name}
             </button>
+            <CustomerGradeBadge grade={row.grade} />
             <ExecutionBadge row={row} onClick={() => openFollowUpDialog(row, {
               initialResult:
                 (row.newImported && row.pendingFirstCall
@@ -790,6 +792,7 @@ export function CustomersTable({
                     >
                       {row.name}
                     </button>
+                    <CustomerGradeBadge grade={row.grade} />
                     <ExecutionBadge
                       row={row}
                       compact

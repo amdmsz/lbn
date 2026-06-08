@@ -17,6 +17,7 @@ import {
 } from "@/lib/auth/access";
 import type { ExtraPermissionCode } from "@/lib/auth/permissions";
 import { assertCustomerNotInActiveRecycleBin } from "@/lib/customers/recycle";
+import { safeRecomputeCustomerGrade } from "@/lib/customers/grade";
 import { touchCustomerEffectiveFollowUpFromLiveInvitationTx } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
 import { findActiveRecycleEntry } from "@/lib/recycle-bin/repository";
@@ -356,6 +357,9 @@ export async function upsertLiveInvitation(
       watchDurationMinutes: parsed.watchDurationMinutes,
       giftQualified,
     });
+
+    // Wave 7-B: 邀约直播后, 至少升到 C 级 (如果已经 A/B 则保持原级).
+    await safeRecomputeCustomerGrade(tx, customer.id);
 
     return saved;
   });

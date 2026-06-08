@@ -15,6 +15,7 @@ import {
   getEnabledCallResultDefinitionByCode,
 } from "@/lib/calls/settings";
 import { assertCustomerNotInActiveRecycleBin } from "@/lib/customers/recycle";
+import { safeRecomputeCustomerGrade } from "@/lib/customers/grade";
 import { prisma } from "@/lib/db/prisma";
 
 export type CallRecordActor = {
@@ -206,6 +207,14 @@ export async function createCallRecord(
         },
       });
     }
+
+    // Wave 7-B: 通话结果落库后顺手 recompute grade.
+    // 触发场景:
+    //   - result = INVALID_NUMBER → 升级 F (除非已经 C/B/A)
+    //   - result ∈ NOT_CONNECTED / HUNG_UP / CONNECTED_NO_TALK → 升级 D
+    //   - linkedWechatStatus = ADDED → 升级 B
+    // 不会降级 — pickHigherGrade 守护.
+    await safeRecomputeCustomerGrade(tx, customer.id);
 
     return created;
   });

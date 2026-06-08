@@ -98,7 +98,7 @@ const drawerActionClassName =
 
 function TradeOrderItemsSection({ order }: Readonly<{ order: TradeOrderDetail }>) {
   return (
-    <section className="rounded-xl border border-border/60 bg-card px-4 py-3.5 shadow-sm">
+    <section className="rounded-xl border border-border/60 bg-card p-6 shadow-sm">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h3 className="text-[15px] font-semibold text-foreground">商品</h3>
         {order.discountAmount !== "0" ? (
@@ -108,7 +108,7 @@ function TradeOrderItemsSection({ order }: Readonly<{ order: TradeOrderDetail }>
         ) : null}
       </div>
 
-      <div className="mt-3 grid gap-2.5">
+      <div className="mt-4 grid gap-2.5">
         {order.items.map((item) => {
           const supplierName =
             item.components.length > 0
@@ -287,7 +287,7 @@ function ParentOrderAlertsSection({
   return (
     <section
       aria-label="父单级提醒"
-      className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-card px-4 py-3 shadow-sm"
+      className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-card px-6 py-3 shadow-sm"
     >
       <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
         待处理
@@ -544,7 +544,7 @@ export function TradeOrderDetailSection(
   });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 p-4 md:p-6">
       {notice ? (
         <ActionBanner tone={notice.status === "success" ? "success" : "danger"}>
           {notice.message}
@@ -568,7 +568,7 @@ export function TradeOrderDetailSection(
       />
 
       {/* 2 + 3 桌面端并排: 商品 (左) + 收货地址 (右), 移动端依次堆叠 */}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(280px,1fr)]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(280px,1fr)]">
         <TradeOrderItemsSection order={order} />
         <AddressCompactCard
           receiverName={order.receiverNameSnapshot}
@@ -578,7 +578,7 @@ export function TradeOrderDetailSection(
       </div>
 
       {/* 4 + 5 桌面端并排: 付款 + 物流 */}
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-6 xl:grid-cols-2">
         <PaymentSnapshotCard
           totalAmount={formatCurrency(order.finalAmount)}
           collectedAmount={formatCurrency(order.collectedAmount)}

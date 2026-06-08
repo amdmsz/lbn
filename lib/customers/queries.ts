@@ -19,6 +19,7 @@
 import { unstable_cache } from "next/cache";
 import {
   CallResult,
+  CustomerGrade,
   CustomerHistoryArchiveVisibility,
   CustomerOwnershipMode,
   CustomerStatus,
@@ -196,6 +197,8 @@ export type CustomerViewer = {
 export type CustomerCenterFilters = {
   queue: CustomerQueueKey;
   executionClasses: CustomerExecutionClass[];
+  // Wave 7-B: 客户分级 A/B/C/D/F multi-select. 空数组 = 不过滤.
+  grades: CustomerGrade[];
   teamId: string;
   salesId: string;
   search: string;
@@ -269,6 +272,8 @@ export type CustomerListItem = {
   district: string | null;
   address: string | null;
   status: CustomerStatus;
+  // Wave 7-B 客户分级 A/B/C/D/F. null 表示新客户还没攒到信号.
+  grade: CustomerGrade | null;
   ownershipMode: CustomerOwnershipMode;
   createdAt: Date;
   avatarUrl: string | null;
@@ -553,6 +558,12 @@ const legacyQueueAliasMap: Partial<Record<string, CustomerQueueKey>> = {
 const customerCenterFiltersSchema = z.object({
   queue: z.enum(customerQueueValues).default("all"),
   executionClasses: z.array(z.enum(customerExecutionClassValues)).default([]),
+  // Wave 7-B: 客户分级 A/B/C/D/F 多选过滤. 与执行档独立 — 执行档是行为画像
+  // (CALLED_TODAY / WECHAT_PENDING 之类), grade 是销售里程碑 (A 成交 / B 加微
+  // / ...). 两个可以叠加, 也可以单独筛.
+  grades: z
+    .array(z.enum([CustomerGrade.A, CustomerGrade.B, CustomerGrade.C, CustomerGrade.D, CustomerGrade.F]))
+    .default([]),
   teamId: z.string().trim().default(""),
   salesId: z.string().trim().default(""),
   search: z.string().trim().default(""),
@@ -588,6 +599,7 @@ const customerSnapshotSelect = {
   name: true,
   phone: true,
   remark: true,
+  grade: true,
   createdAt: true,
   lastEffectiveFollowUpAt: true,
   ownerId: true,
@@ -1232,6 +1244,17 @@ function parseCustomerCenterFilters(
     (value): value is CustomerExecutionClass =>
       customerExecutionClassValues.includes(value as CustomerExecutionClass),
   );
+  // Wave 7-B: 客户分级 multi-select. 容错: 同时接受单数 `grade` 和复数 `grades`,
+  // 大小写宽松化到 A/B/C/D/F.
+  const gradeRaw = [
+    ...getParamValues(rawSearchParams?.grades),
+    ...getParamValues(rawSearchParams?.grade),
+  ];
+  const grades = gradeRaw
+    .map((value) => value.toUpperCase())
+    .filter((value): value is CustomerGrade =>
+      (Object.values(CustomerGrade) as string[]).includes(value),
+    );
   const rawPageSize = Number(getParamValue(rawSearchParams?.pageSize) || CUSTOMERS_PAGE_SIZE);
   const pageSize = customerPageSizeOptions.includes(rawPageSize as CustomerPageSize)
     ? rawPageSize
@@ -1240,6 +1263,7 @@ function parseCustomerCenterFilters(
   return customerCenterFiltersSchema.parse({
     queue: rawQueue,
     executionClasses: [...new Set(executionClasses)],
+    grades: [...new Set(grades)],
     teamId: getParamValue(rawSearchParams?.teamId),
     salesId: getParamValue(rawSearchParams?.salesId),
     search,
@@ -1568,6 +1592,7 @@ async function getCustomerCenterWorkspaceBase(
   const filters: CustomerCenterFilters = {
     queue: parsedFilters.queue,
     executionClasses: parsedFilters.executionClasses,
+    grades: parsedFilters.grades,
     teamId,
     salesId,
     search: parsedFilters.search,
@@ -1637,6 +1662,7 @@ function getCustomerCenterFilteredSnapshots(input: {
         input.filters.executionClasses,
       ),
     )
+    .filter((snapshot) => matchesCustomerGrades(snapshot, input.filters.grades))
     .filter((snapshot) =>
       matchesCustomerProducts(
         snapshot,
@@ -1654,6 +1680,24 @@ function getCustomerCenterFilteredSnapshots(input: {
       ),
     )
     .sort((left, right) => compareCustomerSnapshots(left, right, input.stateMap));
+}
+
+/**
+ * Wave 7-B: 客户分级 multi-select 过滤. 空数组 = 不过滤. snapshot.grade 为 null
+ * 时只有当 filter 包含 null/empty 时才会被收 (我们这里设计成空时不过滤, 而不是
+ * 把 null 视为可选 grade — 销售真要看"无分级"的话, 应该走"全部"再叠加其他过滤).
+ */
+function matchesCustomerGrades(
+  snapshot: CustomerSnapshot,
+  grades: CustomerGrade[],
+) {
+  if (grades.length === 0) {
+    return true;
+  }
+  if (!snapshot.grade) {
+    return false;
+  }
+  return grades.includes(snapshot.grade);
 }
 
 export async function listVisibleCustomerCenterCustomerIds(
@@ -2347,6 +2391,8 @@ async function fetchCustomerListItems(
         avatarPath: true,
         remark: true,
         status: true,
+        // Wave 7-B 客户分级 A/B/C/D/F (可空).
+        grade: true,
         ownershipMode: true,
         createdAt: true,
         owner: {
@@ -2826,6 +2872,8 @@ export type ListCustomersCursorFilters = {
   teamId?: string;
   /** 限定 ownershipMode, 默认沿用 active 集合 (PRIVATE + LOCKED). */
   ownershipModes?: CustomerOwnershipMode[];
+  /** Wave 7-B 客户分级 multi-select. 空数组 / undefined = 不过滤. */
+  grades?: CustomerGrade[];
 };
 
 export type ListCustomersCursorResult = {
@@ -2879,6 +2927,13 @@ export async function listCustomersCursor(
   if (filters.ownershipModes && filters.ownershipModes.length > 0) {
     filterClauses.push({
       ownershipMode: { in: filters.ownershipModes },
+    });
+  }
+
+  // Wave 7-B: 客户分级 SQL 直接走 grade 列 (有 cust_grade_idx 索引).
+  if (filters.grades && filters.grades.length > 0) {
+    filterClauses.push({
+      grade: { in: filters.grades },
     });
   }
 
@@ -3056,7 +3111,8 @@ export async function getCustomerCenterDataCursor(
 
   // cursor 路径仅推 SQL 直接可表达的 filter; 派生 filter (execution / queue
   // / tag / product / 日期) 留 phase 3, 这里也不假装支持, page.tsx 已经只在
-  // 没有这些 filter 时才走 cursor.
+  // 没有这些 filter 时才走 cursor. Wave 7-B: 客户分级 grade 也是 SQL 字段, 可
+  // 以一起推下去.
   const cursorResult = await listCustomersCursor(viewer, {
     cursor,
     pageSize: filters.pageSize,
@@ -3064,6 +3120,7 @@ export async function getCustomerCenterDataCursor(
       search: filters.search || undefined,
       ownerId: filters.salesId || undefined,
       teamId: filters.teamId || undefined,
+      grades: filters.grades.length > 0 ? filters.grades : undefined,
     },
   });
 
@@ -4189,6 +4246,8 @@ async function getVisibleCustomerDetailBase(viewer: CustomerViewer, customerId: 
       address: true,
       status: true,
       level: true,
+      // Wave 7-B 客户分级 A/B/C/D/F (可空).
+      grade: true,
       ownershipMode: true,
       publicPoolEnteredAt: true,
       publicPoolReason: true,

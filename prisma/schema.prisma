@@ -104,6 +104,22 @@ enum CustomerLevel {
   VIP
 }
 
+// Wave 7-B 客户分级 A/B/C/D/F.
+// 业务定义 (销售口述, 不要再回退到 CustomerLevel 思路):
+//   A = 有订单的客户
+//   B = 加了微信的客户
+//   C = 已邀约直播的客户
+//   D = 未接听电话的客户
+//   F = 空号 (手机号无效)
+// 优先级 (高→低): A > B > C > F > D. 推导规则在 lib/customers/grade.ts.
+enum CustomerGrade {
+  A
+  B
+  C
+  D
+  F
+}
+
 enum CustomerOwnershipMode {
   PRIVATE
   PUBLIC
@@ -1031,6 +1047,9 @@ model Customer {
   avatarPath                   String?
   status                       CustomerStatus           @default(ACTIVE)
   level                        CustomerLevel            @default(NEW)
+  // Wave 7-B 客户分级 — 由 lib/customers/grade.ts 派生写入, 不是销售手工选的.
+  // 可空: 全新客户没有任何信号时维持 null, 不硬塞 D.
+  grade                        CustomerGrade?
   ownerId                      String?
   owner                        User?                    @relation("CustomerOwner", fields: [ownerId], references: [id])
   ownershipMode                CustomerOwnershipMode    @default(PRIVATE)
@@ -1085,6 +1104,8 @@ model Customer {
   // 团队视角的客户访问通过 owner → owner.team 间接关联, Customer 表自身无
   // teamId, 所以这里只能从 ownerId 侧建复合索引.
   @@index([ownerId, updatedAt, id], map: "cust_owner_updated_id_idx")
+  // Wave 7-B 客户分级过滤索引. 客户列表按 grade multi-select 时走这条.
+  @@index([grade], map: "cust_grade_idx")
   @@map("customer")
 }
 

@@ -301,63 +301,52 @@ export function SupplierFulfillmentAccordion({
   emptyHint?: string;
 }>) {
   return (
-    <section className="crm-section-card">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1.5">
-          <h3 className="text-lg font-semibold text-foreground">供货商子单</h3>
-          <p className="text-sm leading-6 text-muted-foreground">
-            点击展开查看支付、发货、物流、批次详情。
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+    <section aria-label="供货商子单" className="space-y-3">
+      {/* 折叠态: 单 chip 行 (子单 / supplier / 总额); "已发货 X/Y" 与异常
+          状态由物流卡进度轨道独立表达, 此处不再重复; 也不用浅蓝色强调技术信息 */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          供货商子单
+        </span>
+        <SummaryChip
+          icon={<CircleDot className="h-3 w-3" />}
+          label="子单"
+          value={summary.subOrderCount}
+          tone="neutral"
+        />
+        <SummaryChip
+          icon={<Boxes className="h-3 w-3" />}
+          label="supplier"
+          value={summary.supplierCount}
+          tone="neutral"
+        />
+        <SummaryChip
+          icon={<Coins className="h-3 w-3" />}
+          label="总额"
+          value={formatCurrency(summary.totalAmount)}
+          tone="success"
+        />
+        {summary.exceptionCount > 0 ? (
           <SummaryChip
             icon={<CircleDot className="h-3 w-3" />}
-            label="子单"
-            value={summary.subOrderCount}
-            tone="primary"
+            label="异常"
+            value={summary.exceptionCount}
+            tone="danger"
           />
-          <SummaryChip
-            icon={<Boxes className="h-3 w-3" />}
-            label="supplier"
-            value={summary.supplierCount}
-            tone="neutral"
-          />
-          <SummaryChip
-            icon={<Coins className="h-3 w-3" />}
-            label="总额"
-            value={formatCurrency(summary.totalAmount)}
-            tone="success"
-          />
-          <SummaryChip
-            icon={<Truck className="h-3 w-3" />}
-            label="已发货"
-            value={`${summary.shippedCount}/${summary.subOrderCount}`}
-            tone={summary.shippedCount === summary.subOrderCount ? "success" : "warning"}
-          />
-          {summary.exceptionCount > 0 ? (
-            <SummaryChip
-              icon={<CircleDot className="h-3 w-3" />}
-              label="异常"
-              value={summary.exceptionCount}
-              tone="danger"
-            />
-          ) : null}
-        </div>
+        ) : null}
       </div>
 
-      <div className="mt-5">
-        {items.length === 0 ? (
-          <div className="border-l-2 border-dashed border-border/60 pl-4 text-sm text-muted-foreground">
-            {emptyHint}
-          </div>
-        ) : (
-          <div className="space-y-2.5">
-            {items.map((item) => (
-              <SupplierCard key={item.id} item={item} />
-            ))}
-          </div>
-        )}
-      </div>
+      {items.length === 0 ? (
+        <div className="border-l-2 border-dashed border-border/60 pl-4 text-sm text-muted-foreground">
+          {emptyHint}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {items.map((item) => (
+            <SupplierCard key={item.id} item={item} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }

@@ -70,7 +70,7 @@ export function PaymentSnapshotCard({
     <section
       aria-label="付款情况"
       className={cn(
-        "rounded-xl border border-border/60 bg-card px-4 py-3.5 shadow-sm",
+        "rounded-xl border border-border/60 bg-card p-6 shadow-sm",
       )}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">

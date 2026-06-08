@@ -26,7 +26,7 @@ export function AddressCompactCard({
     <section
       aria-label="收货地址"
       className={cn(
-        "rounded-xl border border-border/60 bg-card px-4 py-3 shadow-sm",
+        "rounded-xl border border-border/60 bg-card p-6 shadow-sm",
       )}
     >
       <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -34,7 +34,7 @@ export function AddressCompactCard({
         收货
       </div>
 
-      <div className="mt-2 space-y-1.5">
+      <div className="mt-3 space-y-1.5">
         <div className="flex items-center gap-2">
           <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="text-sm font-semibold text-foreground">

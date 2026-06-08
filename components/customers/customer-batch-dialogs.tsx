@@ -34,6 +34,15 @@ function FilterHiddenInputs({
           value={executionClass}
         />
       ))}
+      {/* Wave 7-B 客户分级 multi-select 透传. */}
+      {filters.grades.map((grade) => (
+        <input
+          key={grade}
+          type="hidden"
+          name="grades"
+          value={grade}
+        />
+      ))}
       {filters.search ? <input type="hidden" name="search" value={filters.search} /> : null}
       {filters.teamId ? <input type="hidden" name="teamId" value={filters.teamId} /> : null}
       {filters.salesId ? <input type="hidden" name="salesId" value={filters.salesId} /> : null}

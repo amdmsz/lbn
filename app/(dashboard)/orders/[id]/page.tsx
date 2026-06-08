@@ -135,27 +135,15 @@ export default async function SalesOrderDetailPage({
           context={
             <PageContextLink
               href={buildFulfillmentTradeOrdersHref()}
-              label="返回交易单列表"
-              trail={["履约中心", "交易单", tradeOrderData.order.tradeNo]}
+              label="返回订单列表"
             />
           }
-          eyebrow="履约中心"
-          title={`父单详情 · ${tradeOrderData.order.tradeNo}`}
-          description="查看父单、拆单与履约。"
-          actions={
-            <StatusBadge
-              label={canReviewSalesOrder(session.user.role) ? "支持父单审核" : "父单总览模式"}
-              variant={canReviewSalesOrder(session.user.role) ? "success" : "info"}
-            />
-          }
+          title={`订单 ${tradeOrderData.order.tradeNo}`}
         />
 
         {notice ? <ActionBanner tone={notice.tone}>{notice.message}</ActionBanner> : null}
 
-        <DataTableWrapper
-          title="TradeOrder 父单总览"
-          description="回看父单与拆单。"
-        >
+        <DataTableWrapper headerMode="hidden" title="" contentClassName="p-0 md:p-0">
           <TradeOrderDetailSection
             order={tradeOrderData.order}
             operationLogs={tradeOrderData.operationLogs}

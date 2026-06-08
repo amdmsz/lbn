@@ -6,6 +6,7 @@ import {
   getCustomerScope,
 } from "@/lib/auth/access";
 import { assertCustomerNotInActiveRecycleBin } from "@/lib/customers/recycle";
+import { safeRecomputeCustomerGrade } from "@/lib/customers/grade";
 import { touchCustomerEffectiveFollowUpFromWechatTx } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
 import { parseWechatTags } from "@/lib/wechat/metadata";
@@ -153,6 +154,11 @@ export async function createWechatRecord(
       occurredAt: addedAt ?? new Date(),
       addedStatus,
     });
+
+    // Wave 7-B: 加微 (ADDED) 后客户至少 B 级. 不降级 — pickHigherGrade 守护.
+    if (addedStatus === WechatAddStatus.ADDED) {
+      await safeRecomputeCustomerGrade(tx, customer.id);
+    }
 
     return created;
   });

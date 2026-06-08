@@ -44,7 +44,7 @@ export function CustomerCompactCard({
     <section
       aria-label="下单人"
       className={cn(
-        "flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-border/60 bg-card px-4 py-3 shadow-sm",
+        "flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-border/60 bg-card p-6 shadow-sm",
       )}
     >
       <div className="flex min-w-0 items-center gap-3">

@@ -27,6 +27,8 @@ export function buildCustomersHref(
   appendArrayParams(params, "productKeys", next.productKeys);
   appendArrayParams(params, "tagIds", next.tagIds);
   appendArrayParams(params, "executionClasses", next.executionClasses);
+  // Wave 7-B: 客户分级 multi-select.
+  appendArrayParams(params, "grades", next.grades);
 
   if (next.assignedFrom) {
     params.set("assignedFrom", next.assignedFrom);

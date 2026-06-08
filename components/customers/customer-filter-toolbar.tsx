@@ -28,8 +28,13 @@ import {
   type CustomerPageSize,
 } from "@/lib/customers/metadata";
 import { buildCustomersHref } from "@/lib/customers/filter-url";
+import {
+  CUSTOMER_GRADE_LABEL,
+  CUSTOMER_GRADE_VALUES,
+} from "@/lib/customers/grade";
 import type { CustomerCenterData } from "@/lib/customers/queries";
 import { cn } from "@/lib/utils";
+import type { CustomerGrade } from "@prisma/client";
 
 type CustomerFilters = CustomerCenterData["filters"];
 type ProductOption = CustomerCenterData["productOptions"][number];
@@ -589,6 +594,7 @@ export function CustomerFilterToolbar({
   const advancedActiveCount = [
     Boolean(filters.assignedFrom || filters.assignedTo),
     filters.executionClasses.length > 0,
+    filters.grades.length > 0,
     filters.productKeys.length > 0 || Boolean(filters.productKeyword),
     filters.tagIds.length > 0,
     filters.pageSize !== 20,
@@ -612,6 +618,13 @@ export function CustomerFilterToolbar({
           key: "execution-class",
           label: selectedExecutionClass.longLabel,
           onClear: () => applyFilters({ executionClasses: [] }),
+        }
+      : null,
+    filters.grades.length > 0
+      ? {
+          key: "grades",
+          label: `分级 ${filters.grades.join("/")}`,
+          onClear: () => applyFilters({ grades: [] }),
         }
       : null,
     filters.productKeys.length > 0 || filters.productKeyword
@@ -645,6 +658,7 @@ export function CustomerFilterToolbar({
     setTagSearchDraft("");
     applyFilters({
       executionClasses: [],
+      grades: [],
       search: "",
       productKeys: [],
       productKeyword: "",
@@ -824,6 +838,26 @@ export function CustomerFilterToolbar({
                       applyFilters({
                         executionClasses: [option.value as CustomerExecutionClass],
                       });
+                    }}
+                  />
+                ))}
+              </div>
+            </FilterSection>
+
+            {/* Wave 7-B: 客户分级 A/B/C/D/F multi-select. 与"客户分类"独立 — 那
+              个是行为画像 (执行档), 这个是销售里程碑 (有订单/加微/邀约/...). */}
+            <FilterSection title="客户分级">
+              <div className="grid gap-1">
+                {CUSTOMER_GRADE_VALUES.map((grade) => (
+                  <OptionRow
+                    key={grade}
+                    title={CUSTOMER_GRADE_LABEL[grade]}
+                    selected={filters.grades.includes(grade)}
+                    onClick={() => {
+                      const nextGrades = filters.grades.includes(grade)
+                        ? filters.grades.filter((item) => item !== grade)
+                        : [...filters.grades, grade];
+                      applyFilters({ grades: nextGrades as CustomerGrade[] });
                     }}
                   />
                 ))}

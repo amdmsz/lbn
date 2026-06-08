@@ -53,12 +53,25 @@ export type OrderItemCardInput = Readonly<{
 }>;
 
 function getDisplayTitle(input: OrderItemCardInput) {
+  // 优先 productNameSnapshot (干净的商品名); titleSnapshot 通常是销售拼接的
+  // "前缀 / 商品名 (规格) +赠品" 多段堆叠, 销售第一眼不需要; 落 chip 的信息
+  // 已经在副行覆盖, 因此标题只显示 productName 或 sku, 不再回退到 title.
   const title =
-    input.titleSnapshot?.trim() ||
     input.productNameSnapshot?.trim() ||
     input.skuNameSnapshot?.trim() ||
+    input.titleSnapshot?.trim() ||
     "未命名商品";
   return title;
+}
+
+/** chip 去重: 与 title 完全相等或包含/被包含的 chip 不再渲染. */
+function chipDistinctFromTitle(value: string | undefined | null, title: string) {
+  const v = value?.trim();
+  if (!v) return false;
+  if (v === title) return false;
+  if (title.includes(v)) return false;
+  if (v.includes(title)) return false;
+  return true;
 }
 
 function formatQty(qty: number, unit?: string | null) {
@@ -78,16 +91,28 @@ export function OrderItemCard(props: OrderItemCardInput) {
   const isBundle = props.itemType === "BUNDLE";
 
   // 副信息 chip 流: sku / spec / supplier / bundleCode
-  // 只在有值时落 chip, 避免空白 chip
+  // 只在有值时落 chip, 与 title 重复/包含的不再渲染, 避免商品名重复 3 次.
   const chips: Array<{ key: string; label: string; variant: "neutral" | "info" | "warning" }> = [];
-  if (props.skuNameSnapshot?.trim() && props.skuNameSnapshot !== title) {
-    chips.push({ key: "sku", label: props.skuNameSnapshot.trim(), variant: "neutral" });
+  if (chipDistinctFromTitle(props.skuNameSnapshot, title)) {
+    chips.push({
+      key: "sku",
+      label: props.skuNameSnapshot!.trim(),
+      variant: "neutral",
+    });
   }
-  if (props.specSnapshot?.trim()) {
-    chips.push({ key: "spec", label: props.specSnapshot.trim(), variant: "neutral" });
+  if (chipDistinctFromTitle(props.specSnapshot, title)) {
+    chips.push({
+      key: "spec",
+      label: props.specSnapshot!.trim(),
+      variant: "neutral",
+    });
   }
-  if (props.supplierName?.trim()) {
-    chips.push({ key: "supplier", label: props.supplierName.trim(), variant: "info" });
+  if (chipDistinctFromTitle(props.supplierName, title)) {
+    chips.push({
+      key: "supplier",
+      label: props.supplierName!.trim(),
+      variant: "info",
+    });
   }
   if (isBundle && props.bundleCode?.trim()) {
     chips.push({ key: "bundle", label: `套餐 ${props.bundleCode.trim()}`, variant: "warning" });

@@ -14,11 +14,17 @@ import CompactBadgeGroup, {
 } from "@/components/shared/compact-badge-group";
 import type { CustomerBatchActionNoticeState } from "@/lib/customers/batch-action-contract";
 import {
+  CUSTOMER_GRADE_BADGE_TONE,
+  CUSTOMER_GRADE_LABEL,
+  CUSTOMER_GRADE_SHORT_LABEL,
+} from "@/lib/customers/grade";
+import {
   getCustomerExecutionDisplayLongLabel,
   getCustomerExecutionDisplayVariant,
 } from "@/lib/customers/metadata";
 import type { CustomerListItem } from "@/lib/customers/queries";
 import { cn } from "@/lib/utils";
+import type { CustomerGrade } from "@prisma/client";
 
 // 单一执行徽章: 颜色 token, 不再做按钮 + pill 双重渲染.
 export const executionBadgeClassNames = {
@@ -59,6 +65,62 @@ export function ListTopBar({
         共 {totalCount} 位客户
       </p>
     </div>
+  );
+}
+
+// Wave 7-B: 客户分级 A/B/C/D/F chip. 用与 compact-badge-group 一致的 tone 体系,
+// 但单独做一个 component 是因为列表里 chip 出现频率高, 用 1 个字母 (A/B/C/...)
+// 而不是 group 的长 label.
+const customerGradeToneClassMap: Record<
+  "primary" | "success" | "info" | "warning" | "danger",
+  string
+> = {
+  primary:
+    "bg-primary/10 text-primary ring-1 ring-inset ring-primary/20",
+  success:
+    "bg-[var(--tone-success-soft-bg)] text-[var(--tone-success-soft-text)] ring-1 ring-inset ring-[var(--tone-success-soft-border)]",
+  info: "bg-[var(--tone-info-soft-bg)] text-[var(--tone-info-soft-text)] ring-1 ring-inset ring-[var(--tone-info-soft-border)]",
+  warning:
+    "bg-[var(--tone-warning-soft-bg)] text-[var(--tone-warning-soft-text)] ring-1 ring-inset ring-[var(--tone-warning-soft-border)]",
+  danger:
+    "bg-[var(--tone-danger-soft-bg)] text-[var(--tone-danger-soft-text)] ring-1 ring-inset ring-[var(--tone-danger-soft-border)]",
+};
+
+export function CustomerGradeBadge({
+  grade,
+  size = "sm",
+  variant = "short",
+  className,
+}: Readonly<{
+  grade: CustomerGrade | null;
+  size?: "sm" | "md";
+  variant?: "short" | "long";
+  className?: string;
+}>) {
+  if (!grade) {
+    return null;
+  }
+  const tone = CUSTOMER_GRADE_BADGE_TONE[grade];
+  const label =
+    variant === "short"
+      ? CUSTOMER_GRADE_SHORT_LABEL[grade]
+      : CUSTOMER_GRADE_LABEL[grade];
+  const sizeClass =
+    size === "sm"
+      ? "h-5 px-2 text-[11px]"
+      : "h-6 px-2.5 text-[12px]";
+  return (
+    <span
+      title={CUSTOMER_GRADE_LABEL[grade]}
+      className={cn(
+        "inline-flex select-none items-center rounded-full font-semibold tracking-tight",
+        sizeClass,
+        customerGradeToneClassMap[tone],
+        className,
+      )}
+    >
+      {label}
+    </span>
   );
 }
 

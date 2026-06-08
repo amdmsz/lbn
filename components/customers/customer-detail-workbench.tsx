@@ -33,6 +33,7 @@ import {
   formatOwnerLabel,
 } from "@/components/customers/customer-record-list";
 import { CustomerStatusBadge } from "@/components/customers/customer-status-badge";
+import { CustomerGradeBadge } from "@/components/customers/customers-table-bits";
 import { CustomerWechatRecordsSection } from "@/components/customers/customer-wechat-records-section";
 import { ActionBanner } from "@/components/shared/action-banner";
 import CompactBadgeGroup, {
@@ -937,6 +938,8 @@ export function CustomerDetailWorkbench({
                       {shell.name}
                     </h1>
                     <CustomerStatusBadge status={shell.status} />
+                    {/* Wave 7-B: 客户分级 chip 紧贴名字 + 状态, hero 第一视觉锚点. */}
+                    <CustomerGradeBadge grade={shell.grade} size="md" variant="long" />
                   </div>
 
                   <div className="max-w-xl">

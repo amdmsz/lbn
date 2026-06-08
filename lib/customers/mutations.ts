@@ -15,6 +15,7 @@ import {
   canTransferCustomerOwner,
   getCustomerScope,
 } from "@/lib/auth/access";
+import { safeRecomputeCustomerGrade } from "@/lib/customers/grade";
 import { customerManualCreateOperationAction } from "@/lib/customers/metadata";
 import {
   assignCustomerToSalesTx,
@@ -355,6 +356,12 @@ export async function createOwnedCustomer(
           source: "SALES_MANUAL_CREATE",
         },
       },
+    });
+
+    // Wave 7-B: 新建客户立即跑一次 grade 派生. 销售手建客户通常还没有任何信号,
+    // 推导值会是 null, 写库也是 null — 但建一次入口可以保证后续 backfill 不漏.
+    await safeRecomputeCustomerGrade(tx, createdCustomer.id, {
+      currentGrade: null,
     });
 
     return {

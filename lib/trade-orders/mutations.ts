@@ -20,6 +20,7 @@ import {
 import { z } from "zod";
 import { canCreateSalesOrder, canReviewSalesOrder } from "@/lib/auth/access";
 import { assertCustomerNotInActiveRecycleBin } from "@/lib/customers/recycle";
+import { safeRecomputeCustomerGrade } from "@/lib/customers/grade";
 import { touchCustomerEffectiveFollowUpFromTradeOrderTx } from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
 import { syncSalesOrderPaymentArtifacts } from "@/lib/payments/mutations";
@@ -1382,6 +1383,13 @@ export async function reviewTradeOrder(
         },
       },
     });
+
+    // Wave 7-B: 审批通过 → 客户必然升 A. 拒绝时不动 grade (PaymentRecord confirmed
+    // 才是真正成交真相, 这里只在 APPROVED 时升). pickHigherGrade 守护防止后续
+    // 误降.
+    if (input.reviewStatus === "APPROVED") {
+      await safeRecomputeCustomerGrade(tx, tradeOrder.customerId);
+    }
   });
 
   return {

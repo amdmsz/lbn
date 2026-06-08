@@ -25,6 +25,7 @@ import {
   canManageCollectionTasks,
   canSubmitPaymentRecord,
 } from "@/lib/auth/access";
+import { safeRecomputeCustomerGrade } from "@/lib/customers/grade";
 import { prisma } from "@/lib/db/prisma";
 import {
   decimalToNumber,
@@ -2119,6 +2120,13 @@ export async function reviewPaymentRecord(
           },
         });
       }
+    }
+
+    // Wave 7-B: 收款确认 (CONFIRMED) 是 "成交真相" 的最终一锤. 客户必然升 A.
+    // 拒绝 (REJECTED) 不动 grade — 拒绝只是说收款回执有问题, 不代表订单本身被
+    // 撤. pickHigherGrade 守护防止误降.
+    if (input.status === "CONFIRMED" && existing.customerId) {
+      await safeRecomputeCustomerGrade(tx, existing.customerId);
     }
 
     return {
