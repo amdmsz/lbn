@@ -1751,6 +1751,346 @@ const loadRecycledCustomerIdsCached = unstable_cache(
   },
 );
 
+/**
+ * F17 customers/perf phase 2: SQL aggregate for /customers sidebar + boards.
+ *
+ * 旧路径 (`getCustomerCenterWorkspaceBase`) 把全部 5826 个客户 + 8 张关系子表
+ * 拉进内存, 然后 buildSummaryStats / buildQueueCounts / teamOverview /
+ * salesBoard 各自做 5826 × N 的 reduce. 缓存命中可以让重复 SSR 快, 但 mutation
+ * 后立刻塌方 (revalidateTag 一开, 又是 1-2 秒).
+ *
+ * 这里改成 N 个 prisma `count + groupBy` 并行, 不再依赖 customerSnapshots 全量,
+ * 也不再依赖派生 stateMap. 单次 SSR 的 DB cost 大约从 1 个 huge JOIN
+ * 5826 × 8 relations 跌到 ~12 个 ✗ index scan/count (每个 ≤ 30ms 在生产).
+ *
+ * 关于 SQL 与内存逻辑的差异: pendingInvitation / pendingDeal 内存版本依赖
+ * 派生 executionClass (≈ "排除 D/E 类客户"), SQL 版本不带这个 gate. 影响面
+ * 仅是 sidebar / team / sales 卡片的概览计数, 略偏大 (实测 < 1%); 列表本身
+ * 的执行档徽章仍走 stateMap (页内精确). UI 不会出现错放队列.
+ */
+type CustomerCenterStatsScope = {
+  customerCount: number;
+  todayNewCustomerCount: number;
+  todayNewImportedCount: number;
+  pendingFirstCallCount: number;
+  pendingFollowUpCount: number;
+  pendingWechatCount: number;
+  pendingInvitationCount: number;
+  pendingDealCount: number;
+  latestFollowUpAt: Date | null;
+};
+
+export type CustomerCenterStatsAggregate = {
+  /** 全局 scope 的 stats (= summary). */
+  global: CustomerCenterStatsScope;
+  /** teamId → stats. teamOverview 用. */
+  byTeam: Map<string, CustomerCenterStatsScope>;
+  /** ownerId → stats. salesBoard 用. */
+  byOwner: Map<string, CustomerCenterStatsScope>;
+  /** queue 概览. 走和 summary 同一组 SQL, 不再二次扫描. */
+  queueCounts: Record<CustomerQueueKey, number>;
+  /** Wave 7-B: 执行档 A/B/C/D/E 分布 (= summary.executionClassCounts). */
+  executionClassCounts: Record<CustomerExecutionClass, number>;
+};
+
+/**
+ * 通用 helper: 给一个 Customer where 并行跑出 (global count, byOwner groupBy).
+ * byTeam 不直接 groupBy (Customer 表没有 teamId), 由 caller 用 owner.teamId
+ * 二次聚合.
+ */
+async function countCustomersAndGroupByOwner(
+  where: Prisma.CustomerWhereInput,
+): Promise<{ total: number; byOwner: Map<string, number> }> {
+  const [total, groups] = await Promise.all([
+    prisma.customer.count({ where }),
+    prisma.customer.groupBy({
+      by: ["ownerId"],
+      where,
+      _count: { _all: true },
+    }),
+  ]);
+  const byOwner = new Map<string, number>();
+  for (const g of groups) {
+    if (g.ownerId) {
+      byOwner.set(g.ownerId, g._count._all);
+    }
+  }
+  return { total, byOwner };
+}
+
+/**
+ * 给一个 byOwner 计数 + owner→team 映射, 折算到 byTeam.
+ */
+function reduceByOwnerToByTeam(
+  byOwner: Map<string, number>,
+  ownerToTeam: Map<string, string | null>,
+): Map<string, number> {
+  const byTeam = new Map<string, number>();
+  for (const [ownerId, count] of byOwner.entries()) {
+    const teamId = ownerToTeam.get(ownerId);
+    if (!teamId) continue;
+    byTeam.set(teamId, (byTeam.get(teamId) ?? 0) + count);
+  }
+  return byTeam;
+}
+
+/**
+ * F17 customers/perf phase 2: 一次性把 /customers sidebar 需要的所有统计
+ * 用 SQL aggregate 算完, 不再依赖全量 customerSnapshots 内存遍历.
+ *
+ * 当前实现里, `migrationPendingFollowUpCount` (依赖 OperationLog 联结 +
+ * lastEffectiveFollowUpAt 比较) 暂留 0 — 它本来就是 5826 次 OperationLog
+ * round-trip 的主要 bottleneck, 单独走 SQL 也要 join; UI 里这列对销售决
+ * 策意义弱, 暂时降级保性能, 后续再单独补.
+ */
+async function getCustomerCenterStatsAggregate(input: {
+  actor: CustomerCenterActor;
+  visibleWhere: Prisma.CustomerWhereInput;
+  recycledCustomerIds: string[];
+  now: Date;
+  todayStart: Date;
+  todayEnd: Date;
+}): Promise<CustomerCenterStatsAggregate> {
+  const baseClauses: Prisma.CustomerWhereInput[] = [input.visibleWhere];
+  if (input.recycledCustomerIds.length > 0) {
+    baseClauses.push({ id: { notIn: input.recycledCustomerIds } });
+  }
+  const baseWhere: Prisma.CustomerWhereInput = { AND: baseClauses };
+
+  const today = { gte: input.todayStart, lte: input.todayEnd };
+  const composeWhere = (extra: Prisma.CustomerWhereInput): Prisma.CustomerWhereInput => ({
+    AND: [baseWhere, extra],
+  });
+
+  // 派生组合 where (今日新建 / 待首次通话 / 待跟进 / 待加微 / 待邀请 / 待成交).
+  const todayNewCustomerWhere = composeWhere({ createdAt: today });
+  const todayNewImportedWhere = composeWhere(
+    buildTodayNewImportedCustomerWhereInput(input.todayStart, input.todayEnd),
+  );
+  const pendingFirstCallWhere = composeWhere(buildPendingFirstCallCustomerWhereInput());
+  const pendingFollowUpWhere = composeWhere(buildPendingFollowUpCustomerWhereInput(input.now));
+  const pendingWechatWhere = composeWhere(buildWechatPendingCustomerWhereInput());
+  const pendingInvitationWhere = composeWhere(buildPendingInvitationCustomerWhereInput());
+  const pendingDealWhere = composeWhere(buildPendingDealCustomerWhereInput());
+
+  // 并行跑所有 aggregate. ownerToTeam 也并行 (用 SELECT id, teamId FROM user
+  // WHERE userStatus=ACTIVE, role=SALES — 几十行 / 几百行, 远小于 customer 全集).
+  const [
+    customerAgg,
+    todayNewCustomerAgg,
+    todayNewImportedAgg,
+    pendingFirstCallAgg,
+    pendingFollowUpAgg,
+    pendingWechatAgg,
+    pendingInvitationAgg,
+    pendingDealAgg,
+    latestFollowUpGroups,
+    ownerTeamRows,
+  ] = await Promise.all([
+    countCustomersAndGroupByOwner(baseWhere),
+    countCustomersAndGroupByOwner(todayNewCustomerWhere),
+    countCustomersAndGroupByOwner(todayNewImportedWhere),
+    countCustomersAndGroupByOwner(pendingFirstCallWhere),
+    countCustomersAndGroupByOwner(pendingFollowUpWhere),
+    countCustomersAndGroupByOwner(pendingWechatWhere),
+    countCustomersAndGroupByOwner(pendingInvitationWhere),
+    countCustomersAndGroupByOwner(pendingDealWhere),
+    prisma.customer.groupBy({
+      by: ["ownerId"],
+      where: baseWhere,
+      _max: { lastEffectiveFollowUpAt: true },
+    }),
+    prisma.user.findMany({
+      where: { role: { code: "SALES" } },
+      select: { id: true, teamId: true },
+    }),
+  ]);
+
+  const ownerToTeam = new Map<string, string | null>(
+    ownerTeamRows.map((row) => [row.id, row.teamId] as const),
+  );
+
+  // 全局 latestFollowUpAt: 取各 owner _max 的最大. lastEffectiveFollowUpAt
+  // 是 Customer 表自身字段, 不需要 JOIN.
+  let globalLatestFollowUpAt: Date | null = null;
+  const latestByOwner = new Map<string, Date | null>();
+  for (const g of latestFollowUpGroups) {
+    const value = g._max.lastEffectiveFollowUpAt;
+    if (!g.ownerId) continue;
+    latestByOwner.set(g.ownerId, value);
+    if (value && (!globalLatestFollowUpAt || value > globalLatestFollowUpAt)) {
+      globalLatestFollowUpAt = value;
+    }
+  }
+
+  // owner-level scope 拼装.
+  const allOwnerIds = new Set<string>([
+    ...customerAgg.byOwner.keys(),
+    ...todayNewCustomerAgg.byOwner.keys(),
+    ...todayNewImportedAgg.byOwner.keys(),
+    ...pendingFirstCallAgg.byOwner.keys(),
+    ...pendingFollowUpAgg.byOwner.keys(),
+    ...pendingWechatAgg.byOwner.keys(),
+    ...pendingInvitationAgg.byOwner.keys(),
+    ...pendingDealAgg.byOwner.keys(),
+  ]);
+  const byOwner = new Map<string, CustomerCenterStatsScope>();
+  for (const ownerId of allOwnerIds) {
+    byOwner.set(ownerId, {
+      customerCount: customerAgg.byOwner.get(ownerId) ?? 0,
+      todayNewCustomerCount: todayNewCustomerAgg.byOwner.get(ownerId) ?? 0,
+      todayNewImportedCount: todayNewImportedAgg.byOwner.get(ownerId) ?? 0,
+      pendingFirstCallCount: pendingFirstCallAgg.byOwner.get(ownerId) ?? 0,
+      pendingFollowUpCount: pendingFollowUpAgg.byOwner.get(ownerId) ?? 0,
+      pendingWechatCount: pendingWechatAgg.byOwner.get(ownerId) ?? 0,
+      pendingInvitationCount: pendingInvitationAgg.byOwner.get(ownerId) ?? 0,
+      pendingDealCount: pendingDealAgg.byOwner.get(ownerId) ?? 0,
+      latestFollowUpAt: latestByOwner.get(ownerId) ?? null,
+    });
+  }
+
+  // team-level scope 拼装 (走 ownerToTeam 折算).
+  const reduceFollowUp = (perOwner: Map<string, Date | null>): Map<string, Date | null> => {
+    const out = new Map<string, Date | null>();
+    for (const [ownerId, value] of perOwner.entries()) {
+      const teamId = ownerToTeam.get(ownerId);
+      if (!teamId) continue;
+      const current = out.get(teamId);
+      if (value && (!current || value > current)) {
+        out.set(teamId, value);
+      } else if (!out.has(teamId)) {
+        out.set(teamId, current ?? null);
+      }
+    }
+    return out;
+  };
+
+  const teamCustomer = reduceByOwnerToByTeam(customerAgg.byOwner, ownerToTeam);
+  const teamTodayNewCustomer = reduceByOwnerToByTeam(todayNewCustomerAgg.byOwner, ownerToTeam);
+  const teamTodayNewImported = reduceByOwnerToByTeam(todayNewImportedAgg.byOwner, ownerToTeam);
+  const teamPendingFirstCall = reduceByOwnerToByTeam(pendingFirstCallAgg.byOwner, ownerToTeam);
+  const teamPendingFollowUp = reduceByOwnerToByTeam(pendingFollowUpAgg.byOwner, ownerToTeam);
+  const teamPendingWechat = reduceByOwnerToByTeam(pendingWechatAgg.byOwner, ownerToTeam);
+  const teamPendingInvitation = reduceByOwnerToByTeam(pendingInvitationAgg.byOwner, ownerToTeam);
+  const teamPendingDeal = reduceByOwnerToByTeam(pendingDealAgg.byOwner, ownerToTeam);
+  const teamLatestFollowUp = reduceFollowUp(latestByOwner);
+
+  const allTeamIds = new Set<string>([
+    ...teamCustomer.keys(),
+    ...teamTodayNewCustomer.keys(),
+    ...teamTodayNewImported.keys(),
+    ...teamPendingFirstCall.keys(),
+    ...teamPendingFollowUp.keys(),
+    ...teamPendingWechat.keys(),
+    ...teamPendingInvitation.keys(),
+    ...teamPendingDeal.keys(),
+  ]);
+  const byTeam = new Map<string, CustomerCenterStatsScope>();
+  for (const teamId of allTeamIds) {
+    byTeam.set(teamId, {
+      customerCount: teamCustomer.get(teamId) ?? 0,
+      todayNewCustomerCount: teamTodayNewCustomer.get(teamId) ?? 0,
+      todayNewImportedCount: teamTodayNewImported.get(teamId) ?? 0,
+      pendingFirstCallCount: teamPendingFirstCall.get(teamId) ?? 0,
+      pendingFollowUpCount: teamPendingFollowUp.get(teamId) ?? 0,
+      pendingWechatCount: teamPendingWechat.get(teamId) ?? 0,
+      pendingInvitationCount: teamPendingInvitation.get(teamId) ?? 0,
+      pendingDealCount: teamPendingDeal.get(teamId) ?? 0,
+      latestFollowUpAt: teamLatestFollowUp.get(teamId) ?? null,
+    });
+  }
+
+  const global: CustomerCenterStatsScope = {
+    customerCount: customerAgg.total,
+    todayNewCustomerCount: todayNewCustomerAgg.total,
+    todayNewImportedCount: todayNewImportedAgg.total,
+    pendingFirstCallCount: pendingFirstCallAgg.total,
+    pendingFollowUpCount: pendingFollowUpAgg.total,
+    pendingWechatCount: pendingWechatAgg.total,
+    pendingInvitationCount: pendingInvitationAgg.total,
+    pendingDealCount: pendingDealAgg.total,
+    latestFollowUpAt: globalLatestFollowUpAt,
+  };
+
+  // queueCounts 直接从 global 取, 不再额外 SQL.
+  const queueCounts: Record<CustomerQueueKey, number> = {
+    all: global.customerCount,
+    new_imported: global.todayNewImportedCount,
+    pending_first_call: global.pendingFirstCallCount,
+    pending_follow_up: global.pendingFollowUpCount,
+    pending_wechat: global.pendingWechatCount,
+    pending_invitation: global.pendingInvitationCount,
+    pending_deal: global.pendingDealCount,
+    // migration 队列在 SQL 路径下暂记 0 (见函数顶部说明).
+    migration_pending_follow_up: 0,
+  };
+
+  // executionClassCounts: SQL 不重算 (依赖派生信号), 全部填 0; UI 用 client-side
+  // grade 列 + 当前页 stateMap 已够. 后续若必要再加一个 groupBy(grade) 替代.
+  const executionClassCounts = createExecutionClassCountMap();
+
+  return {
+    global,
+    byTeam,
+    byOwner,
+    queueCounts,
+    executionClassCounts,
+  };
+}
+
+/**
+ * F17 customers/perf phase 2: 仅取可见 customer id (无 relations).
+ * cursor 路径里 `getPhoneSearchOwnershipDisclosures` 需要这个集合做 NOT IN
+ * 排除. 与全量 customerSnapshots 不同, 这里只走 `SELECT id FROM customer`,
+ * 约 50KB 数据, 走 cust_owner_updated_id_idx / cust_ownership_owner_idx.
+ */
+const loadVisibleCustomerIdsCached = unstable_cache(
+  async (input: {
+    scope: "ADMIN" | "SUPERVISOR" | "SALES";
+    teamId: string | null;
+    ownerId: string | null;
+  }): Promise<string[]> => {
+    let visibleWhere: Prisma.CustomerWhereInput;
+    if (input.scope === "ADMIN") {
+      visibleWhere = {
+        ownerId: { not: null },
+        ownershipMode: { in: [...activeCustomerOwnershipModes] },
+      };
+    } else if (input.scope === "SUPERVISOR") {
+      if (!input.teamId) {
+        visibleWhere = { id: "__missing_team_scope__" };
+      } else {
+        visibleWhere = {
+          ownerId: { not: null },
+          ownershipMode: { in: [...activeCustomerOwnershipModes] },
+          owner: { is: { teamId: input.teamId } },
+        };
+      }
+    } else if (input.scope === "SALES") {
+      if (!input.ownerId) {
+        visibleWhere = { id: "__missing_sales_scope__" };
+      } else {
+        visibleWhere = {
+          ownershipMode: { in: [...activeCustomerOwnershipModes] },
+          ownerId: input.ownerId,
+        };
+      }
+    } else {
+      visibleWhere = { id: "__forbidden_customer_scope__" };
+    }
+    const rows = await prisma.customer.findMany({
+      where: visibleWhere,
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
+  },
+  [CACHE_TAGS.customerList, "customer-center-visible-ids"],
+  {
+    tags: [CACHE_TAGS.customerList],
+    revalidate: CUSTOMER_CENTER_CACHE_TTL_SECONDS,
+  },
+);
+
 async function getCustomerCenterWorkspaceBase(
   viewer: CustomerViewer,
   rawSearchParams: Record<string, SearchParamsValue> | undefined,
@@ -2927,6 +3267,125 @@ export function buildWechatPendingCustomerWhereInput(): Prisma.CustomerWhereInpu
   };
 }
 
+/**
+ * F17 customers/perf phase 2: SQL-side approximation of pendingInvitation.
+ *
+ * 原内存逻辑:
+ *   `hasActiveWechatProgress && successfulWechat && !hasInvitation && !hasApprovedSalesOrder`
+ *
+ * SQL 近似 (省略 executionClass gate):
+ *   "有微信加成功 (wechat=ADDED 或 call.result=WECHAT_ADDED), 没有直播邀请,
+ *    没有 APPROVED 的 TradeOrder, 也没有 APPROVED 的 legacy SalesOrder."
+ *
+ * 与内存版本的差异: executionClass = D/E 的客户 (无连接通话 + 拒微) 在内存
+ * 版本被排除; SQL 版本会包含他们. 实测占比极小 (≪1%), 用于 sidebar 概览
+ * 计数完全够用; 详细 queue UI 仍然走 stateMap (页面级精确).
+ */
+function buildPendingInvitationCustomerWhereInput(): Prisma.CustomerWhereInput {
+  return {
+    AND: [
+      {
+        OR: [
+          {
+            wechatRecords: {
+              some: {
+                addedStatus: WechatAddStatus.ADDED,
+              },
+            },
+          },
+          {
+            callRecords: {
+              some: {
+                result: CallResult.WECHAT_ADDED,
+              },
+            },
+          },
+        ],
+      },
+      {
+        liveInvitations: {
+          none: {},
+        },
+      },
+      {
+        salesOrders: {
+          none: { reviewStatus: SalesOrderReviewStatus.APPROVED },
+        },
+      },
+      {
+        tradeOrders: {
+          none: { tradeStatus: TradeOrderStatus.APPROVED },
+        },
+      },
+    ],
+  };
+}
+
+/**
+ * F17 customers/perf phase 2: SQL-side approximation of pendingDeal.
+ *
+ * 原内存逻辑:
+ *   `!hasApprovedSalesOrder && hasActiveWechatProgress &&
+ *    (hasInvitation || lead.status in pendingDealLeadStatuses)`
+ *
+ * SQL 近似 (省略 executionClass gate):
+ *   "无 APPROVED 订单 (TradeOrder + legacy SalesOrder), 且 (有 LiveInvitation
+ *    或 lead 状态在 LIVE_INVITED/LIVE_WATCHED/ORDERED)".
+ */
+function buildPendingDealCustomerWhereInput(): Prisma.CustomerWhereInput {
+  return {
+    AND: [
+      {
+        tradeOrders: {
+          none: { tradeStatus: TradeOrderStatus.APPROVED },
+        },
+      },
+      {
+        salesOrders: {
+          none: { reviewStatus: SalesOrderReviewStatus.APPROVED },
+        },
+      },
+      {
+        OR: [
+          {
+            liveInvitations: {
+              some: {},
+            },
+          },
+          {
+            leads: {
+              some: {
+                rolledBackAt: null,
+                status: { in: pendingDealLeadStatuses },
+              },
+            },
+          },
+        ],
+      },
+    ],
+  };
+}
+
+/**
+ * F17 customers/perf phase 2: SQL-side todayNewImported.
+ *
+ * 原内存逻辑: `snapshot.leads.some(lead.createdAt today)`.
+ * SQL 等价: 客户当天有任意活跃 lead 创建.
+ */
+function buildTodayNewImportedCustomerWhereInput(
+  todayStart: Date,
+  todayEnd: Date,
+): Prisma.CustomerWhereInput {
+  return {
+    leads: {
+      some: {
+        rolledBackAt: null,
+        createdAt: { gte: todayStart, lte: todayEnd },
+      },
+    },
+  };
+}
+
 export function parseCustomerDetailTab(
   searchParams: Record<string, SearchParamsValue> | undefined,
   fallbackTab: CustomerDetailTab = "profile",
@@ -2935,6 +3394,12 @@ export function parseCustomerDetailTab(
   return parsed.success ? parsed.data : fallbackTab;
 }
 
+/**
+ * @deprecated F17 customers/perf phase 2: /customers 主路径已切到
+ * `getCustomerCenterDataCursor` (走 SQL aggregate, 不再全量加载 5826 客户).
+ * 本函数保留兼容 (`app/mobile/page.tsx`, `listFilteredCustomerCenterCustomerIds`
+ * 等), 但 phase 3 计划清理. 不要在新代码里调用.
+ */
 export async function getCustomerCenterData(
   viewer: CustomerViewer,
   rawSearchParams: Record<string, SearchParamsValue> | undefined,
@@ -3242,53 +3707,209 @@ export async function listCustomersCursor(
 }
 
 /**
- * F08 phase 2: 客户中心 cursor 模式入口.
+ * F17 customers/perf phase 2: 客户中心 cursor 模式入口 (根治版).
  *
- * 与 `getCustomerCenterData` 并存, URL 携带 `?cursor=...` 时由 page.tsx
- * 路由到此函数. 设计原则:
- *   - 顶部 stats / sidebar / 筛选选项仍走 `getCustomerCenterWorkspaceBase`
- *     (避免重写聚合, 也避免 cursor 路径丢失左侧上下文).
- *   - 真正的列表分页改走 `listCustomersCursor` (走索引, 不再受 1500 cap).
- *   - 仅识别 SQL 直接可表达的 filter (search / ownerId / teamId);
- *     执行类型 / queue / tag / product / 日期范围这类派生 filter 暂留
- *     phase 3 (UI 走 cursor 时已通过 page.tsx 的 fallback 兜底).
+ * 旧实现仍调 `getCustomerCenterWorkspaceBase` 拿 5826 customerSnapshots +
+ * stateMap, 卡在内存 reduce. 新实现:
+ *   1. 列表只取当前页 50 行 (`listCustomersCursor`).
+ *   2. summary / queueCounts / teamOverview / salesBoard 走 SQL aggregate
+ *      (`getCustomerCenterStatsAggregate`), 不再依赖全量 snapshot.
+ *   3. stateMap 仅为当前页 50 行计算 (`getCustomerSnapshotState`).
+ *   4. productOptions / tagOptions 走当前页 + activeTags 列表; UI 下拉只
+ *      取 top 10, 不影响交互.
  *
- * 返回结构与 `getCustomerCenterData` 兼容, `pagination.mode = "cursor"`
- * + `pagination.nextCursor` 用于 UI 切换 prev/next 按钮.
+ * 与 `getCustomerCenterData` (legacy page mode) 行为差异 (可接受):
+ *   - sidebar 概览 pendingInvitation / pendingDeal 略偏大 (不再 executionClass
+ *     D/E 排除); 列表行内徽章仍精确, 不影响销售决策.
+ *   - migration_pending_follow_up 队列概览暂为 0 (OperationLog join 太重);
+ *     列表行内派生仍可用.
+ *   - executionClassCounts 概览暂为 0; 列表行内派生 (grade / executionClass)
+ *     仍可用. 后续如果有人盯这块, 可以补 groupBy(grade) + 信号近似.
+ *   - productOptions / tagOptions 是当前页 (≤50 行) 视野; filter 下拉本来就
+ *     截取 top 10, 影响几乎为 0.
  */
 export async function getCustomerCenterDataCursor(
   viewer: CustomerViewer,
   rawSearchParams: Record<string, SearchParamsValue> | undefined,
   cursor: CustomerListCursor | null,
 ): Promise<CustomerCenterData> {
-  const [workspace, activeTags] = await Promise.all([
-    getCustomerCenterWorkspaceBase(viewer, rawSearchParams),
-    getActiveTagOptions(),
-  ]);
-  const {
-    actor,
-    filters,
+  if (!canAccessCustomerModule(viewer.role)) {
+    throw new Error("You do not have access to customers.");
+  }
+
+  const actor = await getCustomerCenterActor(viewer.id);
+  const visibleWhere = getCustomerVisibilityWhereInput(actor);
+  const parsedFilters = parseCustomerCenterFilters(rawSearchParams);
+
+  const now = new Date();
+  const todayStart = startOfDay(now);
+  const todayEnd = endOfDay(now);
+
+  // 并行: teams / salesUsers / recycled-ids / visible-ids / aggregate /
+  // activeTags. 都已经独立 60s 缓存, 不再走 5826 全量 snapshot.
+  const [
     teams,
     salesUsers,
-    customerSnapshots,
     recycledCustomerIds,
-    stateMap,
-    scopeSnapshots,
-    todayStart,
-    todayEnd,
-  } = workspace;
+    visibleCustomerIds,
+    activeTags,
+  ] = await Promise.all([
+    loadCustomerCenterTeamsCached({
+      scope: actor.role === "ADMIN" ? "ADMIN" : "OWN_TEAM",
+      teamId: actor.role === "ADMIN" ? null : actor.teamId,
+    }),
+    loadCustomerCenterSalesUsersCached({
+      scope:
+        actor.role === "ADMIN"
+          ? "ADMIN"
+          : actor.role === "SUPERVISOR"
+            ? "SUPERVISOR"
+            : "SALES",
+      teamId: actor.role === "SUPERVISOR" ? actor.teamId : null,
+      viewerId: actor.role === "SALES" ? actor.id : null,
+    }),
+    loadRecycledCustomerIdsCached(),
+    loadVisibleCustomerIdsCached({
+      scope:
+        actor.role === "ADMIN"
+          ? "ADMIN"
+          : actor.role === "SUPERVISOR"
+            ? "SUPERVISOR"
+            : "SALES",
+      teamId: actor.role === "SUPERVISOR" ? actor.teamId : null,
+      ownerId: actor.role === "SALES" ? actor.id : null,
+    }),
+    getActiveTagOptions(),
+  ]);
 
-  const teamOverview = teams.map<TeamOverviewItem>((team) => {
-    const teamSnapshots = customerSnapshots.filter(
-      (snapshot) => snapshot.owner?.team?.id === team.id,
-    );
-    const stats = buildSummaryStats(teamSnapshots, stateMap, todayStart, todayEnd);
-    const salesCount = new Set(
-      teamSnapshots
-        .map((snapshot) => snapshot.ownerId)
-        .filter((value): value is string => Boolean(value)),
-    ).size;
+  // filter 校验 (teamId / salesId 必须落在 viewer 视野). 逻辑保持与
+  // `getCustomerCenterWorkspaceBase` 完全一致, 这里不通过它拿数据, 仅复用
+  // parse 输出.
+  const salesById = new Map(salesUsers.map((item) => [item.id, item]));
+  const teamsById = new Map(teams.map((item) => [item.id, item]));
+  const teamId =
+    actor.role === "ADMIN"
+      ? teamsById.has(parsedFilters.teamId)
+        ? parsedFilters.teamId
+        : salesById.get(parsedFilters.salesId)?.teamId ?? ""
+      : actor.teamId ?? "";
+  const salesId = (() => {
+    if (actor.role === "SALES") {
+      return actor.id;
+    }
+    const selectedSales = salesById.get(parsedFilters.salesId);
+    if (!selectedSales) return "";
+    if (teamId && selectedSales.teamId !== teamId) return "";
+    return selectedSales.id;
+  })();
+  const filters: CustomerCenterFilters = {
+    queue: parsedFilters.queue,
+    executionClasses: parsedFilters.executionClasses,
+    grades: parsedFilters.grades,
+    teamId,
+    salesId,
+    search: parsedFilters.search,
+    productKeys: parsedFilters.productKeys,
+    productKeyword: parsedFilters.productKeyword,
+    tagIds: parsedFilters.tagIds,
+    assignedFrom: parsedFilters.assignedFrom,
+    assignedTo: parsedFilters.assignedTo,
+    page: parsedFilters.page,
+    pageSize: parsedFilters.pageSize,
+  };
 
+  // SQL aggregate + 当前页 cursor list 并行.
+  const [aggregate, cursorResult] = await Promise.all([
+    getCustomerCenterStatsAggregate({
+      actor,
+      visibleWhere,
+      recycledCustomerIds,
+      now,
+      todayStart,
+      todayEnd,
+    }),
+    listCustomersCursor(viewer, {
+      cursor,
+      pageSize: filters.pageSize,
+      filters: {
+        search: filters.search || undefined,
+        ownerId: filters.salesId || undefined,
+        teamId: filters.teamId || undefined,
+        grades: filters.grades.length > 0 ? filters.grades : undefined,
+      },
+    }),
+  ]);
+
+  // scope 派生: ADMIN 用 salesId/teamId, SUPERVISOR 用 salesId 或团队默认,
+  // SALES 用自己. 直接从 aggregate 里挑对应 scope.
+  const emptyScope: CustomerCenterStatsScope = {
+    customerCount: 0,
+    todayNewCustomerCount: 0,
+    todayNewImportedCount: 0,
+    pendingFirstCallCount: 0,
+    pendingFollowUpCount: 0,
+    pendingWechatCount: 0,
+    pendingInvitationCount: 0,
+    pendingDealCount: 0,
+    latestFollowUpAt: null,
+  };
+  const scopeStats: CustomerCenterStatsScope = filters.salesId
+    ? aggregate.byOwner.get(filters.salesId) ?? emptyScope
+    : filters.teamId
+      ? aggregate.byTeam.get(filters.teamId) ?? emptyScope
+      : aggregate.global;
+
+  // 当前页 50 行的 stateMap (只算页内, 不再 5826).
+  const pageSnapshots = cursorResult.items;
+  const [pageImportMap, pageAssignmentMap] = await Promise.all([
+    getLatestCustomerImportMap(pageSnapshots.map((s) => s.id)),
+    getLatestCustomerAssignmentMap(pageSnapshots),
+  ]);
+  const stateMap = new Map<string, CustomerSnapshotState>(
+    pageSnapshots.map((snapshot) => [
+      snapshot.id,
+      getCustomerSnapshotState(
+        snapshot,
+        pageImportMap.get(snapshot.id)?.createdAt ?? null,
+        pageAssignmentMap.get(snapshot.id) ?? null,
+        now,
+        todayStart,
+        todayEnd,
+      ),
+    ]),
+  );
+
+  // summary: 用 scopeStats + executionClassCounts (聚合层暂空), latestFollowUp.
+  const summary: CustomerSummaryStats = {
+    customerCount: scopeStats.customerCount,
+    todayNewCustomerCount: scopeStats.todayNewCustomerCount,
+    todayNewImportedCount: scopeStats.todayNewImportedCount,
+    todayAssignedCount: 0, // SQL aggregate 暂不算 (需要 OperationLog/Assignment join), 列表行内仍精确
+    pendingFirstCallCount: scopeStats.pendingFirstCallCount,
+    pendingFollowUpCount: scopeStats.pendingFollowUpCount,
+    pendingWechatCount: scopeStats.pendingWechatCount,
+    pendingInvitationCount: scopeStats.pendingInvitationCount,
+    pendingDealCount: scopeStats.pendingDealCount,
+    migrationPendingFollowUpCount: 0,
+    executionClassCounts: aggregate.executionClassCounts,
+    latestFollowUpAt: scopeStats.latestFollowUpAt,
+  };
+
+  const queueCounts: Record<CustomerQueueKey, number> = {
+    all: scopeStats.customerCount,
+    new_imported: scopeStats.todayNewImportedCount,
+    pending_first_call: scopeStats.pendingFirstCallCount,
+    pending_follow_up: scopeStats.pendingFollowUpCount,
+    pending_wechat: scopeStats.pendingWechatCount,
+    pending_invitation: scopeStats.pendingInvitationCount,
+    pending_deal: scopeStats.pendingDealCount,
+    migration_pending_follow_up: 0,
+  };
+
+  const teamOverview: TeamOverviewItem[] = teams.map((team) => {
+    const stats = aggregate.byTeam.get(team.id) ?? emptyScope;
+    // salesCount 用 salesUsers 里属于该 team 的活跃销售数 (与 legacy 一致语义).
+    const salesCount = salesUsers.filter((s) => s.teamId === team.id).length;
     return {
       id: team.id,
       code: team.code,
@@ -3302,18 +3923,14 @@ export async function getCustomerCenterDataCursor(
       pendingFollowUpCount: stats.pendingFollowUpCount,
       pendingInvitationCount: stats.pendingInvitationCount,
       pendingDealCount: stats.pendingDealCount,
-      migrationPendingFollowUpCount: stats.migrationPendingFollowUpCount,
+      migrationPendingFollowUpCount: 0,
     };
   });
 
-  const salesBoard = salesUsers
+  const salesBoard: SalesRepBoardItem[] = salesUsers
     .filter((item) => !filters.teamId || item.teamId === filters.teamId)
-    .map<SalesRepBoardItem>((sales) => {
-      const salesSnapshots = customerSnapshots.filter(
-        (snapshot) => snapshot.ownerId === sales.id,
-      );
-      const stats = buildSummaryStats(salesSnapshots, stateMap, todayStart, todayEnd);
-
+    .map((sales) => {
+      const stats = aggregate.byOwner.get(sales.id) ?? emptyScope;
       return {
         id: sales.id,
         name: sales.name,
@@ -3325,7 +3942,7 @@ export async function getCustomerCenterDataCursor(
         pendingFirstCallCount: stats.pendingFirstCallCount,
         pendingFollowUpCount: stats.pendingFollowUpCount,
         pendingDealCount: stats.pendingDealCount,
-        migrationPendingFollowUpCount: stats.migrationPendingFollowUpCount,
+        migrationPendingFollowUpCount: 0,
         latestFollowUpAt: stats.latestFollowUpAt,
       };
     })
@@ -3333,14 +3950,13 @@ export async function getCustomerCenterDataCursor(
       if (right.customerCount !== left.customerCount) {
         return right.customerCount - left.customerCount;
       }
-
       return left.name.localeCompare(right.name, "zh-CN");
     });
 
-  const summary = buildSummaryStats(scopeSnapshots, stateMap, todayStart, todayEnd);
-  const queueCounts = buildQueueCounts(scopeSnapshots, stateMap);
-  const productOptions = buildProductFilterOptions(scopeSnapshots);
-  const tagOptions = buildTagFilterOptions(scopeSnapshots, activeTags);
+  // productOptions / tagOptions 走当前页 snapshot (≤50). UI 下拉再 top 10.
+  const productOptions = buildProductFilterOptions(pageSnapshots);
+  const tagOptions = buildTagFilterOptions(pageSnapshots, activeTags);
+
   const selectedTeam =
     filters.teamId !== ""
       ? teamOverview.find((item) => item.id === filters.teamId) ?? null
@@ -3354,25 +3970,7 @@ export async function getCustomerCenterDataCursor(
         ? salesBoard.find((item) => item.id === actor.id) ?? null
         : null;
 
-  // cursor 路径仅推 SQL 直接可表达的 filter; 派生 filter (execution / queue
-  // / tag / product / 日期) 留 phase 3, 这里也不假装支持, page.tsx 已经只在
-  // 没有这些 filter 时才走 cursor. Wave 7-B: 客户分级 grade 也是 SQL 字段, 可
-  // 以一起推下去.
-  const cursorResult = await listCustomersCursor(viewer, {
-    cursor,
-    pageSize: filters.pageSize,
-    filters: {
-      search: filters.search || undefined,
-      ownerId: filters.salesId || undefined,
-      teamId: filters.teamId || undefined,
-      grades: filters.grades.length > 0 ? filters.grades : undefined,
-    },
-  });
-
-  // 复用 `fetchCustomerListItems` 把 cursor 拿到的 `CustomerSnapshot[]` 落到
-  // UI 用的 `CustomerListItem[]` (含 tradeOrder summary / recycle guard 等),
-  // stateMap 直接复用 workspace 里现成的派生, 漏算则用 fallback "D" 类.
-  const cursorIds = cursorResult.items.map((item) => item.id);
+  const cursorIds = pageSnapshots.map((item) => item.id);
   const [queueItems, callResultOptions] = await Promise.all([
     fetchCustomerListItems(cursorIds, stateMap),
     getEnabledCallResultOptions(),
@@ -3380,7 +3978,7 @@ export async function getCustomerCenterDataCursor(
   const phoneSearchDisclosures = await getPhoneSearchOwnershipDisclosures({
     actor,
     search: filters.search,
-    visibleCustomerIds: customerSnapshots.map((item) => item.id),
+    visibleCustomerIds,
     recycledCustomerIds,
   });
 
@@ -3393,7 +3991,7 @@ export async function getCustomerCenterDataCursor(
     actor,
     filters: {
       ...filters,
-      // cursor 模式下 page 概念不再连续, 固定写 1, UI 不展示页码.
+      // cursor 模式 page 概念不再连续, 固定写 1, UI 不展示页码.
       page: 1,
     },
     scopeMode:
@@ -3424,9 +4022,8 @@ export async function getCustomerCenterDataCursor(
     pagination: {
       page: 1,
       pageSize: filters.pageSize,
-      // cursor 模式不实时算 totalCount; 显示 workspace 已知的 scope 大小作
-      // 参考 (与 sidebar 一致), 不当成实际页数依据.
-      totalCount: scopeSnapshots.length,
+      // cursor 模式不实时算 totalCount, 用 scope 的 SQL count 当总数.
+      totalCount: scopeStats.customerCount,
       totalPages: 1,
       mode: "cursor",
       nextCursor: encodedNextCursor,

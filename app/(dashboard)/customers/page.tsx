@@ -6,14 +6,8 @@ import {
   getDefaultRouteForRole,
 } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
-import {
-  readCursorFromSearchParams,
-  CUSTOMER_LIST_CURSOR_PARAM,
-} from "@/lib/customers/list-cursor";
-import {
-  getCustomerCenterData,
-  getCustomerCenterDataCursor,
-} from "@/lib/customers/queries";
+import { readCursorFromSearchParams } from "@/lib/customers/list-cursor";
+import { getCustomerCenterDataCursor } from "@/lib/customers/queries";
 import { isOutboundCallRuntimeEnabled } from "@/lib/outbound-calls/config";
 import { moveCustomerToRecycleBinAction } from "./[id]/actions";
 
@@ -35,33 +29,21 @@ export default async function CustomersPage({
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const canCreateCalls = canCreateCallRecord(session.user.role);
 
-  // F08 phase 2: 带 `cursor` 参数时走 keyset cursor 路径 (走索引, 不再过 1500
-  // hard cap). 不带 cursor 时仍走旧 `getCustomerCenterData` (向后兼容老 link
-  // / 含派生筛选的链接). cursor 路径的简单 filter (search/owner/team) 推到
-  // prisma where; 复杂 filter (执行类型/queue/tag/product/日期) 留 phase 3.
-  const hasCursorParam =
-    resolvedSearchParams?.[CUSTOMER_LIST_CURSOR_PARAM] !== undefined;
-  const parsedCursor = hasCursorParam
-    ? readCursorFromSearchParams(resolvedSearchParams)
-    : null;
+  // F17 customers/perf phase 2: /customers 默认走 SQL aggregate + keyset
+  // cursor 路径, 不再依赖 5826 内存全表加载. 没有 `?cursor=` 时也走 cursor
+  // 模式 (第一页). 旧 page-number `getCustomerCenterData` 仅 backward compat
+  // (export / batch / mobile), UI 已不再走它.
+  const parsedCursor = readCursorFromSearchParams(resolvedSearchParams);
 
   const [data, outboundCallEnabled] = await Promise.all([
-    hasCursorParam
-      ? getCustomerCenterDataCursor(
-          {
-            id: session.user.id,
-            role: session.user.role,
-          },
-          resolvedSearchParams,
-          parsedCursor,
-        )
-      : getCustomerCenterData(
-          {
-            id: session.user.id,
-            role: session.user.role,
-          },
-          resolvedSearchParams,
-        ),
+    getCustomerCenterDataCursor(
+      {
+        id: session.user.id,
+        role: session.user.role,
+      },
+      resolvedSearchParams,
+      parsedCursor,
+    ),
     canCreateCalls ? isOutboundCallRuntimeEnabled() : Promise.resolve(false),
   ]);
 

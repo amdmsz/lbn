@@ -1134,7 +1134,11 @@ export function CustomersTable({
                       )
                     : null
                 }
-                summary={`本页 ${items.length} 位 · 范围内共 ${pagination.totalCount} 位`}
+                summary={
+                  pagination.nextCursor
+                    ? `本页 ${items.length} 位 · 范围内共 ${pagination.totalCount} 位`
+                    : `已加载全部 · 范围内共 ${pagination.totalCount} 位`
+                }
                 scrollTargetId={scrollTargetId}
               />
             ) : (
