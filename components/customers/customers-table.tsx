@@ -210,6 +210,9 @@ export function CustomersTable({
   const [selectedTargetOwnerId, setSelectedTargetOwnerId] = useState("");
   const [batchForceDeleteConfirmation, setBatchForceDeleteConfirmation] = useState("");
   const [batchForceDeleteReason, setBatchForceDeleteReason] = useState("");
+  // 默认 false 保持向后兼容 (走 detach), 勾上后服务端会物理清理 Lead 行 — 适合
+  // "重新导入此批 phone" 场景, 避免旧 Lead 残骸命中导入 dedup.
+  const [batchForceDeletePurgeLeads, setBatchForceDeletePurgeLeads] = useState(false);
   const [batchTransferNotice, setBatchTransferNotice] =
     useState<CustomerBatchActionNoticeState>(initialBatchTransferNoticeState);
   const [batchRecycleNotice, setBatchRecycleNotice] =
@@ -529,6 +532,7 @@ export function CustomersTable({
     resetNotices();
     setBatchForceDeleteConfirmation("");
     setBatchForceDeleteReason("");
+    setBatchForceDeletePurgeLeads(false);
     setBatchForceDeleteDialogOpen(true);
   }
 
@@ -1232,10 +1236,12 @@ export function CustomersTable({
         pending={batchForceDeletePending}
         confirmation={batchForceDeleteConfirmation}
         reason={batchForceDeleteReason}
+        purgeAttachedLeads={batchForceDeletePurgeLeads}
         onClose={closeBatchForceDeleteDialog}
         onSubmit={handleBatchForceDeleteSubmit}
         onConfirmationChange={setBatchForceDeleteConfirmation}
         onReasonChange={setBatchForceDeleteReason}
+        onPurgeAttachedLeadsChange={setBatchForceDeletePurgeLeads}
         selectedCustomerIds={manualSelectedIds}
       />
     </>

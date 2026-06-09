@@ -448,10 +448,12 @@ export function BatchForceDeleteDialog({
   pending,
   confirmation,
   reason,
+  purgeAttachedLeads,
   onClose,
   onSubmit,
   onConfirmationChange,
   onReasonChange,
+  onPurgeAttachedLeadsChange,
   selectedCustomerIds,
 }: Readonly<{
   open: boolean;
@@ -461,10 +463,17 @@ export function BatchForceDeleteDialog({
   pending: boolean;
   confirmation: string;
   reason: string;
+  /**
+   * 是否同时把关联的 Lead 行物理删除 — 默认 false 走 detach 行为. 勾选后服务端
+   * 会按 FK 依赖顺序清理 LeadAssignment / LeadTag / LeadCustomerMergeLog,
+   * 最后物理删 Lead, 后续重新导入此批 phone 不再被 dedup 阻断.
+   */
+  purgeAttachedLeads: boolean;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onConfirmationChange: (nextValue: string) => void;
   onReasonChange: (nextValue: string) => void;
+  onPurgeAttachedLeadsChange: (nextValue: boolean) => void;
   selectedCustomerIds: string[];
 }>) {
   if (!open) {
@@ -551,6 +560,36 @@ export function BatchForceDeleteDialog({
               disabled={pending}
               className="crm-textarea"
             />
+          </label>
+
+          {/* hidden mirror: 单选 checkbox 只发 "true" 一种 value, 不勾时不进
+              formData; 这里同时发 hidden=false 兜底, 让 server schema 总是
+              拿到明确的 "true" / "false" 字符串, 不依赖 checkbox 的存在性. */}
+          <input
+            type="hidden"
+            name="purgeAttachedLeads"
+            value={purgeAttachedLeads ? "true" : "false"}
+          />
+
+          <label className="flex items-start gap-2 rounded-xl border border-[var(--tone-danger-soft-border)] bg-[var(--tone-danger-soft-bg)] px-4 py-3 text-[13px] leading-6 text-[rgba(84,49,45,0.84)]">
+            <input
+              type="checkbox"
+              checked={purgeAttachedLeads}
+              onChange={(event) =>
+                onPurgeAttachedLeadsChange(event.currentTarget.checked)
+              }
+              disabled={pending}
+              className="mt-0.5 h-4 w-4 cursor-pointer rounded border-[var(--tone-danger-soft-border-strong)] text-[var(--color-danger)] focus:ring-[var(--color-danger)]"
+            />
+            <span className="space-y-1">
+              <span className="block font-medium text-[var(--color-danger)]">
+                同时永久删除关联的 Lead 行 (推荐: 重新导入此批 phone 时勾选)
+              </span>
+              <span className="block text-[12px] leading-5 text-[rgba(84,49,45,0.72)]">
+                勾上 = Lead 也物理清理, 后续导入同 phone 不再 dedup 阻断. 不勾 =
+                Lead 解关联保留, 由主管复核.
+              </span>
+            </span>
           </label>
 
           <div className="flex flex-wrap justify-end gap-3">

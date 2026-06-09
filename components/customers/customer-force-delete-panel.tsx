@@ -16,6 +16,11 @@ export type ForceHardDeleteCustomerAction = (input: {
   customerId: string;
   confirmation: string;
   reason: string;
+  /**
+   * true 时把客户关联的 Lead 行也物理清理 (LeadAssignment / LeadTag /
+   * LeadCustomerMergeLog 按 FK 顺序级联). 默认 false 走 detach 行为.
+   */
+  purgeAttachedLeads?: boolean;
 }) => Promise<ForceHardDeleteCustomerActionResult>;
 
 type CustomerForceDeletePanelProps = {
@@ -39,6 +44,9 @@ export function CustomerForceDeletePanel({
   const [open, setOpen] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const [reason, setReason] = useState("");
+  // 默认 false 保持向后兼容; 勾上后服务端会物理清理 Lead 行 — 适合 "重新导入此
+  // phone" 场景, 避免旧 Lead 残骸命中导入 dedup.
+  const [purgeAttachedLeads, setPurgeAttachedLeads] = useState(false);
   const [notice, setNotice] = useState<ForceHardDeleteCustomerActionResult | null>(null);
   const [pending, startTransition] = useTransition();
   const confirmationMatched = useMemo(() => {
@@ -49,6 +57,7 @@ export function CustomerForceDeletePanel({
   function resetForm() {
     setConfirmation("");
     setReason("");
+    setPurgeAttachedLeads(false);
   }
 
   function handleSubmit() {
@@ -66,6 +75,7 @@ export function CustomerForceDeletePanel({
         customerId,
         confirmation,
         reason,
+        purgeAttachedLeads,
       });
       setNotice(result);
 
@@ -170,6 +180,24 @@ export function CustomerForceDeletePanel({
               placeholder="填写本次强制硬删除原因"
               disabled={pending}
             />
+          </label>
+          <label className="flex items-start gap-2 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-[12px] leading-5 text-foreground">
+            <input
+              type="checkbox"
+              checked={purgeAttachedLeads}
+              onChange={(event) => setPurgeAttachedLeads(event.currentTarget.checked)}
+              disabled={pending}
+              className="mt-0.5 h-4 w-4 cursor-pointer rounded border-destructive/50 text-destructive focus:ring-destructive"
+            />
+            <span className="space-y-1">
+              <span className="block font-medium text-destructive">
+                同时永久删除关联的 Lead 行 (推荐: 重新导入此 phone 时勾选)
+              </span>
+              <span className="block text-[11px] leading-5 text-muted-foreground">
+                勾上 = Lead 也物理清理, 后续导入同 phone 不再 dedup 阻断. 不勾 =
+                Lead 解关联保留, 由主管复核.
+              </span>
+            </span>
           </label>
           <div className="flex flex-wrap justify-end gap-2">
             <button

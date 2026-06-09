@@ -648,6 +648,7 @@ async function executeForceDeleteCleanupTx(
     customerId: string;
     dependencies: ForceDeleteDependencySnapshot;
     reason: string;
+    purgeAttachedLeads: boolean;
   },
 ) {
   const { dependencies } = input;
@@ -661,6 +662,9 @@ async function executeForceDeleteCleanupTx(
   // 3) CustomerHistoryArchive.targetCustomerId 置 null 后, source 仍在,
   //    UI / 后续查询无法区分 "归档 → 客户重新建" vs "归档 → 客户已硬删".
   // 解决: detach 前快照 → updateMany → 按行写 OperationLog (重要动作必留审计).
+  //
+  // 当 purgeAttachedLeads=true 时把 Lead 行物理清理掉, 用于 "重新导入同 phone"
+  // 场景 — 否则导入 dedup 仍能找到旧 Lead 残骸把新导入挡掉.
   const detachedLeadRecords = await tx.lead.findMany({
     where: { customerId: input.customerId },
     select: { id: true, ownerId: true, status: true, phone: true },
@@ -673,38 +677,67 @@ async function executeForceDeleteCleanupTx(
       })
     : [];
 
-  const detachedLeads = await tx.lead.updateMany({
-    where: { customerId: input.customerId },
-    data: {
-      customerId: null,
-      // 同步把 ownerId 清空 — 客户已强删, 原 SALES 不应再把这条孤儿 lead
-      // 当成自己客户继续跟进; 走 supervisor 复核 / 重新分配链路.
-      ownerId: null,
-    },
-  });
-  deleted.detachedLeads = detachedLeads.count;
+  const purgeLeads = input.purgeAttachedLeads && detachedLeadIds.length > 0;
+  const leadAuditAction = purgeLeads
+    ? "lead.purged_by_force_delete"
+    : "lead.customer_detached_by_force_delete";
+  const leadAuditDescription = purgeLeads
+    ? `客户被强制硬删除, Lead 已物理清理. 销售视图与导入 dedup 都不再保留残留`
+    : `客户被强制硬删除，Lead 已自动 detach 并解除负责人，需主管复核。`;
+
+  if (purgeLeads) {
+    // 物理清理路径: 先按 detach 路径快照审计, 再按 FK 依赖顺序物理删除.
+    // Lead 上还挂着这些 FK 子表:
+    //   - LeadAssignment.leadId (NOT NULL, NoAction) — 必须先删
+    //   - LeadTag.leadId (NOT NULL, NoAction) — 必须先删
+    //   - LeadCustomerMergeLog.leadId (nullable, SetNull) — 显式删 (替代 SetNull)
+    //   - FollowUpTask/CallRecord/WechatRecord/LiveInvitation/Order/GiftRecord
+    //     (.leadId nullable, NoAction) — 客户 cleanup 已经删过 customer 自己的,
+    //     这里把剩下仅靠 leadId 关联的也清零 (设 NULL), 避免 FK 残留
+    //   - CustomerHistoryArchive.targetLeadId (nullable, SetNull) — 自动 nullify
+    //   - LeadDedupLog.matchedLeadId 是普通字符串字段 (无 FK), 不需要清理
+  } else {
+    const detachedLeads = await tx.lead.updateMany({
+      where: { customerId: input.customerId },
+      data: {
+        customerId: null,
+        // 同步把 ownerId 清空 — 客户已强删, 原 SALES 不应再把这条孤儿 lead
+        // 当成自己客户继续跟进; 走 supervisor 复核 / 重新分配链路.
+        ownerId: null,
+      },
+    });
+    deleted.detachedLeads = detachedLeads.count;
+  }
 
   if (detachedLeadRecords.length > 0) {
     await tx.operationLog.createMany({
       data: detachedLeadRecords.map((record) => ({
         actorId: input.actor.id,
         module: OperationModule.LEAD,
-        action: "lead.customer_detached_by_force_delete",
+        action: leadAuditAction,
         targetType: OperationTargetType.LEAD,
         targetId: record.id,
-        description: `客户被强制硬删除，Lead 已自动 detach 并解除负责人，需主管复核。`,
+        description: leadAuditDescription,
         beforeData: toInputJson({
           customerId: input.customerId,
           ownerId: record.ownerId,
           status: record.status,
           phone: record.phone,
         }),
-        afterData: toInputJson({
-          customerId: null,
-          ownerId: null,
-          reason: input.reason,
-          actorRole: input.actor.role,
-        }),
+        afterData: toInputJson(
+          purgeLeads
+            ? {
+                purged: true,
+                reason: input.reason,
+                actorRole: input.actor.role,
+              }
+            : {
+                customerId: null,
+                ownerId: null,
+                reason: input.reason,
+                actorRole: input.actor.role,
+              },
+        ),
       })),
     });
   }
@@ -727,17 +760,79 @@ async function executeForceDeleteCleanupTx(
         afterData: toInputJson({
           reason: input.reason,
           actorRole: input.actor.role,
+          purged: purgeLeads,
         }),
       })),
     });
   }
   deleted.detachedLeadAssignments = detachedLeadAssignments.length;
 
-  const detachedMergeLogs = await tx.leadCustomerMergeLog.updateMany({
-    where: { customerId: input.customerId },
-    data: { customerId: null },
-  });
-  deleted.detachedLeadCustomerMergeLogs = detachedMergeLogs.count;
+  if (purgeLeads) {
+    // 1) LeadAssignment 物理删 — 必须先删 leadId NOT NULL 的子表
+    deleted.purgedLeadAssignments = (
+      await tx.leadAssignment.deleteMany({
+        where: { leadId: { in: detachedLeadIds } },
+      })
+    ).count;
+
+    // 2) LeadTag 物理删 — leadId NOT NULL
+    deleted.purgedLeadTags = (
+      await tx.leadTag.deleteMany({
+        where: { leadId: { in: detachedLeadIds } },
+      })
+    ).count;
+
+    // 3) LeadCustomerMergeLog 物理删 — 替代默认 SetNull 行为, 真正消失
+    deleted.purgedLeadCustomerMergeLogs = (
+      await tx.leadCustomerMergeLog.deleteMany({
+        where: { leadId: { in: detachedLeadIds } },
+      })
+    ).count;
+
+    // 4) 客户自己的 followUpTask / callRecord / wechatRecord / liveInvitation /
+    //    order / giftRecord 已经在 executeForceDeleteCleanupTx 后段被 deleteMany
+    //    清掉了 (按 customerId 或聚合 id 集合). 剩下的可能仍有 "只挂在 Lead 上但
+    //    customerId=null" 的孤儿行 — 把 leadId 清零, 避免 FK NoAction 违约.
+    await tx.followUpTask.updateMany({
+      where: { leadId: { in: detachedLeadIds } },
+      data: { leadId: null },
+    });
+    await tx.callRecord.updateMany({
+      where: { leadId: { in: detachedLeadIds } },
+      data: { leadId: null },
+    });
+    await tx.wechatRecord.updateMany({
+      where: { leadId: { in: detachedLeadIds } },
+      data: { leadId: null },
+    });
+    await tx.liveInvitation.updateMany({
+      where: { leadId: { in: detachedLeadIds } },
+      data: { leadId: null },
+    });
+    await tx.order.updateMany({
+      where: { leadId: { in: detachedLeadIds } },
+      data: { leadId: null },
+    });
+    await tx.giftRecord.updateMany({
+      where: { leadId: { in: detachedLeadIds } },
+      data: { leadId: null },
+    });
+
+    // 5) 最后物理删 Lead — CustomerHistoryArchive.targetLeadId 走 SetNull,
+    //    LeadDedupLog.matchedLeadId 不是 FK, 跟 Lead 删除无关 (字符串字段保留为
+    //    历史 dedup 痕迹, 不影响新导入).
+    deleted.purgedLeads = (
+      await tx.lead.deleteMany({
+        where: { id: { in: detachedLeadIds } },
+      })
+    ).count;
+  } else {
+    const detachedMergeLogs = await tx.leadCustomerMergeLog.updateMany({
+      where: { customerId: input.customerId },
+      data: { customerId: null },
+    });
+    deleted.detachedLeadCustomerMergeLogs = detachedMergeLogs.count;
+  }
 
   const historyArchiveRecords = await tx.customerHistoryArchive.findMany({
     where: { targetCustomerId: input.customerId },
@@ -1011,6 +1106,11 @@ export type ForceHardDeleteCustomerResult = {
   customerName: string;
   redirectTo: string;
   deletedCounts: DeleteCountMap;
+  /**
+   * 本次实际物理清理的 Lead 行数 (purgeAttachedLeads=true 时 > 0).
+   * purgeAttachedLeads=false (默认) 时为 0 — Lead 仅 detach, 行仍在表里.
+   */
+  purgedLeadCount: number;
 };
 
 export async function forceHardDeleteCustomer(
@@ -1023,6 +1123,13 @@ export async function forceHardDeleteCustomer(
     confirmation: string;
     reason: string;
     confirmationMode?: ForceDeleteConfirmationMode;
+    /**
+     * 当 true 时, 把客户关联的 Lead 行连同 LeadAssignment / LeadTag /
+     * LeadCustomerMergeLog 一起物理删除 — 用于 "重新导入此批 phone" 场景, 避免
+     * 旧 Lead 残骸继续命中导入 dedup. 默认 false, 保留原有 detach 行为
+     * (向后兼容).
+     */
+    purgeAttachedLeads?: boolean;
   },
 ): Promise<ForceHardDeleteCustomerResult> {
   return prisma.$transaction(async (tx) => {
@@ -1075,11 +1182,13 @@ export async function forceHardDeleteCustomer(
       reason,
     });
 
+    const purgeAttachedLeads = input.purgeAttachedLeads === true;
     const deletedCounts = await executeForceDeleteCleanupTx(tx, {
       actor,
       customerId: customer.id,
       dependencies,
       reason,
+      purgeAttachedLeads,
     });
 
     return {
@@ -1087,6 +1196,7 @@ export async function forceHardDeleteCustomer(
       customerName: customer.name,
       redirectTo: getPostDeleteRedirect(customer),
       deletedCounts,
+      purgedLeadCount: deletedCounts.purgedLeads ?? 0,
     };
   }, forceDeleteTransactionOptions);
 }

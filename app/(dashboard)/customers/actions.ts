@@ -75,6 +75,11 @@ const batchForceHardDeleteCustomersSchema = z.object({
   customerIds: z.array(z.string().trim().min(1)).default([]),
   confirmation: z.string().trim().min(1, "请输入确认内容。"),
   reason: z.string().trim().min(1, "请填写强制硬删除原因。").max(500, "原因不能超过 500 字。"),
+  // "true" 时把关联 Lead 行也物理清理 — 适合 "重新导入此批 phone" 场景, 否则
+  // 导入 dedup 仍会被旧 Lead 残骸挡掉. 默认 "false" 保持原 detach 行为.
+  purgeAttachedLeads: z
+    .enum(["true", "false"])
+    .default("false"),
 });
 
 const createOwnedCustomerActionSchema = z.object({
@@ -1121,6 +1126,10 @@ export async function batchForceHardDeleteCustomersAction(
       customerIds: formData.getAll("customerIds").map((value) => String(value).trim()),
       confirmation: String(formData.get("confirmation") ?? "").trim(),
       reason: String(formData.get("reason") ?? "").trim(),
+      purgeAttachedLeads:
+        String(formData.get("purgeAttachedLeads") ?? "false") === "true"
+          ? "true"
+          : "false",
     });
 
     if (!parsed.success) {
@@ -1154,6 +1163,8 @@ export async function batchForceHardDeleteCustomersAction(
     let successCount = 0;
     let blockedCount = 0;
     let deletedBusinessRecordCount = 0;
+    let purgedLeadCount = 0;
+    const purgeAttachedLeads = parsed.data.purgeAttachedLeads === "true";
     const blockedReasonMap = new Map<string, number>();
 
     for (const customerId of customerIds) {
@@ -1168,6 +1179,7 @@ export async function batchForceHardDeleteCustomersAction(
             confirmation: parsed.data.confirmation,
             confirmationMode: "batch_phrase",
             reason: parsed.data.reason,
+            purgeAttachedLeads,
           },
         );
 
@@ -1178,6 +1190,7 @@ export async function batchForceHardDeleteCustomersAction(
           (result.deletedCounts.paymentPlans ?? 0) +
           (result.deletedCounts.paymentRecords ?? 0) +
           (result.deletedCounts.shippingTasks ?? 0);
+        purgedLeadCount += result.purgedLeadCount;
       } catch (error) {
         blockedCount += 1;
         const reason =
@@ -1211,10 +1224,14 @@ export async function batchForceHardDeleteCustomersAction(
       deletedBusinessRecordCount > 0
         ? `已清理关联交易 / 支付 / 履约记录 ${deletedBusinessRecordCount} 项。`
         : "";
+    const purgedLeadNote =
+      purgeAttachedLeads && purgedLeadCount > 0
+        ? `已物理清理关联 Lead 行 ${purgedLeadCount} 条，重新导入此批 phone 不再 dedup 阻断。`
+        : "";
 
     return buildBatchCustomerActionResult({
       status: successCount > 0 ? "success" : "error",
-      message: businessRecordNote ? `${message}${businessRecordNote}` : message,
+      message: `${message}${businessRecordNote}${purgedLeadNote}`,
       selection,
       skippedLabel: CUSTOMER_BATCH_ALREADY_LABELS.forceDelete,
       summary: {

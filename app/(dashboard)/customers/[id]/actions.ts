@@ -54,6 +54,9 @@ const forceHardDeleteCustomerSchema = z.object({
   customerId: z.string().trim().min(1, "缺少客户 ID"),
   confirmation: z.string().trim().min(1, "请输入客户姓名或手机号确认"),
   reason: z.string().trim().min(1, "请填写强制硬删除原因").max(500, "原因不能超过 500 字"),
+  // 同时物理清理关联 Lead 行 — 用于 "重新导入此 phone" 场景, 避免旧 Lead
+  // 残骸命中导入 dedup. 默认 false 保持原 detach 行为.
+  purgeAttachedLeads: z.boolean().optional(),
 });
 
 export type ImportedCustomerDeletionActionResult = {
@@ -785,10 +788,14 @@ export async function forceHardDeleteCustomerAction(
       (result.deletedCounts.paymentPlans ?? 0) +
       (result.deletedCounts.paymentRecords ?? 0) +
       (result.deletedCounts.shippingTasks ?? 0);
+    const purgedLeadSuffix =
+      parsed.data.purgeAttachedLeads && result.purgedLeadCount > 0
+        ? ` 已物理清理关联 Lead ${result.purgedLeadCount} 条。`
+        : "";
     const message =
       deletedBusinessCount > 0
-        ? `已强制硬删除 ${result.customerName}，并清理关联业务记录 ${deletedBusinessCount} 项。`
-        : `已强制硬删除 ${result.customerName}。`;
+        ? `已强制硬删除 ${result.customerName}，并清理关联业务记录 ${deletedBusinessCount} 项。${purgedLeadSuffix}`
+        : `已强制硬删除 ${result.customerName}。${purgedLeadSuffix}`;
 
     return {
       status: "success",
