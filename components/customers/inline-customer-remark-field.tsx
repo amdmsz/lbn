@@ -76,6 +76,14 @@ export function InlineCustomerRemarkField({
 
         setSaveState("error");
         setMessage(result.message);
+      } catch (error) {
+        // updateCustomerRemarkAction 内部已经把 ZodError 等吸收成 error result,
+        // 但 fetch 网络中断 / auth() / revalidateTag 等运行时异常仍可能穿透.
+        // 没 catch 时 finally 把 pending 归零, 用户以为已经保存 — 必须 setSaveState.
+        setSaveState("error");
+        setMessage(
+          error instanceof Error ? error.message : "保存失败, 请稍后重试。",
+        );
       } finally {
         setPending(false);
       }

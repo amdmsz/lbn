@@ -239,6 +239,19 @@ export function CustomerCallRecordForm({
           // server action 内部 revalidateTag 已让 cache 失效, 用户下次翻页/
           // 筛选/搜索时自动同步, 列表保持当前位置稳定不跳.
         }
+      } catch (error) {
+        // server action 一般会自己 try/catch 包成 error result, 但 fetch
+        // 网络中断 / auth() / revalidateTag 等运行时异常仍可能穿透到这里.
+        // 没 catch 时 finally 把 pending 归零, 但用户看不到任何错误反馈,
+        // 误以为保存成功 — 必须显式 setState + 弹 toast.
+        const message =
+          error instanceof Error ? error.message : "保存失败, 请稍后重试。";
+        setState({ status: "error", message });
+        notifyToast({
+          title: "保存失败",
+          description: message,
+          tone: "danger",
+        });
       } finally {
         setPending(false);
       }
