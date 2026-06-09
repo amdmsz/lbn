@@ -3366,6 +3366,50 @@ function buildTodayNewImportedCustomerWhereInput(
   };
 }
 
+/**
+ * 把 customer queue key 翻译成 SQL where 片段, 与 sidebar aggregate 同源.
+ *
+ * 关键: 复用 getCustomerCenterStatsAggregate 内用的同一批 `build*CustomerWhereInput`
+ * helper, 这样列表 (listTotalCount + findMany skip/take) 和侧栏 queueCounts
+ * 用同一份 SQL where — 避免 "侧栏待跟进 1234 位 / 列表展示 5826 行" 的回归.
+ *
+ * - `all`: 返回 null (不缩窄列表).
+ * - `migration_pending_follow_up`: 返回 null. 该队列依赖 OperationLog join,
+ *   SQL aggregate 暂未实现 (概览本身也是 0), 列表保持 fallthrough 与侧栏一致.
+ * - 其余 queue: 复用对应 build*CustomerWhereInput. `now` 仅 pending_follow_up
+ *   的相对时间窗口需要, 默认 new Date() (同一请求内, 毫秒级差异对天级边界无影响).
+ */
+export function buildQueueCustomerWhereInput(
+  queue: CustomerQueueKey,
+  todayStart: Date,
+  todayEnd: Date,
+  now: Date = new Date(),
+): Prisma.CustomerWhereInput | null {
+  switch (queue) {
+    case "all":
+    case "migration_pending_follow_up":
+      return null;
+    case "new_imported":
+      return buildTodayNewImportedCustomerWhereInput(todayStart, todayEnd);
+    case "pending_first_call":
+      return buildPendingFirstCallCustomerWhereInput();
+    case "pending_follow_up":
+      return buildPendingFollowUpCustomerWhereInput(now);
+    case "pending_wechat":
+      return buildWechatPendingCustomerWhereInput();
+    case "pending_invitation":
+      return buildPendingInvitationCustomerWhereInput();
+    case "pending_deal":
+      return buildPendingDealCustomerWhereInput();
+    default: {
+      // 类型层穷尽; 运行期兜底 — 不缩窄.
+      const _exhaustive: never = queue;
+      void _exhaustive;
+      return null;
+    }
+  }
+}
+
 export function parseCustomerDetailTab(
   searchParams: Record<string, SearchParamsValue> | undefined,
   fallbackTab: CustomerDetailTab = "profile",
@@ -3551,8 +3595,9 @@ const loadCustomerCenterBase = cache(loadCustomerCenterBaseImpl);
  * 工具栏 chip 仍显示生效, 但列表只按 grade 过滤 — 书签/分享链接行为不可信.
  *
  * 现在把 page-mode 的 filter clauses 抽到 shared helper, cursor 和 page 都用,
- * 行为一致. 已知降级 (assignedRange ≈ customer.createdAt, executionClass D
- * 近似 "其它", queue 仅 all/new_imported 真正生效) 也一致.
+ * 行为一致. 已知降级 (assignedRange ≈ ownershipEvent EXISTS, executionClass D
+ * 近似 "其它", queue=migration_pending_follow_up 仍 fallthrough) 也一致;
+ * 其余 queue 已经过 buildQueueCustomerWhereInput 与 sidebar aggregate 同源.
  */
 export function buildCustomerCenterListFilterClauses(input: {
   filters: CustomerCenterFilters;
@@ -3693,15 +3738,13 @@ export function buildCustomerCenterListFilterClauses(input: {
       listFilterClauses.push({ OR: classClauses });
     }
   }
-  if (filters.queue !== "all" && filters.queue !== "new_imported") {
-    console.warn(
-      `[customers] queue filter "${filters.queue}" 在 SQL 分页下功能受限, 仅 sidebar 概览生效, 列表本身不会按 queue 缩窄.`,
-    );
-  }
-  if (filters.queue === "new_imported") {
-    listFilterClauses.push(
-      buildTodayNewImportedCustomerWhereInput(todayStart, todayEnd),
-    );
+  // queue 派生过滤: 复用 buildQueueCustomerWhereInput, 与 sidebar aggregate 同源.
+  // 早期版本只接 new_imported, 其余 console.warn 后放行 — 导致 "侧栏待跟进 X /
+  // 列表展示全量" 的回归. 现在所有 queue 都翻译成 SQL where, queueCounts 与
+  // listTotalCount 对齐. (migration_pending_follow_up 仍 fallthrough, 概览 0.)
+  const queueWhere = buildQueueCustomerWhereInput(filters.queue, todayStart, todayEnd);
+  if (queueWhere) {
+    listFilterClauses.push(queueWhere);
   }
   return listFilterClauses;
 }
@@ -4324,20 +4367,17 @@ export async function getCustomerCenterData(
     }
   }
 
-  // queue 派生过滤: SQL 分页下完整翻译成本高 (每个 queue 都依赖多源信号). 这
-  // 里只把 "all" 当默认放过, 其余 queue 输出 console.warn 提示运维 — 用户截
-  // 图里 queue 没切换, 这条路径不阻断当下 hotfix.
-  if (filters.queue !== "all" && filters.queue !== "new_imported") {
-    console.warn(
-      `[customers] queue filter "${filters.queue}" 在 SQL 分页下功能受限, 仅 sidebar 概览生效, 列表本身不会按 queue 缩窄.`,
-    );
-  }
-  // queue=new_imported 是用户最常切的 queue 之一, 这里给一个 SQL 等价 (今日有
-  // 任意活跃 lead 创建), 复用 buildTodayNewImportedCustomerWhereInput.
-  if (filters.queue === "new_imported") {
-    listFilterClauses.push(
-      buildTodayNewImportedCustomerWhereInput(todayStart, todayEnd),
-    );
+  // queue 派生过滤: 复用 buildQueueCustomerWhereInput 与 sidebar aggregate 同源,
+  // queueCounts 与 listTotalCount 用同一份 SQL where. now 用于 pending_follow_up
+  // 相对窗口. (migration_pending_follow_up 仍 fallthrough, 概览本身也是 0.)
+  const queueWhere = buildQueueCustomerWhereInput(
+    filters.queue,
+    todayStart,
+    todayEnd,
+    now,
+  );
+  if (queueWhere) {
+    listFilterClauses.push(queueWhere);
   }
 
   const listWhere: Prisma.CustomerWhereInput = {

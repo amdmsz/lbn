@@ -207,3 +207,89 @@ test("regression — cursor 模式必须看到 tagIds 这条 clause (避免回�
   );
   assert.ok(hasExecClause, "executionClasses clause 必须出现");
 });
+
+// ----------------------------------------------------------------------------
+// W12 (2026-06-10): queue 派生过滤推到 SQL where.
+//
+// 修复前: 只有 queue=new_imported 真正过滤, 其余 queue 仅 console.warn 后放行,
+// 导致 "侧栏待跟进 1234 / 列表展示全量 5826" 的回归. 现在所有可翻译 queue 都
+// 经 buildQueueCustomerWhereInput 进 listFilterClauses, 与 sidebar aggregate
+// 同源.
+// ----------------------------------------------------------------------------
+
+test("queue=pending_first_call → 推一条 SQL clause (不再静默放行)", () => {
+  const clauses = buildCustomerCenterListFilterClauses({
+    filters: makeFilters({ queue: "pending_first_call" }),
+    todayStart,
+    todayEnd,
+  });
+  assert.equal(clauses.length, 1, "pending_first_call 必须缩窄列表, 不能放行全量");
+});
+
+test("queue=pending_follow_up → 推一条 SQL clause", () => {
+  const clauses = buildCustomerCenterListFilterClauses({
+    filters: makeFilters({ queue: "pending_follow_up" }),
+    todayStart,
+    todayEnd,
+  });
+  assert.equal(clauses.length, 1);
+});
+
+test("queue=pending_wechat → 推一条 SQL clause", () => {
+  const clauses = buildCustomerCenterListFilterClauses({
+    filters: makeFilters({ queue: "pending_wechat" }),
+    todayStart,
+    todayEnd,
+  });
+  assert.equal(clauses.length, 1);
+});
+
+test("queue=pending_invitation → 推一条 SQL clause", () => {
+  const clauses = buildCustomerCenterListFilterClauses({
+    filters: makeFilters({ queue: "pending_invitation" }),
+    todayStart,
+    todayEnd,
+  });
+  assert.equal(clauses.length, 1);
+});
+
+test("queue=pending_deal → 推一条 SQL clause", () => {
+  const clauses = buildCustomerCenterListFilterClauses({
+    filters: makeFilters({ queue: "pending_deal" }),
+    todayStart,
+    todayEnd,
+  });
+  assert.equal(clauses.length, 1);
+});
+
+test("queue=all → 不缩窄列表 (返回 0 条 clause)", () => {
+  const clauses = buildCustomerCenterListFilterClauses({
+    filters: makeFilters({ queue: "all" }),
+    todayStart,
+    todayEnd,
+  });
+  assert.equal(clauses.length, 0);
+});
+
+test("queue=migration_pending_follow_up → fallthrough 不缩窄 (依赖 OperationLog, 概览本身也是 0)", () => {
+  const clauses = buildCustomerCenterListFilterClauses({
+    filters: makeFilters({ queue: "migration_pending_follow_up" }),
+    todayStart,
+    todayEnd,
+  });
+  assert.equal(clauses.length, 0);
+});
+
+test("regression — queue + 高级 filter 叠加: 两条 clause 都在 (queue 不再吞掉 tag)", () => {
+  const clauses = buildCustomerCenterListFilterClauses({
+    filters: makeFilters({ queue: "pending_follow_up", tagIds: ["t1"] }),
+    todayStart,
+    todayEnd,
+  });
+  // tagIds + queue = 2 条
+  assert.equal(clauses.length, 2);
+  const hasTag = clauses.some(
+    (c) => typeof c === "object" && c !== null && "customerTags" in c,
+  );
+  assert.ok(hasTag, "queue 缩窄时 tagIds 仍必须生效");
+});
