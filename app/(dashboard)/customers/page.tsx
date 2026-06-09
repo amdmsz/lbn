@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, cache } from "react";
 import { redirect } from "next/navigation";
 import type { RoleCode } from "@prisma/client";
 import {
@@ -26,6 +26,37 @@ import { moveCustomerToRecycleBinAction } from "./[id]/actions";
 
 type ResolvedSearchParams = Record<string, string | string[] | undefined>;
 type CustomerViewer = { id: string; role: RoleCode };
+
+// F19 customers/streaming — per-request dedup.
+//
+// 两个 Suspense (StreamingList + StreamingToolbar) 都需要 list + stats
+// (cursor 模式还要 getCustomerCenterDataCursor). 之前直接 `Promise.all` 各自
+// 调用 — 两个并行的 Suspense 分支同时进入, 都拿到 cache miss, 各自重复触发
+// 整套未 cache 的 SQL (prisma.customer.count / findMany / 多个 count + groupBy).
+// unstable_cache 60s 只 cover 字典 (teams/salesUsers/visibleIds/recycledIds),
+// 第一次 hit + post-mutation hit 都会双倍 cost.
+//
+// 用 React.cache() 把 3 个入口 dedup 到 per-request 维度: 第二个 Suspense 命中
+// 第一个 Suspense 已经在飞的 Promise, 不再触发第二轮 SQL.
+const dedupedGetList = cache(
+  (
+    viewer: CustomerViewer,
+    resolvedSearchParams: ResolvedSearchParams | undefined,
+  ) => getCustomerCenterDataList(viewer, resolvedSearchParams),
+);
+const dedupedGetStats = cache(
+  (
+    viewer: CustomerViewer,
+    resolvedSearchParams: ResolvedSearchParams | undefined,
+  ) => getCustomerCenterDataStats(viewer, resolvedSearchParams),
+);
+const dedupedGetCursor = cache(
+  (
+    viewer: CustomerViewer,
+    resolvedSearchParams: ResolvedSearchParams | undefined,
+    parsedCursor: ReturnType<typeof readCursorFromSearchParams>,
+  ) => getCustomerCenterDataCursor(viewer, resolvedSearchParams, parsedCursor),
+);
 
 export default async function CustomersPage({
   searchParams,
@@ -101,8 +132,10 @@ export default async function CustomersPage({
  * 出 list slice; transferableOwners 透传给 CustomersTable 的 batch transfer
  * dropdown.
  *
- * page 模式: list 与 stats 并行 (底层 unstable_cache 同源, toolbar Suspense
- * 已经会触发 stats, 这里再次 await 走 cache hit, 不重复 SQL). 必须用
+ * page 模式: list 与 stats 并行. 两个 Suspense 分支都会需要这两份数据,
+ * 通过 React.cache() 把 `dedupedGetList` / `dedupedGetStats` dedup 到
+ * per-request 维度 — 第二个分支拿到的是第一个分支已经在飞的 Promise,
+ * 不会再触发 prisma count / findMany / aggregate. 必须用
  * `transferableOwners` (全集 SALES, 不受 filter 限制), 不能用 `salesBoard`
  * (跟随 filter, 选了 team 之后会变成空 dropdown — 即"暂无可移交的销售账号").
  */
@@ -123,7 +156,7 @@ async function StreamingList({
   let transferableOwners: CustomerCenterStatsData["transferableOwners"] = [];
 
   if (parsedCursor) {
-    const full = await getCustomerCenterDataCursor(
+    const full = await dedupedGetCursor(
       viewer,
       resolvedSearchParams,
       parsedCursor,
@@ -142,8 +175,8 @@ async function StreamingList({
     transferableOwners = full.transferableOwners ?? [];
   } else {
     const [listData, stats] = await Promise.all([
-      getCustomerCenterDataList(viewer, resolvedSearchParams),
-      getCustomerCenterDataStats(viewer, resolvedSearchParams),
+      dedupedGetList(viewer, resolvedSearchParams),
+      dedupedGetStats(viewer, resolvedSearchParams),
     ]);
     list = listData;
     transferableOwners = stats.transferableOwners ?? [];
@@ -177,7 +210,7 @@ async function StreamingToolbar({
   parsedCursor: ReturnType<typeof readCursorFromSearchParams>;
 }>) {
   if (parsedCursor) {
-    const full = await getCustomerCenterDataCursor(
+    const full = await dedupedGetCursor(
       viewer,
       resolvedSearchParams,
       parsedCursor,
@@ -195,8 +228,8 @@ async function StreamingToolbar({
   }
 
   const [list, stats] = await Promise.all([
-    getCustomerCenterDataList(viewer, resolvedSearchParams),
-    getCustomerCenterDataStats(viewer, resolvedSearchParams),
+    dedupedGetList(viewer, resolvedSearchParams),
+    dedupedGetStats(viewer, resolvedSearchParams),
   ]);
 
   return (
