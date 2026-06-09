@@ -208,6 +208,13 @@ export function CustomerCallRecordForm({
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    // in-flight 保护: 提交按钮在 pending=true 时已被 disabled,
+    // 但浏览器在 input 上按 Enter 仍可能触发 form submit, 加 guard
+    // 防止双提交并发后两个 server action 的 success 回调互相覆盖
+    // form state / selectedResult.
+    if (pending) return;
+
     const formData = new FormData(event.currentTarget);
 
     setPending(true);

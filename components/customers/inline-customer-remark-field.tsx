@@ -47,6 +47,11 @@ export function InlineCustomerRemarkField({
   }
 
   function commitRemark(nextValue: string) {
+    // in-flight 保护: 第二次 commit 在前一次 fetch 未返回前直接丢弃,
+    // 避免两个 PATCH 并发后 success 回调 setValue(normalizedValue) 把
+    // 用户最新的输入覆盖回更老的快照.
+    if (pending) return;
+
     const normalizedValue = nextValue.trim();
 
     if (normalizedValue === committedValueRef.current) {
@@ -96,6 +101,7 @@ export function InlineCustomerRemarkField({
         value={value}
         rows={2}
         placeholder={placeholder}
+        readOnly={pending}
         onChange={(event) => {
           setValue(event.target.value);
           setSaveState("dirty");
