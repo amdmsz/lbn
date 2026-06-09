@@ -3535,18 +3535,23 @@ async function loadCustomerCenterBase(
 }
 
 /**
- * 构造 page-mode list query 的 SQL where (与 `getCustomerCenterData` 同源).
- * 已知降级与历史注释见 getCustomerCenterData 内部. 抽出后两个 split 路径共用.
+ * Wave 9 hotfix (2026-06-09): cursor 与 page 模式必须使用同一份高级 filter SQL.
+ *
+ * 历史: cursor 模式 (listCustomersCursor) 只把 search/owner/team/grades 推到
+ * SQL, productKeys/productKeyword/tagIds/assignedFrom/assignedTo/
+ * executionClasses/queue 全部静默丢弃. 用户在 cursor 翻页时 (URL 含 `?cursor=`),
+ * 工具栏 chip 仍显示生效, 但列表只按 grade 过滤 — 书签/分享链接行为不可信.
+ *
+ * 现在把 page-mode 的 filter clauses 抽到 shared helper, cursor 和 page 都用,
+ * 行为一致. 已知降级 (assignedRange ≈ customer.createdAt, executionClass D
+ * 近似 "其它", queue 仅 all/new_imported 真正生效) 也一致.
  */
-function buildCustomerCenterListWhere(input: {
+export function buildCustomerCenterListFilterClauses(input: {
   filters: CustomerCenterFilters;
-  visibleWhere: Prisma.CustomerWhereInput;
-  recycledCustomerIds: string[];
   todayStart: Date;
   todayEnd: Date;
-}): Prisma.CustomerWhereInput {
-  const { filters, visibleWhere, recycledCustomerIds, todayStart, todayEnd } =
-    input;
+}): Prisma.CustomerWhereInput[] {
+  const { filters, todayStart, todayEnd } = input;
   const listFilterClauses: Prisma.CustomerWhereInput[] = [];
   if (filters.search && filters.search.trim().length > 0) {
     const term = filters.search.trim();
@@ -3690,6 +3695,27 @@ function buildCustomerCenterListWhere(input: {
       buildTodayNewImportedCustomerWhereInput(todayStart, todayEnd),
     );
   }
+  return listFilterClauses;
+}
+
+/**
+ * 构造 page-mode list query 的 SQL where (与 `getCustomerCenterData` 同源).
+ * 已知降级与历史注释见 getCustomerCenterData 内部. 抽出后两个 split 路径共用.
+ */
+function buildCustomerCenterListWhere(input: {
+  filters: CustomerCenterFilters;
+  visibleWhere: Prisma.CustomerWhereInput;
+  recycledCustomerIds: string[];
+  todayStart: Date;
+  todayEnd: Date;
+}): Prisma.CustomerWhereInput {
+  const { filters, visibleWhere, recycledCustomerIds, todayStart, todayEnd } =
+    input;
+  const listFilterClauses = buildCustomerCenterListFilterClauses({
+    filters,
+    todayStart,
+    todayEnd,
+  });
 
   return {
     AND: [
@@ -4568,6 +4594,26 @@ export type ListCustomersCursorFilters = {
   ownershipModes?: CustomerOwnershipMode[];
   /** Wave 7-B 客户分级 multi-select. 空数组 / undefined = 不过滤. */
   grades?: CustomerGrade[];
+  /**
+   * Wave 9 hotfix: 把 page-mode 的高级 filter (productKeys / productKeyword /
+   * tagIds / assignedFrom / assignedTo / executionClasses / queue) 也透给
+   * cursor 模式. 不提供时不过滤. 与 page-mode SQL where 同源, 由
+   * `buildCustomerCenterListFilterClauses` 统一翻译.
+   *
+   * `todayStart` / `todayEnd` 仅在 `queue === "new_imported"` 时使用; 其它
+   * queue 在 SQL 分页下不真正生效 (与 page-mode 一致, 仅 console.warn).
+   */
+  advanced?: {
+    productKeys?: string[];
+    productKeyword?: string;
+    tagIds?: string[];
+    assignedFrom?: string;
+    assignedTo?: string;
+    executionClasses?: CustomerExecutionClass[];
+    queue?: CustomerQueueKey;
+    todayStart?: Date;
+    todayEnd?: Date;
+  };
 };
 
 export type ListCustomersCursorResult = {
@@ -4629,6 +4675,42 @@ export async function listCustomersCursor(
     filterClauses.push({
       grade: { in: filters.grades },
     });
+  }
+
+  // Wave 9 hotfix: 把 page-mode 的高级 filter SQL clauses 透给 cursor 模式.
+  // 走 `buildCustomerCenterListFilterClauses` 共用 helper, 行为一致.
+  // 与 page-mode 共享同样的已知降级 (见 helper 注释): assignedRange 用
+  // customer.createdAt 替代, executionClass D 退化为 "其它", queue 仅
+  // all / new_imported 真正生效, 其余 queue 仅 console.warn.
+  //
+  // 注意 ownerId/teamId/search/grades 上面已经手动 push, 这里只补 advanced
+  // 里 cursor 类型不覆盖的字段 (productKeys / productKeyword / tagIds /
+  // assignedFrom / assignedTo / executionClasses / queue), 避免 search /
+  // owner / team / grades 在 SQL where 里重复.
+  if (filters.advanced) {
+    const adv = filters.advanced;
+    const advancedClauses = buildCustomerCenterListFilterClauses({
+      filters: {
+        queue: adv.queue ?? "all",
+        executionClasses: adv.executionClasses ?? [],
+        grades: [],
+        teamId: "",
+        salesId: "",
+        search: "",
+        productKeys: adv.productKeys ?? [],
+        productKeyword: adv.productKeyword ?? "",
+        tagIds: adv.tagIds ?? [],
+        assignedFrom: adv.assignedFrom ?? "",
+        assignedTo: adv.assignedTo ?? "",
+        page: 1,
+        pageSize: CUSTOMERS_PAGE_SIZE,
+      },
+      todayStart: adv.todayStart ?? new Date(0),
+      todayEnd: adv.todayEnd ?? new Date(0),
+    });
+    if (advancedClauses.length > 0) {
+      filterClauses.push(...advancedClauses);
+    }
   }
 
   // cursor 翻页条件: keyset `(updatedAt, id) < (cursor.updatedAt, cursor.id)`
@@ -4820,6 +4902,21 @@ export async function getCustomerCenterDataCursor(
         ownerId: filters.salesId || undefined,
         teamId: filters.teamId || undefined,
         grades: filters.grades.length > 0 ? filters.grades : undefined,
+        // Wave 9 hotfix (2026-06-09): 把 productKeys / productKeyword / tagIds /
+        // assignedFrom / assignedTo / executionClasses / queue 透给 cursor 模式
+        // SQL where. 之前这里 silently drop, 导致 ?cursor=xxx&tagIds=abc 的列表
+        // 只按 grade 过滤, 工具栏 chip 显示生效但实际不生效, 书签 / 分享链接不可信.
+        advanced: {
+          productKeys: filters.productKeys,
+          productKeyword: filters.productKeyword,
+          tagIds: filters.tagIds,
+          assignedFrom: filters.assignedFrom,
+          assignedTo: filters.assignedTo,
+          executionClasses: filters.executionClasses,
+          queue: filters.queue,
+          todayStart,
+          todayEnd,
+        },
       },
     }),
   ]);

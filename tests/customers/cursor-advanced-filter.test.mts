@@ -1,0 +1,209 @@
+/**
+ * buildCustomerCenterListFilterClauses 单测.
+ *
+ * Wave 9 hotfix (2026-06-09) 引入: 把 page-mode 的高级 filter SQL clauses 抽到
+ * 共享 helper, cursor 模式也复用. 不依赖 DB, 纯结构断言.
+ *
+ * 这条单测重点验证 finding 描述的真实问题: 当 URL 同时带 cursor 和 advanced
+ * filter (tagIds / productKeys / executionClasses / assignedRange / queue) 时,
+ * cursor 模式以前 silently drop 这些 filter, 现在 helper 必须把它们翻译成 SQL
+ * where clauses 返回, 让 cursor 翻页和 page 翻页表现一致.
+ *
+ * 跑法:
+ *   node --test --import tsx tests/customers/cursor-advanced-filter.test.mts
+ */
+import assert from "node:assert/strict";
+import test from "node:test";
+
+// 必须在任何 lib/db/prisma 之前的 import 设置, prisma.ts import 时立即检查
+process.env.DATABASE_URL =
+  process.env.DATABASE_URL ?? "mariadb://test:test@127.0.0.1:3306/test";
+
+const { buildCustomerCenterListFilterClauses } = await import(
+  "../../lib/customers/queries.ts"
+);
+
+type Filters = Parameters<typeof buildCustomerCenterListFilterClauses>[0]["filters"];
+
+function makeFilters(overrides: Partial<Filters> = {}): Filters {
+  return {
+    queue: "all",
+    executionClasses: [],
+    grades: [],
+    teamId: "",
+    salesId: "",
+    search: "",
+    productKeys: [],
+    productKeyword: "",
+    tagIds: [],
+    assignedFrom: "",
+    assignedTo: "",
+    page: 1,
+    pageSize: 50,
+    ...overrides,
+  } as Filters;
+}
+
+const todayStart = new Date("2026-06-09T00:00:00.000Z");
+const todayEnd = new Date("2026-06-09T23:59:59.999Z");
+
+test("空 filters → 返回空 clauses 数组", () => {
+  const clauses = buildCustomerCenterListFilterClauses({
+    filters: makeFilters(),
+    todayStart,
+    todayEnd,
+  });
+  assert.equal(clauses.length, 0);
+});
+
+test("tagIds 过滤 → 推到 customerTags.some.tagId in", () => {
+  const clauses = buildCustomerCenterListFilterClauses({
+    filters: makeFilters({ tagIds: ["tag_a", "tag_b"] }),
+    todayStart,
+    todayEnd,
+  });
+  assert.equal(clauses.length, 1);
+  assert.deepEqual(clauses[0], {
+    customerTags: { some: { tagId: { in: ["tag_a", "tag_b"] } } },
+  });
+});
+
+test("productKeys 带 `${source}:${label}` 前缀 → 拆出 label 后 OR 匹配 leads / salesOrders", () => {
+  const clauses = buildCustomerCenterListFilterClauses({
+    filters: makeFilters({
+      productKeys: ["interested:茅台", "purchased:五粮液"],
+    }),
+    todayStart,
+    todayEnd,
+  });
+  assert.equal(clauses.length, 1);
+  assert.deepEqual(clauses[0], {
+    OR: [
+      { leads: { some: { interestedProduct: { in: ["茅台", "五粮液"] } } } },
+      {
+        salesOrders: {
+          some: {
+            items: { some: { productNameSnapshot: { in: ["茅台", "五粮液"] } } },
+          },
+        },
+      },
+    ],
+  });
+});
+
+test("productKeyword 模糊匹配 → contains 在 leads / salesOrders 两表 OR", () => {
+  const clauses = buildCustomerCenterListFilterClauses({
+    filters: makeFilters({ productKeyword: "茅台" }),
+    todayStart,
+    todayEnd,
+  });
+  assert.equal(clauses.length, 1);
+  assert.deepEqual(clauses[0], {
+    OR: [
+      { leads: { some: { interestedProduct: { contains: "茅台" } } } },
+      {
+        salesOrders: {
+          some: {
+            items: { some: { productNameSnapshot: { contains: "茅台" } } },
+          },
+        },
+      },
+    ],
+  });
+});
+
+test("assignedFrom + assignedTo → customer.createdAt 范围 (降级实现)", () => {
+  const clauses = buildCustomerCenterListFilterClauses({
+    filters: makeFilters({
+      assignedFrom: "2026-06-01",
+      assignedTo: "2026-06-09",
+    }),
+    todayStart,
+    todayEnd,
+  });
+  assert.equal(clauses.length, 1);
+  const clause = clauses[0] as { createdAt: { gte?: Date; lte?: Date } };
+  assert.ok(clause.createdAt.gte instanceof Date);
+  assert.ok(clause.createdAt.lte instanceof Date);
+});
+
+test("executionClasses A → tradeOrders / salesOrders APPROVED OR", () => {
+  const clauses = buildCustomerCenterListFilterClauses({
+    filters: makeFilters({ executionClasses: ["A"] }),
+    todayStart,
+    todayEnd,
+  });
+  assert.equal(clauses.length, 1);
+  const clause = clauses[0] as { OR: unknown[] };
+  // A 是单个 class, executionClasses OR 包装应该只有 1 条子句
+  assert.equal(clause.OR.length, 1);
+});
+
+test("queue=new_imported → leads.some(createdAt today) 推到 SQL", () => {
+  const clauses = buildCustomerCenterListFilterClauses({
+    filters: makeFilters({ queue: "new_imported" }),
+    todayStart,
+    todayEnd,
+  });
+  assert.equal(clauses.length, 1);
+  assert.deepEqual(clauses[0], {
+    leads: {
+      some: {
+        rolledBackAt: null,
+        createdAt: { gte: todayStart, lte: todayEnd },
+      },
+    },
+  });
+});
+
+test("多种 filter 叠加 → 每条都各自 push 一条 clause", () => {
+  const clauses = buildCustomerCenterListFilterClauses({
+    filters: makeFilters({
+      tagIds: ["tag_a"],
+      productKeyword: "茅台",
+      executionClasses: ["A"],
+      assignedFrom: "2026-06-01",
+    }),
+    todayStart,
+    todayEnd,
+  });
+  // tagIds + productKeyword + executionClasses + assignedRange = 4 条 clauses
+  assert.equal(clauses.length, 4);
+});
+
+test("regression — cursor 模式必须看到 tagIds 这条 clause (避免回退到只过滤 grade)", () => {
+  // 模拟 finding 描述的真实场景: ?cursor=xxx&tagIds=abc&grades=A&executionClasses=B
+  // 过去 cursor 路径只 push grades, 现在 helper 必须把 tagIds + executionClasses
+  // 都翻译出来.
+  const clauses = buildCustomerCenterListFilterClauses({
+    filters: makeFilters({
+      tagIds: ["abc"],
+      grades: ["A"],
+      executionClasses: ["B"],
+    }),
+    todayStart,
+    todayEnd,
+  });
+  // grades + tagIds + executionClasses = 3 条
+  assert.equal(clauses.length, 3);
+
+  // 必须能找到 tagIds clause
+  const hasTagClause = clauses.some(
+    (c) =>
+      typeof c === "object" &&
+      c !== null &&
+      "customerTags" in c &&
+      typeof (c as Record<string, unknown>).customerTags === "object",
+  );
+  assert.ok(hasTagClause, "tagIds clause 必须出现在 cursor / page 共享路径里");
+
+  // 必须能找到 executionClasses clause (OR 包 B 单条)
+  const hasExecClause = clauses.some(
+    (c) =>
+      typeof c === "object" &&
+      c !== null &&
+      "OR" in c &&
+      Array.isArray((c as Record<string, unknown>).OR),
+  );
+  assert.ok(hasExecClause, "executionClasses clause 必须出现");
+});
