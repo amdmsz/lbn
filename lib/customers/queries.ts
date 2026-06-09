@@ -16,6 +16,7 @@
  * 当前增量保持向后兼容: 旧函数签名 / 返回结构 / `customerSnapshotSelect`
  * 一律不动, UI 调用方 (customers-table.tsx) 也不需要改。
  */
+import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import {
   CallResult,
@@ -3418,8 +3419,13 @@ export type CustomerCenterStatsData = {
  * 共享 base loader: actor / teams / salesUsers / recycledIds / visibleIds /
  * activeTags + 校验后的 filters. 所有底层调用都已 60s `unstable_cache`, 列表
  * 与 stats 两条 Suspense 路径各调一次走 cache hit, 不重复 SQL.
+ *
+ * Wave 6/7/8/9 regression fix: 同入口出口也包了 React `cache()`. 即便上层
+ * `getCustomerCenterDataList` / `getCustomerCenterDataStats` 已分别 dedupe, 这
+ * 里仍然 cover (a) cursor mode 内部直接调 base 的代码路径 / (b) 未来新增同请
+ * 求多入口调用方, 让基础数据只算一次.
  */
-async function loadCustomerCenterBase(
+async function loadCustomerCenterBaseImpl(
   viewer: CustomerViewer,
   rawSearchParams: Record<string, SearchParamsValue> | undefined,
 ) {
@@ -3533,6 +3539,8 @@ async function loadCustomerCenterBase(
     todayEnd,
   };
 }
+
+const loadCustomerCenterBase = cache(loadCustomerCenterBaseImpl);
 
 /**
  * Wave 9 hotfix (2026-06-09): cursor 与 page 模式必须使用同一份高级 filter SQL.
@@ -3738,8 +3746,13 @@ function buildCustomerCenterListWhere(input: {
  * 与 `getCustomerCenterData` 行为等价 (page mode), 但不算 SQL aggregate, 也不
  * 构造 summary / queueCounts / teamOverview / salesBoard. 这些走
  * `getCustomerCenterDataStats` 在第二个 Suspense 边界异步填充.
+ *
+ * Wave 6/7/8/9 regression fix: 用 React `cache()` 包一层入口, 让同一请求里
+ * 不同 Suspense 边界拿到的 (viewer, rawSearchParams) 同引用调用共享同一个
+ * Promise — 避免 `loadCustomerCenterBase` + 内部 SQL 跑两遍. 失效粒度仍
+ * 由底层 `unstable_cache` (60s TTL) 控制, 跨请求行为不变.
  */
-export async function getCustomerCenterDataList(
+async function getCustomerCenterDataListImpl(
   viewer: CustomerViewer,
   rawSearchParams: Record<string, SearchParamsValue> | undefined,
 ): Promise<CustomerCenterListData> {
@@ -3835,14 +3848,21 @@ export async function getCustomerCenterDataList(
   };
 }
 
+export const getCustomerCenterDataList = cache(getCustomerCenterDataListImpl);
+
 /**
  * F19 customers/streaming: stats 分片入口.
  *
  * 走 SQL aggregate (`getCustomerCenterStatsAggregate`) + 派生 summary /
  * queueCounts / teamOverview / salesBoard / selectedTeam / selectedSales.
  * UI 在列表 SSR 完成后, 通过 Suspense 在顶部 / sidebar 异步填充.
+ *
+ * Wave 6/7/8/9 regression fix: 同 list 入口, 用 React `cache()` 包一层. page.tsx
+ * 里 StreamingList + StreamingToolbar 两个 Suspense 边界都会调一次, 同一请求里
+ * 共享同一个 Promise — 避免 `getCustomerCenterStatsAggregate` (8 对 count+groupBy,
+ * 16+ SQL, 每条都带 `id: notIn [大 recycled set]`) 跑两遍.
  */
-export async function getCustomerCenterDataStats(
+async function getCustomerCenterDataStatsImpl(
   viewer: CustomerViewer,
   rawSearchParams: Record<string, SearchParamsValue> | undefined,
 ): Promise<CustomerCenterStatsData> {
@@ -4013,6 +4033,8 @@ export async function getCustomerCenterDataStats(
     transferableOwners,
   };
 }
+
+export const getCustomerCenterDataStats = cache(getCustomerCenterDataStatsImpl);
 
 /**
  * F18 customers/perf phase 3: /customers 主路径 page-mode 入口.
