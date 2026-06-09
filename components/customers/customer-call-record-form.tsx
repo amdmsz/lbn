@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+// useRouter 已不再使用 (router.refresh 移除, 防止列表 reorder 让用户找不到客户).
 import { createCustomerCallRecordAction } from "@/app/(dashboard)/customers/[id]/call-actions";
 import {
   initialCreateCallRecordActionState,
@@ -142,7 +142,6 @@ export function CustomerCallRecordForm({
   onCancel?: () => void;
   onLater?: () => void;
 }>) {
-  const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const remarkRef = useRef<HTMLTextAreaElement>(null);
   const [state, setState] = useState<CreateCallRecordActionState>(
@@ -234,9 +233,11 @@ export function CustomerCallRecordForm({
             tone: "success",
           });
           onSuccess?.();
-          // router.refresh 异步触发, 不阻塞 pending 归零. RSC 重新渲染期间
-          // 用户看到的是"已保存"(pending 已是 false), 列表后台静默更新.
-          router.refresh();
+          // 不再调 router.refresh — 用户反馈"打完一个电话备注完, 列表就变了,
+          // 就找不到那个了". 因为 list 按 updatedAt desc 排序, 保存通话会
+          // touch customer.updatedAt, 客户被排到第 1 页, 用户当前页找不到.
+          // server action 内部 revalidateTag 已让 cache 失效, 用户下次翻页/
+          // 筛选/搜索时自动同步, 列表保持当前位置稳定不跳.
         }
       } finally {
         setPending(false);
