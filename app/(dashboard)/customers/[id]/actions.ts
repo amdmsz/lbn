@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { ZodError, z } from "zod";
 import {
@@ -11,6 +11,7 @@ import {
   sanitizeRedirectTarget,
 } from "@/lib/action-notice";
 import { auth } from "@/lib/auth/session";
+import { CACHE_TAGS } from "@/lib/cache-tags";
 import {
   CUSTOMER_RECYCLE_REASON_OPTIONS,
   type CustomerRecycleReasonCode,
@@ -550,8 +551,15 @@ export async function moveCustomerToRecycleBinAction(
     );
 
     if (result.status !== "blocked") {
-      revalidatePath("/customers");
-      revalidatePath(`/customers/${customerId}`);
+      // 该 action 直接挂在 /customers 列表行内 "移入回收站" 按钮 (见
+      // customers-table.tsx -> customer-list-card.tsx -> CustomerRecycleInlineEntry).
+      // revalidatePath("/customers") 会强制当前 route 整页 RSC re-render, 列表
+      // 按 updatedAt desc 排序后当前页客户被推到第 1 页 / 被移除的客户位置塌方.
+      // 改成 updateTag — 数据 cache 失效, 当前页 UI 不强制 re-render, 用户翻页/
+      // 筛选时自然拿新数据, 但当前页保持稳定 (call-actions.ts / commit 477e669 同根因).
+      updateTag(CACHE_TAGS.customerList);
+      updateTag(CACHE_TAGS.customer(customerId));
+      // /recycle-bin 是聚合页, 用户主动 navigate 时刷新.
       revalidatePath("/recycle-bin");
     }
 
