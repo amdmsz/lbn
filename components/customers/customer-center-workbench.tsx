@@ -109,8 +109,12 @@ export function CustomerCenterToolbarSection({
 
 /**
  * 列表区主体. 不再依赖 salesBoard (批量转移所有人) — 由 stats 异步注入的
- * `batchOwnerTransferOptions` 决定. 在 stats 未到位时, 该 dropdown 暂时为空,
- * 列表本身仍可看 / 筛选 / 翻页.
+ * `batchOwnerTransferOptions` (= `transferableOwners` 全集) 决定. 在 stats
+ * 未到位时, 该 dropdown 暂时为空, 列表本身仍可看 / 筛选 / 翻页.
+ *
+ * 注意: 这里必须传 `transferableOwners`, 不能用 `salesBoard`. `salesBoard`
+ * 跟随当前 filter (team 选中后只剩本团队成员), 会让 ADMIN 在某团队 filter
+ * 下出现"暂无可移交的销售账号".
  */
 export function CustomerCenterListSection({
   role,
@@ -121,7 +125,7 @@ export function CustomerCenterListSection({
 }: Readonly<{
   role: RoleCode;
   list: CustomerCenterListData;
-  batchOwnerTransferOptions: CustomerCenterStatsData["salesBoard"];
+  batchOwnerTransferOptions: CustomerCenterStatsData["transferableOwners"];
   outboundCallEnabled: boolean;
   moveCustomerToRecycleBinAction?: MoveCustomerToRecycleBinAction;
 }>) {

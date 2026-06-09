@@ -395,6 +395,16 @@ export type CustomerCenterData = {
   queueCounts: Record<CustomerQueueKey, number>;
   teamOverview: TeamOverviewItem[];
   salesBoard: SalesRepBoardItem[];
+  /**
+   * 批量"移交所有人"目标候选: 仅按 viewer scope 过滤 (ADMIN 全, SUPERVISOR
+   * 本团队), 不受当前 filter (teamId/salesId) 限制.
+   *
+   * 与 `salesBoard` 的区别: `salesBoard` 用于"销售员表现榜" UI, 跟随当前
+   * filter (team 选中后只显示该团队成员); `transferableOwners` 用于批量
+   * 移交 dropdown, 必须显示视野内全集销售, 否则 ADMIN 选了某 team filter
+   * 之后 dropdown 会变成空 (该 team 内可能 0 个有效移交目标).
+   */
+  transferableOwners: SalesRepBoardItem[];
   productOptions: CustomerProductFilterOption[];
   tagOptions: CustomerTagFilterOption[];
   callResultOptions: CallResultOption[];
@@ -3401,6 +3411,7 @@ export type CustomerCenterStatsData = {
   queueCounts: CustomerCenterData["queueCounts"];
   teamOverview: CustomerCenterData["teamOverview"];
   salesBoard: CustomerCenterData["salesBoard"];
+  transferableOwners: CustomerCenterData["transferableOwners"];
 };
 
 /**
@@ -3921,6 +3932,37 @@ export async function getCustomerCenterDataStats(
       return left.name.localeCompare(right.name, "zh-CN");
     });
 
+  // 批量"移交所有人"目标候选: 与 salesBoard 同构, 但不应用 filters.teamId.
+  // salesUsers 已经按 viewer scope 拿到 (ADMIN 全, SUPERVISOR 本团队,
+  // SALES 仅自己), 不做额外过滤. SALES role 实际上 RBAC 不允许批量移交,
+  // 但仍补足字段, dropdown 是否渲染由前端 canTransferCustomerOwner 决定.
+  const transferableOwners: SalesRepBoardItem[] = salesUsers
+    .map((sales) => {
+      const stats = aggregate.byOwner.get(sales.id) ?? emptyScope;
+      return {
+        id: sales.id,
+        name: sales.name,
+        username: sales.username,
+        teamId: sales.teamId,
+        teamName: sales.team?.name ?? null,
+        customerCount: stats.customerCount,
+        todayNewImportedCount: stats.todayNewImportedCount,
+        pendingFirstCallCount: stats.pendingFirstCallCount,
+        pendingFollowUpCount: stats.pendingFollowUpCount,
+        pendingDealCount: stats.pendingDealCount,
+        migrationPendingFollowUpCount: 0,
+        latestFollowUpAt: stats.latestFollowUpAt,
+      };
+    })
+    .sort((left, right) => {
+      // dropdown 按团队 + 姓名稳定排序, 方便检索; 不再按 customerCount.
+      const leftTeam = left.teamName ?? "";
+      const rightTeam = right.teamName ?? "";
+      const teamCmp = leftTeam.localeCompare(rightTeam, "zh-CN");
+      if (teamCmp !== 0) return teamCmp;
+      return left.name.localeCompare(right.name, "zh-CN");
+    });
+
   const selectedTeam =
     filters.teamId !== ""
       ? teamOverview.find((item) => item.id === filters.teamId) ?? null
@@ -3942,6 +3984,7 @@ export async function getCustomerCenterDataStats(
     queueCounts,
     teamOverview,
     salesBoard,
+    transferableOwners,
   };
 }
 
@@ -4398,6 +4441,34 @@ export async function getCustomerCenterData(
       return left.name.localeCompare(right.name, "zh-CN");
     });
 
+  // 批量"移交所有人"目标候选: 与 salesBoard 同构, 但不应用 filters.teamId.
+  // 见 `CustomerCenterData.transferableOwners` 注释.
+  const transferableOwners: SalesRepBoardItem[] = salesUsers
+    .map((sales) => {
+      const stats = aggregate.byOwner.get(sales.id) ?? emptyScope;
+      return {
+        id: sales.id,
+        name: sales.name,
+        username: sales.username,
+        teamId: sales.teamId,
+        teamName: sales.team?.name ?? null,
+        customerCount: stats.customerCount,
+        todayNewImportedCount: stats.todayNewImportedCount,
+        pendingFirstCallCount: stats.pendingFirstCallCount,
+        pendingFollowUpCount: stats.pendingFollowUpCount,
+        pendingDealCount: stats.pendingDealCount,
+        migrationPendingFollowUpCount: 0,
+        latestFollowUpAt: stats.latestFollowUpAt,
+      };
+    })
+    .sort((left, right) => {
+      const leftTeam = left.teamName ?? "";
+      const rightTeam = right.teamName ?? "";
+      const teamCmp = leftTeam.localeCompare(rightTeam, "zh-CN");
+      if (teamCmp !== 0) return teamCmp;
+      return left.name.localeCompare(right.name, "zh-CN");
+    });
+
   // productOptions / tagOptions 走当前页 snapshot (≤pageSize). UI 下拉再 top 10.
   const productOptions = buildProductFilterOptions(pageSnapshots);
   const tagOptions = buildTagFilterOptions(pageSnapshots, activeTags);
@@ -4453,6 +4524,7 @@ export async function getCustomerCenterData(
     queueCounts,
     teamOverview,
     salesBoard,
+    transferableOwners,
     productOptions,
     tagOptions,
     callResultOptions,
@@ -4865,6 +4937,34 @@ export async function getCustomerCenterDataCursor(
       return left.name.localeCompare(right.name, "zh-CN");
     });
 
+  // 批量"移交所有人"目标候选: 与 salesBoard 同构, 但不应用 filters.teamId.
+  // 见 `CustomerCenterData.transferableOwners` 注释.
+  const transferableOwners: SalesRepBoardItem[] = salesUsers
+    .map((sales) => {
+      const stats = aggregate.byOwner.get(sales.id) ?? emptyScope;
+      return {
+        id: sales.id,
+        name: sales.name,
+        username: sales.username,
+        teamId: sales.teamId,
+        teamName: sales.team?.name ?? null,
+        customerCount: stats.customerCount,
+        todayNewImportedCount: stats.todayNewImportedCount,
+        pendingFirstCallCount: stats.pendingFirstCallCount,
+        pendingFollowUpCount: stats.pendingFollowUpCount,
+        pendingDealCount: stats.pendingDealCount,
+        migrationPendingFollowUpCount: 0,
+        latestFollowUpAt: stats.latestFollowUpAt,
+      };
+    })
+    .sort((left, right) => {
+      const leftTeam = left.teamName ?? "";
+      const rightTeam = right.teamName ?? "";
+      const teamCmp = leftTeam.localeCompare(rightTeam, "zh-CN");
+      if (teamCmp !== 0) return teamCmp;
+      return left.name.localeCompare(right.name, "zh-CN");
+    });
+
   // productOptions / tagOptions 走当前页 snapshot (≤50). UI 下拉再 top 10.
   const productOptions = buildProductFilterOptions(pageSnapshots);
   const tagOptions = buildTagFilterOptions(pageSnapshots, activeTags);
@@ -4926,6 +5026,7 @@ export async function getCustomerCenterDataCursor(
     queueCounts,
     teamOverview,
     salesBoard,
+    transferableOwners,
     productOptions,
     tagOptions,
     callResultOptions,

@@ -98,7 +98,13 @@ export default async function CustomersPage({
  * 列表 Suspense 内部. 串行依赖 list 数据 (但与 toolbar 分支并行).
  *
  * cursor 模式: 复用 getCustomerCenterDataCursor (列表 + stats 一起), 然后 slice
- * 出 list slice; salesBoard 透传给 CustomersTable 的 batch transfer dropdown.
+ * 出 list slice; transferableOwners 透传给 CustomersTable 的 batch transfer
+ * dropdown.
+ *
+ * page 模式: list 与 stats 并行 (底层 unstable_cache 同源, toolbar Suspense
+ * 已经会触发 stats, 这里再次 await 走 cache hit, 不重复 SQL). 必须用
+ * `transferableOwners` (全集 SALES, 不受 filter 限制), 不能用 `salesBoard`
+ * (跟随 filter, 选了 team 之后会变成空 dropdown — 即"暂无可移交的销售账号").
  */
 async function StreamingList({
   viewer,
@@ -114,7 +120,7 @@ async function StreamingList({
   moveCustomerToRecycleBinAction?: MoveCustomerToRecycleBinAction;
 }>) {
   let list: CustomerCenterListData;
-  let cursorSalesBoard: CustomerCenterStatsData["salesBoard"] = [];
+  let transferableOwners: CustomerCenterStatsData["transferableOwners"] = [];
 
   if (parsedCursor) {
     const full = await getCustomerCenterDataCursor(
@@ -133,16 +139,21 @@ async function StreamingList({
       phoneSearchDisclosures: full.phoneSearchDisclosures,
       pagination: full.pagination,
     };
-    cursorSalesBoard = full.salesBoard;
+    transferableOwners = full.transferableOwners ?? [];
   } else {
-    list = await getCustomerCenterDataList(viewer, resolvedSearchParams);
+    const [listData, stats] = await Promise.all([
+      getCustomerCenterDataList(viewer, resolvedSearchParams),
+      getCustomerCenterDataStats(viewer, resolvedSearchParams),
+    ]);
+    list = listData;
+    transferableOwners = stats.transferableOwners ?? [];
   }
 
   return (
     <CustomerCenterListSection
       role={viewer.role}
       list={list}
-      batchOwnerTransferOptions={cursorSalesBoard}
+      batchOwnerTransferOptions={transferableOwners}
       outboundCallEnabled={outboundCallEnabled}
       moveCustomerToRecycleBinAction={moveAction}
     />
