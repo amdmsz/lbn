@@ -16,6 +16,13 @@ export function buildCustomersHref(
   };
   const params = new URLSearchParams();
 
+  // queue 是 sidebar 队列选择 (pending_first_call / pending_wechat / ...).
+  // 默认 "all" 不写 URL; 其他值必须落进 query, 否则翻页 / 改 pageSize / filter-toolbar
+  // 重建 URL 时会丢掉 queue 选择 (parse 侧会 fallback "all").
+  if (next.queue && next.queue !== "all") {
+    params.set("queue", next.queue);
+  }
+
   if (next.search) {
     params.set("search", next.search);
   }
