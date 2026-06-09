@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { updateCustomerRemarkAction } from "@/app/(dashboard)/customers/actions";
 import { cn } from "@/lib/utils";
 
@@ -20,7 +20,10 @@ export function InlineCustomerRemarkField({
   const [value, setValue] = useState(initialValue ?? "");
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [message, setMessage] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  // 注意: 不用 useTransition. server action 的 revalidateTag 会让 transition
+  // 等 customer list RSC 重新渲染完才结束 (5826 客户 SSR 几百 ms), 用户看到
+  // "保存中..." 一直显示. 改用本地 useState, fetch 一返回立即归零.
+  const [pending, setPending] = useState(false);
   const committedValueRef = useRef(initialValue?.trim() ?? "");
   const resetTimerRef = useRef<number | null>(null);
 
@@ -53,25 +56,30 @@ export function InlineCustomerRemarkField({
       return;
     }
 
-    startTransition(async () => {
-      const formData = new FormData();
-      formData.set("customerId", customerId);
-      formData.set("remark", nextValue);
+    setPending(true);
+    void (async () => {
+      try {
+        const formData = new FormData();
+        formData.set("customerId", customerId);
+        formData.set("remark", nextValue);
 
-      const result = await updateCustomerRemarkAction(formData);
+        const result = await updateCustomerRemarkAction(formData);
 
-      if (result.status === "success") {
-        committedValueRef.current = normalizedValue;
-        setValue(normalizedValue);
-        setSaveState("saved");
+        if (result.status === "success") {
+          committedValueRef.current = normalizedValue;
+          setValue(normalizedValue);
+          setSaveState("saved");
+          setMessage(result.message);
+          scheduleReset();
+          return;
+        }
+
+        setSaveState("error");
         setMessage(result.message);
-        scheduleReset();
-        return;
+      } finally {
+        setPending(false);
       }
-
-      setSaveState("error");
-      setMessage(result.message);
-    });
+    })();
   }
 
   return (

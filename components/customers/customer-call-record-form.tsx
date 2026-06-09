@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createCustomerCallRecordAction } from "@/app/(dashboard)/customers/[id]/call-actions";
 import {
@@ -148,7 +148,12 @@ export function CustomerCallRecordForm({
   const [state, setState] = useState<CreateCallRecordActionState>(
     initialCreateCallRecordActionState,
   );
-  const [pending, startTransition] = useTransition();
+  // 注意: 这里**不**用 useTransition. React 19 + Next 16 的 useTransition
+  // 会等 server action 的 revalidateTag 触发的 RSC 重新渲染完成才结束,
+  // customer list 5826 客户 + SQL aggregate SSR ~300-500ms, 用户看到的
+  // "保存中..." 会一直显示直到整个客户列表 refetch 完. 改成本地 useState
+  // 在 fetch 一返回就归零, RSC 重渲染后台进行, UI 立即反馈"已保存".
+  const [pending, setPending] = useState(false);
   const [callTimeDefault] = useState(() =>
     getDefaultDateTimeLocalValue(defaultCallTime),
   );
@@ -206,30 +211,37 @@ export function CustomerCallRecordForm({
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
 
-    startTransition(async () => {
-      const nextState = mobileCallRecordId
-        ? await updateMobileCallRecordFromForm(mobileCallRecordId, formData)
-        : await createCustomerCallRecordAction(
-            initialCreateCallRecordActionState,
-            formData,
-          );
+    setPending(true);
+    void (async () => {
+      try {
+        const nextState = mobileCallRecordId
+          ? await updateMobileCallRecordFromForm(mobileCallRecordId, formData)
+          : await createCustomerCallRecordAction(
+              initialCreateCallRecordActionState,
+              formData,
+            );
 
-      setState(nextState);
+        setState(nextState);
 
-      if (nextState.status === "success") {
-        formRef.current?.reset();
-        setConnectedState(inferConnectedStateFromResultCode(resolvedDefaultResult));
-        setWechatState(inferWechatStateFromResultCode(resolvedDefaultResult));
-        setSelectedResult(resolvedDefaultResult);
-        notifyToast({
-          title: "跟进已保存",
-          description: nextState.message,
-          tone: "success",
-        });
-        onSuccess?.();
-        router.refresh();
+        if (nextState.status === "success") {
+          formRef.current?.reset();
+          setConnectedState(inferConnectedStateFromResultCode(resolvedDefaultResult));
+          setWechatState(inferWechatStateFromResultCode(resolvedDefaultResult));
+          setSelectedResult(resolvedDefaultResult);
+          notifyToast({
+            title: "跟进已保存",
+            description: nextState.message,
+            tone: "success",
+          });
+          onSuccess?.();
+          // router.refresh 异步触发, 不阻塞 pending 归零. RSC 重新渲染期间
+          // 用户看到的是"已保存"(pending 已是 false), 列表后台静默更新.
+          router.refresh();
+        }
+      } finally {
+        setPending(false);
       }
-    });
+    })();
   }
 
   return (
