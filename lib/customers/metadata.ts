@@ -154,6 +154,11 @@ export const customerQueueOptions = [
     description: "已经进入加微动作但还没有形成成功加微结果的客户。",
   },
   {
+    value: "wechat_added",
+    label: "已加微",
+    description: "已经形成成功加微结果的客户（有加微成功记录或加微成功通话）。",
+  },
+  {
     value: "pending_invitation",
     label: "待邀约",
     description: "已经形成有效微信触点，但还没有直播邀约记录的客户。",
@@ -289,6 +294,38 @@ export const customerWorkStatusOptions = customerQueueOptions.filter(
   } => item.value !== "all",
 );
 
+/**
+ * Wave 12 工作台收敛: 首屏队列 tab 只保留 4 个主队列, 顺序即渲染顺序
+ * (待拨打 → 已加微 → 待邀约 → 全部). 其余队列不删 — 入口下沉到客户筛选器
+ * 高级筛选「工作队列」组 (单选 chip, 同样写 queue URL 参数).
+ */
+export const primaryCustomerQueueKeys: readonly CustomerQueueKey[] = [
+  "pending_dial",
+  "wechat_added",
+  "pending_invitation",
+  "all",
+];
+
+/** 首屏队列 tab 选项, 按 `primaryCustomerQueueKeys` 顺序输出. */
+export const primaryCustomerQueueOptions = primaryCustomerQueueKeys.flatMap(
+  (key) => customerQueueOptions.filter((option) => option.value === key),
+);
+
+/** 下沉到高级筛选「工作队列」组的队列选项 (保持 customerQueueOptions 原顺序). */
+export const advancedCustomerQueueOptions = customerQueueOptions.filter(
+  (option) => !primaryCustomerQueueKeys.includes(option.value),
+);
+
+export function isPrimaryCustomerQueue(queue: CustomerQueueKey) {
+  return primaryCustomerQueueKeys.includes(queue);
+}
+
+/**
+ * 队列 tab 旁「更多队列」入口与筛选器高级面板之间的桥 — 两者是隔着 server
+ * 组件的同级 client 组件, 用 window 自定义事件打开面板, 不引入共享 context.
+ */
+export const OPEN_CUSTOMER_ADVANCED_FILTER_EVENT = "customers:open-advanced-filter";
+
 const customerWorkStatusMeta: Record<
   CustomerWorkStatusKey,
   { label: string; variant: StatusBadgeVariant }
@@ -301,6 +338,9 @@ const customerWorkStatusMeta: Record<
   pending_dial: { label: "待拨打", variant: "warning" },
   pending_follow_up: { label: "待回访", variant: "warning" },
   pending_wechat: { label: "待加微", variant: "info" },
+  // wechat_added 同 pending_dial: 只作 sidebar 队列筛选, 不作为行内推进 badge
+  // (行内已有 isWechatAdded 展示). 这里仅为满足 Record 穷尽类型而存在.
+  wechat_added: { label: "已加微", variant: "success" },
   pending_invitation: { label: "待邀约", variant: "success" },
   pending_deal: { label: "待成交", variant: "info" },
   migration_pending_follow_up: { label: "待接续跟进", variant: "warning" },

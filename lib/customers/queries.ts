@@ -529,6 +529,7 @@ const customerQueueValues = [
   "pending_dial",
   "pending_follow_up",
   "pending_wechat",
+  "wechat_added",
   "pending_invitation",
   "pending_deal",
   "migration_pending_follow_up",
@@ -592,7 +593,9 @@ const legacyQueueAliasMap: Partial<Record<string, CustomerQueueKey>> = {
   mine: "all",
   pending_first_call: "pending_first_call",
   wechat_pending: "pending_wechat",
-  wechat_added: "pending_invitation",
+  // Wave 12: wechat_added 成为真实队列 (已加微), legacy `?view=wechat_added`
+  // 不再近似映射到 pending_invitation.
+  wechat_added: "wechat_added",
 };
 
 const customerCenterFiltersSchema = z.object({
@@ -1813,6 +1816,8 @@ type CustomerCenterStatsScope = {
   pendingDialCount: number;
   pendingFollowUpCount: number;
   pendingWechatCount: number;
+  /** Wave 12: 已加微客户数 (buildWechatAddedSignalWhereInput 正面判定). */
+  wechatAddedCount: number;
   pendingInvitationCount: number;
   pendingDealCount: number;
   latestFollowUpAt: Date | null;
@@ -1909,6 +1914,7 @@ async function getCustomerCenterStatsAggregate(input: {
   const pendingDialWhere = composeWhere(buildPendingDialCustomerWhereInput());
   const pendingFollowUpWhere = composeWhere(buildPendingFollowUpCustomerWhereInput(input.now));
   const pendingWechatWhere = composeWhere(buildWechatPendingCustomerWhereInput());
+  const wechatAddedWhere = composeWhere(buildWechatAddedSignalWhereInput());
   const pendingInvitationWhere = composeWhere(buildPendingInvitationCustomerWhereInput());
   const pendingDealWhere = composeWhere(buildPendingDealCustomerWhereInput());
 
@@ -1922,6 +1928,7 @@ async function getCustomerCenterStatsAggregate(input: {
     pendingDialAgg,
     pendingFollowUpAgg,
     pendingWechatAgg,
+    wechatAddedAgg,
     pendingInvitationAgg,
     pendingDealAgg,
     latestFollowUpGroups,
@@ -1934,6 +1941,7 @@ async function getCustomerCenterStatsAggregate(input: {
     countCustomersAndGroupByOwner(pendingDialWhere),
     countCustomersAndGroupByOwner(pendingFollowUpWhere),
     countCustomersAndGroupByOwner(pendingWechatWhere),
+    countCustomersAndGroupByOwner(wechatAddedWhere),
     countCustomersAndGroupByOwner(pendingInvitationWhere),
     countCustomersAndGroupByOwner(pendingDealWhere),
     prisma.customer.groupBy({
@@ -1973,6 +1981,7 @@ async function getCustomerCenterStatsAggregate(input: {
     ...pendingDialAgg.byOwner.keys(),
     ...pendingFollowUpAgg.byOwner.keys(),
     ...pendingWechatAgg.byOwner.keys(),
+    ...wechatAddedAgg.byOwner.keys(),
     ...pendingInvitationAgg.byOwner.keys(),
     ...pendingDealAgg.byOwner.keys(),
   ]);
@@ -1986,6 +1995,7 @@ async function getCustomerCenterStatsAggregate(input: {
       pendingDialCount: pendingDialAgg.byOwner.get(ownerId) ?? 0,
       pendingFollowUpCount: pendingFollowUpAgg.byOwner.get(ownerId) ?? 0,
       pendingWechatCount: pendingWechatAgg.byOwner.get(ownerId) ?? 0,
+      wechatAddedCount: wechatAddedAgg.byOwner.get(ownerId) ?? 0,
       pendingInvitationCount: pendingInvitationAgg.byOwner.get(ownerId) ?? 0,
       pendingDealCount: pendingDealAgg.byOwner.get(ownerId) ?? 0,
       latestFollowUpAt: latestByOwner.get(ownerId) ?? null,
@@ -2015,6 +2025,7 @@ async function getCustomerCenterStatsAggregate(input: {
   const teamPendingDial = reduceByOwnerToByTeam(pendingDialAgg.byOwner, ownerToTeam);
   const teamPendingFollowUp = reduceByOwnerToByTeam(pendingFollowUpAgg.byOwner, ownerToTeam);
   const teamPendingWechat = reduceByOwnerToByTeam(pendingWechatAgg.byOwner, ownerToTeam);
+  const teamWechatAdded = reduceByOwnerToByTeam(wechatAddedAgg.byOwner, ownerToTeam);
   const teamPendingInvitation = reduceByOwnerToByTeam(pendingInvitationAgg.byOwner, ownerToTeam);
   const teamPendingDeal = reduceByOwnerToByTeam(pendingDealAgg.byOwner, ownerToTeam);
   const teamLatestFollowUp = reduceFollowUp(latestByOwner);
@@ -2027,6 +2038,7 @@ async function getCustomerCenterStatsAggregate(input: {
     ...teamPendingDial.keys(),
     ...teamPendingFollowUp.keys(),
     ...teamPendingWechat.keys(),
+    ...teamWechatAdded.keys(),
     ...teamPendingInvitation.keys(),
     ...teamPendingDeal.keys(),
   ]);
@@ -2040,6 +2052,7 @@ async function getCustomerCenterStatsAggregate(input: {
       pendingDialCount: teamPendingDial.get(teamId) ?? 0,
       pendingFollowUpCount: teamPendingFollowUp.get(teamId) ?? 0,
       pendingWechatCount: teamPendingWechat.get(teamId) ?? 0,
+      wechatAddedCount: teamWechatAdded.get(teamId) ?? 0,
       pendingInvitationCount: teamPendingInvitation.get(teamId) ?? 0,
       pendingDealCount: teamPendingDeal.get(teamId) ?? 0,
       latestFollowUpAt: teamLatestFollowUp.get(teamId) ?? null,
@@ -2054,6 +2067,7 @@ async function getCustomerCenterStatsAggregate(input: {
     pendingDialCount: pendingDialAgg.total,
     pendingFollowUpCount: pendingFollowUpAgg.total,
     pendingWechatCount: pendingWechatAgg.total,
+    wechatAddedCount: wechatAddedAgg.total,
     pendingInvitationCount: pendingInvitationAgg.total,
     pendingDealCount: pendingDealAgg.total,
     latestFollowUpAt: globalLatestFollowUpAt,
@@ -2067,6 +2081,7 @@ async function getCustomerCenterStatsAggregate(input: {
     pending_dial: global.pendingDialCount,
     pending_follow_up: global.pendingFollowUpCount,
     pending_wechat: global.pendingWechatCount,
+    wechat_added: global.wechatAddedCount,
     pending_invitation: global.pendingInvitationCount,
     pending_deal: global.pendingDealCount,
     // migration 队列在 SQL 路径下暂记 0 (见函数顶部说明).
@@ -3250,7 +3265,10 @@ export function buildPendingFollowUpCustomerWhereInput(now = new Date()): Prisma
  * "已成功加微" 信号 (SQL OR 片段): 有 WechatRecord.addedStatus = ADDED, 或有
  * CallRecord.result = WECHAT_ADDED. 与内存版 `buildSuccessfulWechatMatcher` /
  * `isSuccessfulWechatCallSignal` 同语义, SQL 侧单一真相, 供 pending_wechat /
- * pending_dial / isWechatAdded 复用, 避免判定漂移.
+ * pending_dial / isWechatAdded / wechat_added 队列复用, 避免判定漂移.
+ *
+ * Wave 12: 本身也是 `wechat_added` 队列 (已加微) 的 where —
+ * `buildNotAddedWechatCustomerWhereInput` 的正面.
  */
 function buildWechatAddedSignalWhereInput(): Prisma.CustomerWhereInput {
   return {
@@ -3491,6 +3509,8 @@ export function buildQueueCustomerWhereInput(
       return buildPendingFollowUpCustomerWhereInput(now);
     case "pending_wechat":
       return buildWechatPendingCustomerWhereInput();
+    case "wechat_added":
+      return buildWechatAddedSignalWhereInput();
     case "pending_invitation":
       return buildPendingInvitationCustomerWhereInput();
     case "pending_deal":
@@ -3551,6 +3571,21 @@ export type CustomerCenterStatsData = {
   teamOverview: CustomerCenterData["teamOverview"];
   salesBoard: CustomerCenterData["salesBoard"];
   transferableOwners: CustomerCenterData["transferableOwners"];
+  /**
+   * Wave 12 今日战绩条 (真实数据, 替换 0 占位). 3 个 count 都是请求时直查
+   * (不进 unstable_cache): myDialedToday 按 viewer.id 区分, 进共享 cache 会
+   * 串号; 每个都是单 index scan 级别的轻量 count, 直查最稳.
+   */
+  /** 当前登录人今日拨打数: CallRecord.salesId = viewer.id 且 callTime 在今日. */
+  myDialedToday: number;
+  /**
+   * 可见范围内今日拨打总数: CallRecord.callTime 在今日且关联客户命中
+   * viewer 可见 scope (排除回收站). SALES 视角可见范围 = 自己, 直接复用
+   * myDialedToday (不另发 SQL).
+   */
+  scopeDialedToday: number;
+  /** 可见范围内今日新加微数: WechatRecord.addedStatus = ADDED 且 addedAt 在今日. */
+  wechatAddedToday: number;
 };
 
 /**
@@ -4017,14 +4052,51 @@ async function getCustomerCenterDataStatsImpl(
     todayEnd,
   } = base;
 
-  const aggregate = await getCustomerCenterStatsAggregate({
-    actor,
-    visibleWhere,
-    recycledCustomerIds,
-    now,
-    todayStart,
-    todayEnd,
-  });
+  // Wave 12 今日战绩条: 3 个轻量 count 与 aggregate 并行直查 (不缓存).
+  // - myDialedToday 以 viewer.id 维度统计 "我今天拨了几个电话", 与客户可见
+  //   范围无关 (走 callrecord 的 [salesId, callTime] 索引).
+  // - scopeDialedToday / wechatAddedToday 以 viewer 可见客户 scope 统计
+  //   (visibleWhere + 排除回收站), 与 sidebar aggregate 同一套 scope 锚点.
+  const todayRange = { gte: todayStart, lte: todayEnd };
+  const scopeCustomerWhere: Prisma.CustomerWhereInput =
+    recycledCustomerIds.length > 0
+      ? { AND: [visibleWhere, { id: { notIn: recycledCustomerIds } }] }
+      : visibleWhere;
+
+  const [aggregate, myDialedToday, scopeDialedTodayRaw, wechatAddedToday] =
+    await Promise.all([
+      getCustomerCenterStatsAggregate({
+        actor,
+        visibleWhere,
+        recycledCustomerIds,
+        now,
+        todayStart,
+        todayEnd,
+      }),
+      prisma.callRecord.count({
+        where: {
+          salesId: actor.id,
+          callTime: todayRange,
+        },
+      }),
+      // SALES 可见范围就是本人客户, 语义与 myDialedToday 一致 — 复用, 省一条 SQL.
+      actor.role === "SALES"
+        ? Promise.resolve<number | null>(null)
+        : prisma.callRecord.count({
+            where: {
+              callTime: todayRange,
+              customer: { is: scopeCustomerWhere },
+            },
+          }),
+      prisma.wechatRecord.count({
+        where: {
+          addedStatus: WechatAddStatus.ADDED,
+          addedAt: todayRange,
+          customer: { is: scopeCustomerWhere },
+        },
+      }),
+    ]);
+  const scopeDialedToday = scopeDialedTodayRaw ?? myDialedToday;
 
   const emptyScope: CustomerCenterStatsScope = {
     customerCount: 0,
@@ -4034,6 +4106,7 @@ async function getCustomerCenterDataStatsImpl(
     pendingDialCount: 0,
     pendingFollowUpCount: 0,
     pendingWechatCount: 0,
+    wechatAddedCount: 0,
     pendingInvitationCount: 0,
     pendingDealCount: 0,
     latestFollowUpAt: null,
@@ -4066,6 +4139,7 @@ async function getCustomerCenterDataStatsImpl(
     pending_dial: scopeStats.pendingDialCount,
     pending_follow_up: scopeStats.pendingFollowUpCount,
     pending_wechat: scopeStats.pendingWechatCount,
+    wechat_added: scopeStats.wechatAddedCount,
     pending_invitation: scopeStats.pendingInvitationCount,
     pending_deal: scopeStats.pendingDealCount,
     migration_pending_follow_up: 0,
@@ -4170,6 +4244,9 @@ async function getCustomerCenterDataStatsImpl(
     teamOverview,
     salesBoard,
     transferableOwners,
+    myDialedToday,
+    scopeDialedToday,
+    wechatAddedToday,
   };
 }
 
@@ -4525,6 +4602,7 @@ export async function getCustomerCenterData(
     pendingDialCount: 0,
     pendingFollowUpCount: 0,
     pendingWechatCount: 0,
+    wechatAddedCount: 0,
     pendingInvitationCount: 0,
     pendingDealCount: 0,
     latestFollowUpAt: null,
@@ -4576,6 +4654,7 @@ export async function getCustomerCenterData(
     pending_dial: scopeStats.pendingDialCount,
     pending_follow_up: scopeStats.pendingFollowUpCount,
     pending_wechat: scopeStats.pendingWechatCount,
+    wechat_added: scopeStats.wechatAddedCount,
     pending_invitation: scopeStats.pendingInvitationCount,
     pending_deal: scopeStats.pendingDealCount,
     migration_pending_follow_up: 0,
@@ -5095,6 +5174,7 @@ export async function getCustomerCenterDataCursor(
     pendingDialCount: 0,
     pendingFollowUpCount: 0,
     pendingWechatCount: 0,
+    wechatAddedCount: 0,
     pendingInvitationCount: 0,
     pendingDealCount: 0,
     latestFollowUpAt: null,
@@ -5148,6 +5228,7 @@ export async function getCustomerCenterDataCursor(
     pending_dial: scopeStats.pendingDialCount,
     pending_follow_up: scopeStats.pendingFollowUpCount,
     pending_wechat: scopeStats.pendingWechatCount,
+    wechat_added: scopeStats.wechatAddedCount,
     pending_invitation: scopeStats.pendingInvitationCount,
     pending_deal: scopeStats.pendingDealCount,
     migration_pending_follow_up: 0,

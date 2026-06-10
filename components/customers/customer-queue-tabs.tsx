@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { buildCustomersHref } from "@/lib/customers/filter-url";
 import type { CustomerCenterFilters } from "@/lib/customers/queries";
-import type { CustomerQueueKey } from "@/lib/customers/metadata";
+import {
+  getCustomerQueueLabel,
+  OPEN_CUSTOMER_ADVANCED_FILTER_EVENT,
+  type CustomerQueueKey,
+} from "@/lib/customers/metadata";
 import { cn } from "@/lib/utils";
 
 export type CustomerQueueTabItem = {
@@ -26,6 +30,10 @@ const numberFormatter = new Intl.NumberFormat("zh-CN");
  * 客户队列横向 tab. 纯展示 — 切换走 next/link href (queue 落进 URL),
  * 不持有任何本地状态, 不碰 customers-table / workbench / dialog.
  *
+ * Wave 12 收敛后首屏只渲染 4 个主队列 (items 由 workbench 决定); 其余队列从
+ * 「更多队列」进高级筛选「工作队列」组切换. 当前 queue 不在首屏 tab 内时,
+ * 「更多队列」上直接标出生效队列名, 避免看起来"哪个 tab 都没选中".
+ *
  * 移动端 overflow-x-auto 可横滑; active = 实心主色 chip, 非 active = 描边 chip.
  */
 export function CustomerQueueTabs({
@@ -37,6 +45,8 @@ export function CustomerQueueTabs({
   if (items.length === 0) {
     return null;
   }
+
+  const activeInTabs = items.some((item) => item.key === activeKey);
 
   return (
     <nav
@@ -78,6 +88,23 @@ export function CustomerQueueTabs({
           </Link>
         );
       })}
+      <button
+        type="button"
+        onClick={() =>
+          window.dispatchEvent(new Event(OPEN_CUSTOMER_ADVANCED_FILTER_EVENT))
+        }
+        className={cn(
+          "inline-flex shrink-0 items-center whitespace-nowrap rounded-full px-2 py-1.5 text-xs transition-colors",
+          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[hsl(var(--info-hsl)/0.45)]",
+          activeInTabs
+            ? "text-muted-foreground/80 hover:text-foreground"
+            : "font-medium text-primary",
+        )}
+      >
+        {activeInTabs
+          ? "更多队列"
+          : `更多队列 · ${getCustomerQueueLabel(activeKey)}`}
+      </button>
     </nav>
   );
 }

@@ -224,6 +224,12 @@ async function StreamingToolbar({
         teamOverview={full.teamOverview}
         salesBoard={full.salesBoard}
         queueCounts={full.queueCounts}
+        // cursor fallback 模式 (`?cursor=`) 的 CustomerCenterData 不带今日
+        // 战绩 count — 与该路径文档化的其他 stats 降级 (executionClassCounts
+        // 等) 一致, 用 0 兜底; 主路径 page mode 走下方 stats 真实字段.
+        myDialedToday={0}
+        scopeDialedToday={0}
+        wechatAddedToday={0}
       />
     );
   }
@@ -242,6 +248,9 @@ async function StreamingToolbar({
       teamOverview={stats.teamOverview}
       salesBoard={stats.salesBoard}
       queueCounts={stats.queueCounts}
+      myDialedToday={stats.myDialedToday}
+      scopeDialedToday={stats.scopeDialedToday}
+      wechatAddedToday={stats.wechatAddedToday}
     />
   );
 }

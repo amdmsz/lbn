@@ -22,7 +22,7 @@ import {
 import { CustomerTodayStats } from "@/components/customers/customer-today-stats";
 import { CustomersTable } from "@/components/customers/customers-table";
 import { buildCustomersExportHref } from "@/lib/customers/export-url";
-import { customerQueueOptions } from "@/lib/customers/metadata";
+import { primaryCustomerQueueOptions } from "@/lib/customers/metadata";
 import type {
   CustomerCenterListData,
   CustomerCenterStatsData,
@@ -79,14 +79,15 @@ export function CustomerCenterWorkbench({
 }
 
 /**
- * 队列 tab 数据从 `queueCounts` 派生 — 顺序对齐 `customerQueueOptions`
- * (全部 → 新导入 → 待首呼 → 待拨打 → ...). 纯展示, count 为 0 的队列仍保留
- * (销售要据此判断"这个队列今天清空了"), 不在前端二次过滤.
+ * 队列 tab 数据从 `queueCounts` 派生 — Wave 12 收敛后首屏只渲染 4 个主队列,
+ * 顺序对齐 `primaryCustomerQueueOptions` (待拨打 → 已加微 → 待邀约 → 全部).
+ * 其余队列入口在筛选器高级筛选「工作队列」组 (单选 chip, 同样写 queue URL
+ * 参数). count 为 0 的主队列仍保留 (销售要据此判断"这个队列今天清空了").
  */
 function buildQueueTabItems(
   queueCounts: CustomerCenterStatsData["queueCounts"],
 ): CustomerQueueTabItem[] {
-  return customerQueueOptions.map((option) => ({
+  return primaryCustomerQueueOptions.map((option) => ({
     key: option.value,
     label: option.label,
     count: queueCounts[option.value] ?? 0,
@@ -111,6 +112,9 @@ export function CustomerCenterToolbarSection({
   teamOverview,
   salesBoard,
   queueCounts,
+  myDialedToday,
+  scopeDialedToday,
+  wechatAddedToday,
 }: Readonly<{
   role: RoleCode;
   filters: CustomerCenterListData["filters"];
@@ -119,13 +123,10 @@ export function CustomerCenterToolbarSection({
   teamOverview: CustomerCenterStatsData["teamOverview"];
   salesBoard: CustomerCenterStatsData["salesBoard"];
   queueCounts: CustomerCenterStatsData["queueCounts"];
+  myDialedToday: CustomerCenterStatsData["myDialedToday"];
+  scopeDialedToday: CustomerCenterStatsData["scopeDialedToday"];
+  wechatAddedToday: CustomerCenterStatsData["wechatAddedToday"];
 }>) {
-  // TODO(stats): 后端 stats aggregate 暂未暴露 dialedToday / wechatToday
-  // (今日已拨 / 今日加微). 在补字段前用 0 占位, 不阻塞队列 tab + 待拨打剩余数
-  // (pendingDialCount 已有真实值, 来自 queueCounts.pending_dial).
-  const dialedToday = 0;
-  const wechatToday = 0;
-
   return (
     <div className="space-y-3">
       <CustomerFilterToolbar
@@ -137,6 +138,7 @@ export function CustomerCenterToolbarSection({
         tagOptions={tagOptions}
         teamOptions={role === "ADMIN" ? teamOverview : []}
         salesOptions={role === "ADMIN" || role === "SUPERVISOR" ? salesBoard : []}
+        queueCounts={queueCounts}
       />
       <CustomerQueueTabs
         items={buildQueueTabItems(queueCounts)}
@@ -144,9 +146,11 @@ export function CustomerCenterToolbarSection({
         filters={filters}
       />
       <CustomerTodayStats
-        dialedToday={dialedToday}
-        wechatToday={wechatToday}
+        myDialedToday={myDialedToday}
+        scopeDialedToday={scopeDialedToday}
+        wechatAddedToday={wechatAddedToday}
         pendingDialCount={queueCounts.pending_dial ?? 0}
+        isSalesViewer={role === "SALES"}
       />
     </div>
   );

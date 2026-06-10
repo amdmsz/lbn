@@ -23,10 +23,15 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  advancedCustomerQueueOptions,
   customerExecutionClassOptions,
   customerPageSizeOptions,
+  getCustomerQueueLabel,
+  isPrimaryCustomerQueue,
+  OPEN_CUSTOMER_ADVANCED_FILTER_EVENT,
   type CustomerExecutionClass,
   type CustomerPageSize,
+  type CustomerQueueKey,
 } from "@/lib/customers/metadata";
 import { buildCustomersHref } from "@/lib/customers/filter-url";
 import {
@@ -470,6 +475,7 @@ export function CustomerFilterToolbar({
   tagOptions,
   teamOptions = [],
   salesOptions = [],
+  queueCounts,
 }: Readonly<{
   filters: CustomerFilters;
   exportHref?: string | null;
@@ -477,6 +483,11 @@ export function CustomerFilterToolbar({
   tagOptions: TagOption[];
   teamOptions?: TeamOption[];
   salesOptions?: SalesOption[];
+  /**
+   * 队列计数 (stats aggregate 派生) — 高级筛选「工作队列」chip 上显示;
+   * 缺省时 chip 只显示队列名, 不显示数字.
+   */
+  queueCounts?: Partial<Record<CustomerQueueKey, number>>;
 }>) {
   const pathname = usePathname() || "/customers";
   const router = useRouter();
@@ -530,6 +541,22 @@ export function CustomerFilterToolbar({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [open]);
+
+  // 队列 tab 旁「更多队列」入口 — tabs 与 toolbar 是隔着 server 组件的同级
+  // client 组件, 通过 window 自定义事件打开高级筛选面板 (内含「工作队列」组).
+  useEffect(() => {
+    function handleOpenAdvanced() {
+      setOpen(true);
+    }
+
+    window.addEventListener(OPEN_CUSTOMER_ADVANCED_FILTER_EVENT, handleOpenAdvanced);
+    return () => {
+      window.removeEventListener(
+        OPEN_CUSTOMER_ADVANCED_FILTER_EVENT,
+        handleOpenAdvanced,
+      );
+    };
+  }, []);
 
   const visibleProductOptions = useMemo(
     () =>
@@ -595,7 +622,12 @@ export function CustomerFilterToolbar({
   // pageSize 是 "每页显示" 偏好, 不是数据过滤维度, 不算进 advanced active count.
   // 旧实现 `filters.pageSize !== 20` 在 default pageSize 改成 10 后会一直为 true,
   // 导致红色徽标显示 "1" 但用户找不到对应的高亮 chip — 误导.
+  //
+  // 首屏 4 个主队列 (待拨打 / 已加微 / 待邀约 / 全部) 走 tab, 不算高级筛选;
+  // 只有「工作队列」组里的下沉队列生效时才计数 + 出 chip.
+  const advancedQueueActive = !isPrimaryCustomerQueue(filters.queue);
   const advancedActiveCount = [
+    advancedQueueActive,
     Boolean(filters.assignedFrom || filters.assignedTo),
     filters.executionClasses.length > 0,
     filters.grades.length > 0,
@@ -609,6 +641,13 @@ export function CustomerFilterToolbar({
   }
 
   const advancedChips = [
+    advancedQueueActive
+      ? {
+          key: "queue",
+          label: `队列 ${getCustomerQueueLabel(filters.queue)}`,
+          onClear: () => applyFilters({ queue: "all" }),
+        }
+      : null,
     timeFilterSummary
       ? {
           key: "time",
@@ -660,6 +699,9 @@ export function CustomerFilterToolbar({
     setProductKeywordDraft("");
     setTagSearchDraft("");
     applyFilters({
+      // 主队列 tab 选择不属于高级筛选, 清空不动它; 「工作队列」下沉队列
+      // 生效时一并清回「全部」, 避免清空后还留着一个看不见的队列收窄.
+      queue: advancedQueueActive ? "all" : filters.queue,
       executionClasses: [],
       grades: [],
       search: "",
@@ -797,6 +839,52 @@ export function CustomerFilterToolbar({
       {open ? (
         <div className="crm-animate-pop absolute right-0 top-full z-40 mt-2 w-[min(52rem,calc(100vw-2rem))] rounded-lg border border-border bg-card p-4 text-foreground shadow-md">
           <div className="grid gap-4 lg:grid-cols-2">
+            {/* Wave 12 收敛: 首屏队列 tab 只留 4 个主队列, 其余队列入口下沉到
+              这里. 单选 chip — 点选即切 queue URL 参数, 再点一次回「全部」. */}
+            <FilterSection title="工作队列">
+              <div className="flex flex-wrap gap-1.5">
+                {advancedCustomerQueueOptions.map((option) => {
+                  const selected = filters.queue === option.value;
+                  const count = queueCounts?.[option.value];
+
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={selected}
+                      title={option.description}
+                      onClick={() =>
+                        applyFilters({ queue: selected ? "all" : option.value })
+                      }
+                      className={cn(
+                        "inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-medium",
+                        selected
+                          ? "border-primary/40 bg-primary/10 text-primary"
+                          : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                      )}
+                    >
+                      {option.label}
+                      {typeof count === "number" ? (
+                        <span
+                          className={cn(
+                            "tabular-nums",
+                            selected
+                              ? "text-primary/70"
+                              : "text-muted-foreground/70",
+                          )}
+                        >
+                          {count}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground/70">
+                单选生效，再点一次回到「全部」；待拨打 / 已加微 / 待邀约在列表上方 tab。
+              </p>
+            </FilterSection>
+
             <FilterSection title="分配时间">
               <div className="flex flex-wrap gap-1.5">
                 {(
