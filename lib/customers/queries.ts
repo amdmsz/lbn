@@ -121,6 +121,9 @@ type CustomerSnapshotState = {
   pendingInvitation: boolean;
   pendingDeal: boolean;
   migrationPendingFollowUp: boolean;
+  // Wave 11: 是否已加微 (复用 buildSuccessfulWechatMatcher). 列表行据此决定是否
+  // 隐藏 "已拨 X/5" 提示. 与 pendingWechat 不同 — pendingWechat 还要求"加微进行中".
+  isWechatAdded: boolean;
   workingStatuses: CustomerWorkStatusKey[];
   latestInterestedProduct: string | null;
   latestPurchasedProduct: string | null;
@@ -275,6 +278,11 @@ export type CustomerListItem = {
   status: CustomerStatus;
   // Wave 7-B 客户分级 A/B/C/D/F. null 表示新客户还没攒到信号.
   grade: CustomerGrade | null;
+  // Wave 11 累计拨打次数 = CallRecord 总条数. 列表行用它显 "已拨 X/5".
+  callCount: number;
+  // Wave 11 是否已加微 (复用加微判定: 有 ADDED WechatRecord 或 result=WECHAT_ADDED
+  // 的 CallRecord). 已加微时行上不再显 "已拨 X/5".
+  isWechatAdded: boolean;
   ownershipMode: CustomerOwnershipMode;
   createdAt: Date;
   avatarUrl: string | null;
@@ -518,6 +526,7 @@ const customerQueueValues = [
   "all",
   "new_imported",
   "pending_first_call",
+  "pending_dial",
   "pending_follow_up",
   "pending_wechat",
   "pending_invitation",
@@ -631,6 +640,7 @@ const customerSnapshotSelect = {
   phone: true,
   remark: true,
   grade: true,
+  callCount: true,
   createdAt: true,
   lastEffectiveFollowUpAt: true,
   ownerId: true,
@@ -1800,6 +1810,7 @@ type CustomerCenterStatsScope = {
   todayNewCustomerCount: number;
   todayNewImportedCount: number;
   pendingFirstCallCount: number;
+  pendingDialCount: number;
   pendingFollowUpCount: number;
   pendingWechatCount: number;
   pendingInvitationCount: number;
@@ -1895,6 +1906,7 @@ async function getCustomerCenterStatsAggregate(input: {
     buildTodayNewImportedCustomerWhereInput(input.todayStart, input.todayEnd),
   );
   const pendingFirstCallWhere = composeWhere(buildPendingFirstCallCustomerWhereInput());
+  const pendingDialWhere = composeWhere(buildPendingDialCustomerWhereInput());
   const pendingFollowUpWhere = composeWhere(buildPendingFollowUpCustomerWhereInput(input.now));
   const pendingWechatWhere = composeWhere(buildWechatPendingCustomerWhereInput());
   const pendingInvitationWhere = composeWhere(buildPendingInvitationCustomerWhereInput());
@@ -1907,6 +1919,7 @@ async function getCustomerCenterStatsAggregate(input: {
     todayNewCustomerAgg,
     todayNewImportedAgg,
     pendingFirstCallAgg,
+    pendingDialAgg,
     pendingFollowUpAgg,
     pendingWechatAgg,
     pendingInvitationAgg,
@@ -1918,6 +1931,7 @@ async function getCustomerCenterStatsAggregate(input: {
     countCustomersAndGroupByOwner(todayNewCustomerWhere),
     countCustomersAndGroupByOwner(todayNewImportedWhere),
     countCustomersAndGroupByOwner(pendingFirstCallWhere),
+    countCustomersAndGroupByOwner(pendingDialWhere),
     countCustomersAndGroupByOwner(pendingFollowUpWhere),
     countCustomersAndGroupByOwner(pendingWechatWhere),
     countCustomersAndGroupByOwner(pendingInvitationWhere),
@@ -1956,6 +1970,7 @@ async function getCustomerCenterStatsAggregate(input: {
     ...todayNewCustomerAgg.byOwner.keys(),
     ...todayNewImportedAgg.byOwner.keys(),
     ...pendingFirstCallAgg.byOwner.keys(),
+    ...pendingDialAgg.byOwner.keys(),
     ...pendingFollowUpAgg.byOwner.keys(),
     ...pendingWechatAgg.byOwner.keys(),
     ...pendingInvitationAgg.byOwner.keys(),
@@ -1968,6 +1983,7 @@ async function getCustomerCenterStatsAggregate(input: {
       todayNewCustomerCount: todayNewCustomerAgg.byOwner.get(ownerId) ?? 0,
       todayNewImportedCount: todayNewImportedAgg.byOwner.get(ownerId) ?? 0,
       pendingFirstCallCount: pendingFirstCallAgg.byOwner.get(ownerId) ?? 0,
+      pendingDialCount: pendingDialAgg.byOwner.get(ownerId) ?? 0,
       pendingFollowUpCount: pendingFollowUpAgg.byOwner.get(ownerId) ?? 0,
       pendingWechatCount: pendingWechatAgg.byOwner.get(ownerId) ?? 0,
       pendingInvitationCount: pendingInvitationAgg.byOwner.get(ownerId) ?? 0,
@@ -1996,6 +2012,7 @@ async function getCustomerCenterStatsAggregate(input: {
   const teamTodayNewCustomer = reduceByOwnerToByTeam(todayNewCustomerAgg.byOwner, ownerToTeam);
   const teamTodayNewImported = reduceByOwnerToByTeam(todayNewImportedAgg.byOwner, ownerToTeam);
   const teamPendingFirstCall = reduceByOwnerToByTeam(pendingFirstCallAgg.byOwner, ownerToTeam);
+  const teamPendingDial = reduceByOwnerToByTeam(pendingDialAgg.byOwner, ownerToTeam);
   const teamPendingFollowUp = reduceByOwnerToByTeam(pendingFollowUpAgg.byOwner, ownerToTeam);
   const teamPendingWechat = reduceByOwnerToByTeam(pendingWechatAgg.byOwner, ownerToTeam);
   const teamPendingInvitation = reduceByOwnerToByTeam(pendingInvitationAgg.byOwner, ownerToTeam);
@@ -2007,6 +2024,7 @@ async function getCustomerCenterStatsAggregate(input: {
     ...teamTodayNewCustomer.keys(),
     ...teamTodayNewImported.keys(),
     ...teamPendingFirstCall.keys(),
+    ...teamPendingDial.keys(),
     ...teamPendingFollowUp.keys(),
     ...teamPendingWechat.keys(),
     ...teamPendingInvitation.keys(),
@@ -2019,6 +2037,7 @@ async function getCustomerCenterStatsAggregate(input: {
       todayNewCustomerCount: teamTodayNewCustomer.get(teamId) ?? 0,
       todayNewImportedCount: teamTodayNewImported.get(teamId) ?? 0,
       pendingFirstCallCount: teamPendingFirstCall.get(teamId) ?? 0,
+      pendingDialCount: teamPendingDial.get(teamId) ?? 0,
       pendingFollowUpCount: teamPendingFollowUp.get(teamId) ?? 0,
       pendingWechatCount: teamPendingWechat.get(teamId) ?? 0,
       pendingInvitationCount: teamPendingInvitation.get(teamId) ?? 0,
@@ -2032,6 +2051,7 @@ async function getCustomerCenterStatsAggregate(input: {
     todayNewCustomerCount: todayNewCustomerAgg.total,
     todayNewImportedCount: todayNewImportedAgg.total,
     pendingFirstCallCount: pendingFirstCallAgg.total,
+    pendingDialCount: pendingDialAgg.total,
     pendingFollowUpCount: pendingFollowUpAgg.total,
     pendingWechatCount: pendingWechatAgg.total,
     pendingInvitationCount: pendingInvitationAgg.total,
@@ -2044,6 +2064,7 @@ async function getCustomerCenterStatsAggregate(input: {
     all: global.customerCount,
     new_imported: global.todayNewImportedCount,
     pending_first_call: global.pendingFirstCallCount,
+    pending_dial: global.pendingDialCount,
     pending_follow_up: global.pendingFollowUpCount,
     pending_wechat: global.pendingWechatCount,
     pending_invitation: global.pendingInvitationCount,
@@ -2658,6 +2679,7 @@ function getCustomerSnapshotCoreState(
     pendingInvitation,
     pendingDeal,
     migrationPendingFollowUp,
+    isWechatAdded: successfulWechat,
     workingStatuses,
   };
 }
@@ -2974,6 +2996,8 @@ async function fetchCustomerListItems(
         status: true,
         // Wave 7-B 客户分级 A/B/C/D/F (可空).
         grade: true,
+        // Wave 11 累计拨打次数 → 列表行 "已拨 X/5".
+        callCount: true,
         ownershipMode: true,
         createdAt: true,
         owner: {
@@ -3117,6 +3141,10 @@ async function fetchCustomerListItems(
       result.push({
         ...item,
         avatarUrl: resolveCustomerAvatarSrc(item.avatarPath),
+        // Wave 11: callCount 来自 select 标量; isWechatAdded 来自 stateMap 的加微
+        // 判定 (buildSuccessfulWechatMatcher). 行上据此显/隐 "已拨 X/5".
+        callCount: item.callCount,
+        isWechatAdded: state?.isWechatAdded ?? false,
         assignedAt: state?.assignedAt ?? null,
         callRecords: item.callRecords.map((record) => {
           const labeled = labeledCallRecordMap.get(record.id);
@@ -3218,29 +3246,48 @@ export function buildPendingFollowUpCustomerWhereInput(now = new Date()): Prisma
   };
 }
 
+/**
+ * "已成功加微" 信号 (SQL OR 片段): 有 WechatRecord.addedStatus = ADDED, 或有
+ * CallRecord.result = WECHAT_ADDED. 与内存版 `buildSuccessfulWechatMatcher` /
+ * `isSuccessfulWechatCallSignal` 同语义, SQL 侧单一真相, 供 pending_wechat /
+ * pending_dial / isWechatAdded 复用, 避免判定漂移.
+ */
+function buildWechatAddedSignalWhereInput(): Prisma.CustomerWhereInput {
+  return {
+    OR: [
+      {
+        wechatRecords: {
+          some: {
+            addedStatus: WechatAddStatus.ADDED,
+          },
+        },
+      },
+      {
+        callRecords: {
+          some: {
+            result: CallResult.WECHAT_ADDED,
+          },
+        },
+      },
+    ],
+  };
+}
+
+/**
+ * "未加微" (SQL): 取 `buildWechatAddedSignalWhereInput` 的反面 —— 既无 ADDED 的
+ * WechatRecord, 也无 result = WECHAT_ADDED 的 CallRecord. pending_dial 队列与
+ * pending_wechat 都用它做 "还没加上微信" 的判定锚点.
+ */
+export function buildNotAddedWechatCustomerWhereInput(): Prisma.CustomerWhereInput {
+  return {
+    NOT: buildWechatAddedSignalWhereInput(),
+  };
+}
+
 export function buildWechatPendingCustomerWhereInput(): Prisma.CustomerWhereInput {
   return {
     AND: [
-      {
-        NOT: {
-          OR: [
-            {
-              wechatRecords: {
-                some: {
-                  addedStatus: WechatAddStatus.ADDED,
-                },
-              },
-            },
-            {
-              callRecords: {
-                some: {
-                  result: CallResult.WECHAT_ADDED,
-                },
-              },
-            },
-          ],
-        },
-      },
+      buildNotAddedWechatCustomerWhereInput(),
       {
         OR: [
           {
@@ -3258,6 +3305,35 @@ export function buildWechatPendingCustomerWhereInput(): Prisma.CustomerWhereInpu
             },
           },
         ],
+      },
+    ],
+  };
+}
+
+/**
+ * Wave 11 待拨打队列 (pending_dial) 的 SQL where.
+ *
+ * 业务定义 (销售口述): "未加微客户至少拨打 5 遍". 队列纳入条件:
+ *   - 未加微: 取 `buildNotAddedWechatCustomerWhereInput` (无 ADDED WechatRecord
+ *     且无 result = WECHAT_ADDED 的 CallRecord).
+ *   - 非空号: grade != F. grade 是 lib/customers/grade.ts 派生的稳定结论, F =
+ *     空号 (CallRecord result = INVALID_NUMBER 终态). Prisma 的 `{ not: F }` 在
+ *     nullable 列上等价 `grade IS NULL OR grade <> 'F'`, 所以还没攒到信号的
+ *     新客户 (grade = null) 也算 "非空号", 正确留在待拨打队列里.
+ *
+ * 注意 (用户明确要求): 不按 callCount >= 5 把 "已拨满 5 次" 切出去 —— 5 只是
+ * 列表行上的提示 (已拨 X/5), 拨满后客户仍留在 pending_dial, 直到加上微信或被
+ * 判为空号才离开. 因此本 where 不含任何 callCount 过滤. (砍掉的 dial_exhausted
+ * 队列也不再存在.)
+ */
+export function buildPendingDialCustomerWhereInput(): Prisma.CustomerWhereInput {
+  return {
+    AND: [
+      buildNotAddedWechatCustomerWhereInput(),
+      {
+        grade: {
+          not: CustomerGrade.F,
+        },
       },
     ],
   };
@@ -3409,6 +3485,8 @@ export function buildQueueCustomerWhereInput(
       return buildTodayNewImportedCustomerWhereInput(todayStart, todayEnd);
     case "pending_first_call":
       return buildPendingFirstCallCustomerWhereInput();
+    case "pending_dial":
+      return buildPendingDialCustomerWhereInput();
     case "pending_follow_up":
       return buildPendingFollowUpCustomerWhereInput(now);
     case "pending_wechat":
@@ -3953,6 +4031,7 @@ async function getCustomerCenterDataStatsImpl(
     todayNewCustomerCount: 0,
     todayNewImportedCount: 0,
     pendingFirstCallCount: 0,
+    pendingDialCount: 0,
     pendingFollowUpCount: 0,
     pendingWechatCount: 0,
     pendingInvitationCount: 0,
@@ -3984,6 +4063,7 @@ async function getCustomerCenterDataStatsImpl(
     all: scopeStats.customerCount,
     new_imported: scopeStats.todayNewImportedCount,
     pending_first_call: scopeStats.pendingFirstCallCount,
+    pending_dial: scopeStats.pendingDialCount,
     pending_follow_up: scopeStats.pendingFollowUpCount,
     pending_wechat: scopeStats.pendingWechatCount,
     pending_invitation: scopeStats.pendingInvitationCount,
@@ -4442,6 +4522,7 @@ export async function getCustomerCenterData(
     todayNewCustomerCount: 0,
     todayNewImportedCount: 0,
     pendingFirstCallCount: 0,
+    pendingDialCount: 0,
     pendingFollowUpCount: 0,
     pendingWechatCount: 0,
     pendingInvitationCount: 0,
@@ -4492,6 +4573,7 @@ export async function getCustomerCenterData(
     all: scopeStats.customerCount,
     new_imported: scopeStats.todayNewImportedCount,
     pending_first_call: scopeStats.pendingFirstCallCount,
+    pending_dial: scopeStats.pendingDialCount,
     pending_follow_up: scopeStats.pendingFollowUpCount,
     pending_wechat: scopeStats.pendingWechatCount,
     pending_invitation: scopeStats.pendingInvitationCount,
@@ -5010,6 +5092,7 @@ export async function getCustomerCenterDataCursor(
     todayNewCustomerCount: 0,
     todayNewImportedCount: 0,
     pendingFirstCallCount: 0,
+    pendingDialCount: 0,
     pendingFollowUpCount: 0,
     pendingWechatCount: 0,
     pendingInvitationCount: 0,
@@ -5062,6 +5145,7 @@ export async function getCustomerCenterDataCursor(
     all: scopeStats.customerCount,
     new_imported: scopeStats.todayNewImportedCount,
     pending_first_call: scopeStats.pendingFirstCallCount,
+    pending_dial: scopeStats.pendingDialCount,
     pending_follow_up: scopeStats.pendingFollowUpCount,
     pending_wechat: scopeStats.pendingWechatCount,
     pending_invitation: scopeStats.pendingInvitationCount,

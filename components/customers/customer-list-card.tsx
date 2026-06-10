@@ -14,6 +14,7 @@ import {
   SquarePen,
   Trash2,
 } from "lucide-react";
+import { CustomerCallProgress } from "@/components/customers/customer-call-progress";
 import { CustomerCallRecordForm } from "@/components/customers/customer-call-record-form";
 import { CustomerCallRecordHistory } from "@/components/customers/customer-call-record-history";
 import {
@@ -417,9 +418,25 @@ export function CustomerListCard({
               </div>
 
               <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center">
-                <p className="font-mono text-xl font-bold leading-none tracking-tight text-[var(--foreground)] tabular-nums">
-                  {phoneText}
-                </p>
+                {item.phone?.trim() ? (
+                  // 移动端: 手机号 tel: 链接, 点一下唤起系统拨号 (录音 / 审计仍
+                  // 走右侧"拨打并录音"按钮 startMobileCallFollowUpDial).
+                  <a
+                    href={`tel:${item.phone.trim()}`}
+                    onClick={stopCardNavigation}
+                    className="w-fit font-mono text-xl font-bold leading-none tracking-tight text-[var(--foreground)] tabular-nums underline-offset-4 transition-colors hover:text-[var(--color-accent-strong)] hover:underline"
+                  >
+                    {phoneText}
+                  </a>
+                ) : (
+                  <p className="font-mono text-xl font-bold leading-none tracking-tight text-[var(--color-sidebar-muted)] tabular-nums">
+                    {phoneText}
+                  </p>
+                )}
+                <CustomerCallProgress
+                  callCount={item.callCount}
+                  isWechatAdded={item.isWechatAdded}
+                />
                 {canDialFromCard ? (
                   <button
                     type="button"

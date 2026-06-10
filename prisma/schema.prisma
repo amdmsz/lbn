@@ -1050,6 +1050,11 @@ model Customer {
   // Wave 7-B 客户分级 — 由 lib/customers/grade.ts 派生写入, 不是销售手工选的.
   // 可空: 全新客户没有任何信号时维持 null, 不硬塞 D.
   grade                        CustomerGrade?
+  // Wave 11 "未加微至少拨打 5 遍" 工作流: 该客户累计拨打次数 = 其 CallRecord
+  // 总条数 (创建一条 +1, 不论是否接通). 由 createCallRecord 同事务 increment;
+  // 历史数据走 scripts/backfill-customer-call-count.mjs 回填. 驱动 pending_dial
+  // 队列过滤 + 列表行 "已拨 X/5" 提示.
+  callCount                    Int                      @default(0)
   ownerId                      String?
   owner                        User?                    @relation("CustomerOwner", fields: [ownerId], references: [id])
   ownershipMode                CustomerOwnershipMode    @default(PRIVATE)
@@ -1106,6 +1111,9 @@ model Customer {
   @@index([ownerId, updatedAt, id], map: "cust_owner_updated_id_idx")
   // Wave 7-B 客户分级过滤索引. 客户列表按 grade multi-select 时走这条.
   @@index([grade], map: "cust_grade_idx")
+  // Wave 11 pending_dial 队列过滤索引. "已拨 X/5" 提示与待拨打筛选会按
+  // callCount 缩窄, 这条让队列计数 + 列表过滤走索引.
+  @@index([callCount], map: "cust_call_count_idx")
   @@map("customer")
 }
 

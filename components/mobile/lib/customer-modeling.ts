@@ -114,6 +114,10 @@ export function createMobileApiCustomerListItem(
     status: item.status as CustomerListItem["status"],
     // Wave 7-B: 移动端 API 暂未透传 grade, 用 fallback. null 表示 "暂不显示分级 chip".
     grade: fallback?.grade ?? null,
+    // Wave 11: 移动端 API 暂未透传 callCount / isWechatAdded, 用 fallback 兜底.
+    // callCount 缺省 0 (不显 "已拨 X/5"), isWechatAdded 缺省 false.
+    callCount: fallback?.callCount ?? 0,
+    isWechatAdded: fallback?.isWechatAdded ?? false,
     ownershipMode: item.ownershipMode as CustomerListItem["ownershipMode"],
     createdAt: new Date(item.createdAt),
     avatarUrl: item.avatarUrl ?? fallback?.avatarUrl ?? null,

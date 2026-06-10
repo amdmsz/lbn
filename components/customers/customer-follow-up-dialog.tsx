@@ -1,86 +1,42 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronRight, X } from "lucide-react";
-import { CustomerPhoneSpotlight } from "@/components/customers/customer-phone-spotlight";
-import type { StatusBadgeVariant } from "@/components/shared/status-badge";
+import { ChevronRight, PhoneOutgoing, X } from "lucide-react";
+import { CustomerCallProgress } from "@/components/customers/customer-call-progress";
+import { CustomerMobileDialButton } from "@/components/customers/mobile-call-followup-sheet";
+import { CustomerOutboundCallButton } from "@/components/customers/customer-outbound-call-button";
+import { StatusBadge } from "@/components/shared/status-badge";
 import type { MobileCallTriggerSource } from "@/lib/calls/mobile-call-followup";
 import {
   getCustomerExecutionDisplayLongLabel,
   getCustomerExecutionDisplayVariant,
   formatDateTime,
-  isCustomerExecutionDisplayTemporary,
 } from "@/lib/customers/metadata";
 import type { CustomerListItem } from "@/lib/customers/queries";
 import { CustomerCallRecordForm } from "@/components/customers/customer-call-record-form";
-import { CustomerCallRecordHistory } from "@/components/customers/customer-call-record-history";
 import type { CallResultOption } from "@/lib/calls/metadata";
 import { cn } from "@/lib/utils";
 
-const quietExecutionClassVariantClassNames: Record<StatusBadgeVariant, string> =
-  {
-    neutral:
-      "border-[var(--crm-badge-neutral-border)] bg-[var(--crm-badge-neutral-bg)] text-[var(--crm-badge-neutral-text)]",
-    info: "border-[var(--tone-info-soft-border)] bg-[var(--tone-info-soft-bg)] text-[var(--color-accent-strong)]",
-    success:
-      "border-[var(--tone-success-soft-border)] bg-[var(--tone-success-soft-bg)] text-[var(--color-success)]",
-    warning:
-      "border-[var(--tone-warning-soft-border)] bg-[var(--tone-warning-soft-bg)] text-[var(--color-warning)]",
-    danger:
-      "border-[var(--tone-danger-soft-border)] bg-[var(--tone-danger-soft-bg)] text-[var(--color-danger)]",
-  };
+const dialogSurfaceClassName = "rounded-md border border-border bg-card";
 
-const quickClassActions = [
-  { value: "D" as const, label: "D 未接通", result: "NOT_CONNECTED" },
-  { value: "B" as const, label: "B 已加微信", result: "WECHAT_ADDED" },
-  { value: "E" as const, label: "E 拒加", result: "REFUSED_WECHAT" },
-];
-
-const dialogSurfaceClassName =
-  "rounded-xl border border-border bg-card shadow-sm";
-
+// 右上次要入口: 克制小胶囊, 不抢主操作 (打电话 + 点结果) 的视线.
 const quietActionLinkClassName =
-  "inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-card px-3 text-[12px] font-medium text-muted-foreground transition-[border-color,background-color,color,transform,box-shadow] duration-150 motion-safe:hover:-translate-y-[1px] hover:border-primary/20 hover:bg-muted hover:text-foreground hover:shadow-sm";
+  "inline-flex h-8 items-center gap-1 rounded-md border border-border bg-card px-2.5 text-[12px] font-medium text-muted-foreground transition-colors duration-150 hover:border-primary/30 hover:bg-muted hover:text-foreground";
 
 function buildCustomerTradeOrderHref(customerId: string) {
   return `/customers/${customerId}?tab=orders&createTradeOrder=1`;
 }
 
-function QuietExecutionClassBadge({
+function QuietActionLink({
+  href,
   label,
-  variant,
-}: Readonly<{
-  label: string;
-  variant: StatusBadgeVariant;
-}>) {
+}: Readonly<{ href: string; label: string }>) {
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full border px-2.5 py-[0.32rem] text-[11px] font-medium tracking-[0.04em]",
-        quietExecutionClassVariantClassNames[variant],
-      )}
-    >
-      {label}
-    </span>
-  );
-}
-
-function DialogMetaBlock({
-  label,
-  value,
-}: Readonly<{
-  label: string;
-  value: string;
-}>) {
-  return (
-    <div className="rounded-xl border border-border/60 bg-background p-3 shadow-sm">
-      <p className="crm-detail-label text-[10px]">{label}</p>
-      <p className="mt-1 text-sm font-medium leading-5 text-foreground">
-        {value}
-      </p>
-    </div>
+    <Link href={href} prefetch={false} className={quietActionLinkClassName}>
+      <span>{label}</span>
+      <ChevronRight className="h-3.5 w-3.5" />
+    </Link>
   );
 }
 
@@ -154,18 +110,16 @@ function CustomerFollowUpDialogBody({
   triggerSource: MobileCallTriggerSource;
   onClose: () => void;
 }>) {
-  const [presetResult, setPresetResult] = useState(initialResult);
-  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
+  const hasPhone =
+    Boolean(item.phone?.trim()) && item.phone.trim() !== "暂无电话";
+  const phoneText = hasPhone ? item.phone.trim() : "暂无电话";
 
-  const phoneText = item.phone?.trim() || "暂无电话";
-  const latestCallRecord = item.callRecords[0] ?? null;
-  const visibleCallRecords = isHistoryExpanded
-    ? item.callRecords
-    : item.callRecords.slice(0, 3);
-  const collapsedHistoryCount = Math.max(item.callRecords.length - 3, 0);
+  const recentRecords = item.callRecords.slice(0, 4);
+
   const detailHref = `/customers/${item.id}`;
   const liveHref = `${detailHref}?tab=live`;
   const orderHref = buildCustomerTradeOrderHref(item.id);
+
   const executionDisplayInput = {
     executionClass: item.executionClass,
     newImported: item.newImported,
@@ -177,9 +131,9 @@ function CustomerFollowUpDialogBody({
   const executionClassLabel = getCustomerExecutionDisplayLongLabel(
     executionDisplayInput,
   );
-  const isTemporaryExecutionDisplay = isCustomerExecutionDisplayTemporary(
-    executionDisplayInput,
-  );
+
+  // 外呼按钮平时是次要小按钮; 没启动坐席时仍渲染 (disabled-feel) 给 title 提示.
+  const canUseOutbound = outboundCallEnabled && canCreateCallRecord && hasPhone;
 
   return (
     <div
@@ -190,156 +144,89 @@ function CustomerFollowUpDialogBody({
         role="dialog"
         aria-modal="true"
         aria-label={`跟进 ${item.name}`}
-        className="fixed left-[50%] top-[50%] z-50 flex h-[85vh] max-h-[85vh] w-full max-w-[1000px] translate-x-[-50%] translate-y-[-50%] flex-col overflow-hidden rounded-xl border border-border bg-background text-foreground shadow-2xl"
+        className="fixed left-[50%] top-[50%] z-50 flex max-h-[88vh] w-full max-w-[860px] translate-x-[-50%] translate-y-[-50%] flex-col overflow-hidden rounded-lg border border-border bg-background text-foreground shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="relative shrink-0 border-b border-border bg-card px-4 py-3 md:px-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1 space-y-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-sidebar-muted)]">
-                跟进
-              </p>
+        {/* 顶部: 姓名 + 状态徽章 + 已拨 X/5 + 右上次要入口 */}
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border bg-card px-4 py-3 md:px-5">
+          <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+            <h3 className="text-[1.3rem] font-semibold tracking-tight text-foreground">
+              {item.name}
+            </h3>
+            <StatusBadge label={executionClassLabel} variant={executionClassVariant} />
+            <CustomerCallProgress
+              callCount={item.callCount}
+              isWechatAdded={item.isWechatAdded}
+            />
+          </div>
 
-              <div className="flex flex-wrap items-center gap-2.5">
-                <h3 className="text-[1.48rem] font-semibold tracking-tight text-foreground">
-                  {item.name}
-                </h3>
-                <QuietExecutionClassBadge
-                  label={executionClassLabel}
-                  variant={executionClassVariant}
-                />
-              </div>
-
-              <CustomerPhoneSpotlight
-                customerId={item.id}
-                customerName={item.name}
-                phone={phoneText}
-                triggerSource={triggerSource}
-                variant="dialog"
-                outboundCallEnabled={outboundCallEnabled && canCreateCallRecord}
-                outboundCallPlacement="icon"
-              />
-
-              <div className="grid gap-2 sm:grid-cols-2">
-                <DialogMetaBlock
-                  label="最近跟进"
-                  value={
-                    item.latestFollowUpAt
-                      ? formatDateTime(item.latestFollowUpAt)
-                      : "暂无"
-                  }
-                />
-                <DialogMetaBlock
-                  label="累计通话"
-                  value={`${item._count.callRecords} 次`}
-                />
-              </div>
-            </div>
-
-            <div className="flex shrink-0 items-center gap-2">
-              <Link href={detailHref} prefetch={false} className={quietActionLinkClassName}>
-                <span>客户详情</span>
-                <ChevronRight className="h-3.5 w-3.5" />
-              </Link>
-              <button
-                type="button"
-                onClick={onClose}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-[border-color,background-color,color,box-shadow,transform] duration-150 motion-safe:hover:-translate-y-[1px] hover:border-primary/20 hover:bg-muted hover:text-foreground hover:shadow-sm"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <QuietActionLink href={liveHref} label="直播邀约" />
+            {canCreateSalesOrder ? (
+              <QuietActionLink href={orderHref} label="订单" />
+            ) : null}
+            <QuietActionLink href={detailHref} label="客户详情" />
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="关闭"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors duration-150 hover:border-primary/30 hover:bg-muted hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
 
-        <div className="relative grid min-h-0 min-w-0 flex-1 gap-4 overflow-y-auto overflow-x-hidden px-4 py-3 [scrollbar-width:none] [-ms-overflow-style:none] md:px-5 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,0.82fr)] lg:overflow-hidden xl:grid-cols-[minmax(0,1.05fr)_minmax(23rem,0.85fr)] [&::-webkit-scrollbar]:hidden">
-          <div className="min-h-0 min-w-0 space-y-3 overflow-y-auto overflow-x-hidden pr-0.5 [scrollbar-width:none] [-ms-overflow-style:none] lg:h-full [&::-webkit-scrollbar]:hidden">
+        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-4 py-4 md:px-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.7fr)] lg:overflow-hidden">
+          {/* 左列: 电话 + 本次结果 + 备注 + 保存 */}
+          <div className="min-w-0 space-y-4 lg:overflow-y-auto lg:pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className={cn(dialogSurfaceClassName, "px-4 py-3.5")}>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-                  <p className="crm-detail-label text-[11px]">分类推进</p>
-                  {isTemporaryExecutionDisplay ? (
-                    <span className="inline-flex items-center rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-medium tracking-[0.04em] text-muted-foreground">
-                      首呼后进入 A-E
-                    </span>
-                  ) : null}
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <Link href={liveHref} prefetch={false} className={quietActionLinkClassName}>
-                    <span>直播邀约</span>
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </Link>
-                  {canCreateSalesOrder ? (
-                    <Link href={orderHref} prefetch={false} className={quietActionLinkClassName}>
-                      <span>订单</span>
-                      <ChevronRight className="h-3.5 w-3.5" />
-                    </Link>
-                  ) : null}
-                </div>
+              <div className="flex items-center justify-between gap-3">
+                <p
+                  title={hasPhone ? phoneText : undefined}
+                  className="min-w-0 truncate font-mono text-[1.6rem] font-semibold leading-none tracking-tight tabular-nums text-foreground"
+                >
+                  {phoneText}
+                </p>
+                {hasPhone ? (
+                  <OutboundCallSlot
+                    customerId={item.id}
+                    customerName={item.name}
+                    phone={phoneText}
+                    triggerSource={triggerSource}
+                    enabled={canUseOutbound}
+                  />
+                ) : null}
               </div>
-
-              {canCreateCallRecord ? (
-                <div className="mt-2.5 flex flex-wrap gap-2">
-                  {quickClassActions.map((action) => (
-                    <button
-                      key={action.value}
-                      type="button"
-                      onClick={() => setPresetResult(action.result)}
-                      className={cn(
-                        "inline-flex h-8 items-center rounded-full border px-3.5 text-[12px] font-medium transition-[border-color,background-color,color,transform,box-shadow] duration-150 motion-safe:hover:-translate-y-[1px]",
-                        presetResult === action.result
-                          ? "border-primary/20 bg-primary/10 text-foreground shadow-sm"
-                          : "border-border bg-background text-muted-foreground hover:border-primary/20 hover:bg-muted hover:text-foreground",
-                      )}
-                    >
-                      {action.label}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
+              <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
+                用手机拨打后，在下面点一下结果即可。
+              </p>
             </div>
 
             {canCreateCallRecord ? (
-              <div
-                className={cn(dialogSurfaceClassName, "px-4 py-3.5 md:px-5")}
-              >
-                <div className="mb-3">
-                  <p className="crm-detail-label text-[11px]">本次跟进</p>
-                </div>
-
-                <CustomerCallRecordForm
-                  customerId={item.id}
-                  resultOptions={resultOptions}
-                  variant="quick-note"
-                  defaultResult={presetResult}
-                  remarkAutoFocus={canCreateCallRecord || remarkAutoFocus}
-                  submitLabel="保存本次跟进"
-                  pendingLabel="保存中..."
-                  className={cn(
-                    "[&_label]:space-y-1.5",
-                    "[&_.crm-label]:text-[10px] [&_.crm-label]:font-semibold [&_.crm-label]:uppercase [&_.crm-label]:tracking-[0.16em] [&_.crm-label]:text-muted-foreground",
-                    "[&_.crm-input]:min-h-[2.55rem] [&_.crm-select]:min-h-[2.55rem] [&_.crm-textarea]:min-h-[7.25rem]",
-                    "[&_.crm-input]:rounded-lg [&_.crm-select]:rounded-lg [&_.crm-textarea]:rounded-lg",
-                    "[&_.crm-input]:border [&_.crm-select]:border [&_.crm-textarea]:border",
-                    "[&_.crm-input]:border-border/60 [&_.crm-select]:border-border/60 [&_.crm-textarea]:border-border/60",
-                    "[&_.crm-input]:bg-background [&_.crm-select]:bg-background [&_.crm-textarea]:bg-background",
-                    "[&_.crm-input]:shadow-sm [&_.crm-select]:shadow-sm [&_.crm-textarea]:shadow-sm",
-                    "[&_.crm-input:hover]:bg-background [&_.crm-select:hover]:bg-background [&_.crm-textarea:hover]:bg-background",
-                    "[&_.crm-input:focus]:border-primary [&_.crm-select:focus]:border-primary [&_.crm-textarea:focus]:border-primary",
-                    "[&_.crm-input:focus]:ring-1 [&_.crm-select:focus]:ring-1 [&_.crm-textarea:focus]:ring-1",
-                    "[&_.crm-input:focus]:ring-primary [&_.crm-select:focus]:ring-primary [&_.crm-textarea:focus]:ring-primary",
-                    "[&_.crm-banner]:rounded-lg [&_.crm-banner]:border-border/60 [&_.crm-banner]:bg-background [&_.crm-banner]:shadow-none",
-                  )}
-                  submitButtonClassName="inline-flex w-full items-center justify-center rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors duration-150 hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-                  onSuccess={onClose}
-                />
-              </div>
+              <CustomerCallRecordForm
+                customerId={item.id}
+                resultOptions={resultOptions}
+                variant="follow-up"
+                defaultResult={initialResult}
+                remarkAutoFocus={remarkAutoFocus}
+                submitLabel="保存"
+                pendingLabel="保存中..."
+                className={cn(
+                  "space-y-3.5",
+                  "[&_.crm-label]:text-[11px] [&_.crm-label]:font-semibold [&_.crm-label]:text-muted-foreground",
+                  "[&_.crm-textarea]:min-h-[5.5rem] [&_.crm-textarea]:rounded-md [&_.crm-textarea]:border [&_.crm-textarea]:border-border/70 [&_.crm-textarea]:bg-background",
+                  "[&_.crm-textarea:focus]:border-primary [&_.crm-textarea:focus]:ring-1 [&_.crm-textarea:focus]:ring-primary",
+                  "[&_.crm-banner]:rounded-md [&_.crm-banner]:border-border/70 [&_.crm-banner]:bg-background [&_.crm-banner]:shadow-none",
+                )}
+                submitButtonClassName="inline-flex w-full items-center justify-center rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors duration-150 hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                onSuccess={onClose}
+              />
             ) : (
               <div
                 className={cn(
                   dialogSurfaceClassName,
-                  "px-4 py-3.5 text-[13px] leading-6 text-[var(--color-sidebar-muted)]",
+                  "px-4 py-3.5 text-[13px] leading-6 text-muted-foreground",
                 )}
               >
                 当前角色仅查看最近记录。补记请进入客户详情。
@@ -347,48 +234,126 @@ function CustomerFollowUpDialogBody({
             )}
           </div>
 
+          {/* 右列: 最近记录 (只显 结果 + 备注 + 时间) */}
           <div
             className={cn(
               dialogSurfaceClassName,
-              "flex min-h-[18rem] min-w-0 flex-col px-4 py-3.5 md:px-5 lg:h-full lg:min-h-0",
+              "flex min-h-[14rem] min-w-0 flex-col px-4 py-3.5 lg:h-full lg:min-h-0",
             )}
           >
-            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1">
-                <p className="crm-detail-label text-[11px]">最近记录</p>
-                <p className="text-[13px] leading-5 text-[var(--color-sidebar-muted)]">
-                  {latestCallRecord
-                    ? `最新结果：${latestCallRecord.resultLabel}`
-                    : "当前客户还没有通话记录"}
-                </p>
-              </div>
-              <p className="text-[12px] font-medium tabular-nums text-[var(--color-sidebar-muted)]">
-                {`${item._count.callRecords} 条`}
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                最近记录
               </p>
+              <span className="text-[12px] tabular-nums text-muted-foreground">
+                {item._count.callRecords} 条
+              </span>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-              <CustomerCallRecordHistory
-                records={visibleCallRecords}
-                variant="timeline"
-                cardClassName="px-0"
-                emptyTitle="暂无跟进记录"
-                emptyDescription="补记通话后会显示在这里。"
-                emptyClassName="min-h-[12rem] border-border/40 bg-background shadow-none"
-              />
-              {!isHistoryExpanded && collapsedHistoryCount > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => setIsHistoryExpanded(true)}
-                  className="mt-2 w-full rounded-lg border border-dashed border-border py-3 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
-                >
-                  展开查看其余 {collapsedHistoryCount} 条记录
-                </button>
-              ) : null}
+            <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {recentRecords.length > 0 ? (
+                <ul className="space-y-0">
+                  {recentRecords.map((record) => (
+                    <FollowUpRecentRecordRow
+                      key={record.id}
+                      resultLabel={record.resultLabel}
+                      remark={record.remark}
+                      callTime={record.callTime}
+                    />
+                  ))}
+                </ul>
+              ) : (
+                <div className="flex h-full min-h-[10rem] items-center justify-center rounded-md border border-dashed border-border/60 px-4 text-center text-[13px] text-muted-foreground">
+                  当前客户还没有通话记录
+                </div>
+              )}
             </div>
+
+            <p className="mt-2.5 border-t border-border/40 pt-2.5 text-[11px] leading-4 text-muted-foreground/70">
+              外呼通话会自动附带录音与时长。
+            </p>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function OutboundCallSlot({
+  customerId,
+  customerName,
+  phone,
+  triggerSource,
+  enabled,
+}: Readonly<{
+  customerId: string;
+  customerName: string;
+  phone: string;
+  triggerSource: MobileCallTriggerSource;
+  enabled: boolean;
+}>) {
+  return (
+    <div className="flex shrink-0 items-center gap-2">
+      {/* 移动端: 保留原生/tel: 拨号 + 录音待补记流程 (md 以下显示). */}
+      <CustomerMobileDialButton
+        customerId={customerId}
+        customerName={customerName}
+        phone={phone}
+        triggerSource={triggerSource}
+        label="拨打"
+        className="inline-flex h-8 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary px-3 text-[12px] font-medium text-primary-foreground transition-colors duration-150 hover:border-primary/30 hover:bg-primary/90 md:hidden"
+      />
+
+      {/* 桌面端: 次要小"外呼"按钮 (启动坐席后网页拨号; 未启动给 title 提示). */}
+      {enabled ? (
+        <CustomerOutboundCallButton
+          customerId={customerId}
+          customerName={customerName}
+          label="外呼"
+          className="hidden h-8 shrink-0 border-primary/20 bg-primary/10 px-3 text-[12px] text-primary hover:border-primary/30 hover:bg-primary/15 md:inline-flex"
+        />
+      ) : (
+        <button
+          type="button"
+          disabled
+          title="启动坐席后可用"
+          className="hidden h-8 shrink-0 cursor-not-allowed items-center gap-1.5 rounded-full border border-border bg-card px-3 text-[12px] font-medium text-muted-foreground opacity-70 md:inline-flex"
+        >
+          <PhoneOutgoing className="h-3.5 w-3.5" aria-hidden="true" />
+          外呼
+        </button>
+      )}
+    </div>
+  );
+}
+
+function FollowUpRecentRecordRow({
+  resultLabel,
+  remark,
+  callTime,
+}: Readonly<{
+  resultLabel: string;
+  remark: string | null;
+  callTime: Date | string;
+}>) {
+  const normalizedTime = callTime instanceof Date ? callTime : new Date(callTime);
+  const trimmedRemark = remark?.trim();
+
+  return (
+    <li className="border-b border-border/40 py-2.5 first:pt-0 last:border-b-0 last:pb-0">
+      <div className="flex items-start justify-between gap-3">
+        <p className="min-w-0 break-words text-[13px] font-semibold leading-5 text-foreground [word-break:normal]">
+          {resultLabel}
+        </p>
+        <time className="shrink-0 pt-0.5 text-right text-[11px] font-medium leading-4 tabular-nums text-muted-foreground">
+          {formatDateTime(normalizedTime)}
+        </time>
+      </div>
+      {trimmedRemark ? (
+        <p className="mt-0.5 min-w-0 break-words text-[12px] leading-5 text-muted-foreground [word-break:normal]">
+          {trimmedRemark}
+        </p>
+      ) : null}
+    </li>
   );
 }

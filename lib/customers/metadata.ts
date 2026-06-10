@@ -139,6 +139,11 @@ export const customerQueueOptions = [
     description: "已承接但还没有通话记录的客户。",
   },
   {
+    value: "pending_dial",
+    label: "待拨打",
+    description: "还没有加微的有效客户（已排除空号），按“至少拨打 5 遍”持续触达。",
+  },
+  {
     value: "pending_follow_up",
     label: "待回访",
     description: "存在逾期待办或下一次跟进时间已到的客户。",
@@ -290,6 +295,10 @@ const customerWorkStatusMeta: Record<
 > = {
   new_imported: { label: "今日新增", variant: "info" },
   pending_first_call: { label: "待首呼", variant: "warning" },
+  // pending_dial 是 sidebar 队列筛选, 不作为行内推进 badge (行上只显 "已拨 X/5"
+  // 文案, 不进 workingStatuses). 这里仅为满足 Record<CustomerWorkStatusKey> 穷尽
+  // 类型而存在.
+  pending_dial: { label: "待拨打", variant: "warning" },
   pending_follow_up: { label: "待回访", variant: "warning" },
   pending_wechat: { label: "待加微", variant: "info" },
   pending_invitation: { label: "待邀约", variant: "success" },

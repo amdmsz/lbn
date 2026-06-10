@@ -223,6 +223,7 @@ async function StreamingToolbar({
         tagOptions={full.tagOptions}
         teamOverview={full.teamOverview}
         salesBoard={full.salesBoard}
+        queueCounts={full.queueCounts}
       />
     );
   }
@@ -240,6 +241,7 @@ async function StreamingToolbar({
       tagOptions={list.tagOptions}
       teamOverview={stats.teamOverview}
       salesBoard={stats.salesBoard}
+      queueCounts={stats.queueCounts}
     />
   );
 }

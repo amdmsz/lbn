@@ -15,8 +15,14 @@ import { CustomerCreateEntry } from "@/components/customers/customer-create-entr
 import type { MoveCustomerToRecycleBinAction } from "@/components/customers/customer-recycle-entry";
 import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
 import { CustomerFilterToolbar } from "@/components/customers/customer-filter-toolbar";
+import {
+  CustomerQueueTabs,
+  type CustomerQueueTabItem,
+} from "@/components/customers/customer-queue-tabs";
+import { CustomerTodayStats } from "@/components/customers/customer-today-stats";
 import { CustomersTable } from "@/components/customers/customers-table";
 import { buildCustomersExportHref } from "@/lib/customers/export-url";
+import { customerQueueOptions } from "@/lib/customers/metadata";
 import type {
   CustomerCenterListData,
   CustomerCenterStatsData,
@@ -73,10 +79,29 @@ export function CustomerCenterWorkbench({
 }
 
 /**
- * Stats 边界内部的真实内容 — 顶部 / sidebar 筛选 toolbar.
+ * 队列 tab 数据从 `queueCounts` 派生 — 顺序对齐 `customerQueueOptions`
+ * (全部 → 新导入 → 待首呼 → 待拨打 → ...). 纯展示, count 为 0 的队列仍保留
+ * (销售要据此判断"这个队列今天清空了"), 不在前端二次过滤.
+ */
+function buildQueueTabItems(
+  queueCounts: CustomerCenterStatsData["queueCounts"],
+): CustomerQueueTabItem[] {
+  return customerQueueOptions.map((option) => ({
+    key: option.value,
+    label: option.label,
+    count: queueCounts[option.value] ?? 0,
+  }));
+}
+
+/**
+ * Stats 边界内部的真实内容 — 顶部 / sidebar 筛选 toolbar + 队列 tab + 今日战绩条.
  *
- * `teamOverview` / `salesOptions` 是 SQL aggregate 的派生, 走慢路径; 单独
- * 包在 stats Suspense 内, 不阻塞 ListSection.
+ * `teamOverview` / `salesOptions` / `queueCounts` 是 SQL aggregate 的派生, 走慢
+ * 路径; 单独包在 stats Suspense 内, 不阻塞 ListSection.
+ *
+ * 队列 tab + 今日战绩条放在筛选工具栏之后、客户列表之前 (顺序: 工具栏 → 队列
+ * tab → 战绩条 → 列表). 它们依赖 `queueCounts` (stats), 所以与 toolbar 同源,
+ * 一并在 stats 边界内填充.
  */
 export function CustomerCenterToolbarSection({
   role,
@@ -85,6 +110,7 @@ export function CustomerCenterToolbarSection({
   tagOptions,
   teamOverview,
   salesBoard,
+  queueCounts,
 }: Readonly<{
   role: RoleCode;
   filters: CustomerCenterListData["filters"];
@@ -92,18 +118,37 @@ export function CustomerCenterToolbarSection({
   tagOptions: CustomerCenterListData["tagOptions"];
   teamOverview: CustomerCenterStatsData["teamOverview"];
   salesBoard: CustomerCenterStatsData["salesBoard"];
+  queueCounts: CustomerCenterStatsData["queueCounts"];
 }>) {
+  // TODO(stats): 后端 stats aggregate 暂未暴露 dialedToday / wechatToday
+  // (今日已拨 / 今日加微). 在补字段前用 0 占位, 不阻塞队列 tab + 待拨打剩余数
+  // (pendingDialCount 已有真实值, 来自 queueCounts.pending_dial).
+  const dialedToday = 0;
+  const wechatToday = 0;
+
   return (
-    <CustomerFilterToolbar
-      filters={filters}
-      exportHref={
-        canExportCustomers(role) ? buildCustomersExportHref(filters) : null
-      }
-      productOptions={productOptions}
-      tagOptions={tagOptions}
-      teamOptions={role === "ADMIN" ? teamOverview : []}
-      salesOptions={role === "ADMIN" || role === "SUPERVISOR" ? salesBoard : []}
-    />
+    <div className="space-y-3">
+      <CustomerFilterToolbar
+        filters={filters}
+        exportHref={
+          canExportCustomers(role) ? buildCustomersExportHref(filters) : null
+        }
+        productOptions={productOptions}
+        tagOptions={tagOptions}
+        teamOptions={role === "ADMIN" ? teamOverview : []}
+        salesOptions={role === "ADMIN" || role === "SUPERVISOR" ? salesBoard : []}
+      />
+      <CustomerQueueTabs
+        items={buildQueueTabItems(queueCounts)}
+        activeKey={filters.queue}
+        filters={filters}
+      />
+      <CustomerTodayStats
+        dialedToday={dialedToday}
+        wechatToday={wechatToday}
+        pendingDialCount={queueCounts.pending_dial ?? 0}
+      />
+    </div>
   );
 }
 
@@ -138,6 +183,7 @@ export function CustomerCenterListSection({
         search={list.filters.search}
       />
       <CustomersTable
+        viewerRole={role}
         items={list.queueItems}
         pagination={list.pagination}
         callResultOptions={list.callResultOptions}

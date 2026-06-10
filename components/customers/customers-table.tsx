@@ -5,7 +5,8 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { FormEvent, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { CheckSquare2 } from "lucide-react";
+import { CheckSquare2, Phone } from "lucide-react";
+import type { RoleCode } from "@prisma/client";
 import {
   batchAddCustomerTagAction,
   batchForceHardDeleteCustomersAction,
@@ -33,6 +34,7 @@ import {
   notifyCustomerBatchActionResult,
   readJsonStorageValue,
 } from "@/components/customers/customer-list-helpers";
+import { CustomerCallProgress } from "@/components/customers/customer-call-progress";
 import { CustomerPhoneSpotlight } from "@/components/customers/customer-phone-spotlight";
 import { InlineCustomerRemarkField } from "@/components/customers/inline-customer-remark-field";
 import { CustomerListCard } from "@/components/customers/customer-list-card";
@@ -41,7 +43,6 @@ import { type MoveCustomerToRecycleBinAction } from "@/components/customers/cust
 import { CustomersTableBatchActionBar } from "@/components/customers/customers-table-batch-action-bar";
 import {
   BlockedReasonStrip,
-  CustomerGradeBadge,
   ExecutionBadge,
   executionBadgeClassNames,
   ListTopBar,
@@ -155,6 +156,7 @@ function getRecentProductText(row: CustomerListItem) {
 }
 
 export function CustomersTable({
+  viewerRole = "ADMIN",
   items,
   pagination,
   callResultOptions,
@@ -174,6 +176,10 @@ export function CustomersTable({
   headerAction,
   scrollTargetId,
 }: Readonly<{
+  // 可选, 默认按 ADMIN (展示负责人). `/customers` workbench 传真实 role —
+  // SALES 视角会隐藏行内"负责人 (@cxxx)"冗余. 旧 CustomerWorkQueue 不传, 保持
+  // 原有"始终展示负责人"行为不回退.
+  viewerRole?: RoleCode;
   items: CustomerListItem[];
   pagination: PaginationData;
   callResultOptions: CallResultOption[];
@@ -194,6 +200,9 @@ export function CustomersTable({
   scrollTargetId?: string;
 }>) {
   const [viewMode, setViewMode] = useState<CustomerViewMode>("table");
+  // SALES 视角下"负责人 (@cxxx)"几乎都是自己, 是冗余噪声; 只有 ADMIN /
+  // SUPERVISOR 跨人看客户时才需要在行内看负责人 (与 getOwnerLabel 一致).
+  const showOwnerLabel = viewerRole === "ADMIN" || viewerRole === "SUPERVISOR";
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("manual");
   const currentPageSelectionKey = `${pagination.page}:${items.map((item) => item.id).join(",")}`;
   const [pageSelection, setPageSelection] = useState<PageSelectionState>({
@@ -675,7 +684,6 @@ export function CustomersTable({
             >
               {row.name}
             </button>
-            <CustomerGradeBadge grade={row.grade} />
             <ExecutionBadge row={row} onClick={() => openFollowUpDialog(row, {
               initialResult:
                 (row.newImported && row.pendingFirstCall
@@ -683,6 +691,10 @@ export function CustomersTable({
                   : getCustomerExecutionClassQuickResult(row.executionClass)) ||
                 getSuggestedFollowUpResult(row),
             })} />
+            <CustomerCallProgress
+              callCount={row.callCount}
+              isWechatAdded={row.isWechatAdded}
+            />
           </div>
           <CustomerPhoneSpotlight
             customerId={row.id}
@@ -792,7 +804,10 @@ export function CustomersTable({
       ]
     : baseColumns;
 
-  // Spacious rows: md+ 主视图. 行高从 py-6 → py-3 (≥50% 缩减).
+  // Spacious rows: md+ 主视图 (定稿 v3 干净风格).
+  //   行 1: [头像] 姓名 + 单一状态徽章 + "已拨 X/5"
+  //   行 2: 大字手机号 (font-mono 主角) · 地址 · 上次跟进摘要
+  //   右侧: [记录拨打] 蓝主按钮 + 更多
   const spaciousRows = (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="divide-y divide-border">
@@ -804,11 +819,16 @@ export function CustomersTable({
             newImported: row.newImported,
             pendingFirstCall: row.pendingFirstCall,
           });
-          const recentProduct = getRecentProductText(row);
+          const phoneText = row.phone?.trim() ?? "";
+          const hasPhone = phoneText.length > 0;
           const callsText = getCallsSummaryText(
             row.latestFollowUpAt,
             row._count.callRecords,
           );
+          const followUpSummary = latestCallRecord
+            ? `${callsText} · ${latestCallRecord.resultLabel}`
+            : callsText;
+          const ownerLabel = getOwnerLabel(row);
 
           return (
             <article
@@ -816,7 +836,7 @@ export function CustomersTable({
               id={`customer-row-${row.id}`}
               onClick={(event) => handleSpaciousRowClick(event, row)}
               className={cn(
-                "group/customer-row grid cursor-pointer grid-cols-12 items-center gap-3 bg-card px-5 py-3 ring-1 ring-inset ring-transparent outline-none transition-[background-color,box-shadow,transform] duration-200 ease-out xl:px-6",
+                "group/customer-row flex cursor-pointer items-center gap-4 bg-card px-5 py-4 ring-1 ring-inset ring-transparent outline-none transition-[background-color,box-shadow,transform] duration-200 ease-out xl:px-6",
                 "hover:bg-muted/40 hover:ring-primary/10",
                 "active:scale-[0.998] active:ring-primary/30 active:duration-[50ms]",
                 "focus-within:ring-primary/40",
@@ -824,125 +844,123 @@ export function CustomersTable({
                   "scroll-mt-28 bg-primary/10 shadow-[inset_3px_0_0_hsl(var(--primary))]",
               )}
             >
-              {/* 客户身份 */}
-              <div className="col-span-12 flex min-w-0 items-center gap-3 lg:col-span-4">
-                {canBatchSelect ? (
-                  <label
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-card transition-colors hover:border-primary/30 hover:bg-muted"
-                    data-row-interactive="true"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={
-                        selectionMode === "filtered" ||
-                        manualSelectedIds.includes(row.id)
-                      }
-                      onChange={() => toggleSelected(row.id)}
-                      aria-label={`选择客户 ${row.name}`}
-                      className="h-3.5 w-3.5 rounded border-border bg-card text-primary focus:ring-primary/15"
-                    />
-                  </label>
-                ) : null}
+              {canBatchSelect ? (
+                <label
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-card transition-colors hover:border-primary/30 hover:bg-muted"
+                  data-row-interactive="true"
+                >
+                  <input
+                    type="checkbox"
+                    checked={
+                      selectionMode === "filtered" ||
+                      manualSelectedIds.includes(row.id)
+                    }
+                    onChange={() => toggleSelected(row.id)}
+                    aria-label={`选择客户 ${row.name}`}
+                    className="h-3.5 w-3.5 rounded border-border bg-card text-primary focus:ring-primary/15"
+                  />
+                </label>
+              ) : null}
 
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/15 bg-primary/10 text-sm font-bold text-primary transition-transform duration-200 ease-out group-hover/customer-row:scale-105">
-                  {getCustomerInitial(row)}
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => openCustomerSheet(row)}
-                      className="max-w-full truncate text-left text-[15px] font-semibold text-foreground transition-colors hover:text-primary"
-                    >
-                      {row.name}
-                    </button>
-                    <CustomerGradeBadge grade={row.grade} />
-                    <ExecutionBadge
-                      row={row}
-                      compact
-                      onClick={() =>
-                        openFollowUpDialog(row, {
-                          initialResult:
-                            (row.newImported && row.pendingFirstCall
-                              ? ""
-                              : getCustomerExecutionClassQuickResult(
-                                  row.executionClass,
-                                )) || getSuggestedFollowUpResult(row),
-                        })
-                      }
-                      variantClass={executionBadgeClassNames[executionVariant]}
-                    />
-                  </div>
-                  <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5">
-                    <span className="truncate font-mono text-sm font-semibold leading-tight tracking-tight text-foreground tabular-nums">
-                      {row.phone?.trim() || "暂无电话"}
-                    </span>
-                    <span
-                      className="max-w-[14rem] truncate text-xs text-muted-foreground"
-                      title={getCustomerAddress(row)}
-                    >
-                      {getCustomerAddress(row)}
-                    </span>
-                  </div>
-                </div>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-primary/15 bg-primary/10 text-sm font-bold text-primary transition-transform duration-200 ease-out group-hover/customer-row:scale-105">
+                {getCustomerInitial(row)}
               </div>
 
-              {/* 负责人 + 最近意向 (单行) */}
-              <div className="col-span-12 min-w-0 lg:col-span-4">
-                <p
-                  className="truncate text-[13px] text-foreground/80"
-                  title={getOwnerLabel(row)}
-                >
-                  {getOwnerLabel(row)}
-                </p>
+              {/* 身份 + 手机号主角 + 摘要 */}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <button
+                    type="button"
+                    onClick={() => openCustomerSheet(row)}
+                    className="max-w-full truncate text-left text-[15px] font-semibold text-foreground transition-colors hover:text-primary"
+                  >
+                    {row.name}
+                  </button>
+                  {/* 单一状态徽章: 取信息量更大的 execution (含临时态 + 是
+                      跟进编辑入口); grade A/B/C/D/F 退到详情页, 不在行内堆两个. */}
+                  <ExecutionBadge
+                    row={row}
+                    compact
+                    onClick={() =>
+                      openFollowUpDialog(row, {
+                        initialResult:
+                          (row.newImported && row.pendingFirstCall
+                            ? ""
+                            : getCustomerExecutionClassQuickResult(
+                                row.executionClass,
+                              )) || getSuggestedFollowUpResult(row),
+                      })
+                    }
+                    variantClass={executionBadgeClassNames[executionVariant]}
+                  />
+                  <CustomerCallProgress
+                    callCount={row.callCount}
+                    isWechatAdded={row.isWechatAdded}
+                  />
+                </div>
+
+                {/* 手机号 = 主角: 大字 font-mono; 移动端 tel: 点一下拨号
+                    (md+ 用右侧"记录拨打"走录音/审计路径). */}
+                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5">
+                  {hasPhone ? (
+                    <a
+                      href={`tel:${phoneText}`}
+                      onClick={(event) => event.stopPropagation()}
+                      data-row-interactive="true"
+                      className="truncate font-mono text-base font-bold leading-tight tracking-tight text-foreground tabular-nums transition-colors hover:text-primary md:pointer-events-none md:hover:text-foreground"
+                      title={phoneText}
+                    >
+                      {phoneText}
+                    </a>
+                  ) : (
+                    <span className="truncate font-mono text-base font-bold leading-tight tracking-tight text-muted-foreground tabular-nums">
+                      暂无电话
+                    </span>
+                  )}
+                  <span
+                    className="max-w-[16rem] truncate text-xs text-muted-foreground"
+                    title={getCustomerAddress(row)}
+                  >
+                    {getCustomerAddress(row)}
+                  </span>
+                </div>
+
                 <p
                   className="mt-0.5 truncate text-xs text-muted-foreground"
-                  title={recentProduct}
-                >
-                  最近意向 · {recentProduct}
-                </p>
-              </div>
-
-              {/* 通话 + 跟进结果 + 备注 inline 小字 (与跟进编辑入口冲突, 删除独立 popover trigger) */}
-              <div className="col-span-12 min-w-0 lg:col-span-3">
-                <p
-                  className="truncate text-[13px] text-foreground/80"
                   title={
                     row.latestFollowUpAt
                       ? `最近跟进 ${formatDateTime(row.latestFollowUpAt)}`
                       : "暂无跟进记录"
                   }
                 >
-                  {callsText}
+                  {showOwnerLabel ? `${ownerLabel} · ` : ""}
+                  {followUpSummary}
+                  {remarkText.length > 0 ? ` · 备注 ${remarkText}` : ""}
                 </p>
-                <p
-                  className="mt-0.5 truncate text-xs text-muted-foreground"
-                  title={
-                    latestCallRecord ? latestCallRecord.resultLabel : "暂无通话结果"
-                  }
-                >
-                  {latestCallRecord ? latestCallRecord.resultLabel : "暂无通话结果"}
-                </p>
-                {remarkText.length > 0 ? (
-                  <p
-                    className="mt-1 truncate text-xs text-muted-foreground/80"
-                    title={remarkText}
-                  >
-                    备注 · {remarkText}
-                  </p>
-                ) : null}
               </div>
 
-              {/* 动作 */}
-              <div className="col-span-12 flex items-center justify-end gap-1 lg:pointer-events-none lg:col-span-1 lg:opacity-0 lg:transition-opacity lg:duration-150 lg:group-hover/customer-row:pointer-events-auto lg:group-hover/customer-row:opacity-100 lg:group-focus-within/customer-row:pointer-events-auto lg:group-focus-within/customer-row:opacity-100">
-                <RowActions
-                  row={row}
-                  onOpenSheet={() => openCustomerSheet(row)}
-                  onOpenFollowUp={() => openFollowUpDialog(row)}
-                  onPopupOpen={() => rememberFocusedCustomer(row)}
-                  variant="spacious"
-                />
+              {/* 动作: 记录拨打主按钮常驻 (核心动作) + 更多 hover 出现 */}
+              <div className="flex shrink-0 items-center gap-2">
+                {canCreateCallRecord ? (
+                  <button
+                    type="button"
+                    onClick={() => openFollowUpDialog(row)}
+                    data-row-interactive="true"
+                    className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-primary px-3.5 text-[13px] font-semibold text-primary-foreground outline-none transition-colors duration-200 ease-out hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-primary/40"
+                  >
+                    <Phone className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>记录拨打</span>
+                  </button>
+                ) : null}
+                <div className="flex items-center gap-1 lg:pointer-events-none lg:opacity-0 lg:transition-opacity lg:duration-150 lg:group-hover/customer-row:pointer-events-auto lg:group-hover/customer-row:opacity-100 lg:group-focus-within/customer-row:pointer-events-auto lg:group-focus-within/customer-row:opacity-100">
+                  <RowActions
+                    row={row}
+                    onOpenSheet={() => openCustomerSheet(row)}
+                    onOpenFollowUp={() => openFollowUpDialog(row)}
+                    onPopupOpen={() => rememberFocusedCustomer(row)}
+                    variant="spacious"
+                  />
+                </div>
               </div>
             </article>
           );

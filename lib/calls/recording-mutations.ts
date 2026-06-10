@@ -404,6 +404,13 @@ export async function startMobileCallSession(
       },
     });
 
+    // Wave 11: 累计拨打次数 = CallRecord 总条数. 移动端发起本地电话即落一条
+    // CallRecord, 计入拨打次数 (同事务). 见 lib/calls/mutations.ts 同款 increment.
+    await tx.customer.update({
+      where: { id: customer.id },
+      data: { callCount: { increment: 1 } },
+    });
+
     await tx.operationLog.create({
       data: {
         actorId: actor.id,

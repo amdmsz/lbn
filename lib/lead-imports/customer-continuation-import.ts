@@ -505,6 +505,14 @@ async function ensureImportedCustomerSignalTx(
     },
   });
 
+  // Wave 11: 累计拨打次数 = CallRecord 总条数. 客户续接导入补齐一条历史通话结果
+  // 也落一条 CallRecord, 同事务 increment 保持与计数一致 (INVALID_NUMBER 复用
+  // 既有记录的早返回路径不会走到这里, 不会重复计数).
+  await tx.customer.update({
+    where: { id: input.customerId },
+    data: { callCount: { increment: 1 } },
+  });
+
   await createOperationLog(tx, {
     actor: { connect: { id: input.actorId } },
     module: OperationModule.CALL,

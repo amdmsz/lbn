@@ -148,6 +148,14 @@ export async function createCallRecord(
       },
     });
 
+    // Wave 11 "未加微至少拨打 5 遍": 累计拨打次数 = CallRecord 总条数. 每成功落
+    // 一条 (不论是否接通) 就 +1, 同事务保证与 CallRecord 计数一致. 驱动
+    // pending_dial 队列与列表行 "已拨 X/5" 提示. 与 grade 派生互不影响.
+    await tx.customer.update({
+      where: { id: customer.id },
+      data: { callCount: { increment: 1 } },
+    });
+
     await tx.operationLog.create({
       data: {
         actorId: actor.id,

@@ -553,6 +553,13 @@ export async function startOutboundCall(
       select: { id: true },
     });
 
+    // Wave 11: 累计拨打次数 = CallRecord 总条数. CRM 外呼发起即落一条 CallRecord,
+    // 计入拨打次数 (同事务). 见 lib/calls/mutations.ts createCallRecord 同款 increment.
+    await tx.customer.update({
+      where: { id: customer.id },
+      data: { callCount: { increment: 1 } },
+    });
+
     const session = await tx.outboundCallSession.create({
       data: {
         callRecordId: callRecord.id,

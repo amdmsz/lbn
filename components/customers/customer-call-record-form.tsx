@@ -11,6 +11,10 @@ import { ActionBanner } from "@/components/shared/action-banner";
 import { notifyToast } from "@/components/shared/toast-provider";
 import type { CallResultOption } from "@/lib/calls/metadata";
 import {
+  buildFollowUpQuickResults,
+  type FollowUpQuickResultDefinition,
+} from "@/lib/calls/follow-up-quick-results";
+import {
   filterMobileCallResultOptions,
   getSuggestedMobileCallResultCode,
   inferConnectedStateFromResultCode,
@@ -109,6 +113,45 @@ function HelperChoiceButton({
   );
 }
 
+// 选中态柔和色块: 选中即 2px 主色边; tone 仅微调底色, 与 result 语义一致.
+const quickResultSelectedToneClassNames: Record<
+  FollowUpQuickResultDefinition["tone"],
+  string
+> = {
+  neutral: "bg-primary/[0.06]",
+  success: "bg-[var(--tone-success-soft-bg)]",
+  danger: "bg-[var(--tone-danger-soft-bg)]",
+};
+
+function FollowUpQuickResultButton({
+  definition,
+  active,
+  onSelect,
+}: Readonly<{
+  definition: FollowUpQuickResultDefinition;
+  active: boolean;
+  onSelect: () => void;
+}>) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onSelect}
+      className={cn(
+        "inline-flex min-h-[3.1rem] flex-1 basis-[5.5rem] items-center justify-center rounded-md border px-3 py-2 text-[13px] font-semibold leading-tight transition-colors duration-150",
+        active
+          ? cn(
+              "border-2 border-primary text-foreground shadow-sm",
+              quickResultSelectedToneClassNames[definition.tone],
+            )
+          : "border border-border/70 bg-background text-muted-foreground hover:border-primary/30 hover:bg-muted hover:text-foreground",
+      )}
+    >
+      {definition.label}
+    </button>
+  );
+}
+
 export function CustomerCallRecordForm({
   customerId,
   resultOptions,
@@ -133,7 +176,7 @@ export function CustomerCallRecordForm({
   className?: string;
   submitButtonClassName?: string;
   onSuccess?: () => void;
-  variant?: "full" | "quick-note" | "mobile-followup";
+  variant?: "full" | "quick-note" | "mobile-followup" | "follow-up";
   defaultDurationSeconds?: number;
   defaultCallTime?: Date | string | null;
   defaultResult?: string;
@@ -170,6 +213,8 @@ export function CustomerCallRecordForm({
     variant === "mobile-followup"
       ? filterMobileCallResultOptions(resultOptions, connectedState, wechatState)
       : resultOptions;
+  const followUpQuickResults =
+    variant === "follow-up" ? buildFollowUpQuickResults(resultOptions) : [];
 
   useEffect(() => {
     setSelectedResult(resolvedDefaultResult);
@@ -214,6 +259,13 @@ export function CustomerCallRecordForm({
     // 防止双提交并发后两个 server action 的 success 回调互相覆盖
     // form state / selectedResult.
     if (pending) return;
+
+    // follow-up 变体没有原生 <select required>, 结果靠大按钮选. 没选就拦下,
+    // 给一句行内提示, 不发请求 (后端也会校验, 但前端先挡省一次往返).
+    if (variant === "follow-up" && !selectedResult) {
+      setState({ status: "error", message: "请先点选本次结果。" });
+      return;
+    }
 
     const formData = new FormData(event.currentTarget);
 
@@ -269,7 +321,32 @@ export function CustomerCallRecordForm({
     <form ref={formRef} onSubmit={handleSubmit} className={cn("space-y-3.5", className)}>
       <input type="hidden" name="customerId" value={customerId} />
 
-      {variant === "quick-note" ? (
+      {variant === "follow-up" ? (
+        <>
+          <input type="hidden" name="callTime" value={callTimeDefault} />
+          <input
+            type="hidden"
+            name="durationSeconds"
+            value={String(defaultDurationSeconds)}
+          />
+          {/* 选中的 result code 随 form 提交; 大按钮只更新这个值. */}
+          <input type="hidden" name="result" value={selectedResult} />
+
+          <div className="space-y-2">
+            <span className="crm-label">本次结果</span>
+            <div className="flex flex-wrap gap-2">
+              {followUpQuickResults.map((definition) => (
+                <FollowUpQuickResultButton
+                  key={definition.code}
+                  definition={definition}
+                  active={selectedResult === definition.code}
+                  onSelect={() => setSelectedResult(definition.code)}
+                />
+              ))}
+            </div>
+          </div>
+        </>
+      ) : variant === "quick-note" ? (
         <>
           <input type="hidden" name="callTime" value={callTimeDefault} />
           <input
@@ -453,14 +530,20 @@ export function CustomerCallRecordForm({
       )}
 
       <label className="block space-y-2">
-        <span className="crm-label">备注</span>
+        <span className="crm-label">
+          {variant === "follow-up" ? "备注（选填）" : "备注"}
+        </span>
         <textarea
           ref={remarkRef}
           name="remark"
-          rows={4}
+          rows={variant === "follow-up" ? 3 : 4}
           maxLength={1000}
           autoFocus={remarkAutoFocus}
-          placeholder="记录本次沟通内容、客户反馈和后续动作"
+          placeholder={
+            variant === "follow-up"
+              ? "可补一句沟通内容或下一步（选填）"
+              : "记录本次沟通内容、客户反馈和后续动作"
+          }
           className="crm-textarea"
         />
       </label>
