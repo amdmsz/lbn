@@ -498,19 +498,20 @@ export type CustomerOwnerTransferOption = {
 // 触发 cap 时 console.warn 仍然保留作为 cursor 切流压力的早期信号.
 const CUSTOMER_CENTER_LIST_HARD_CAP = 10000;
 
-// 客户列表统一排序: 按导入顺序固定 (createdAt 升序, 先导入先打), id 升序作为
-// 稳定 tiebreaker.
+// 客户列表统一排序: 按导入时间固定 (createdAt 降序, 新导入在最前), id 降序
+// 作为稳定 tiebreaker.
 //
 // 业务原因: 销售按列表从上往下挨个拨打. 旧排序 `updatedAt desc` 会在销售记录
 // 通话/备注 (touch updatedAt) 后把该客户弹到列表最前, 顺序乱掉 — 销售反馈
 // "保留记录后客户位置变了, 很乱". 改成 createdAt 后, 记录动作不再改变客户在
-// 列表的位置, 新导入客户稳定排在列表最后.
+// 列表的位置 (createdAt 不会被 touch), 顺序稳定. 新导入的客户排在列表最前,
+// 方便优先跟进新资源; 拨打过程中只要没有新导入, 顺序纹丝不动.
 //
 // 性能: 没有 (ownerId, createdAt, id) 复合索引, MariaDB 走 filesort. 当前
 // 5826 行级别 filesort 是毫秒级, 可接受; 量级再涨可加索引.
 const CUSTOMER_CENTER_LIST_ORDER_BY: Prisma.CustomerOrderByWithRelationInput[] = [
-  { createdAt: "asc" },
-  { id: "asc" },
+  { createdAt: "desc" },
+  { id: "desc" },
 ];
 
 const customerQueueValues = [
