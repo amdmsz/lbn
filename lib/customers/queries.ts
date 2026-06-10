@@ -3477,6 +3477,56 @@ function buildTodayNewImportedCustomerWhereInput(
 }
 
 /**
+ * 分配时间 (assignedFrom / assignedTo) → SQL where.
+ *
+ * 真相: 客户被"分配/接手"的时间 = CustomerOwnershipEvent (PRIVATE 承接) 的
+ * createdAt; 早期 lead 期分配走 LeadAssignment.createdAt. 与内存 assignedAt
+ * 派生 (getLatestCustomerAssignmentMap) 同源.
+ *
+ * 关键修复 (2026-06-10): 之前 SQL 端图省事用 customer.createdAt 近似, 导致
+ * "老客户(createdAt 旧) 今天重新分配给某销售" 时, 按 分配时间=今天 + 该销售
+ * 过滤 → 列表空 (createdAt 不在今天). 现在改查 ownershipEvents / leadAssignments
+ * 的 createdAt, 老客户重分配能正确命中.
+ *
+ * salesId 存在时: "分配时间" = 分配给该销售的事件时间 (toOwnerId / toUserId
+ * 限定到该销售). 不传 salesId (ADMIN 看全量): 任意 PRIVATE 承接 / lead 分配在
+ * 窗口内即算.
+ */
+function buildAssignedRangeCustomerWhereInput(
+  assignedFrom: string,
+  assignedTo: string,
+  salesId: string,
+): Prisma.CustomerWhereInput | null {
+  const fromDate = parseDateOnly(assignedFrom, "start");
+  const toDate = parseDateOnly(assignedTo, "end");
+  if (!fromDate && !toDate) {
+    return null;
+  }
+  const range: { gte?: Date; lte?: Date } = {};
+  if (fromDate) range.gte = fromDate;
+  if (toDate) range.lte = toDate;
+
+  const ownershipEventWhere: Prisma.CustomerOwnershipEventWhereInput = {
+    toOwnershipMode: CustomerOwnershipMode.PRIVATE,
+    createdAt: range,
+  };
+  const leadAssignmentWhere: Prisma.LeadAssignmentWhereInput = {
+    createdAt: range,
+  };
+  if (salesId) {
+    ownershipEventWhere.toOwnerId = salesId;
+    leadAssignmentWhere.toUserId = salesId;
+  }
+
+  return {
+    OR: [
+      { ownershipEvents: { some: ownershipEventWhere } },
+      { leads: { some: { assignments: { some: leadAssignmentWhere } } } },
+    ],
+  };
+}
+
+/**
  * 把 customer queue key 翻译成 SQL where 片段, 与 sidebar aggregate 同源.
  *
  * 关键: 复用 getCustomerCenterStatsAggregate 内用的同一批 `build*CustomerWhereInput`
@@ -3793,15 +3843,13 @@ export function buildCustomerCenterListFilterClauses(input: {
       customerTags: { some: { tagId: { in: filters.tagIds } } },
     });
   }
-  if (filters.assignedFrom || filters.assignedTo) {
-    const fromDate = parseDateOnly(filters.assignedFrom, "start");
-    const toDate = parseDateOnly(filters.assignedTo, "end");
-    if (fromDate || toDate) {
-      const range: { gte?: Date; lte?: Date } = {};
-      if (fromDate) range.gte = fromDate;
-      if (toDate) range.lte = toDate;
-      listFilterClauses.push({ createdAt: range });
-    }
+  const assignedRangeWhere = buildAssignedRangeCustomerWhereInput(
+    filters.assignedFrom,
+    filters.assignedTo,
+    filters.salesId,
+  );
+  if (assignedRangeWhere) {
+    listFilterClauses.push(assignedRangeWhere);
   }
   if (filters.executionClasses.length > 0) {
     const classClauses: Prisma.CustomerWhereInput[] = [];
@@ -4445,20 +4493,17 @@ export async function getCustomerCenterData(
     });
   }
 
-  // assignedRange (assignedFrom / assignedTo): 完整语义是 "客户被分配/接手的时间
-  // 在窗口内", 真相是 CustomerOwnershipEvent 上的最新 event.createdAt. 但 SQL 端
-  // join + group by + having 复杂度高, 这里先用 customer.createdAt 替代 (≈ "客
-  // 户创建时间在窗口内"). 业务上对绝大多数 case 等价 (导入即创建, 分配紧跟随).
-  // 完整实现等 phase 3 (需要 join CustomerOwnershipEvent).
-  if (filters.assignedFrom || filters.assignedTo) {
-    const fromDate = parseDateOnly(filters.assignedFrom, "start");
-    const toDate = parseDateOnly(filters.assignedTo, "end");
-    if (fromDate || toDate) {
-      const range: { gte?: Date; lte?: Date } = {};
-      if (fromDate) range.gte = fromDate;
-      if (toDate) range.lte = toDate;
-      listFilterClauses.push({ createdAt: range });
-    }
+  // assignedRange (assignedFrom / assignedTo): 真相 = CustomerOwnershipEvent /
+  // LeadAssignment 的 createdAt (分配/接手时间), 不是 customer.createdAt — 老客户
+  // 今天重分配时 createdAt 是旧的, 用 createdAt 会让 "分配时间=今天" 漏掉它.
+  // 走 buildAssignedRangeCustomerWhereInput 与 streaming 路径 + 内存 assignedAt 同源.
+  const assignedRangeWhere = buildAssignedRangeCustomerWhereInput(
+    filters.assignedFrom,
+    filters.assignedTo,
+    filters.salesId,
+  );
+  if (assignedRangeWhere) {
+    listFilterClauses.push(assignedRangeWhere);
   }
 
   // executionClasses (A/B/C/D/E): 派生 (deriveCustomerExecutionClassFromSignals)
