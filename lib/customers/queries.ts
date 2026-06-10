@@ -498,6 +498,21 @@ export type CustomerOwnerTransferOption = {
 // 触发 cap 时 console.warn 仍然保留作为 cursor 切流压力的早期信号.
 const CUSTOMER_CENTER_LIST_HARD_CAP = 10000;
 
+// 客户列表统一排序: 按导入顺序固定 (createdAt 升序, 先导入先打), id 升序作为
+// 稳定 tiebreaker.
+//
+// 业务原因: 销售按列表从上往下挨个拨打. 旧排序 `updatedAt desc` 会在销售记录
+// 通话/备注 (touch updatedAt) 后把该客户弹到列表最前, 顺序乱掉 — 销售反馈
+// "保留记录后客户位置变了, 很乱". 改成 createdAt 后, 记录动作不再改变客户在
+// 列表的位置, 新导入客户稳定排在列表最后.
+//
+// 性能: 没有 (ownerId, createdAt, id) 复合索引, MariaDB 走 filesort. 当前
+// 5826 行级别 filesort 是毫秒级, 可接受; 量级再涨可加索引.
+const CUSTOMER_CENTER_LIST_ORDER_BY: Prisma.CustomerOrderByWithRelationInput[] = [
+  { createdAt: "asc" },
+  { id: "asc" },
+];
+
 const customerQueueValues = [
   "all",
   "new_imported",
@@ -3830,7 +3845,7 @@ async function getCustomerCenterDataListImpl(
 
   const pageSnapshots: CustomerSnapshot[] = await prisma.customer.findMany({
     where: listWhere,
-    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    orderBy: CUSTOMER_CENTER_LIST_ORDER_BY,
     skip,
     take: pageSize,
     select: customerSnapshotSelect,
@@ -4414,7 +4429,7 @@ export async function getCustomerCenterData(
 
   const pageSnapshots: CustomerSnapshot[] = await prisma.customer.findMany({
     where: listWhere,
-    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    orderBy: CUSTOMER_CENTER_LIST_ORDER_BY,
     skip,
     take: pageSize,
     select: customerSnapshotSelect,
@@ -4803,6 +4818,10 @@ export async function listCustomersCursor(
         ...filterClauses,
       ],
     },
+    // cursor (keyset) fallback 仍按 updatedAt — cursor 编码的就是 updatedAt,
+    // 改排序需同步改 codec + WHERE. 但分页 UI 已切到 page-number 按钮 (page
+    // mode), 不再生成 `?cursor=` URL, 此路径正常导航不可达. 默认可见列表
+    // (page mode, 上面 CUSTOMER_CENTER_LIST_ORDER_BY) 已按导入顺序固定.
     orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
     take: pageSize + 1,
     select: {
