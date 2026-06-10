@@ -869,8 +869,11 @@ export function CustomersTable({
           });
           const phoneText = row.phone?.trim() ?? "";
           const hasPhone = phoneText.length > 0;
+          // 栏2 地址: 优先显完整地址 (省市区 / 详细地址), 销售很多客户只填了
+          // 详细地址没填结构化省市, 之前只取 [province, city] 会误显"地区未填".
+          const fullAddressText = getCustomerAddress(row);
           const regionText =
-            [row.province, row.city].filter(Boolean).join(" ") || "地区未填";
+            fullAddressText === "未填写" ? "地址未填" : fullAddressText;
           const productText =
             row.latestInterestedProduct ?? row.latestPurchasedProduct;
           const ownerLabel = getOwnerLabel(row);
