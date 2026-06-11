@@ -452,6 +452,12 @@ async function getScopedPublicCustomers(scope: AutoAssignScopeSummary) {
       status: {
         notIn: [...customerPublicPoolRecycleConfig.excludedCustomerStatuses],
       },
+      // 回收站封存壳 (phone→ARCHIVED:id) 不可拨打, 不参与自动分配
+      NOT: {
+        phone: {
+          startsWith: "ARCHIVED:",
+        },
+      },
     },
     orderBy: [{ publicPoolEnteredAt: "asc" }, { createdAt: "asc" }, { id: "asc" }],
     select: publicPoolAutoAssignCustomerSelect,

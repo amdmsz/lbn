@@ -1,6 +1,7 @@
 import type { RoleCode } from "@prisma/client";
 import {
   canAccessCallRecordingModule,
+  canAccessCustomerPublicPool,
   canAccessLiveSessionModule,
   canAccessProductModule,
   canAccessRecycleBinModule,
@@ -70,6 +71,14 @@ const navigationItems = {
     description: "客户执行主工作台和客户经营视图。",
     iconName: "customers",
     activePrefixes: ["/customers"],
+    excludePrefixes: ["/customers/public-pool"],
+  }),
+  customerPublicPool: createItem({
+    title: "公海池",
+    href: "/customers/public-pool",
+    description: "公海认领、未接通回流与再分配工作台。",
+    iconName: "customers",
+    activePrefixes: ["/customers/public-pool"],
   }),
   callRecordings: createItem({
     title: "通话录音",
@@ -233,6 +242,7 @@ const navigationTree: NavigationTree = {
         {
           items: [
             navigationItems.customers,
+            navigationItems.customerPublicPool,
             navigationItems.callRecordings,
             navigationItems.leads,
             navigationItems.leadImports,
@@ -287,6 +297,7 @@ const navigationTree: NavigationTree = {
         {
           items: [
             navigationItems.customers,
+            navigationItems.customerPublicPool,
             navigationItems.callRecordings,
             navigationItems.leads,
             navigationItems.leadImports,
@@ -333,7 +344,15 @@ const navigationTree: NavigationTree = {
       key: "customer-operations",
       title: "客户运营",
       description: "客户主线与直播邀约协同。",
-      sections: [{ items: [navigationItems.customers, navigationItems.liveSessions] }],
+      sections: [
+        {
+          items: [
+            navigationItems.customers,
+            navigationItems.customerPublicPool,
+            navigationItems.liveSessions,
+          ],
+        },
+      ],
     },
     {
       key: "commerce",
@@ -433,6 +452,10 @@ function canAccessNavigationItem(
 
   if (item.href === "/call-recordings") {
     return canAccessCallRecordingModule(role);
+  }
+
+  if (item.href === "/customers/public-pool") {
+    return canAccessCustomerPublicPool(role);
   }
 
   if (item.href === "/products") {

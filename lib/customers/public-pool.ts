@@ -544,6 +544,15 @@ function buildVisiblePublicCustomerWhere(
         },
       ],
     },
+    // 回收站"仅封存"的客户壳 (姓名→已封存客户#X, phone→ARCHIVED:id, 无法拨打)
+    // ownerId 也是 null, 会漏进公海列表和计数 — 一律排除.
+    {
+      NOT: {
+        phone: {
+          startsWith: "ARCHIVED:",
+        },
+      },
+    },
     ...buildSearchClause(filters.search),
     ...buildOrderFilter(filters.hasOrders),
   ];
