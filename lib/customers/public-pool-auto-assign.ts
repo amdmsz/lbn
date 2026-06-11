@@ -16,6 +16,7 @@ import {
   customerPublicPoolRecycleConfig,
   defaultTeamPublicPoolSettingValues,
   publicPoolAutoAssignStrategyLabels,
+  PUBLIC_POOL_RECLAIM_COOLDOWN_HOURS,
   type PublicPoolAutoAssignStrategyValue,
 } from "@/lib/customers/public-pool-metadata";
 import {
@@ -549,10 +550,63 @@ function toInternalCandidate(
   };
 }
 
+// 指派冷却: 收集"销售在 24h 内拨打过哪些候选客户"的配对, 轮转 / 低负载选人时
+// 跳过这些配对 — 防止昨天刚回流的未接通又自动分回打过它的人.
+async function getCooldownPairs(
+  customers: InternalAutoAssignCandidate[],
+  sales: AutoAssignSalesCandidate[],
+  now: Date,
+) {
+  if (customers.length === 0 || sales.length === 0) {
+    return new Set<string>();
+  }
+
+  const cooldownStart = new Date(
+    now.getTime() - PUBLIC_POOL_RECLAIM_COOLDOWN_HOURS * 60 * 60 * 1000,
+  );
+  const rows = await prisma.callRecord.findMany({
+    where: {
+      customerId: {
+        in: customers.map((item) => item.customerId),
+      },
+      salesId: {
+        in: sales.map((item) => item.id),
+      },
+      callTime: {
+        gte: cooldownStart,
+      },
+    },
+    distinct: ["customerId", "salesId"],
+    select: {
+      customerId: true,
+      salesId: true,
+    },
+  });
+
+  return new Set(rows.map((row) => `${row.customerId}:${row.salesId}`));
+}
+
+function isCooldownBlockedPair(
+  cooldownPairs: Set<string>,
+  customerId: string,
+  salesId: string,
+) {
+  return cooldownPairs.has(`${customerId}:${salesId}`);
+}
+
+function buildCooldownIssue() {
+  return buildIssue(
+    "ALL_SALES_IN_COOLDOWN",
+    "候选销售均在冷却期内",
+    `当前可承接的销售在 ${PUBLIC_POOL_RECLAIM_COOLDOWN_HOURS} 小时内都拨打过该客户，本轮自动分配跳过，避免未接通客户回到刚打过的人手里。`,
+  );
+}
+
 function buildLoadBalancingPlans(
   customers: InternalAutoAssignCandidate[],
   sales: AutoAssignSalesCandidate[],
   setting: ResolvedTeamPublicPoolSetting,
+  cooldownPairs: Set<string>,
 ) {
   const mutableLoads = new Map(
     sales.map((item) => [item.id, item.currentPrivateCustomerCount]),
@@ -579,7 +633,7 @@ function buildLoadBalancingPlans(
 
       return left.id.localeCompare(right.id, "zh-Hans-CN");
     });
-    const candidate = rankedSales.find((salesItem) => {
+    const capacityCandidates = rankedSales.filter((salesItem) => {
       if (setting.maxActiveCustomersPerSales === null) {
         return true;
       }
@@ -590,7 +644,7 @@ function buildLoadBalancingPlans(
       );
     });
 
-    if (!candidate) {
+    if (capacityCandidates.length === 0) {
       unassigned.push({
         customer,
         issue: buildIssue(
@@ -598,6 +652,19 @@ function buildLoadBalancingPlans(
           "全部销售已达容量上限",
           "当前候选 SALES 都已达到团队设置的最大承接客户数，本轮不再继续自动分配。",
         ),
+      });
+      continue;
+    }
+
+    const candidate = capacityCandidates.find(
+      (salesItem) =>
+        !isCooldownBlockedPair(cooldownPairs, customer.customerId, salesItem.id),
+    );
+
+    if (!candidate) {
+      unassigned.push({
+        customer,
+        issue: buildCooldownIssue(),
       });
       continue;
     }
@@ -621,6 +688,7 @@ function buildRoundRobinPlans(
   customers: InternalAutoAssignCandidate[],
   sales: AutoAssignSalesCandidate[],
   setting: ResolvedTeamPublicPoolSetting,
+  cooldownPairs: Set<string>,
 ) {
   const mutableLoads = new Map(
     sales.map((item) => [item.id, item.currentPrivateCustomerCount]),
@@ -639,6 +707,7 @@ function buildRoundRobinPlans(
 
   for (const customer of customers) {
     let chosen: AutoAssignSalesCandidate | null = null;
+    let sawCapacityCandidate = false;
 
     for (let offset = 0; offset < sales.length; offset += 1) {
       const salesItem = sales[(nextIndex + offset) % sales.length];
@@ -651,6 +720,12 @@ function buildRoundRobinPlans(
         continue;
       }
 
+      sawCapacityCandidate = true;
+
+      if (isCooldownBlockedPair(cooldownPairs, customer.customerId, salesItem.id)) {
+        continue;
+      }
+
       chosen = salesItem;
       nextIndex = (nextIndex + offset + 1) % sales.length;
       break;
@@ -659,11 +734,13 @@ function buildRoundRobinPlans(
     if (!chosen) {
       unassigned.push({
         customer,
-        issue: buildIssue(
-          "ALL_SALES_AT_CAPACITY",
-          "全部销售已达容量上限",
-          "当前轮转候选 SALES 都已达到团队设置的最大承接客户数，本轮不再继续自动分配。",
-        ),
+        issue: sawCapacityCandidate
+          ? buildCooldownIssue()
+          : buildIssue(
+              "ALL_SALES_AT_CAPACITY",
+              "全部销售已达容量上限",
+              "当前轮转候选 SALES 都已达到团队设置的最大承接客户数，本轮不再继续自动分配。",
+            ),
       });
       continue;
     }
@@ -815,10 +892,11 @@ async function buildAutoAssignPreviewData(
     };
   }
 
+  const cooldownPairs = await getCooldownPairs(assignableCustomers, sales, now);
   const dynamicPlans =
     setting.autoAssignStrategy === "ROUND_ROBIN"
-      ? buildRoundRobinPlans(assignableCustomers, sales, setting)
-      : buildLoadBalancingPlans(assignableCustomers, sales, setting);
+      ? buildRoundRobinPlans(assignableCustomers, sales, setting, cooldownPairs)
+      : buildLoadBalancingPlans(assignableCustomers, sales, setting, cooldownPairs);
   const unassigned = [...lockedCustomers, ...dynamicPlans.unassigned];
   const ruleSummary =
     setting.autoAssignStrategy === "ROUND_ROBIN"

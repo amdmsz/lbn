@@ -13,6 +13,7 @@ import {
 import type { CallResultEffectLevelValue } from "@/lib/calls/metadata";
 import { prisma } from "@/lib/db/prisma";
 import { assertCustomerNotInActiveRecycleBin } from "@/lib/customers/recycle";
+import { PUBLIC_POOL_RECLAIM_COOLDOWN_HOURS } from "@/lib/customers/public-pool-metadata";
 import { getResolvedTeamPublicPoolSetting } from "@/lib/customers/public-pool-settings";
 import { getWechatAddedStatusEffectMeta } from "@/lib/wechat/metadata";
 
@@ -665,6 +666,35 @@ export async function assignCustomerToSalesTx(
   });
 }
 
+// 指派/认领冷却: 该销售在冷却窗口内是否拨打过这位客户. 用于防止"昨天拨了 5 遍
+// 未接通回流公海, 今天又落回同一个人手里"的循环.
+export async function hasRecentCallFromSalesTx(
+  tx: TransactionClient,
+  input: {
+    customerId: string;
+    salesId: string;
+    now: Date;
+  },
+) {
+  const cooldownStart = new Date(
+    input.now.getTime() - PUBLIC_POOL_RECLAIM_COOLDOWN_HOURS * 60 * 60 * 1000,
+  );
+  const recentCall = await tx.callRecord.findFirst({
+    where: {
+      customerId: input.customerId,
+      salesId: input.salesId,
+      callTime: {
+        gte: cooldownStart,
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return Boolean(recentCall);
+}
+
 export async function claimPublicPoolCustomerTx(
   tx: TransactionClient,
   input: {
@@ -696,6 +726,18 @@ export async function claimPublicPoolCustomerTx(
 
   if (isProtectedCustomer(customer, now)) {
     throw new Error("Customer is currently protected and cannot be claimed.");
+  }
+
+  if (
+    await hasRecentCallFromSalesTx(tx, {
+      customerId: customer.id,
+      salesId: input.actor.id,
+      now,
+    })
+  ) {
+    throw new Error(
+      `您在 ${PUBLIC_POOL_RECLAIM_COOLDOWN_HOURS} 小时内拨打过该客户，冷却期内不能认领。`,
+    );
   }
 
   return persistOwnershipTransitionTx(tx, {
@@ -752,7 +794,14 @@ export async function releaseCustomerToPublicPoolTx(
     throw new Error("Batch recycle is disabled by the current team public-pool rule.");
   }
 
-  if (input.actor.role !== "ADMIN" && isProtectedCustomer(customer, now)) {
+  // 未接通回流是主管在分配次日的例行动作 — 客户被指派时自带 2 天 claim-lock,
+  // 不放行的话, 昨天刚分出去的未接通客户永远回不了公海. 仅该原因对 SUPERVISOR 放行.
+  const canBypassClaimLock =
+    input.actor.role === "ADMIN" ||
+    (input.actor.role === "SUPERVISOR" &&
+      input.reason === PublicPoolReason.UNREACHABLE_RECYCLE);
+
+  if (!canBypassClaimLock && isProtectedCustomer(customer, now)) {
     throw new Error("Customer is still under claim protection.");
   }
 

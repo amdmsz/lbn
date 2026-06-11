@@ -2,11 +2,24 @@ import { CUSTOMERS_PAGE_SIZE } from "@/lib/customers/metadata";
 
 export type CustomerPublicPoolFilterShape = {
   view: "pool" | "recycle" | "records";
-  segment: "all" | "claimable" | "locked" | "today_new" | "expiring_soon";
+  segment:
+    | "all"
+    | "claimable"
+    | "locked"
+    | "today_new"
+    | "expiring_soon"
+    | "unreachable";
   search: string;
   reason: string;
   teamId: string;
   hasOrders: "all" | "yes" | "no";
+  // 回收工作台·未接通回流筛选 (拨打关系以选定业务员为参照)
+  ownerId: string;
+  calledRange: "any" | "never" | "within1d" | "within7d" | "within30d";
+  callOutcome: "all" | "unreachable";
+  // 公海工作台·目标销售拨打关系分桶
+  targetSalesId: string;
+  dialBucket: "all" | "never" | "within1d" | "within7d" | "within30d";
   page: number;
   pageSize: number;
 };
@@ -49,6 +62,26 @@ export function buildCustomerPublicPoolHref(
 
   if (next.hasOrders !== "all") {
     params.set("hasOrders", next.hasOrders);
+  }
+
+  if (next.ownerId) {
+    params.set("ownerId", next.ownerId);
+  }
+
+  if (next.calledRange !== "any") {
+    params.set("calledRange", next.calledRange);
+  }
+
+  if (next.callOutcome !== "all") {
+    params.set("callOutcome", next.callOutcome);
+  }
+
+  if (next.targetSalesId) {
+    params.set("targetSalesId", next.targetSalesId);
+  }
+
+  if (next.dialBucket !== "all") {
+    params.set("dialBucket", next.dialBucket);
   }
 
   if (next.pageSize !== CUSTOMERS_PAGE_SIZE) {

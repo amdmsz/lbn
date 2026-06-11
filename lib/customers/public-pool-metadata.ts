@@ -22,6 +22,7 @@ export const PUBLIC_POOL_REASON_VALUES = [
   "BATCH_REALLOCATION",
   "MERGE_RELEASE",
   "INVALID_FOLLOWUP_RECYCLE",
+  "UNREACHABLE_RECYCLE",
 ] as const satisfies readonly PublicPoolReason[];
 
 export const CUSTOMER_OWNERSHIP_EVENT_REASON_VALUES = [
@@ -32,6 +33,7 @@ export const CUSTOMER_OWNERSHIP_EVENT_REASON_VALUES = [
   "BATCH_REALLOCATION",
   "MERGE_RELEASE",
   "INVALID_FOLLOWUP_RECYCLE",
+  "UNREACHABLE_RECYCLE",
   "SALES_CLAIM",
   "SUPERVISOR_ASSIGN",
   "AUTO_ASSIGN",
@@ -64,6 +66,7 @@ export const publicPoolReasonLabels: Record<PublicPoolReason, string> = {
   BATCH_REALLOCATION: "批量回收",
   MERGE_RELEASE: "归并释放",
   INVALID_FOLLOWUP_RECYCLE: "无效跟进回收",
+  UNREACHABLE_RECYCLE: "未接通回流",
 };
 
 export const ownershipEventReasonLabels: Record<CustomerOwnershipEventReason, string> = {
@@ -74,6 +77,7 @@ export const ownershipEventReasonLabels: Record<CustomerOwnershipEventReason, st
   BATCH_REALLOCATION: "批量回收",
   MERGE_RELEASE: "归并释放",
   INVALID_FOLLOWUP_RECYCLE: "无效跟进回收",
+  UNREACHABLE_RECYCLE: "未接通回流",
   SALES_CLAIM: "销售认领",
   SUPERVISOR_ASSIGN: "主管指派",
   AUTO_ASSIGN: "自动分配",
@@ -189,6 +193,11 @@ export const customerPublicPoolSettingFieldLabels = {
   batchRecycleEnabled: "允许批量回收",
   batchAssignEnabled: "允许批量指派",
 } satisfies Record<keyof TeamPublicPoolSettingValues, string>;
+
+// 指派冷却: 同一销售 24 小时内拨打过的客户, 不再经"销售认领 / 自动分配"回到她手里
+// (避免第二天又分回本人). 主管指派界面默认按此过滤, 但可切换分桶
+// (从未拨打 / 超过24小时 / 超过7天 / 超过30天 / 全部) 显式选择.
+export const PUBLIC_POOL_RECLAIM_COOLDOWN_HOURS = 24;
 
 export const customerPublicPoolRecycleConfig = {
   inactiveRecycleBatchSize: 50,

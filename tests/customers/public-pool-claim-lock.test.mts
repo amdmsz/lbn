@@ -101,6 +101,9 @@ function installPrismaStub(): void {
       callback: (tx: typeof fakeClient) => Promise<T>,
     ): Promise<T> => callback(fakeClient),
 
+    // getOwnershipCustomerTx 的 SELECT ... FOR UPDATE 行锁 — in-memory 模拟无并发, 直接放行
+    $queryRaw: async () => [],
+
     recycleBinEntry: {
       findFirst: async ({ where }: { where: Record<string, unknown> }) => {
         const targetId = where.targetId as string;

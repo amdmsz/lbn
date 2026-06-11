@@ -261,6 +261,12 @@ function getSegmentTabs(data: CustomerPublicPoolData) {
       href: buildCustomerPublicPoolHref(filters, { segment: "expiring_soon", page: 1 }),
       count: data.summary.expiringSoonCount,
     },
+    {
+      value: "unreachable",
+      label: "未接通池",
+      href: buildCustomerPublicPoolHref(filters, { segment: "unreachable", page: 1 }),
+      count: data.summary.unreachableCount,
+    },
   ];
 }
 
@@ -819,7 +825,10 @@ export function CustomerPublicPoolWorkbench({
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [note, setNote] = useState("");
-  const [targetSalesId, setTargetSalesId] = useState(data.salesOptions[0]?.id ?? "");
+  // 若 URL 里已通过"目标销售"筛过拨打关系, 批量指派默认锁定同一个人
+  const [targetSalesId, setTargetSalesId] = useState(
+    data.filters.targetSalesId || (data.salesOptions[0]?.id ?? ""),
+  );
   const [result, setResult] = useState<WorkbenchFeedback>(buildDefaultFeedback);
   const [inactivePreview, setInactivePreview] =
     useState<CustomerPublicPoolRecyclePreviewResult | null>(null);
@@ -845,6 +854,11 @@ export function CustomerPublicPoolWorkbench({
     reason: "",
     teamId: "",
     hasOrders: "all",
+    ownerId: "",
+    calledRange: "any",
+    callOutcome: "all",
+    targetSalesId: "",
+    dialBucket: "all",
     page: 1,
   });
 
@@ -970,8 +984,13 @@ export function CustomerPublicPoolWorkbench({
   }
 
   const allPoolIds = data.poolItems.filter((item) => !item.isLocked).map((item) => item.id);
+  // 未接通回流模式 (筛"全是未接通") 下, 主管可以选中保护期内的客户 —
+  // 服务端对 UNREACHABLE_RECYCLE 已放行 claim-lock, 其他回收原因保持原限制.
+  const recycleLockBypass =
+    data.actor.role === "ADMIN" ||
+    (data.actor.role === "SUPERVISOR" && filters.callOutcome === "unreachable");
   const allRecycleIds = data.recycleItems
-    .filter((item) => data.actor.role === "ADMIN" || !item.isLocked)
+    .filter((item) => recycleLockBypass || !item.isLocked)
     .map((item) => item.id);
   const actionableCount =
     data.filters.view === "recycle" ? allRecycleIds.length : allPoolIds.length;
@@ -1168,6 +1187,79 @@ export function CustomerPublicPoolWorkbench({
                 </select>
               </label>
             ) : null}
+            {data.filters.view === "recycle" && data.canManage ? (
+              <>
+                <label className="space-y-2">
+                  <span className="crm-label">业务员</span>
+                  <select name="ownerId" defaultValue={data.filters.ownerId} className="crm-select">
+                    <option value="">全部业务员</option>
+                    {data.salesOptions.map((sales) => (
+                      <option key={sales.id} value={sales.id}>
+                        {sales.name} (@{sales.username})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-2">
+                  <span className="crm-label">该业务员拨打关系</span>
+                  <select
+                    name="calledRange"
+                    defaultValue={data.filters.calledRange}
+                    className="crm-select"
+                  >
+                    <option value="any">不限</option>
+                    <option value="never">从未拨打过</option>
+                    <option value="within1d">1 天内打过</option>
+                    <option value="within7d">一周内打过</option>
+                    <option value="within30d">30 天内打过</option>
+                  </select>
+                </label>
+                <label className="space-y-2">
+                  <span className="crm-label">拨打结果</span>
+                  <select
+                    name="callOutcome"
+                    defaultValue={data.filters.callOutcome}
+                    className="crm-select"
+                  >
+                    <option value="all">全部结果</option>
+                    <option value="unreachable">全是未接通</option>
+                  </select>
+                </label>
+              </>
+            ) : null}
+            {data.filters.view === "pool" && data.canManage ? (
+              <>
+                <label className="space-y-2">
+                  <span className="crm-label">目标销售</span>
+                  <select
+                    name="targetSalesId"
+                    defaultValue={data.filters.targetSalesId}
+                    className="crm-select"
+                  >
+                    <option value="">不按销售筛</option>
+                    {data.salesOptions.map((sales) => (
+                      <option key={sales.id} value={sales.id}>
+                        {sales.name} (@{sales.username})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-2">
+                  <span className="crm-label">该销售拨打关系</span>
+                  <select
+                    name="dialBucket"
+                    defaultValue={data.filters.dialBucket}
+                    className="crm-select"
+                  >
+                    <option value="all">全部（不过滤）</option>
+                    <option value="never">从未拨打过</option>
+                    <option value="within1d">1 天内打过</option>
+                    <option value="within7d">一周内打过</option>
+                    <option value="within30d">30 天内打过</option>
+                  </select>
+                </label>
+              </>
+            ) : null}
             <label className="space-y-2">
               <span className="crm-label">每页</span>
               <select name="pageSize" defaultValue={String(data.filters.pageSize)} className="crm-select">
@@ -1253,22 +1345,41 @@ export function CustomerPublicPoolWorkbench({
                 </button>
               ) : null}
               {data.filters.view === "recycle" && data.canManage ? (
-                <button
-                  type="button"
-                  disabled={pending || selectedCount === 0}
-                  className="crm-button crm-button-primary"
-                  onClick={() =>
-                    runMutation(() =>
-                      releaseCustomerToPublicPoolAction({
-                        customerIds: selectedIds,
-                        note,
-                        reason: "BATCH_REALLOCATION",
-                      }),
-                    )
-                  }
-                >
-                  {pending ? "处理中..." : "批量回收"}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    disabled={pending || selectedCount === 0}
+                    className="crm-button crm-button-primary"
+                    onClick={() =>
+                      runMutation(() =>
+                        releaseCustomerToPublicPoolAction({
+                          customerIds: selectedIds,
+                          note,
+                          reason: "BATCH_REALLOCATION",
+                        }),
+                      )
+                    }
+                  >
+                    {pending ? "处理中..." : "批量回收"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pending || selectedCount === 0}
+                    title="把选中客户作为未接通回流放回公海，入公海后出现在“未接通池”分段，次日可再分配"
+                    className="crm-button crm-button-primary"
+                    onClick={() =>
+                      runMutation(() =>
+                        releaseCustomerToPublicPoolAction({
+                          customerIds: selectedIds,
+                          note,
+                          reason: "UNREACHABLE_RECYCLE",
+                        }),
+                      )
+                    }
+                  >
+                    {pending ? "处理中..." : "未接通回流"}
+                  </button>
+                </>
               ) : null}
             </StickyActionBar>
           </div>
@@ -1414,6 +1525,37 @@ export function CustomerPublicPoolWorkbench({
                     </div>
                   ),
                 },
+                // 选定目标销售后, 标注"她最近一次拨打该客户"的分桶, 主管据此决定是否指派
+                ...(filters.targetSalesId
+                  ? [
+                      {
+                        key: "targetSalesCall",
+                        title: "该销售最近拨打",
+                        render: (row: (typeof data.poolItems)[number]) => (
+                          <div className="space-y-1">
+                            {row.targetSalesLastCalledAt ? (
+                              <>
+                                <StatusBadge
+                                  label={formatRelativeAge(row.targetSalesLastCalledAt)}
+                                  variant={
+                                    Date.now() - row.targetSalesLastCalledAt.getTime() <
+                                    24 * 60 * 60 * 1000
+                                      ? "warning"
+                                      : "neutral"
+                                  }
+                                />
+                                <div className="text-[12px] text-[var(--color-sidebar-muted)]">
+                                  {formatDateTime(row.targetSalesLastCalledAt)}
+                                </div>
+                              </>
+                            ) : (
+                              <StatusBadge label="从未拨打" variant="success" />
+                            )}
+                          </div>
+                        ),
+                      },
+                    ]
+                  : []),
                 {
                   key: "entered",
                   title: "入池原因 / 时间",
@@ -1568,7 +1710,7 @@ export function CustomerPublicPoolWorkbench({
                       <input
                         type="checkbox"
                         checked={selectedIds.includes(row.id)}
-                        disabled={data.actor.role !== "ADMIN" && row.isLocked}
+                        disabled={!recycleLockBypass && row.isLocked}
                         onChange={(event) => toggleSelected(row.id, event.target.checked)}
                       />
                     ),
@@ -1605,6 +1747,24 @@ export function CustomerPublicPoolWorkbench({
                         <div>{row.owner?.name ?? "无 owner"}</div>
                         <div>{row.owner ? `@${row.owner.username}` : "-"}</div>
                         <div>{row.owner?.teamName ?? "无团队"}</div>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: "calls",
+                    title: "拨打情况",
+                    render: (row) => (
+                      <div className="space-y-1">
+                        <div className="text-[12px] text-[var(--foreground)]">
+                          {row.rangeCallCount !== null
+                            ? `范围内 ${row.rangeCallCount} 次 / 累计 ${row.totalCallCount} 次`
+                            : `累计 ${row.totalCallCount} 次`}
+                        </div>
+                        <div className="text-[12px] text-[var(--color-sidebar-muted)]">
+                          {row.latestCall
+                            ? `最近 ${formatDateTime(row.latestCall.callTime)} · ${row.latestCall.resultLabel}`
+                            : "暂无拨打记录"}
+                        </div>
                       </div>
                     ),
                   },

@@ -134,6 +134,8 @@ enum PublicPoolReason {
   BATCH_REALLOCATION
   MERGE_RELEASE
   INVALID_FOLLOWUP_RECYCLE
+  // 未接通回流: 主管把"拨打多次未接通"的客户手动放回公海, 形成可再分配的未接通池
+  UNREACHABLE_RECYCLE
 }
 
 enum PublicPoolAutoAssignStrategy {
@@ -150,6 +152,7 @@ enum CustomerOwnershipEventReason {
   BATCH_REALLOCATION
   MERGE_RELEASE
   INVALID_FOLLOWUP_RECYCLE
+  UNREACHABLE_RECYCLE
   SALES_CLAIM
   SUPERVISOR_ASSIGN
   AUTO_ASSIGN

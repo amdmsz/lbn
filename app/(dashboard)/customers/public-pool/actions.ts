@@ -317,7 +317,11 @@ export async function releaseCustomerToPublicPoolAction(
     message: buildResultMessage(
       result.successCount,
       result.skipped.length,
-      parsed.data.reason === "MANUAL_RELEASE" ? "已释放到公海" : "已批量回收",
+      parsed.data.reason === "MANUAL_RELEASE"
+        ? "已释放到公海"
+        : parsed.data.reason === "UNREACHABLE_RECYCLE"
+          ? "已回流到未接通池"
+          : "已批量回收",
       "回收失败",
     ),
     successCount: result.successCount,

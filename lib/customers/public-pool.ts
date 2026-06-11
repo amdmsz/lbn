@@ -1,4 +1,5 @@
 import {
+  CallResult,
   CustomerOwnershipEventReason,
   CustomerOwnershipMode,
   PublicPoolReason,
@@ -6,6 +7,11 @@ import {
   type Prisma,
   type RoleCode,
 } from "@prisma/client";
+import {
+  getDefaultSystemCallResultDefinition,
+  isSystemCallResultCode,
+  resolveStoredCallResultCode,
+} from "@/lib/calls/metadata";
 import { z } from "zod";
 import {
   canAccessCustomerPublicPool,
@@ -31,7 +37,13 @@ import { getLeadSourceLabel } from "@/lib/leads/metadata";
 type SearchParamsValue = string | string[] | undefined;
 
 type PublicPoolView = "pool" | "recycle" | "records";
-type PublicPoolSegment = "all" | "claimable" | "locked" | "today_new" | "expiring_soon";
+type PublicPoolSegment =
+  | "all"
+  | "claimable"
+  | "locked"
+  | "today_new"
+  | "expiring_soon"
+  | "unreachable";
 
 type PublicPoolActor = Awaited<ReturnType<typeof getCustomerOwnershipActorContext>>;
 
@@ -42,7 +54,19 @@ const publicPoolSegmentValues = [
   "locked",
   "today_new",
   "expiring_soon",
+  "unreachable",
 ] as const satisfies PublicPoolSegment[];
+
+// 拨打关系分桶 (回收工作台 + 公海工作台共用口径): 以选定的业务员/目标销售为参照,
+// 看"她对这个号码的拨打关系" — never=从未拨打过, withinXX=该窗口内打过.
+// 回收侧没选业务员时退化为"任意人拨打过".
+const publicPoolCalledRangeValues = ["any", "never", "within1d", "within7d", "within30d"] as const;
+const publicPoolCallOutcomeValues = ["all", "unreachable"] as const;
+const publicPoolDialBucketValues = ["all", "never", "within1d", "within7d", "within30d"] as const;
+
+export type PublicPoolCalledRange = (typeof publicPoolCalledRangeValues)[number];
+export type PublicPoolCallOutcome = (typeof publicPoolCallOutcomeValues)[number];
+export type PublicPoolDialBucket = (typeof publicPoolDialBucketValues)[number];
 
 const publicPoolFiltersSchema = z.object({
   view: z.enum(publicPoolViewValues).default("pool"),
@@ -51,6 +75,11 @@ const publicPoolFiltersSchema = z.object({
   reason: z.string().trim().default(""),
   teamId: z.string().trim().default(""),
   hasOrders: z.enum(["all", "yes", "no"]).default("all"),
+  ownerId: z.string().trim().default(""),
+  calledRange: z.enum(publicPoolCalledRangeValues).default("any"),
+  callOutcome: z.enum(publicPoolCallOutcomeValues).default("all"),
+  targetSalesId: z.string().trim().default(""),
+  dialBucket: z.enum(publicPoolDialBucketValues).default("all"),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z
     .coerce
@@ -159,6 +188,16 @@ const recycleCustomerSelect = {
   createdAt: true,
   claimLockedUntil: true,
   lastEffectiveFollowUpAt: true,
+  callCount: true,
+  callRecords: {
+    orderBy: [{ callTime: "desc" }, { id: "desc" }],
+    take: 1,
+    select: {
+      callTime: true,
+      result: true,
+      resultCode: true,
+    },
+  },
   owner: {
     select: {
       id: true,
@@ -228,6 +267,8 @@ export type CustomerPublicPoolListItem = {
   claimLockedUntil: Date | null;
   isLocked: boolean;
   isClaimable: boolean;
+  // 选定"目标销售"筛选时: 该销售最近一次拨打这位客户的时间 (null=从未拨打)
+  targetSalesLastCalledAt: Date | null;
   lastOwner: {
     id: string;
     name: string;
@@ -260,6 +301,14 @@ export type CustomerRecycleListItem = {
   lastEffectiveFollowUpAt: Date | null;
   claimLockedUntil: Date | null;
   isLocked: boolean;
+  // 未接通回流: 累计拨打 / 最近一次拨打(时间+结果) / 所选时间范围内的拨打次数
+  // (calledRange=any 时为 null, 列表显示累计值)
+  totalCallCount: number;
+  latestCall: {
+    callTime: Date;
+    resultLabel: string;
+  } | null;
+  rangeCallCount: number | null;
   owner: {
     id: string;
     name: string;
@@ -333,6 +382,7 @@ export type CustomerPublicPoolData = {
     lockedCount: number;
     todayNewCount: number;
     expiringSoonCount: number;
+    unreachableCount: number;
     myClaimCount: number;
     recycleCandidateCount: number;
     recordCount: number;
@@ -386,9 +436,43 @@ function parseCustomerPublicPoolFilters(
     reason: getParamValue(rawSearchParams?.reason),
     teamId: getParamValue(rawSearchParams?.teamId),
     hasOrders: getParamValue(rawSearchParams?.hasOrders) || "all",
+    ownerId: getParamValue(rawSearchParams?.ownerId),
+    calledRange: getParamValue(rawSearchParams?.calledRange) || "any",
+    callOutcome: getParamValue(rawSearchParams?.callOutcome) || "all",
+    targetSalesId: getParamValue(rawSearchParams?.targetSalesId),
+    dialBucket: getParamValue(rawSearchParams?.dialBucket) || "all",
     page: getParamValue(rawSearchParams?.page) || "1",
     pageSize: getParamValue(rawSearchParams?.pageSize) || String(CUSTOMERS_PAGE_SIZE),
   });
+}
+
+// "X 内打过"分桶 → callTime 下限. never / any / all 由调用方单独处理.
+function resolveRecencyCutoff(
+  value: PublicPoolCalledRange | PublicPoolDialBucket,
+  now: Date,
+) {
+  switch (value) {
+    case "within1d":
+      return new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    case "within7d":
+      return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    case "within30d":
+      return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    default:
+      return null;
+  }
+}
+
+function getCallResultDisplayLabel(result: CallResult | null, resultCode: string | null) {
+  const code = resolveStoredCallResultCode({ result, resultCode });
+
+  if (!code) {
+    return "未记录";
+  }
+
+  return isSystemCallResultCode(code)
+    ? getDefaultSystemCallResultDefinition(code).label
+    : code;
 }
 
 function buildSearchClause(search: string): Prisma.CustomerWhereInput[] {
@@ -528,6 +612,43 @@ function buildVisiblePublicCustomerWhere(
     });
   }
 
+  // 未接通池: 主管回流回来的未接通客户, 配合"目标销售拨打关系"分桶做次日再分配
+  if (filters.segment === "unreachable") {
+    clauses.push({
+      publicPoolReason: PublicPoolReason.UNREACHABLE_RECYCLE,
+    });
+  }
+
+  // 目标销售拨打关系: never=该销售从未拨打过 (可放心指派);
+  // withinXX=该销售在窗口内打过 (主管可见可选, 自行决定要不要再分给她).
+  // 仅在选定目标销售后生效, all 完全不过滤.
+  if (filters.targetSalesId && filters.dialBucket !== "all") {
+    if (filters.dialBucket === "never") {
+      clauses.push({
+        callRecords: {
+          none: {
+            salesId: filters.targetSalesId,
+          },
+        },
+      });
+    } else {
+      const recencyCutoff = resolveRecencyCutoff(filters.dialBucket, now);
+
+      if (recencyCutoff) {
+        clauses.push({
+          callRecords: {
+            some: {
+              salesId: filters.targetSalesId,
+              callTime: {
+                gte: recencyCutoff,
+              },
+            },
+          },
+        });
+      }
+    }
+  }
+
   return {
     AND: clauses,
   } satisfies Prisma.CustomerWhereInput;
@@ -536,6 +657,7 @@ function buildVisiblePublicCustomerWhere(
 function buildVisibleRecycleCustomerWhere(
   actor: PublicPoolActor,
   filters: CustomerPublicPoolFilters,
+  now: Date,
 ): Prisma.CustomerWhereInput {
   if (!canManageCustomerPublicPool(actor.role)) {
     return {
@@ -573,6 +695,69 @@ function buildVisibleRecycleCustomerWhere(
       owner: {
         is: {
           teamId: actor.teamId,
+        },
+      },
+    });
+  }
+
+  // 未接通回流筛选: 业务员 + 该业务员拨打关系分桶 + 拨打结果口径
+  if (filters.ownerId) {
+    clauses.push({
+      ownerId: filters.ownerId,
+    });
+  }
+
+  // 分桶以选定业务员为参照; 没选业务员时退化为"任意人拨打过"
+  const salesScope = filters.ownerId ? { salesId: filters.ownerId } : {};
+  const recencyCutoff = resolveRecencyCutoff(filters.calledRange, now);
+
+  if (filters.calledRange === "never") {
+    clauses.push({
+      callRecords: {
+        none: {
+          ...salesScope,
+        },
+      },
+    });
+  } else if (recencyCutoff) {
+    clauses.push({
+      callRecords: {
+        some: {
+          ...salesScope,
+          callTime: {
+            gte: recencyCutoff,
+          },
+        },
+      },
+    });
+  }
+
+  if (filters.callOutcome === "unreachable") {
+    // 口径: 窗口内有未接通拨打, 且窗口内没有其他结果的拨打 (全是未接通).
+    // 未接通看客户全量拨打记录 (不限定业务员) — 只要有人打通过就不算未接通客户.
+    // 自定义 resultCode 行 (result=null) 不计为"其他结果" — 宁可多显给主管人工
+    // 判断, 也不漏掉应回流的客户.
+    clauses.push({
+      callRecords: {
+        some: {
+          ...(recencyCutoff ? { callTime: { gte: recencyCutoff } } : {}),
+          OR: [
+            { result: CallResult.NOT_CONNECTED },
+            { resultCode: CallResult.NOT_CONNECTED },
+          ],
+        },
+      },
+    });
+    clauses.push({
+      NOT: {
+        callRecords: {
+          some: {
+            ...(recencyCutoff ? { callTime: { gte: recencyCutoff } } : {}),
+            AND: [
+              { result: { not: null } },
+              { result: { not: CallResult.NOT_CONNECTED } },
+            ],
+          },
         },
       },
     });
@@ -649,6 +834,7 @@ function mapPoolItem(
     select: typeof publicPoolCustomerSelect;
   }>,
   now: Date,
+  targetSalesLastCalledAt: Date | null = null,
 ): CustomerPublicPoolListItem {
   const latestLead = item.leads[0] ?? null;
   const isLocked = Boolean(item.claimLockedUntil && item.claimLockedUntil.getTime() > now.getTime());
@@ -667,6 +853,7 @@ function mapPoolItem(
     claimLockedUntil: item.claimLockedUntil,
     isLocked,
     isClaimable: !isLocked,
+    targetSalesLastCalledAt,
     lastOwner: item.lastOwner
       ? {
           id: item.lastOwner.id,
@@ -694,8 +881,10 @@ function mapRecycleItem(
     select: typeof recycleCustomerSelect;
   }>,
   now: Date,
+  rangeCallCount: number | null = null,
 ): CustomerRecycleListItem {
   const latestLead = item.leads[0] ?? null;
+  const latestCall = item.callRecords[0] ?? null;
 
   return {
     id: item.id,
@@ -707,6 +896,14 @@ function mapRecycleItem(
     lastEffectiveFollowUpAt: item.lastEffectiveFollowUpAt,
     claimLockedUntil: item.claimLockedUntil,
     isLocked: Boolean(item.claimLockedUntil && item.claimLockedUntil.getTime() > now.getTime()),
+    totalCallCount: item.callCount,
+    latestCall: latestCall
+      ? {
+          callTime: latestCall.callTime,
+          resultLabel: getCallResultDisplayLabel(latestCall.result, latestCall.resultCode),
+        }
+      : null,
+    rangeCallCount,
     owner: item.owner
       ? {
           id: item.owner.id,
@@ -762,6 +959,26 @@ export function buildCustomerPublicPoolHref(
     params.set("hasOrders", next.hasOrders);
   }
 
+  if (next.ownerId) {
+    params.set("ownerId", next.ownerId);
+  }
+
+  if (next.calledRange !== "any") {
+    params.set("calledRange", next.calledRange);
+  }
+
+  if (next.callOutcome !== "all") {
+    params.set("callOutcome", next.callOutcome);
+  }
+
+  if (next.targetSalesId) {
+    params.set("targetSalesId", next.targetSalesId);
+  }
+
+  if (next.dialBucket !== "all") {
+    params.set("dialBucket", next.dialBucket);
+  }
+
   if (next.pageSize !== CUSTOMERS_PAGE_SIZE) {
     params.set("pageSize", String(next.pageSize));
   }
@@ -793,7 +1010,7 @@ export async function getCustomerPublicPoolData(
     viewer.role === "ADMIN" ? filters.teamId || null : actor.teamId;
   const activeTeamSetting = await getResolvedTeamPublicPoolSetting(activeSettingTeamId);
   const visiblePublicWhere = buildVisiblePublicCustomerWhere(actor, filters, now);
-  const visibleRecycleWhere = buildVisibleRecycleCustomerWhere(actor, filters);
+  const visibleRecycleWhere = buildVisibleRecycleCustomerWhere(actor, filters, now);
   const visibleRecordWhere = buildVisibleOwnershipRecordWhere(actor, filters);
 
   const [teamOptions, salesOptions] = await Promise.all([
@@ -846,6 +1063,7 @@ export async function getCustomerPublicPoolData(
     lockedCount,
     todayNewCount,
     expiringSoonCount,
+    unreachableCount,
     recycleCandidateCount,
     recordCount,
     myClaimRows,
@@ -865,9 +1083,12 @@ export async function getCustomerPublicPoolData(
     prisma.customer.count({
       where: buildVisiblePublicCustomerWhere(actor, { ...filters, segment: "expiring_soon" }, now),
     }),
+    prisma.customer.count({
+      where: buildVisiblePublicCustomerWhere(actor, { ...filters, segment: "unreachable" }, now),
+    }),
     canManageCustomerPublicPool(viewer.role)
       ? prisma.customer.count({
-          where: buildVisibleRecycleCustomerWhere(actor, { ...filters, view: "recycle" }),
+          where: buildVisibleRecycleCustomerWhere(actor, { ...filters, view: "recycle" }, now),
         })
       : Promise.resolve(0),
     prisma.customerOwnershipEvent.count({
@@ -974,6 +1195,7 @@ export async function getCustomerPublicPoolData(
         lockedCount,
         todayNewCount,
         expiringSoonCount,
+        unreachableCount,
         myClaimCount: myClaimRows.length,
         recycleCandidateCount,
         recordCount,
@@ -1012,6 +1234,34 @@ export async function getCustomerPublicPoolData(
       take: pagination.pageSize,
       select: recycleCustomerSelect,
     });
+    // 选了"X 内打过"分桶时, 给当前页客户补"窗口内拨打次数"
+    // (选了业务员则只数她的拨打)
+    const recencyCutoff = resolveRecencyCutoff(filters.calledRange, now);
+    const rangeCallCounts = new Map<string, number>();
+
+    if (recencyCutoff && rows.length > 0) {
+      const grouped = await prisma.callRecord.groupBy({
+        by: ["customerId"],
+        where: {
+          customerId: {
+            in: rows.map((row) => row.id),
+          },
+          ...(filters.ownerId ? { salesId: filters.ownerId } : {}),
+          callTime: {
+            gte: recencyCutoff,
+          },
+        },
+        _count: {
+          _all: true,
+        },
+      });
+
+      for (const bucket of grouped) {
+        if (bucket.customerId) {
+          rangeCallCounts.set(bucket.customerId, bucket._count._all);
+        }
+      }
+    }
 
     return {
       actor,
@@ -1026,6 +1276,7 @@ export async function getCustomerPublicPoolData(
         lockedCount,
         todayNewCount,
         expiringSoonCount,
+        unreachableCount,
         myClaimCount: myClaimRows.length,
         recycleCandidateCount,
         recordCount,
@@ -1033,7 +1284,13 @@ export async function getCustomerPublicPoolData(
       teamOptions,
       salesOptions,
       poolItems: [],
-      recycleItems: rows.map((row) => mapRecycleItem(row, now)),
+      recycleItems: rows.map((row) =>
+        mapRecycleItem(
+          row,
+          now,
+          recencyCutoff ? rangeCallCounts.get(row.id) ?? 0 : null,
+        ),
+      ),
       recordItems: [],
       pagination,
     };
@@ -1050,6 +1307,29 @@ export async function getCustomerPublicPoolData(
     take: pagination.pageSize,
     select: publicPoolCustomerSelect,
   });
+  // 选了目标销售时, 给当前页客户补"该销售最近一次拨打时间", 行上标注给主管看
+  const targetSalesLastCalledMap = new Map<string, Date>();
+
+  if (filters.targetSalesId && rows.length > 0) {
+    const grouped = await prisma.callRecord.groupBy({
+      by: ["customerId"],
+      where: {
+        customerId: {
+          in: rows.map((row) => row.id),
+        },
+        salesId: filters.targetSalesId,
+      },
+      _max: {
+        callTime: true,
+      },
+    });
+
+    for (const bucket of grouped) {
+      if (bucket.customerId && bucket._max.callTime) {
+        targetSalesLastCalledMap.set(bucket.customerId, bucket._max.callTime);
+      }
+    }
+  }
 
   return {
     actor,
@@ -1064,13 +1344,16 @@ export async function getCustomerPublicPoolData(
       lockedCount,
       todayNewCount,
       expiringSoonCount,
+      unreachableCount,
       myClaimCount: myClaimRows.length,
       recycleCandidateCount,
       recordCount,
     },
     teamOptions,
     salesOptions,
-    poolItems: rows.map((row) => mapPoolItem(row, now)),
+    poolItems: rows.map((row) =>
+      mapPoolItem(row, now, targetSalesLastCalledMap.get(row.id) ?? null),
+    ),
     recycleItems: [],
     recordItems: [],
     pagination,
