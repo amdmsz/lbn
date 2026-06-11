@@ -113,6 +113,9 @@ function parseMappedData(
     address: typeof value.address === "string" ? value.address : null,
     interestedProduct:
       typeof value.interestedProduct === "string" ? value.interestedProduct : null,
+    interestedAmount:
+      typeof value.interestedAmount === "string" ? value.interestedAmount : null,
+    interestedAt: typeof value.interestedAt === "string" ? value.interestedAt : null,
     campaignName: typeof value.campaignName === "string" ? value.campaignName : null,
     sourceDetail: typeof value.sourceDetail === "string" ? value.sourceDetail : null,
     remark: typeof value.remark === "string" ? value.remark : null,
@@ -721,6 +724,8 @@ export async function replaceDuplicateCustomerWithNewLead(
         phone,
         address: mappedData.address,
         interestedProduct: mappedData.interestedProduct,
+        interestedAmount: mappedData.interestedAmount,
+        interestedAt: mappedData.interestedAt ? new Date(mappedData.interestedAt) : null,
         remark: mappedData.remark,
         status: LeadStatus.ASSIGNED,
         ownerId: targetSales.id,

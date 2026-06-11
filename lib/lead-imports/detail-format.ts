@@ -39,14 +39,20 @@ export function formatLeadMappedPreview(value: Prisma.JsonValue | null) {
     ["name", "姓名"],
     ["address", "地址"],
     ["interestedProduct", "意向商品"],
+    ["interestedAmount", "意向金额"],
+    ["interestedAt", "意向时间"],
     ["campaignName", "活动标记"],
     ["sourceDetail", "来源详情"],
   ] as const;
   const entries = previewKeys.flatMap(([key, label]) => {
     const item = value[key];
-    return typeof item === "string" && item.trim().length > 0
-      ? [`${label}: ${item}`]
-      : [];
+    if (typeof item !== "string" || item.trim().length === 0) {
+      return [];
+    }
+
+    // interestedAt 存的是 ISO 文本, 展示时转回本地可读时间
+    const text = key === "interestedAt" ? formatOptionalDateTime(item) : item;
+    return text !== "-" ? [`${label}: ${text}`] : [];
   });
 
   return entries.length > 0 ? entries.join(" / ") : "-";

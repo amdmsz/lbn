@@ -15,3 +15,22 @@ test("固定模板映射会识别备注列", () => {
   assert.deepEqual(result.missingHeaders, []);
   assert.equal(result.mapping.remark, "备注");
 });
+
+test("信息流名单表头 (姓名/电话/地址/产品/日期/金额) 全列自动映射", () => {
+  const result = buildFixedLeadImportMapping([
+    "姓名",
+    "电话",
+    "地址",
+    "产品",
+    "日期",
+    "金额",
+  ]);
+
+  assert.deepEqual(result.missingHeaders, []);
+  assert.equal(result.mapping.phone, "电话");
+  assert.equal(result.mapping.name, "姓名");
+  assert.equal(result.mapping.address, "地址");
+  assert.equal(result.mapping.interestedProduct, "产品");
+  assert.equal(result.mapping.interestedAt, "日期");
+  assert.equal(result.mapping.interestedAmount, "金额");
+});

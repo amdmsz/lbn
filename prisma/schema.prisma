@@ -998,6 +998,10 @@ model Lead {
   district          String?
   address           String?
   interestedProduct String?
+  // 信息流名单自带的意向金额 / 意向发生时间 (Excel 的"金额""日期"列).
+  // 客户中心"最近意向"按 interestedAt ?? createdAt 取最新, 并把两者标注在产品旁.
+  interestedAmount  Decimal?                 @db.Decimal(10, 2)
+  interestedAt      DateTime?
   isFirstPurchase   Boolean                  @default(false)
   remark            String?                  @db.Text
   status            LeadStatus               @default(NEW)

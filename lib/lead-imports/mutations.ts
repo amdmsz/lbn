@@ -139,6 +139,61 @@ async function createOperationLog(
   await tx.operationLog.create({ data });
 }
 
+// 金额列常见写法: "298" / "¥298" / "1,280元". 清洗后转 Decimal(10,2) 文本;
+// 解析不出或超界一律置 null, 不让单元格脏数据拖垮整行导入.
+function parseImportedAmount(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const cleaned = value.replace(/[¥￥,，\s元]/g, "");
+  if (!cleaned) {
+    return null;
+  }
+
+  const parsed = Number(cleaned);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed >= 1e8) {
+    return null;
+  }
+
+  return parsed.toFixed(2);
+}
+
+// 日期列两种形态: 文本 ("2026/6/9 15:16") 或 Excel 日期序列号 (sheet_to_json
+// 把日期单元格读成天数文本, 1899-12-30 起算). 序列号按本地挂钟时间还原,
+// 与文本路径 new Date(text) 的本地时区语义保持一致.
+function parseImportedDateTime(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const text = value.trim();
+  if (!text) {
+    return null;
+  }
+
+  if (/^\d+(\.\d+)?$/.test(text)) {
+    const serial = Number(text);
+    // 1954~2118 年之外的序列号视为普通数字列误映射, 不当日期
+    if (serial < 20000 || serial > 80000) {
+      return null;
+    }
+
+    const utc = new Date(Math.round((serial - 25569) * 86400000));
+    return new Date(
+      utc.getUTCFullYear(),
+      utc.getUTCMonth(),
+      utc.getUTCDate(),
+      utc.getUTCHours(),
+      utc.getUTCMinutes(),
+      utc.getUTCSeconds(),
+    );
+  }
+
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 function buildMappedLeadData(
   rawData: Record<string, string>,
   mapping: LeadImportMappingConfig,
@@ -146,6 +201,9 @@ function buildMappedLeadData(
 ) {
   const phoneRaw = getMappedValue(rawData, mapping, "phone");
   const normalizedPhone = normalizeImportedPhone(phoneRaw);
+  const interestedAt = parseImportedDateTime(
+    normalizeOptional(getMappedValue(rawData, mapping, "interestedAt")),
+  );
   const mappedData: LeadImportRowMappedData = {
     phone: normalizedPhone,
     name: normalizeOptional(getMappedValue(rawData, mapping, "name")),
@@ -153,6 +211,10 @@ function buildMappedLeadData(
     interestedProduct: normalizeOptional(
       getMappedValue(rawData, mapping, "interestedProduct"),
     ),
+    interestedAmount: parseImportedAmount(
+      normalizeOptional(getMappedValue(rawData, mapping, "interestedAmount")),
+    ),
+    interestedAt: interestedAt ? interestedAt.toISOString() : null,
     campaignName: normalizeOptional(getMappedValue(rawData, mapping, "campaignName")),
     sourceDetail: normalizeOptional(getMappedValue(rawData, mapping, "sourceDetail")),
     remark: normalizeOptional(getMappedValue(rawData, mapping, "remark")),
@@ -605,6 +667,8 @@ async function processLeadImportRowTx(
           name: mappedData.name,
           address: mappedData.address,
           interestedProduct: mappedData.interestedProduct,
+          interestedAmount: mappedData.interestedAmount,
+          interestedAt: mappedData.interestedAt ? new Date(mappedData.interestedAt) : null,
           campaignName: mappedData.campaignName,
           sourceDetail: mappedData.sourceDetail,
           remark: mappedData.remark,

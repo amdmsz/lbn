@@ -135,6 +135,8 @@ export function createMobileApiCustomerListItem(
     newImported: fallback?.newImported ?? false,
     pendingFirstCall: fallback?.pendingFirstCall ?? !item.latestCall,
     latestInterestedProduct: fallback?.latestInterestedProduct ?? null,
+    latestInterestedAmount: fallback?.latestInterestedAmount ?? null,
+    latestInterestedAt: fallback?.latestInterestedAt ?? null,
     latestPurchasedProduct:
       fallback?.latestPurchasedProduct ?? item.latestOrder?.tradeNo ?? null,
     remark: fallback?.remark ?? null,

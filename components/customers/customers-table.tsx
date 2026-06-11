@@ -160,6 +160,41 @@ function getRecentProductText(row: CustomerListItem) {
   return row.latestInterestedProduct ?? row.latestPurchasedProduct ?? "暂无意向商品";
 }
 
+// 意向标注 "¥298 · 06-09 15:16": 金额 / 时间来自导入名单的"金额""日期"列,
+// 只在展示的是意向商品 (非已购兜底) 时显示, 缺哪个就不显哪个.
+function getInterestMetaText(row: CustomerListItem) {
+  if (!row.latestInterestedProduct) {
+    return null;
+  }
+
+  const parts: string[] = [];
+  if (row.latestInterestedAmount) {
+    const amount = Number(row.latestInterestedAmount);
+    if (Number.isFinite(amount)) {
+      parts.push(`¥${amount.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`);
+    }
+  }
+  if (row.latestInterestedAt) {
+    const at =
+      row.latestInterestedAt instanceof Date
+        ? row.latestInterestedAt
+        : new Date(row.latestInterestedAt);
+    if (!Number.isNaN(at.getTime())) {
+      parts.push(
+        new Intl.DateTimeFormat("zh-CN", {
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }).format(at),
+      );
+    }
+  }
+
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
 // 栏4 "最近通话" 时间短格式: 今天 11:28 / 昨天 18:05 / 06-08 09:12.
 function formatCallTimeShort(value: Date) {
   const timeText = new Intl.DateTimeFormat("zh-CN", {
@@ -772,14 +807,21 @@ export function CustomersTable({
       key: "recentProduct",
       title: "最近意向",
       headerClassName: "w-[18%]",
-      render: (row: CustomerListItem) => (
-        <p
-          className="max-w-[16rem] truncate text-[13px] text-[var(--color-sidebar-muted)]"
-          title={getRecentProductText(row)}
-        >
-          {getRecentProductText(row)}
-        </p>
-      ),
+      render: (row: CustomerListItem) => {
+        const metaText = getInterestMetaText(row);
+        const fullText = metaText
+          ? `${getRecentProductText(row)} · ${metaText}`
+          : getRecentProductText(row);
+
+        return (
+          <p
+            className="max-w-[16rem] truncate text-[13px] text-[var(--color-sidebar-muted)]"
+            title={fullText}
+          >
+            {fullText}
+          </p>
+        );
+      },
     },
     {
       key: "calls",
@@ -876,6 +918,7 @@ export function CustomersTable({
             fullAddressText === "未填写" ? "地址未填" : fullAddressText;
           const productText =
             row.latestInterestedProduct ?? row.latestPurchasedProduct;
+          const interestMetaText = getInterestMetaText(row);
           const ownerLabel = getOwnerLabel(row);
 
           return (
@@ -985,10 +1028,19 @@ export function CustomersTable({
                 <div className="min-w-0 lg:flex-1">
                   <p
                     className="truncate text-[13px] leading-5 text-foreground/85"
-                    title={productText ?? undefined}
+                    title={
+                      productText
+                        ? interestMetaText
+                          ? `${productText} · ${interestMetaText}`
+                          : productText
+                        : undefined
+                    }
                   >
                     <span className="text-muted-foreground">意向 </span>
                     {productText ?? "—"}
+                    {interestMetaText ? (
+                      <span className="text-muted-foreground"> · {interestMetaText}</span>
+                    ) : null}
                   </p>
                   <p
                     className="truncate text-xs leading-5 text-muted-foreground"

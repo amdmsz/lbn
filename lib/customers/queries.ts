@@ -126,6 +126,10 @@ type CustomerSnapshotState = {
   isWechatAdded: boolean;
   workingStatuses: CustomerWorkStatusKey[];
   latestInterestedProduct: string | null;
+  // 最近意向的金额 / 发生时间标注 (信息流导入的"金额""日期"列). 仅在对应 lead
+  // 上有值时给出, 老数据保持 null, 列表行只显产品名.
+  latestInterestedAmount: string | null;
+  latestInterestedAt: Date | null;
   latestPurchasedProduct: string | null;
   productKeys: string[];
   tagIds: string[];
@@ -133,7 +137,12 @@ type CustomerSnapshotState = {
 
 type CustomerDashboardState = Omit<
   CustomerSnapshotState,
-  "latestInterestedProduct" | "latestPurchasedProduct" | "productKeys" | "tagIds"
+  | "latestInterestedProduct"
+  | "latestInterestedAmount"
+  | "latestInterestedAt"
+  | "latestPurchasedProduct"
+  | "productKeys"
+  | "tagIds"
 >;
 
 type CustomerStateSource = {
@@ -297,6 +306,9 @@ export type CustomerListItem = {
   newImported: boolean;
   pendingFirstCall: boolean;
   latestInterestedProduct: string | null;
+  // 最近意向的金额 / 发生时间 (导入名单的"金额""日期"列), 列表行标注在产品名旁.
+  latestInterestedAmount: string | null;
+  latestInterestedAt: Date | null;
   latestPurchasedProduct: string | null;
   remark: string | null;
   workingStatuses: CustomerWorkStatusKey[];
@@ -673,6 +685,8 @@ const customerSnapshotSelect = {
       status: true,
       remark: true,
       interestedProduct: true,
+      interestedAmount: true,
+      interestedAt: true,
       nextFollowUpAt: true,
     },
   },
@@ -2803,10 +2817,14 @@ function deriveCustomerExecutionClass(snapshot: CustomerStateSource): CustomerEx
   });
 }
 
+// "最近"按意向真实发生时间 (interestedAt) 优先, 没有才退回导入时间 (createdAt) —
+// 信息流名单常隔几天补导, 用导入时间排序会被旧名单反向覆盖.
 function getLatestInterestedProduct(snapshot: CustomerSnapshot) {
-  const record = snapshot.leads.reduce<{
-    createdAt: Date;
+  return snapshot.leads.reduce<{
+    occurredAt: Date;
     interestedProduct: string;
+    interestedAmount: string | null;
+    interestedAt: Date | null;
   } | null>((latest, lead) => {
     const interestedProduct = lead.interestedProduct?.trim();
 
@@ -2814,17 +2832,19 @@ function getLatestInterestedProduct(snapshot: CustomerSnapshot) {
       return latest;
     }
 
-    if (!latest || lead.createdAt.getTime() > latest.createdAt.getTime()) {
+    const occurredAt = lead.interestedAt ?? lead.createdAt;
+
+    if (!latest || occurredAt.getTime() > latest.occurredAt.getTime()) {
       return {
-        createdAt: lead.createdAt,
+        occurredAt,
         interestedProduct,
+        interestedAmount: lead.interestedAmount?.toString() ?? null,
+        interestedAt: lead.interestedAt,
       };
     }
 
     return latest;
   }, null);
-
-  return record?.interestedProduct ?? null;
 }
 
 function getLatestPurchasedProduct(snapshot: CustomerSnapshot) {
@@ -2984,6 +3004,8 @@ function getCustomerSnapshotState(
   todayStart: Date,
   todayEnd: Date,
 ): CustomerSnapshotState {
+  const latestInterest = getLatestInterestedProduct(snapshot);
+
   return {
     ...getCustomerSnapshotCoreState(
       snapshot,
@@ -2993,7 +3015,9 @@ function getCustomerSnapshotState(
       todayStart,
       todayEnd,
     ),
-    latestInterestedProduct: getLatestInterestedProduct(snapshot),
+    latestInterestedProduct: latestInterest?.interestedProduct ?? null,
+    latestInterestedAmount: latestInterest?.interestedAmount ?? null,
+    latestInterestedAt: latestInterest?.interestedAt ?? null,
     latestPurchasedProduct: getLatestPurchasedProduct(snapshot),
     productKeys: getSnapshotProductEntries(snapshot).map((item) => item.key),
     tagIds: [...new Set(snapshot.customerTags.map((item) => item.tagId))],
@@ -3465,6 +3489,8 @@ async function fetchCustomerListItems(
         newImported: state?.newImported ?? false,
         pendingFirstCall: state?.pendingFirstCall ?? false,
         latestInterestedProduct: state?.latestInterestedProduct ?? null,
+        latestInterestedAmount: state?.latestInterestedAmount ?? null,
+        latestInterestedAt: state?.latestInterestedAt ?? null,
         latestPurchasedProduct: state?.latestPurchasedProduct ?? null,
         remark: item.remark,
         workingStatuses: state?.workingStatuses ?? [],

@@ -77,6 +77,9 @@ export type LeadImportRowMappedData = {
   name: string | null;
   address: string | null;
   interestedProduct: string | null;
+  // 规范化后的金额文本 (如 "298") / ISO 时间文本; 解析失败时保留原始文本仅作展示, 不入库.
+  interestedAmount: string | null;
+  interestedAt: string | null;
   campaignName: string | null;
   sourceDetail: string | null;
   remark: string | null;
@@ -299,6 +302,18 @@ export const leadImportFieldDefinitions = [
     label: "意向商品",
     required: false,
     aliases: ["意向商品", "购买商品", "产品", "product", "sku"],
+  },
+  {
+    key: "interestedAmount",
+    label: "意向金额",
+    required: false,
+    aliases: ["意向金额", "金额", "价格", "产品金额", "amount", "price"],
+  },
+  {
+    key: "interestedAt",
+    label: "意向时间",
+    required: false,
+    aliases: ["意向时间", "日期", "时间", "提交时间", "意向日期", "date", "datetime", "time"],
   },
   {
     key: "campaignName",
