@@ -37,6 +37,7 @@ function makeSignal(overrides: Partial<Signal> = {}): Signal {
     hasWechat: false,
     hasLiveInvitation: false,
     isInvalidNumber: false,
+    hasRefusedWechat: false,
     hasUnansweredCall: false,
     ...overrides,
   };
@@ -123,6 +124,32 @@ test("空号 → F 级 (优先级在 D 之上, 因为 F 是稳定结论)", () =>
   );
 });
 
+test("拒加 → E 级 (优先级 F > E > D)", () => {
+  assert.equal(
+    deriveCustomerGrade(makeSignal({ hasRefusedWechat: true })),
+    CustomerGrade.E,
+  );
+  // 拒加 + 未接通 — 拒加赢 (稳定结论)
+  assert.equal(
+    deriveCustomerGrade(
+      makeSignal({ hasRefusedWechat: true, hasUnansweredCall: true }),
+    ),
+    CustomerGrade.E,
+  );
+  // 空号 + 拒加 — 空号赢 (号都打不通)
+  assert.equal(
+    deriveCustomerGrade(
+      makeSignal({ isInvalidNumber: true, hasRefusedWechat: true }),
+    ),
+    CustomerGrade.F,
+  );
+  // 加了微信的拒加无意义 — 微信赢
+  assert.equal(
+    deriveCustomerGrade(makeSignal({ hasWechat: true, hasRefusedWechat: true })),
+    CustomerGrade.B,
+  );
+});
+
 test("未接听 → D 级 (其他信号都空时的兜底)", () => {
   assert.equal(
     deriveCustomerGrade(makeSignal({ hasUnansweredCall: true })),
@@ -203,12 +230,13 @@ test("pickHigherGrade: null 在两端的处理", () => {
   assert.equal(pickHigherGrade(null, null), null);
 });
 
-test("UI metadata 覆盖全部 5 个 grade, 不能漏 mapping", () => {
+test("UI metadata 覆盖全部 6 个 grade, 不能漏 mapping", () => {
   const grades = [
     CustomerGrade.A,
     CustomerGrade.B,
     CustomerGrade.C,
     CustomerGrade.D,
+    CustomerGrade.E,
     CustomerGrade.F,
   ] as const;
   for (const grade of grades) {

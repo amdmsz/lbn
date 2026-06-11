@@ -29,12 +29,12 @@ import {
   getCustomerQueueLabel,
   isPrimaryCustomerQueue,
   OPEN_CUSTOMER_ADVANCED_FILTER_EVENT,
-  type CustomerExecutionClass,
   type CustomerPageSize,
   type CustomerQueueKey,
 } from "@/lib/customers/metadata";
 import { buildCustomersHref } from "@/lib/customers/filter-url";
 import {
+  CUSTOMER_GRADE_DESCRIPTION,
   CUSTOMER_GRADE_LABEL,
   CUSTOMER_GRADE_VALUES,
 } from "@/lib/customers/grade";
@@ -217,10 +217,10 @@ function OptionRow({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex min-h-9 w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm",
+        "flex min-h-9 w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm transition-colors duration-150",
         selected
-          ? "border-primary/40 bg-primary/10 text-primary"
-          : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
+          ? "border-primary/50 bg-primary/10 text-primary ring-1 ring-inset ring-primary/20"
+          : "border-border/70 bg-card text-muted-foreground hover:border-primary/40 hover:bg-primary/[0.04] hover:text-foreground",
       )}
     >
       <span className="min-w-0">
@@ -417,8 +417,9 @@ function FilterSection({
   children: ReactNode;
 }>) {
   return (
-    <section className="space-y-2">
-      <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+    <section className="space-y-2.5 rounded-xl border border-border/60 bg-background/60 p-3">
+      <h3 className="flex items-center gap-1.5 text-xs font-semibold text-foreground/80">
+        <span className="h-1 w-1 rounded-full bg-primary" aria-hidden />
         {title}
       </h3>
       {children}
@@ -655,6 +656,8 @@ export function CustomerFilterToolbar({
           onClear: () => applyFilters({ assignedFrom: "", assignedTo: "" }),
         }
       : null,
+    // executionClasses 已无 UI 入口 (与 grade 合并), 但老链接 / 收藏的 URL 还可能
+    // 带这个参数 — 保留 chip 让用户能看见并清掉.
     selectedExecutionClass
       ? {
           key: "execution-class",
@@ -665,7 +668,7 @@ export function CustomerFilterToolbar({
     filters.grades.length > 0
       ? {
           key: "grades",
-          label: `分级 ${filters.grades.join("/")}`,
+          label: `分类 ${filters.grades.join("/")}`,
           onClear: () => applyFilters({ grades: [] }),
         }
       : null,
@@ -837,8 +840,29 @@ export function CustomerFilterToolbar({
       </div>
 
       {open ? (
-        <div className="crm-animate-pop absolute right-0 top-full z-40 mt-2 w-[min(52rem,calc(100vw-2rem))] rounded-lg border border-border bg-card p-4 text-foreground shadow-md">
-          <div className="grid gap-4 lg:grid-cols-2">
+        <div className="crm-animate-pop absolute right-0 top-full z-40 mt-2 w-[min(56rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-card text-foreground shadow-xl">
+          <div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-2.5">
+            <div className="flex items-center gap-2">
+              <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
+              <span className="text-sm font-semibold">高级筛选</span>
+              {advancedActiveCount > 0 ? (
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                  {advancedActiveCount} 项生效
+                </span>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="关闭高级筛选"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="max-h-[68vh] overflow-y-auto p-4">
+          <div className="grid items-start gap-3 lg:grid-cols-2">
             {/* Wave 12 收敛: 首屏队列 tab 只留 4 个主队列, 其余队列入口下沉到
               这里. 单选 chip — 点选即切 queue URL 参数, 再点一次回「全部」. */}
             <FilterSection title="工作队列">
@@ -930,32 +954,16 @@ export function CustomerFilterToolbar({
               </div>
             </FilterSection>
 
+            {/* 客户分类 = grade (A/B/C/D/E/F, 落库多选). 原 executionClass 的
+              "客户分类"区块与 grade 的"客户分级"区块重复建设, 已合并为这一个 —
+              E 拒加并入 grade, executionClasses URL 参数仅保留兼容, 不再有 UI 入口. */}
             <FilterSection title="客户分类">
-              <div className="grid gap-1">
-                {customerExecutionClassOptions.map((option) => (
-                  <OptionRow
-                    key={option.value}
-                    title={option.longLabel}
-                    subtitle={option.description}
-                    selected={filters.executionClasses.includes(option.value)}
-                    onClick={() => {
-                      applyFilters({
-                        executionClasses: [option.value as CustomerExecutionClass],
-                      });
-                    }}
-                  />
-                ))}
-              </div>
-            </FilterSection>
-
-            {/* Wave 7-B: 客户分级 A/B/C/D/F multi-select. 与"客户分类"独立 — 那
-              个是行为画像 (执行档), 这个是销售里程碑 (有订单/加微/邀约/...). */}
-            <FilterSection title="客户分级">
-              <div className="grid gap-1">
+              <div className="grid grid-cols-2 gap-1.5">
                 {CUSTOMER_GRADE_VALUES.map((grade) => (
                   <OptionRow
                     key={grade}
                     title={CUSTOMER_GRADE_LABEL[grade]}
+                    subtitle={CUSTOMER_GRADE_DESCRIPTION[grade]}
                     selected={filters.grades.includes(grade)}
                     onClick={() => {
                       const nextGrades = filters.grades.includes(grade)
@@ -966,6 +974,9 @@ export function CustomerFilterToolbar({
                   />
                 ))}
               </div>
+              <p className="text-xs text-muted-foreground/70">
+                可多选；分类由系统按订单 / 加微 / 邀约 / 通话结果自动判定。
+              </p>
             </FilterSection>
 
             <FilterSection title="商品">
@@ -1045,8 +1056,9 @@ export function CustomerFilterToolbar({
               </div>
             </FilterSection>
           </div>
+          </div>
 
-          <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
+          <div className="flex items-center justify-between border-t border-border bg-muted/40 px-4 py-2.5">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span>每页</span>
               <InlineNativeSelect

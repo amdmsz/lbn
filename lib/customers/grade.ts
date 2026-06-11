@@ -1,5 +1,5 @@
 /**
- * 客户分级 (Customer Grade) — A/B/C/D/F.
+ * 客户分级 (Customer Grade) — A/B/C/D/E/F.
  *
  * 业务定义 (销售口述, 不要再改语义):
  *
@@ -7,13 +7,17 @@
  *   B 级 = 加了微信的客户 (有 wechatId 或 wechatRecord.addedAt 已落)
  *   C 级 = 已邀约直播的客户 (有 liveInvitation)
  *   D 级 = 未接听电话的客户 (有 callRecord 但都没接通)
+ *   E 级 = 拒加 (客户明确拒绝加微信: 通话 result = REFUSED_WECHAT 或微信申请被拒)
  *   F 级 = 空号 (手机号无效, 通话 result = INVALID_NUMBER 或被显式标记)
  *
- * 优先级 (高 -> 低): A > B > C > F > D
+ * 优先级 (高 -> 低): A > B > C > F > E > D
  *   - A 一旦给定就不降级, 除非订单全部被撤销 (调用方需在 reCompute 时确保数据已撤销)
  *   - "加微信" + "邀约直播" 并存时, B (微信) 优于 C (直播)
- *   - 空号 F 比 D 强, 因为 F 是稳定结论, D 只是"暂时没接到"
+ *   - 空号 F / 拒加 E 都是稳定结论, 比 D ("暂时没接到") 强; F 比 E 强 (号都打不通)
  *   - 完全没数据时返回 null, mutation 不写入 grade, 让上游决定
+ *
+ * 历史: E 档原来只存在于"客户分类"(executionClass, 查询期内存推导); 用户要求两套
+ * 合并后, grade 成为唯一对外的客户分类口径, E 在此落库.
  *
  * 这个文件只有纯函数, 没有 prisma client. lib/customers/queries.ts 在做 customer
  * snapshot 时可以拿到必要字段后调用; mutation 改完客户后也可以重新调一次, 把
@@ -51,6 +55,12 @@ export type CustomerGradeSignal = {
    */
   isInvalidNumber: boolean;
   /**
+   * 是否明确拒绝加微信. 任一为 true 即为 E 候选:
+   *   - CallRecord 中存在 result = REFUSED_WECHAT
+   *   - WechatRecord 存在 addedStatus = REJECTED
+   */
+  hasRefusedWechat: boolean;
+  /**
    * 是否打过电话但全部没接通. 仅当上述 A/B/C/F 都不满足时才看. 任一为 true 即为 D:
    *   - CallRecord 至少一条 result = NOT_CONNECTED / HUNG_UP / CONNECTED_NO_TALK
    *   - 简化策略: 调用方传 "有通话且 0 个 INTERESTED/WECHAT_ADDED" 也可以
@@ -59,7 +69,7 @@ export type CustomerGradeSignal = {
 };
 
 /**
- * 推导客户分级. 优先级: A > B > C > F > D.
+ * 推导客户分级. 优先级: A > B > C > F > E > D.
  *
  * 返回 null 表示当前数据不足以判定 (新建客户还没动作, 不应该硬塞 D).
  */
@@ -77,6 +87,9 @@ export function deriveCustomerGrade(
   }
   if (signal.isInvalidNumber) {
     return CustomerGrade.F;
+  }
+  if (signal.hasRefusedWechat) {
+    return CustomerGrade.E;
   }
   if (signal.hasUnansweredCall) {
     return CustomerGrade.D;
@@ -113,14 +126,15 @@ export function pickHigherGrade(
 /**
  * grade 排序权重. 数字越大越高优. 用于 pickHigherGrade.
  *
- * 顺序: A(5) > B(4) > C(3) > F(2) > D(1).
- * F > D 因为 "空号" 是稳定结论, "未接听" 是 D 中的最弱信号.
+ * 顺序: A(6) > B(5) > C(4) > F(3) > E(2) > D(1).
+ * F / E > D 因为 "空号 / 拒加" 是稳定结论, "未接听" 是最弱信号.
  */
 const GRADE_RANK: Record<CustomerGrade, number> = {
-  [CustomerGrade.A]: 5,
-  [CustomerGrade.B]: 4,
-  [CustomerGrade.C]: 3,
-  [CustomerGrade.F]: 2,
+  [CustomerGrade.A]: 6,
+  [CustomerGrade.B]: 5,
+  [CustomerGrade.C]: 4,
+  [CustomerGrade.F]: 3,
+  [CustomerGrade.E]: 2,
   [CustomerGrade.D]: 1,
 };
 
@@ -137,6 +151,7 @@ export const CUSTOMER_GRADE_BADGE_TONE: Record<
   [CustomerGrade.B]: "success",
   [CustomerGrade.C]: "info",
   [CustomerGrade.D]: "warning",
+  [CustomerGrade.E]: "danger",
   [CustomerGrade.F]: "danger",
 };
 
@@ -148,7 +163,20 @@ export const CUSTOMER_GRADE_LABEL: Record<CustomerGrade, string> = {
   [CustomerGrade.B]: "B · 已加微",
   [CustomerGrade.C]: "C · 邀约直播",
   [CustomerGrade.D]: "D · 未接通",
+  [CustomerGrade.E]: "E · 拒加",
   [CustomerGrade.F]: "F · 空号",
+};
+
+/**
+ * 筛选面板用的含义短描述 (与原"客户分类"文案对齐).
+ */
+export const CUSTOMER_GRADE_DESCRIPTION: Record<CustomerGrade, string> = {
+  [CustomerGrade.A]: "已形成成交结果。",
+  [CustomerGrade.B]: "已进入微信承接。",
+  [CustomerGrade.C]: "已形成直播邀约动作。",
+  [CustomerGrade.D]: "打过电话但还未建立有效联系。",
+  [CustomerGrade.E]: "客户明确拒绝加微信。",
+  [CustomerGrade.F]: "手机号无效（空号）。",
 };
 
 /**
@@ -159,6 +187,7 @@ export const CUSTOMER_GRADE_SHORT_LABEL: Record<CustomerGrade, string> = {
   [CustomerGrade.B]: "B",
   [CustomerGrade.C]: "C",
   [CustomerGrade.D]: "D",
+  [CustomerGrade.E]: "E",
   [CustomerGrade.F]: "F",
 };
 
@@ -167,6 +196,7 @@ export const CUSTOMER_GRADE_VALUES = [
   CustomerGrade.B,
   CustomerGrade.C,
   CustomerGrade.D,
+  CustomerGrade.E,
   CustomerGrade.F,
 ] as const satisfies readonly CustomerGrade[];
 
@@ -204,6 +234,8 @@ export async function readCustomerGradeSignal(
     wechatAddedCount,
     liveInvitationCount,
     invalidCallCount,
+    refusedWechatCallCount,
+    wechatRejectedCount,
     unansweredCallCount,
   ] = await Promise.all([
     tx.customer.findUnique({
@@ -220,6 +252,12 @@ export async function readCustomerGradeSignal(
     tx.liveInvitation.count({ where: { customerId } }),
     tx.callRecord.count({
       where: { customerId, result: CallResult.INVALID_NUMBER },
+    }),
+    tx.callRecord.count({
+      where: { customerId, result: CallResult.REFUSED_WECHAT },
+    }),
+    tx.wechatRecord.count({
+      where: { customerId, addedStatus: WechatAddStatus.REJECTED },
     }),
     tx.callRecord.count({
       where: {
@@ -241,6 +279,7 @@ export async function readCustomerGradeSignal(
       Boolean(customer?.wechatId?.trim()) || wechatAddedCount > 0,
     hasLiveInvitation: liveInvitationCount > 0,
     isInvalidNumber: invalidCallCount > 0,
+    hasRefusedWechat: refusedWechatCallCount > 0 || wechatRejectedCount > 0,
     hasUnansweredCall: unansweredCallCount > 0,
   };
 }

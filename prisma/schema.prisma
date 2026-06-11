@@ -117,6 +117,9 @@ enum CustomerGrade {
   B
   C
   D
+  // 拒加: 客户明确拒绝加微信 (通话结果 REFUSED_WECHAT / 微信申请被拒).
+  // 由原"客户分类"(executionClass) 的 E 档合并而来 — 客户分类与分级现统一走 grade.
+  E
   F
 }
 

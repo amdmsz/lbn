@@ -6,9 +6,11 @@ import {
   canBatchManageCustomerTags,
   canBatchMoveCustomersToRecycleBin,
   canCreateCustomer,
+  canManageCustomerPublicPool,
   canPermanentlyDeleteCustomers,
   canTransferCustomerOwner,
 } from "@/lib/auth/access";
+import { releaseCustomersToPublicPool } from "@/lib/customers/ownership";
 import { CACHE_TAGS } from "@/lib/cache-tags";
 import { auth } from "@/lib/auth/session";
 import {
@@ -70,6 +72,15 @@ const batchTransferCustomerOwnerSchema = z.object({
   note: z.string().trim().max(500, "移交备注不能超过 500 个字符。").default(""),
 });
 
+const batchReleaseCustomersToPublicPoolSchema = z.object({
+  selectionMode: z.enum(["manual", "filtered"]).default("manual"),
+  customerIds: z.array(z.string().trim().min(1)).default([]),
+  // unreachable = 未接通回流 (进公海"未接通池", 主管可绕过 2 天指派保护期);
+  // reallocate = 普通批量回收 (保护期内客户会被跳过).
+  mode: z.enum(["unreachable", "reallocate"]).default("unreachable"),
+  note: z.string().trim().max(500, "备注不能超过 500 个字符。").default(""),
+});
+
 const batchForceHardDeleteCustomersSchema = z.object({
   selectionMode: z.enum(["manual", "filtered"]).default("manual"),
   customerIds: z.array(z.string().trim().min(1)).default([]),
@@ -110,6 +121,7 @@ const CUSTOMER_BATCH_ALREADY_LABELS = {
   tag: "已有标签",
   recycle: "已在回收站",
   transfer: "无需移交",
+  release: "已在公海",
   forceDelete: "跳过",
 } as const;
 
@@ -119,6 +131,7 @@ export type BatchMoveCustomersToRecycleBinBlockedReason =
 export type BatchAddCustomerTagActionResult = CustomerBatchActionResult;
 export type BatchMoveCustomersToRecycleBinActionResult = CustomerBatchActionResult;
 export type BatchTransferCustomerOwnerActionResult = CustomerBatchActionResult;
+export type BatchReleaseCustomersToPublicPoolActionResult = CustomerBatchActionResult;
 export type BatchForceHardDeleteCustomersActionResult = CustomerBatchActionResult;
 export type CreateOwnedCustomerField = keyof z.output<typeof createOwnedCustomerActionSchema>;
 export type CreateOwnedCustomerActionResult = {
@@ -314,6 +327,48 @@ function buildBatchTransferLimitExceededResult(input: {
     skippedLabel: CUSTOMER_BATCH_ALREADY_LABELS.transfer,
   });
 }
+
+function buildBatchReleaseEmptyResult(
+  message: string,
+  code: CustomerBatchActionErrorCode = "unknown",
+): BatchReleaseCustomersToPublicPoolActionResult {
+  return buildBatchCustomerActionResult({
+    status: "error",
+    message,
+    error: { code, message },
+    skippedLabel: CUSTOMER_BATCH_ALREADY_LABELS.release,
+  });
+}
+
+function buildBatchReleaseLimitExceededResult(input: {
+  selection: CustomerBatchSelection;
+  limitExceeded: CustomerBatchLimitExceeded;
+}): BatchReleaseCustomersToPublicPoolActionResult {
+  const message = `当前筛选结果共 ${input.limitExceeded.actualCount} 位客户，超过单次 ${input.limitExceeded.maxCount} 位上限，请先缩小筛选范围后再批量移交公海。`;
+
+  return buildBatchCustomerActionResult({
+    status: "error",
+    message,
+    error: {
+      code: "limit_exceeded",
+      message,
+    },
+    selection: input.selection,
+    limitExceeded: input.limitExceeded,
+    skippedLabel: CUSTOMER_BATCH_ALREADY_LABELS.release,
+  });
+}
+
+// ownership 层抛的英文错误 → 给销售/主管看的中文原因
+const BATCH_RELEASE_REASON_TRANSLATIONS: Record<string, string> = {
+  "Customer is still under claim protection.":
+    "客户仍在指派保护期内（普通回收不放行，可改用未接通回流）",
+  "Batch recycle is disabled by the current team public-pool rule.":
+    "当前团队公海规则关闭了批量回收",
+  "Customer is unavailable.": "客户不存在或已被删除",
+  "当前客户已移入回收站，不能继续执行公海 / 归属链路动作。":
+    "客户已在回收站，不能移交公海",
+};
 
 function buildBatchForceHardDeleteEmptyResult(
   message: string,
@@ -985,6 +1040,133 @@ export async function batchTransferCustomerOwnerAction(
 
     return buildBatchTransferEmptyResult(
       error instanceof Error ? error.message : "批量移交负责人失败，请稍后重试。",
+    );
+  }
+}
+
+// 批量"移交公海": 替代以前把客户移交给"公海/中转"假人账号的做法 — 直接走
+// 公海归属事务 (releaseCustomersToPublicPool), 审计记到真实操作人名下.
+// 默认按"未接通回流"入池 (进公海"未接通池", 次日可再分配), 也可选普通回收.
+export async function batchReleaseCustomersToPublicPoolAction(
+  formData: FormData,
+): Promise<BatchReleaseCustomersToPublicPoolActionResult> {
+  try {
+    const actor = await getBatchCustomerActor();
+
+    if (!canManageCustomerPublicPool(actor.role)) {
+      return buildBatchReleaseEmptyResult(
+        "当前角色没有批量移交公海的权限。",
+        "forbidden",
+      );
+    }
+
+    const parsed = batchReleaseCustomersToPublicPoolSchema.safeParse({
+      selectionMode: String(formData.get("selectionMode") ?? "manual"),
+      customerIds: formData.getAll("customerIds").map((value) => String(value).trim()),
+      mode: String(formData.get("mode") ?? "unreachable"),
+      note: String(formData.get("note") ?? "").trim(),
+    });
+
+    if (!parsed.success) {
+      return buildBatchReleaseEmptyResult(
+        parsed.error.issues[0]?.message ?? "提交数据不完整，无法执行批量移交公海。",
+        "validation_error",
+      );
+    }
+
+    const resolvedSelection = await resolveBatchCustomerSelection({
+      actor,
+      selectionMode: parsed.data.selectionMode,
+      formData,
+      customerIds: parsed.data.customerIds,
+      filteredEmptyMessage: "当前筛选结果下没有可移交公海的客户。",
+      staleSelectionMessage: "部分客户已不在当前客户工作台范围，请刷新后重试。",
+    });
+
+    if (resolvedSelection.status === "limit_exceeded") {
+      return buildBatchReleaseLimitExceededResult(resolvedSelection);
+    }
+
+    const { customerIds, selection } = resolvedSelection;
+    const result = await releaseCustomersToPublicPool(actor.id, {
+      customerIds,
+      reason:
+        parsed.data.mode === "unreachable"
+          ? "UNREACHABLE_RECYCLE"
+          : "BATCH_REALLOCATION",
+      note: parsed.data.note || null,
+    });
+
+    let skippedCount = 0;
+    let blockedCount = 0;
+    const blockedReasonMap = new Map<string, number>();
+
+    for (const item of result.skipped) {
+      if (item.reason === "Customer is already public.") {
+        skippedCount += 1;
+        continue;
+      }
+
+      blockedCount += 1;
+      const reason =
+        BATCH_RELEASE_REASON_TRANSLATIONS[item.reason] ?? item.reason;
+      blockedReasonMap.set(reason, (blockedReasonMap.get(reason) ?? 0) + 1);
+    }
+
+    if (result.successCount > 0) {
+      updateTag(CACHE_TAGS.customerList);
+      for (const customerId of customerIds) {
+        updateTag(CACHE_TAGS.customer(customerId));
+      }
+      revalidatePath("/customers/public-pool");
+      revalidatePath("/dashboard");
+    }
+
+    const summaryParts = [`已移交公海 ${result.successCount} 位客户`];
+    if (skippedCount > 0) {
+      summaryParts.push(`${skippedCount} 位已在公海`);
+    }
+    if (blockedCount > 0) {
+      summaryParts.push(`${blockedCount} 位被阻断`);
+    }
+
+    return buildBatchCustomerActionResult({
+      status: result.successCount > 0 ? "success" : "error",
+      message:
+        result.successCount > 0
+          ? `${summaryParts.join("，")}。${
+              parsed.data.mode === "unreachable"
+                ? "可在公海「未接通池」分段查看并再分配。"
+                : ""
+            }`
+          : "没有客户完成移交公海，请展开阻断原因查看详情。",
+      selection,
+      skippedLabel: CUSTOMER_BATCH_ALREADY_LABELS.release,
+      summary: {
+        totalCount: customerIds.length,
+        successCount: result.successCount,
+        skippedCount,
+        blockedCount,
+      },
+      blockedReasonSummary: buildSimpleBlockedReasons(blockedReasonMap),
+    });
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      "message" in error &&
+      typeof error.code === "string" &&
+      typeof error.message === "string"
+    ) {
+      return buildBatchReleaseEmptyResult(
+        error.message,
+        error.code as CustomerBatchActionErrorCode,
+      );
+    }
+
+    return buildBatchReleaseEmptyResult(
+      error instanceof Error ? error.message : "批量移交公海失败，请稍后重试。",
     );
   }
 }

@@ -16,6 +16,7 @@ import {
   batchAddCustomerTagAction,
   batchForceHardDeleteCustomersAction,
   batchMoveCustomersToRecycleBinAction,
+  batchReleaseCustomersToPublicPoolAction,
   batchTransferCustomerOwnerAction,
 } from "@/app/(dashboard)/customers/actions";
 import {
@@ -23,7 +24,9 @@ import {
   BatchOwnerTransferDialog,
   BatchRecycleDialog,
   BatchRecycleRequestDialog,
+  BatchReleaseToPoolDialog,
   BatchTagDialog,
+  type BatchReleaseToPoolMode,
   type BatchTagOption,
   type SelectionMode,
 } from "@/components/customers/customer-batch-dialogs";
@@ -144,6 +147,8 @@ const initialBatchTransferNoticeState =
   createInitialCustomerBatchActionNoticeState("无需移交");
 const initialBatchForceDeleteNoticeState =
   createInitialCustomerBatchActionNoticeState("跳过");
+const initialBatchReleaseNoticeState =
+  createInitialCustomerBatchActionNoticeState("已在公海");
 
 function getCallsSummaryText(latestFollowUpAt: Date | null, totalCallCount: number) {
   if (!latestFollowUpAt) {
@@ -229,6 +234,7 @@ export function CustomersTable({
   moveToRecycleBinAction,
   canBatchAddTags = false,
   canBatchTransferOwner = false,
+  canBatchReleaseToPublicPool = false,
   canBatchMoveToRecycleBin = false,
   canBatchForceHardDelete = false,
   batchTagOptions = [],
@@ -252,6 +258,8 @@ export function CustomersTable({
   moveToRecycleBinAction?: MoveCustomerToRecycleBinAction;
   canBatchAddTags?: boolean;
   canBatchTransferOwner?: boolean;
+  // 批量"移交公海" (释放回公海池, 替代移交给中转假账号) — ADMIN/SUPERVISOR.
+  canBatchReleaseToPublicPool?: boolean;
   canBatchMoveToRecycleBin?: boolean;
   canBatchForceHardDelete?: boolean;
   batchTagOptions?: BatchTagOption[];
@@ -278,6 +286,9 @@ export function CustomersTable({
   // 销售自助"申请回收" — 本波只 UI, 无服务端动作.
   const [batchRecycleRequestDialogOpen, setBatchRecycleRequestDialogOpen] = useState(false);
   const [batchForceDeleteDialogOpen, setBatchForceDeleteDialogOpen] = useState(false);
+  const [batchReleaseDialogOpen, setBatchReleaseDialogOpen] = useState(false);
+  const [batchReleaseMode, setBatchReleaseMode] =
+    useState<BatchReleaseToPoolMode>("unreachable");
   const [selectedTagId, setSelectedTagId] = useState("");
   const [selectedTargetOwnerId, setSelectedTargetOwnerId] = useState("");
   const [batchForceDeleteConfirmation, setBatchForceDeleteConfirmation] = useState("");
@@ -291,6 +302,8 @@ export function CustomersTable({
     useState<CustomerBatchActionNoticeState>(initialBatchRecycleNoticeState);
   const [batchForceDeleteNotice, setBatchForceDeleteNotice] =
     useState<CustomerBatchActionNoticeState>(initialBatchForceDeleteNoticeState);
+  const [batchReleaseNotice, setBatchReleaseNotice] =
+    useState<CustomerBatchActionNoticeState>(initialBatchReleaseNoticeState);
   const [followUpDialogState, setFollowUpDialogState] = useState<FollowUpDialogState>({
     item: null,
     initialResult: "",
@@ -302,6 +315,7 @@ export function CustomersTable({
   const [batchOwnerTransferPending, startBatchOwnerTransferTransition] = useTransition();
   const [batchRecyclePending, startBatchRecycleTransition] = useTransition();
   const [batchForceDeletePending, startBatchForceDeleteTransition] = useTransition();
+  const [batchReleasePending, startBatchReleaseTransition] = useTransition();
   const router = useRouter();
   const pathname = usePathname() || "/customers";
   const searchParams = useSearchParams();
@@ -385,6 +399,7 @@ export function CustomersTable({
   const canBatchSelect =
     canBatchAddTags ||
     canBatchTransferOwner ||
+    canBatchReleaseToPublicPool ||
     canBatchMoveToRecycleBin ||
     canBatchForceHardDelete;
   const filteredSelectionExceedsLimit =
@@ -546,6 +561,7 @@ export function CustomersTable({
     setBatchRecycleNotice(initialBatchRecycleNoticeState);
     setBatchTransferNotice(initialBatchTransferNoticeState);
     setBatchForceDeleteNotice(initialBatchForceDeleteNoticeState);
+    setBatchReleaseNotice(initialBatchReleaseNoticeState);
   }
 
   function openBatchTagDialog() {
@@ -610,6 +626,16 @@ export function CustomersTable({
 
   function closeBatchForceDeleteDialog() {
     setBatchForceDeleteDialogOpen(false);
+  }
+
+  function openBatchReleaseDialog() {
+    resetNotices();
+    setBatchReleaseMode("unreachable");
+    setBatchReleaseDialogOpen(true);
+  }
+
+  function closeBatchReleaseDialog() {
+    setBatchReleaseDialogOpen(false);
   }
 
   function openFollowUpDialog(
@@ -698,6 +724,25 @@ export function CustomersTable({
       notifyCustomerBatchActionResult(nextState, {
         defaultTitle: "批量移交已处理",
         successLabel: "成功移交",
+        countUnitLabel: "位",
+      });
+      if (nextState.summary.successCount > 0 || nextState.summary.skippedCount > 0) {
+        resetSelection();
+        router.refresh();
+      }
+    });
+  }
+
+  function handleBatchReleaseSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    startBatchReleaseTransition(async () => {
+      const nextState = await batchReleaseCustomersToPublicPoolAction(formData);
+      setBatchReleaseNotice(nextState);
+      closeBatchReleaseDialog();
+      notifyCustomerBatchActionResult(nextState, {
+        defaultTitle: "批量移交公海已处理",
+        successLabel: "成功移交公海",
         countUnitLabel: "位",
       });
       if (nextState.summary.successCount > 0 || nextState.summary.skippedCount > 0) {
@@ -1157,6 +1202,14 @@ export function CustomersTable({
                 />
               ) : null}
 
+              {batchReleaseNotice.blockedReasonSummary.length > 0 ? (
+                <BlockedReasonStrip
+                  title="移交公海阻断"
+                  tone="warning"
+                  summary={batchReleaseNotice.blockedReasonSummary}
+                />
+              ) : null}
+
               {batchRecycleNotice.blockedReasonSummary.length > 0 ? (
                 <CustomerRecycleBlockedReasonSummary
                   items={batchRecycleNotice.blockedReasonSummary}
@@ -1185,6 +1238,7 @@ export function CustomersTable({
                   manualRecycleUnavailable={manualRecycleUnavailable}
                   canBatchAddTags={canBatchAddTags}
                   canBatchTransferOwner={canBatchTransferOwner}
+                  canBatchReleaseToPublicPool={canBatchReleaseToPublicPool}
                   canBatchMoveToRecycleBin={canBatchMoveToRecycleBin}
                   canBatchForceHardDelete={canBatchForceHardDelete}
                   hasBatchOwnerTransferOptions={hasBatchOwnerTransferOptions}
@@ -1195,6 +1249,7 @@ export function CustomersTable({
                   onResetSelection={resetSelection}
                   onOpenBatchTag={openBatchTagDialog}
                   onOpenBatchOwnerTransfer={openBatchOwnerTransferDialog}
+                  onOpenBatchRelease={openBatchReleaseDialog}
                   onOpenBatchRecycle={openBatchRecycleDialog}
                   onOpenBatchForceDelete={openBatchForceDeleteDialog}
                 />
@@ -1339,6 +1394,19 @@ export function CustomersTable({
         onClose={closeBatchOwnerTransferDialog}
         onOwnerChange={setSelectedTargetOwnerId}
         onSubmit={handleBatchOwnerTransferSubmit}
+        selectedCustomerIds={manualSelectedIds}
+      />
+
+      <BatchReleaseToPoolDialog
+        open={batchReleaseDialogOpen}
+        selectedCount={selectedCount}
+        selectionMode={selectionMode}
+        filters={filters}
+        pending={batchReleasePending}
+        mode={batchReleaseMode}
+        onModeChange={setBatchReleaseMode}
+        onClose={closeBatchReleaseDialog}
+        onSubmit={handleBatchReleaseSubmit}
         selectedCustomerIds={manualSelectedIds}
       />
 

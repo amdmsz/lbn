@@ -310,6 +310,154 @@ export function BatchOwnerTransferDialog({
   );
 }
 
+export type BatchReleaseToPoolMode = "unreachable" | "reallocate";
+
+// 批量"移交公海": 替代移交给"公海/中转"假人账号的旧做法.
+// 默认未接通回流 (进公海"未接通池", 可绕过指派保护期), 也可切普通回收.
+export function BatchReleaseToPoolDialog({
+  open,
+  selectedCount,
+  selectionMode,
+  filters,
+  pending,
+  mode,
+  onModeChange,
+  onClose,
+  onSubmit,
+  selectedCustomerIds,
+}: Readonly<{
+  open: boolean;
+  selectedCount: number;
+  selectionMode: SelectionMode;
+  filters: CustomerCenterFilters;
+  pending: boolean;
+  mode: BatchReleaseToPoolMode;
+  onModeChange: (nextMode: BatchReleaseToPoolMode) => void;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  selectedCustomerIds: string[];
+}>) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/28 px-4 py-8 lg:pl-[var(--dashboard-sidebar-width,0px)]"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="批量移交公海"
+        className="crm-card w-full max-w-lg overflow-hidden"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="border-b border-[var(--color-border-soft)] px-5 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1.5">
+              <h3 className="text-lg font-semibold text-[var(--foreground)]">批量移交公海</h3>
+              <p className="text-sm leading-6 text-[var(--color-sidebar-muted)]">
+                本次会把已选 {selectedCount} 位客户释放回公海，由主管在公海池统一再分配。已在公海的客户会计入“已在公海”。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="crm-button crm-button-ghost min-h-0 px-3 py-2 text-sm"
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={onSubmit} className="space-y-4 px-5 py-4">
+          <input type="hidden" name="selectionMode" value={selectionMode} />
+          {selectionMode === "filtered" ? (
+            <FilterHiddenInputs filters={filters} />
+          ) : (
+            selectedCustomerIds.map((customerId) => (
+              <input key={customerId} type="hidden" name="customerIds" value={customerId} />
+            ))
+          )}
+          <input type="hidden" name="mode" value={mode} />
+
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-[var(--foreground)]">入池方式</legend>
+            <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-[13px] leading-6">
+              <input
+                type="radio"
+                checked={mode === "unreachable"}
+                onChange={() => onModeChange("unreachable")}
+                disabled={pending}
+                className="mt-1 h-4 w-4"
+              />
+              <span>
+                <span className="block font-medium text-[var(--foreground)]">
+                  未接通回流（推荐）
+                </span>
+                <span className="block text-[var(--color-sidebar-muted)]">
+                  进入公海「未接通池」分段，次日可按拨打关系再分配；刚指派的客户也能放回（绕过保护期）。
+                </span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-[13px] leading-6">
+              <input
+                type="radio"
+                checked={mode === "reallocate"}
+                onChange={() => onModeChange("reallocate")}
+                disabled={pending}
+                className="mt-1 h-4 w-4"
+              />
+              <span>
+                <span className="block font-medium text-[var(--foreground)]">普通回收</span>
+                <span className="block text-[var(--color-sidebar-muted)]">
+                  常规批量回收入池；仍在指派保护期内的客户会被跳过并提示原因。
+                </span>
+              </span>
+            </label>
+          </fieldset>
+
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-[var(--foreground)]">备注</span>
+            <textarea
+              name="note"
+              rows={2}
+              maxLength={500}
+              placeholder="可填写移交原因，选填"
+              disabled={pending}
+              className="crm-textarea"
+            />
+          </label>
+
+          <div className="rounded-xl border border-[var(--color-border-soft)] bg-[var(--color-shell-surface-soft)] px-4 py-3 text-[13px] leading-6 text-[var(--color-sidebar-muted)]">
+            {selectionMode === "filtered"
+              ? `这次会按当前筛选结果批量处理 ${selectedCount} 位客户，全程保留归属审计，记录在你的账号名下。`
+              : "这次会按当前页手选客户批量处理，全程保留归属审计，记录在你的账号名下。"}
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="crm-button crm-button-secondary"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              disabled={pending}
+              className="crm-button crm-button-primary disabled:cursor-not-allowed disabled:opacity-55"
+            >
+              {pending ? "移交中..." : "确认移交公海"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export function BatchRecycleDialog({
   open,
   selectedCount,

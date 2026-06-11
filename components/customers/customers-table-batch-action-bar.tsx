@@ -5,6 +5,7 @@ import {
   CheckSquare2,
   Tags,
   Trash2,
+  Waves,
   X,
 } from "lucide-react";
 import type { BatchTagOption, SelectionMode } from "@/components/customers/customer-batch-dialogs";
@@ -26,6 +27,7 @@ export type BatchActionBarProps = Readonly<{
   manualRecycleUnavailable: boolean;
   canBatchAddTags: boolean;
   canBatchTransferOwner: boolean;
+  canBatchReleaseToPublicPool: boolean;
   canBatchMoveToRecycleBin: boolean;
   canBatchForceHardDelete: boolean;
   hasBatchOwnerTransferOptions: boolean;
@@ -36,6 +38,7 @@ export type BatchActionBarProps = Readonly<{
   onResetSelection: () => void;
   onOpenBatchTag: () => void;
   onOpenBatchOwnerTransfer: () => void;
+  onOpenBatchRelease: () => void;
   onOpenBatchRecycle: () => void;
   onOpenBatchForceDelete: () => void;
 }>;
@@ -57,6 +60,7 @@ export function CustomersTableBatchActionBar(props: BatchActionBarProps) {
     manualRecycleUnavailable,
     canBatchAddTags,
     canBatchTransferOwner,
+    canBatchReleaseToPublicPool,
     canBatchMoveToRecycleBin,
     canBatchForceHardDelete,
     hasBatchOwnerTransferOptions,
@@ -67,6 +71,7 @@ export function CustomersTableBatchActionBar(props: BatchActionBarProps) {
     onResetSelection,
     onOpenBatchTag,
     onOpenBatchOwnerTransfer,
+    onOpenBatchRelease,
     onOpenBatchRecycle,
     onOpenBatchForceDelete,
   } = props;
@@ -170,6 +175,19 @@ export function CustomersTableBatchActionBar(props: BatchActionBarProps) {
           >
             <ArrowRightLeft className="h-3.5 w-3.5" />
             移交
+          </button>
+        ) : null}
+
+        {canBatchReleaseToPublicPool ? (
+          <button
+            type="button"
+            onClick={onOpenBatchRelease}
+            disabled={batchExecutionBlockedByLimit}
+            title="把已选客户释放回公海池（默认未接通回流，进入公海「未接通池」），替代移交给中转账号。"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-primary/20 bg-card px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:border-border disabled:text-muted-foreground"
+          >
+            <Waves className="h-3.5 w-3.5" />
+            移交公海
           </button>
         ) : null}
 

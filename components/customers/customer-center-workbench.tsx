@@ -8,6 +8,7 @@ import {
   canCreateCustomer,
   canCreateSalesOrder,
   canExportCustomers,
+  canManageCustomerPublicPool,
   canPermanentlyDeleteCustomers,
   canTransferCustomerOwner,
 } from "@/lib/auth/access";
@@ -197,6 +198,7 @@ export function CustomerCenterListSection({
         moveToRecycleBinAction={moveCustomerToRecycleBinAction}
         canBatchAddTags={canBatchManageCustomerTags(role)}
         canBatchTransferOwner={canTransferCustomerOwner(role)}
+        canBatchReleaseToPublicPool={canManageCustomerPublicPool(role)}
         canBatchMoveToRecycleBin={canBatchMoveCustomersToRecycleBin(role)}
         canBatchForceHardDelete={canPermanentlyDeleteCustomers(role)}
         batchTagOptions={list.tagOptions}
