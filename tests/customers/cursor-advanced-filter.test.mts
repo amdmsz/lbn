@@ -112,7 +112,11 @@ test("productKeyword 模糊匹配 → contains 在 leads / salesOrders 两表 OR
   });
 });
 
-test("assignedFrom + assignedTo → customer.createdAt 范围 (降级实现)", () => {
+test("assignedFrom + assignedTo → OwnershipEvent / LeadAssignment 时间窗口 (不再用 createdAt)", () => {
+  // 2026-06-10 修复: 分配时间真相 = CustomerOwnershipEvent (PRIVATE 承接) /
+  // LeadAssignment 的 createdAt, 不是 customer.createdAt — 老客户今天重分配时
+  // createdAt 是旧的, 用 createdAt 会漏掉. clause 应是 OR(ownershipEvents.some,
+  // leads.assignments.some) 而非 { createdAt: range }.
   const clauses = buildCustomerCenterListFilterClauses({
     filters: makeFilters({
       assignedFrom: "2026-06-01",
@@ -122,9 +126,21 @@ test("assignedFrom + assignedTo → customer.createdAt 范围 (降级实现)", (
     todayEnd,
   });
   assert.equal(clauses.length, 1);
-  const clause = clauses[0] as { createdAt: { gte?: Date; lte?: Date } };
-  assert.ok(clause.createdAt.gte instanceof Date);
-  assert.ok(clause.createdAt.lte instanceof Date);
+  const clause = clauses[0] as {
+    OR?: Array<Record<string, unknown>>;
+    createdAt?: unknown;
+  };
+  // 不应再是顶层 customer.createdAt 过滤
+  assert.equal(clause.createdAt, undefined, "分配时间不应再用 customer.createdAt");
+  assert.ok(Array.isArray(clause.OR), "应为 OR(ownershipEvents, leadAssignments)");
+  const hasOwnershipEvent = clause.OR!.some(
+    (c) => typeof c === "object" && c !== null && "ownershipEvents" in c,
+  );
+  const hasLeadAssignment = clause.OR!.some(
+    (c) => typeof c === "object" && c !== null && "leads" in c,
+  );
+  assert.ok(hasOwnershipEvent, "OR 内应有 ownershipEvents.some 子句");
+  assert.ok(hasLeadAssignment, "OR 内应有 leads.assignments.some 子句");
 });
 
 test("executionClasses A → tradeOrders / salesOrders APPROVED OR", () => {

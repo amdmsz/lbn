@@ -1836,6 +1836,63 @@ export type CustomerCenterStatsAggregate = {
   executionClassCounts: Record<CustomerExecutionClass, number>;
 };
 
+// F20 customers/perf phase 3: 给 stats aggregate 套 60s `unstable_cache`.
+//
+// 背景 (2026-06-11 事故复盘第二层防御): connection pool 已 10→25
+// (lib/db/prisma.ts) 止血; 但每个 /customers SSR 仍实时跑 ~10 对 count+groupBy
+// (`getCustomerCenterStatsAggregate`) + 3 个今日 count, 早高峰多销售并发刷新
+// 仍是巨大的 SQL 扇出. 本波把这两块最重的查询缓存掉, 把每请求的统计 SQL 从
+// ~13 条降到 cache hit 时 0 条 (mutation 60s 或 revalidateTag 即更新).
+//
+// 关键技术点 — Map 不能进 JSON:
+//   `CustomerCenterStatsAggregate` 含 `byTeam: Map` / `byOwner: Map`,
+//   每个 value 还含 `latestFollowUpAt: Date | null`. unstable_cache 内部走
+//   JSON.stringify/parse, Map 会被序列化成 `{}` 丢光数据, Date 会变 ISO string.
+//   解决: 缓存边界内只暴露 JSON-safe 形状 (Map → `[[key, scope], ...]` 数组,
+//   Date → ISO string), 缓存边界外再 revive 回 Map + Date. 与现有
+//   `reviveCustomerSnapshotDates` 处理 Date 同款思路.
+//
+// 缓存 key:
+//   { scope: ADMIN|SUPERVISOR|SALES, teamId, ownerId, dateKey }.
+//   - scope/teamId/ownerId: 决定 visibleWhere (queue tab 数字是 scope 全量,
+//     不随 filters 收窄, 所以 key 不含 filters).
+//   - dateKey (本地 YYYY-MM-DD): 今日相关 where (todayNew* / pendingFollowUp 的
+//     `lte: now`) 跨天自然失效. 同一天内的细微 now 漂移 (≤ TTL) 可接受 — 这正是
+//     缓存允许的延迟.
+//   - 故意不把 visibleWhere (Prisma JSON) / now/todayStart/todayEnd (含毫秒的
+//     Date) 进 key: 前者不可序列化稳定, 后者每请求都变会让命中率塌成 0. 在 cached
+//     fn 内部用 scope 重建 visibleWhere, 用 dateKey 重建今日窗口.
+//   - recycledCustomerIds 故意不进 key 也不进 SQL: 它每天变, 进 key 会塌命中率
+//     (沿用 loadCustomerCenterListSnapshotsCached / loadVisibleCustomerIdsCached
+//     的同款决定). 后果是 sidebar / queue tab 概览计数不再扣除回收站客户 (通常个
+//     位数), 略偏大 — 与该函数顶部已声明的 "概览计数略偏大 (< 1%)" 同一档近似;
+//     列表本身仍走 listWhere / snapshot 内存过滤精确排除回收站, 不受影响.
+
+/** scope value 的 JSON-safe 版本: latestFollowUpAt Date → ISO string. */
+type CustomerCenterStatsScopeSerialized = Omit<
+  CustomerCenterStatsScope,
+  "latestFollowUpAt"
+> & {
+  latestFollowUpAt: string | null;
+};
+
+/** aggregate 的 JSON-safe 版本: Map → entries 数组, Date → ISO string. */
+type CustomerCenterStatsAggregateSerialized = {
+  global: CustomerCenterStatsScopeSerialized;
+  byTeam: Array<[string, CustomerCenterStatsScopeSerialized]>;
+  byOwner: Array<[string, CustomerCenterStatsScopeSerialized]>;
+  queueCounts: Record<CustomerQueueKey, number>;
+  executionClassCounts: Record<CustomerExecutionClass, number>;
+};
+
+/** 本地时区 YYYY-MM-DD, 作为今日相关缓存的跨天失效锚点. */
+function localDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 /**
  * 通用 helper: 给一个 Customer where 并行跑出 (global count, byOwner groupBy).
  * byTeam 不直接 groupBy (Customer 表没有 teamId), 由 caller 用 owner.teamId
@@ -1885,22 +1942,41 @@ function reduceByOwnerToByTeam(
  * lastEffectiveFollowUpAt 比较) 暂留 0 — 它本来就是 5826 次 OperationLog
  * round-trip 的主要 bottleneck, 单独走 SQL 也要 join; UI 里这列对销售决
  * 策意义弱, 暂时降级保性能, 后续再单独补.
+ *
+ * F20 customers/perf phase 3: 这里是 *裸 SQL 计算* 部分, 返回 JSON-safe 形状
+ * (`CustomerCenterStatsAggregateSerialized`: Map→entries, Date→ISO), 由
+ * `loadCustomerCenterStatsAggregateCached` 套 60s `unstable_cache`. 入参只接
+ * 可序列化的 scope 标识 (scope/teamId/ownerId) + dateKey, 在内部重建 visibleWhere
+ * 与今日窗口, 保证 cache key 稳定. 公开入口 `getCustomerCenterStatsAggregate`
+ * 在缓存边界外把 serialized 形状 revive 回带 Map / Date 的
+ * `CustomerCenterStatsAggregate` —— cache hit / miss 两条路径最终结构完全一致.
  */
-async function getCustomerCenterStatsAggregate(input: {
-  actor: CustomerCenterActor;
-  visibleWhere: Prisma.CustomerWhereInput;
-  recycledCustomerIds: string[];
-  now: Date;
-  todayStart: Date;
-  todayEnd: Date;
-}): Promise<CustomerCenterStatsAggregate> {
-  const baseClauses: Prisma.CustomerWhereInput[] = [input.visibleWhere];
-  if (input.recycledCustomerIds.length > 0) {
-    baseClauses.push({ id: { notIn: input.recycledCustomerIds } });
-  }
-  const baseWhere: Prisma.CustomerWhereInput = { AND: baseClauses };
+async function computeCustomerCenterStatsAggregateSerialized(input: {
+  scope: "ADMIN" | "SUPERVISOR" | "SALES";
+  teamId: string | null;
+  ownerId: string | null;
+  /** 本地 YYYY-MM-DD; 用于重建今日窗口 + 作为跨天缓存失效锚点. */
+  dateKey: string;
+}): Promise<CustomerCenterStatsAggregateSerialized> {
+  // 在 cached fn 内重建 visibleWhere, 避免把 Prisma JSON 当 cache key
+  // (与 loadCustomerCenterListSnapshotsCached / loadVisibleCustomerIdsCached 同款).
+  const visibleWhere = buildCustomerVisibilityWhereFromScope(input);
 
-  const today = { gte: input.todayStart, lte: input.todayEnd };
+  // 用 dateKey 重建今日窗口 + now. now 仅用于 pendingFollowUp 的 `lte` 边界
+  // (判 "到期/逾期"); 用当天 00:00 派生的 todayEnd 作为 now, 跨请求确定, 不引入
+  // 毫秒漂移 (本就在 60s 缓存窗口内, 这点延迟正是缓存允许的). 注意 dateKey 是本地
+  // 日期, 这里用 T00:00:00 本地构造 Date 再 startOfDay/endOfDay 归一.
+  const dayAnchor = new Date(`${input.dateKey}T00:00:00`);
+  const todayStart = startOfDay(dayAnchor);
+  const todayEnd = endOfDay(dayAnchor);
+  const now = todayEnd;
+
+  // 注意: 故意不把 recycledCustomerIds 合并进 SQL where —— 它每天变, 进 cache
+  // key 会让命中率塌方 (沿用同款决定, 见上方 phase 3 说明). 概览计数因此不扣回收站
+  // 客户, 略偏大, 与本函数顶部声明的近似同档; 列表精确排除走 listWhere / snapshot.
+  const baseWhere: Prisma.CustomerWhereInput = visibleWhere;
+
+  const today = { gte: todayStart, lte: todayEnd };
   const composeWhere = (extra: Prisma.CustomerWhereInput): Prisma.CustomerWhereInput => ({
     AND: [baseWhere, extra],
   });
@@ -1908,11 +1984,11 @@ async function getCustomerCenterStatsAggregate(input: {
   // 派生组合 where (今日新建 / 待首次通话 / 待跟进 / 待加微 / 待邀请 / 待成交).
   const todayNewCustomerWhere = composeWhere({ createdAt: today });
   const todayNewImportedWhere = composeWhere(
-    buildTodayNewImportedCustomerWhereInput(input.todayStart, input.todayEnd),
+    buildTodayNewImportedCustomerWhereInput(todayStart, todayEnd),
   );
   const pendingFirstCallWhere = composeWhere(buildPendingFirstCallCustomerWhereInput());
   const pendingDialWhere = composeWhere(buildPendingDialCustomerWhereInput());
-  const pendingFollowUpWhere = composeWhere(buildPendingFollowUpCustomerWhereInput(input.now));
+  const pendingFollowUpWhere = composeWhere(buildPendingFollowUpCustomerWhereInput(now));
   const pendingWechatWhere = composeWhere(buildWechatPendingCustomerWhereInput());
   const wechatAddedWhere = composeWhere(buildWechatAddedSignalWhereInput());
   const pendingInvitationWhere = composeWhere(buildPendingInvitationCustomerWhereInput());
@@ -2092,14 +2168,215 @@ async function getCustomerCenterStatsAggregate(input: {
   // grade 列 + 当前页 stateMap 已够. 后续若必要再加一个 groupBy(grade) 替代.
   const executionClassCounts = createExecutionClassCountMap();
 
+  // 返回 JSON-safe 形状: Map → entries 数组, Date → ISO string. 由
+  // unstable_cache 序列化时不丢数据; 缓存边界外 `reviveCustomerCenterStatsAggregate`
+  // revive 回 Map + Date.
   return {
-    global,
-    byTeam,
-    byOwner,
+    global: serializeStatsScope(global),
+    byTeam: Array.from(byTeam, ([key, scope]) => [key, serializeStatsScope(scope)]),
+    byOwner: Array.from(byOwner, ([key, scope]) => [key, serializeStatsScope(scope)]),
     queueCounts,
     executionClassCounts,
   };
 }
+
+/**
+ * F20 customers/perf phase 3: scope 标识 → visibleWhere. 与
+ * `getCustomerVisibilityWhereInput` 同语义, 但入参是可序列化的 scope 标识
+ * (而非 actor 对象), 供各 cached fn 在缓存边界内重建 where, 不把 Prisma JSON
+ * 当 cache key. 三个 cached helper (snapshots / visibleIds / statsAggregate)
+ * 之前各自内联同一段, 这里收敛成一处, 行为一致.
+ */
+function buildCustomerVisibilityWhereFromScope(input: {
+  scope: "ADMIN" | "SUPERVISOR" | "SALES";
+  teamId: string | null;
+  ownerId: string | null;
+}): Prisma.CustomerWhereInput {
+  if (input.scope === "ADMIN") {
+    return {
+      ownerId: { not: null },
+      ownershipMode: { in: [...activeCustomerOwnershipModes] },
+    };
+  }
+  if (input.scope === "SUPERVISOR") {
+    if (!input.teamId) {
+      return { id: "__missing_team_scope__" };
+    }
+    return {
+      ownerId: { not: null },
+      ownershipMode: { in: [...activeCustomerOwnershipModes] },
+      owner: { is: { teamId: input.teamId } },
+    };
+  }
+  // SALES
+  if (!input.ownerId) {
+    return { id: "__missing_sales_scope__" };
+  }
+  return {
+    ownershipMode: { in: [...activeCustomerOwnershipModes] },
+    ownerId: input.ownerId,
+  };
+}
+
+function serializeStatsScope(
+  scope: CustomerCenterStatsScope,
+): CustomerCenterStatsScopeSerialized {
+  return {
+    ...scope,
+    latestFollowUpAt: scope.latestFollowUpAt
+      ? scope.latestFollowUpAt.toISOString()
+      : null,
+  };
+}
+
+function reviveStatsScope(
+  scope: CustomerCenterStatsScopeSerialized,
+): CustomerCenterStatsScope {
+  return {
+    ...scope,
+    latestFollowUpAt: reviveDate(scope.latestFollowUpAt),
+  };
+}
+
+/**
+ * 把 cached serialized aggregate revive 回带 Map / Date 的运行时形状.
+ * 关键: cache miss 时 unstable_cache 拿到的也是 serialized 形状 (它内部对
+ * 返回值做 JSON round-trip), 所以 hit / miss 两条路径都经这里 revive,
+ * 最终结构 (byTeam/byOwner 为 Map, value.latestFollowUpAt 为 Date|null) 完全一致.
+ */
+function reviveCustomerCenterStatsAggregate(
+  serialized: CustomerCenterStatsAggregateSerialized,
+): CustomerCenterStatsAggregate {
+  return {
+    global: reviveStatsScope(serialized.global),
+    byTeam: new Map(
+      serialized.byTeam.map(([key, scope]) => [key, reviveStatsScope(scope)] as const),
+    ),
+    byOwner: new Map(
+      serialized.byOwner.map(([key, scope]) => [key, reviveStatsScope(scope)] as const),
+    ),
+    queueCounts: serialized.queueCounts,
+    executionClassCounts: serialized.executionClassCounts,
+  };
+}
+
+const loadCustomerCenterStatsAggregateCached = unstable_cache(
+  computeCustomerCenterStatsAggregateSerialized,
+  [CACHE_TAGS.customerList, "customer-center-stats-aggregate"],
+  {
+    tags: [CACHE_TAGS.customerList],
+    revalidate: CUSTOMER_CENTER_CACHE_TTL_SECONDS,
+  },
+);
+
+/**
+ * F20 customers/perf phase 3: stats aggregate 的公开入口 (缓存边界外).
+ *
+ * 把请求级的 actor / now 映射成可序列化的 cache key (scope/teamId/ownerId +
+ * 本地 dateKey), 调 `loadCustomerCenterStatsAggregateCached` (60s), 再把
+ * serialized 形状 revive 回 Map + Date. 签名与旧版保持一致, 三个调用点
+ * (stats / page / cursor) 不需要改.
+ *
+ * `recycledCustomerIds` 参数仍保留 (调用点已传) 但不再进入 SQL / cache key —
+ * 见 phase 3 说明: 它每天变, 进 key 会塌命中率; 概览计数因此不扣回收站客户,
+ * 与本聚合既有的近似同档. 列表精确排除走 listWhere / snapshot 内存过滤, 不受影响.
+ */
+async function getCustomerCenterStatsAggregate(input: {
+  actor: CustomerCenterActor;
+  visibleWhere: Prisma.CustomerWhereInput;
+  recycledCustomerIds: string[];
+  now: Date;
+  todayStart: Date;
+  todayEnd: Date;
+}): Promise<CustomerCenterStatsAggregate> {
+  const scope: "ADMIN" | "SUPERVISOR" | "SALES" =
+    input.actor.role === "ADMIN"
+      ? "ADMIN"
+      : input.actor.role === "SUPERVISOR"
+        ? "SUPERVISOR"
+        : "SALES";
+  const serialized = await loadCustomerCenterStatsAggregateCached({
+    scope,
+    teamId: scope === "SUPERVISOR" ? input.actor.teamId : null,
+    ownerId: scope === "SALES" ? input.actor.id : null,
+    dateKey: localDateKey(input.todayStart),
+  });
+  return reviveCustomerCenterStatsAggregate(serialized);
+}
+
+// F20 customers/perf phase 3: Wave 12 今日战绩条的 3 个 count 也套 60s
+// `unstable_cache`. 它们原本每个 /customers 请求都直查 (注释说 "直查最稳"), 但在
+// 连接池事故复盘里, 这 3 条叠加 aggregate 的十几条 SQL 一起放大了早高峰扇出.
+//
+// 缓存 key:
+//   - myDialedToday 按 viewer.id (进 key): "我今天拨了几个" 是 per-viewer 维度,
+//     绝不能进共享 scope cache 串号.
+//   - scopeDialedToday / wechatAddedToday 按 scope (与 aggregate 同一套 scope 锚点).
+//   - 都 + dateKey 跨天失效. todayRange 在 cached fn 内由 dateKey 重建.
+//   - recycled 同样不进 key / 不进 SQL (见 aggregate 说明); 影响是 "刚被回收的客户
+//     今天的拨打 / 加微" 仍被计入战绩, 量级可忽略, 与 aggregate 近似同档.
+// TTL 复用 60s (今日统计稍有延迟可接受; mutation 后 revalidateTag 也即时清).
+
+const loadMyDialedTodayCached = unstable_cache(
+  async (input: { viewerId: string; dateKey: string }): Promise<number> => {
+    const dayAnchor = new Date(`${input.dateKey}T00:00:00`);
+    const todayRange = { gte: startOfDay(dayAnchor), lte: endOfDay(dayAnchor) };
+    return prisma.callRecord.count({
+      where: { salesId: input.viewerId, callTime: todayRange },
+    });
+  },
+  [CACHE_TAGS.customerList, "customer-center-my-dialed-today"],
+  {
+    tags: [CACHE_TAGS.customerList],
+    revalidate: CUSTOMER_CENTER_CACHE_TTL_SECONDS,
+  },
+);
+
+const loadScopeDialedTodayCached = unstable_cache(
+  async (input: {
+    scope: "ADMIN" | "SUPERVISOR" | "SALES";
+    teamId: string | null;
+    ownerId: string | null;
+    dateKey: string;
+  }): Promise<number> => {
+    const scopeCustomerWhere = buildCustomerVisibilityWhereFromScope(input);
+    const dayAnchor = new Date(`${input.dateKey}T00:00:00`);
+    const todayRange = { gte: startOfDay(dayAnchor), lte: endOfDay(dayAnchor) };
+    return prisma.callRecord.count({
+      where: { callTime: todayRange, customer: { is: scopeCustomerWhere } },
+    });
+  },
+  [CACHE_TAGS.customerList, "customer-center-scope-dialed-today"],
+  {
+    tags: [CACHE_TAGS.customerList],
+    revalidate: CUSTOMER_CENTER_CACHE_TTL_SECONDS,
+  },
+);
+
+const loadScopeWechatAddedTodayCached = unstable_cache(
+  async (input: {
+    scope: "ADMIN" | "SUPERVISOR" | "SALES";
+    teamId: string | null;
+    ownerId: string | null;
+    dateKey: string;
+  }): Promise<number> => {
+    const scopeCustomerWhere = buildCustomerVisibilityWhereFromScope(input);
+    const dayAnchor = new Date(`${input.dateKey}T00:00:00`);
+    const todayRange = { gte: startOfDay(dayAnchor), lte: endOfDay(dayAnchor) };
+    return prisma.wechatRecord.count({
+      where: {
+        addedStatus: WechatAddStatus.ADDED,
+        addedAt: todayRange,
+        customer: { is: scopeCustomerWhere },
+      },
+    });
+  },
+  [CACHE_TAGS.customerList, "customer-center-scope-wechat-added-today"],
+  {
+    tags: [CACHE_TAGS.customerList],
+    revalidate: CUSTOMER_CENTER_CACHE_TTL_SECONDS,
+  },
+);
 
 /**
  * F17 customers/perf phase 2: 仅取可见 customer id (无 relations).
@@ -4100,16 +4377,17 @@ async function getCustomerCenterDataStatsImpl(
     todayEnd,
   } = base;
 
-  // Wave 12 今日战绩条: 3 个轻量 count 与 aggregate 并行直查 (不缓存).
+  // Wave 12 今日战绩条: 3 个轻量 count. F20 phase 3 起改走 60s `unstable_cache`
+  // (与 aggregate 同一波缓存, 减早高峰 SQL 扇出).
   // - myDialedToday 以 viewer.id 维度统计 "我今天拨了几个电话", 与客户可见
-  //   范围无关 (走 callrecord 的 [salesId, callTime] 索引).
-  // - scopeDialedToday / wechatAddedToday 以 viewer 可见客户 scope 统计
-  //   (visibleWhere + 排除回收站), 与 sidebar aggregate 同一套 scope 锚点.
-  const todayRange = { gte: todayStart, lte: todayEnd };
-  const scopeCustomerWhere: Prisma.CustomerWhereInput =
-    recycledCustomerIds.length > 0
-      ? { AND: [visibleWhere, { id: { notIn: recycledCustomerIds } }] }
-      : visibleWhere;
+  //   范围无关 (走 callrecord 的 [salesId, callTime] 索引), 按 viewer.id 进 cache key.
+  // - scopeDialedToday / wechatAddedToday 以 viewer 可见客户 scope 统计, 与 sidebar
+  //   aggregate 同一套 scope 锚点 (recycled 同样不进 SQL/key, 见 cached helper 说明).
+  const scope: "ADMIN" | "SUPERVISOR" | "SALES" =
+    actor.role === "ADMIN" ? "ADMIN" : actor.role === "SUPERVISOR" ? "SUPERVISOR" : "SALES";
+  const scopeTeamId = scope === "SUPERVISOR" ? actor.teamId : null;
+  const scopeOwnerId = scope === "SALES" ? actor.id : null;
+  const dateKey = localDateKey(todayStart);
 
   const [aggregate, myDialedToday, scopeDialedTodayRaw, wechatAddedToday] =
     await Promise.all([
@@ -4121,27 +4399,21 @@ async function getCustomerCenterDataStatsImpl(
         todayStart,
         todayEnd,
       }),
-      prisma.callRecord.count({
-        where: {
-          salesId: actor.id,
-          callTime: todayRange,
-        },
-      }),
+      loadMyDialedTodayCached({ viewerId: actor.id, dateKey }),
       // SALES 可见范围就是本人客户, 语义与 myDialedToday 一致 — 复用, 省一条 SQL.
       actor.role === "SALES"
         ? Promise.resolve<number | null>(null)
-        : prisma.callRecord.count({
-            where: {
-              callTime: todayRange,
-              customer: { is: scopeCustomerWhere },
-            },
+        : loadScopeDialedTodayCached({
+            scope,
+            teamId: scopeTeamId,
+            ownerId: scopeOwnerId,
+            dateKey,
           }),
-      prisma.wechatRecord.count({
-        where: {
-          addedStatus: WechatAddStatus.ADDED,
-          addedAt: todayRange,
-          customer: { is: scopeCustomerWhere },
-        },
+      loadScopeWechatAddedTodayCached({
+        scope,
+        teamId: scopeTeamId,
+        ownerId: scopeOwnerId,
+        dateKey,
       }),
     ]);
   const scopeDialedToday = scopeDialedTodayRaw ?? myDialedToday;
