@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Plus, Trash2, X } from "lucide-react";
 
 export function ShippingQuickFillDrawer({
@@ -100,7 +101,13 @@ export function ShippingQuickFillDrawer({
         回填物流
       </button>
 
-      {open ? (
+      {/* 关键: 用 Portal 把抽屉渲染到 document.body. 本组件渲染在列表的
+        `pending-logistics-form` (批量回填 form) 内部, 抽屉自带 <form action=...>
+        若留在原地就构成 HTML 非法嵌套 form, 浏览器丢弃内层 form, "保存并发货"
+        会误提交到外层批量 action → 表现为"点了没反应". Portal 出 body 后,
+        抽屉的 form 不再嵌套, 单子发货 action 才能正确触发. */}
+      {open && typeof document !== "undefined"
+        ? createPortal(
         <div className="fixed inset-0 z-50">
           <button
             type="button"
@@ -184,6 +191,7 @@ export function ShippingQuickFillDrawer({
                               value={item.shippingProvider}
                               onChange={(event) => updatePackage(item.id, { shippingProvider: event.target.value })}
                               placeholder="例如：顺丰 / 京东"
+                              list="shipping-provider-options"
                               className="crm-input"
                             />
                           </label>
@@ -226,8 +234,10 @@ export function ShippingQuickFillDrawer({
               </div>
             </form>
           </div>
-        </div>
-      ) : null}
+        </div>,
+            document.body,
+          )
+        : null}
     </>
   );
 }
