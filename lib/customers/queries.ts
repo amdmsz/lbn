@@ -3637,24 +3637,29 @@ export function buildWechatPendingCustomerWhereInput(): Prisma.CustomerWhereInpu
  * 业务定义 (销售口述): "未加微客户至少拨打 5 遍". 队列纳入条件:
  *   - 未加微: 取 `buildNotAddedWechatCustomerWhereInput` (无 ADDED WechatRecord
  *     且无 result = WECHAT_ADDED 的 CallRecord).
- *   - 非空号: grade != F. grade 是 lib/customers/grade.ts 派生的稳定结论, F =
- *     空号 (CallRecord result = INVALID_NUMBER 终态). Prisma 的 `{ not: F }` 在
- *     nullable 列上等价 `grade IS NULL OR grade <> 'F'`, 所以还没攒到信号的
- *     新客户 (grade = null) 也算 "非空号", 正确留在待拨打队列里.
+ *   - 非稳定结论: grade 不在 (E 拒加, F 空号). 两者都是 grade.ts 派生的终态 —
+ *     空号拨不通, 明确拒加再拨只会惹反感, 都不该再占用销售拨打额度.
+ *     grade = null (新客户还没攒到信号) 仍留在队列, 用显式 OR 把 null 包进来
+ *     (SQL `NOT IN` 会把 null 行排除, 不能直接用 notIn 一把梭).
  *
  * 注意 (用户明确要求): 不按 callCount >= 5 把 "已拨满 5 次" 切出去 —— 5 只是
  * 列表行上的提示 (已拨 X/5), 拨满后客户仍留在 pending_dial, 直到加上微信或被
- * 判为空号才离开. 因此本 where 不含任何 callCount 过滤. (砍掉的 dial_exhausted
- * 队列也不再存在.)
+ * 判为空号/拒加才离开. 因此本 where 不含任何 callCount 过滤. (砍掉的
+ * dial_exhausted 队列也不再存在.)
  */
 export function buildPendingDialCustomerWhereInput(): Prisma.CustomerWhereInput {
   return {
     AND: [
       buildNotAddedWechatCustomerWhereInput(),
       {
-        grade: {
-          not: CustomerGrade.F,
-        },
+        OR: [
+          { grade: null },
+          {
+            grade: {
+              notIn: [CustomerGrade.E, CustomerGrade.F],
+            },
+          },
+        ],
       },
     ],
   };
