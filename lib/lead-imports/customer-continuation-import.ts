@@ -17,6 +17,7 @@ import {
 import { z } from "zod";
 import {
   createInitialPublicOwnershipEventTx,
+  resolveImportPublicPoolTeamId,
   touchCustomerEffectiveFollowUpFromWechatTx,
 } from "@/lib/customers/ownership";
 import { listActiveCustomerIds } from "@/lib/customers/recycle";
@@ -1115,6 +1116,10 @@ export async function createCustomerContinuationImportBatch(
         teamId: true,
       },
     });
+    // ADMIN 跑导入时 teamId 为 null, 回退到唯一团队, 避免公海客户无团队对主管不可见.
+    const importPoolTeamId = await resolveImportPublicPoolTeamId(
+      actorUser?.teamId ?? null,
+    );
 
     const candidateRows = parsedFile.rows.map((row) => ({
       rowNumber: row.rowNumber,
@@ -1395,7 +1400,7 @@ export async function createCustomerContinuationImportBatch(
                   publicPoolEnteredAt: null,
                   publicPoolReason: null,
                   claimLockedUntil: addDays(now, 2),
-                  publicPoolTeamId: resolvedOwner.teamId ?? actorUser?.teamId ?? null,
+                  publicPoolTeamId: resolvedOwner.teamId ?? importPoolTeamId,
                 },
                 select: {
                   id: true,
@@ -1505,8 +1510,8 @@ export async function createCustomerContinuationImportBatch(
                   : PublicPoolReason.UNASSIGNED_IMPORT,
                 claimLockedUntil: shouldAssignOwner ? addDays(now, 2) : null,
                 publicPoolTeamId: shouldAssignOwner
-                  ? resolvedOwner!.teamId ?? actorUser?.teamId ?? null
-                  : actorUser?.teamId ?? null,
+                  ? resolvedOwner!.teamId ?? importPoolTeamId
+                  : importPoolTeamId,
               },
               select: {
                 id: true,
@@ -1543,7 +1548,7 @@ export async function createCustomerContinuationImportBatch(
               ownerOutcome = "PUBLIC_POOL";
               await createInitialPublicOwnershipEventTx(tx, {
                 actorId: actor.id,
-                actorTeamId: actorUser?.teamId ?? null,
+                actorTeamId: importPoolTeamId,
                 customerId: createdCustomer.id,
                 note: `Customer continuation import batch ${input.file.name} row ${row.rowNumber}`,
               });
@@ -2289,6 +2294,10 @@ export async function processCustomerContinuationImportBatchAsync(
       teamId: true,
     },
   });
+  // ADMIN 跑导入时 teamId 为 null, 回退到唯一团队, 避免公海客户无团队对主管不可见.
+  const importPoolTeamId = await resolveImportPublicPoolTeamId(
+    actorUser?.teamId ?? null,
+  );
 
   const candidateRows = parsedFile.rows.map((row) => ({
     rowNumber: row.rowNumber,
@@ -2418,7 +2427,7 @@ export async function processCustomerContinuationImportBatchAsync(
           id: batch.createdById,
           role: "ADMIN",
         },
-        actorTeamId: actorUser?.teamId ?? null,
+        actorTeamId: importPoolTeamId,
         batchId: batch.id,
         fileName: batch.fileName,
         row,

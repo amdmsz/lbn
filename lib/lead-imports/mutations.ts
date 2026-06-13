@@ -14,7 +14,10 @@ import {
 } from "@prisma/client";
 import { z } from "zod";
 import { canAccessLeadImportModule } from "@/lib/auth/access";
-import { createInitialPublicOwnershipEventTx } from "@/lib/customers/ownership";
+import {
+  createInitialPublicOwnershipEventTx,
+  resolveImportPublicPoolTeamId,
+} from "@/lib/customers/ownership";
 import { prisma } from "@/lib/db/prisma";
 import {
   createLeadImportBatchCompletedLog,
@@ -857,6 +860,10 @@ export async function processLeadImportBatchAsync(
     where: { id: batch.createdById },
     select: { teamId: true },
   });
+  // ADMIN 跑导入时 teamId 为 null, 回退到唯一团队, 避免公海客户无团队对主管不可见.
+  const importPoolTeamId = await resolveImportPublicPoolTeamId(
+    actorTeam?.teamId ?? null,
+  );
 
   const uniqueCandidatePhones = [
     ...new Set(
@@ -935,7 +942,7 @@ export async function processLeadImportBatchAsync(
           id: batch.createdById,
           role: "ADMIN",
         },
-        actorTeamId: actorTeam?.teamId ?? null,
+        actorTeamId: importPoolTeamId,
         batchId: batch.id,
         fileName: batch.fileName,
         row,

@@ -540,6 +540,21 @@ async function persistOwnershipTransitionTx(
   };
 }
 
+// 导入进公海时解析归属团队. 优先用操作人团队; 操作人无团队 (典型: ADMIN 账号
+// 跑名单导入) 时, 单团队系统回退到唯一团队 —— 否则新建公海客户 publicPoolTeamId
+// 落 NULL, 主管视角因团队过滤而完全看不到 (历史事故根因, 2026-06 修复). 多团队
+// 系统无法自动判断该归哪个团队, 保持 null (退化为旧行为, 由 ADMIN 视角兜底).
+export async function resolveImportPublicPoolTeamId(
+  actorTeamId: string | null,
+): Promise<string | null> {
+  if (actorTeamId) {
+    return actorTeamId;
+  }
+
+  const teams = await prisma.team.findMany({ select: { id: true }, take: 2 });
+  return teams.length === 1 ? teams[0]!.id : null;
+}
+
 export async function createInitialPublicOwnershipEventTx(
   tx: TransactionClient,
   input: {
