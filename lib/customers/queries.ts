@@ -7526,6 +7526,66 @@ export async function getCustomerDetailCallsData(
   };
 }
 
+// 跟进弹窗"查看全部"用的轻量分页: 只取 结果/备注/时间, 不拉录音/AI, 走游标翻页.
+// 真相仍在客户详情·通话 tab; 这里只为让业务员在拨号流里翻完整历史.
+const CUSTOMER_CALL_RECORDS_PAGE_SIZE = 20;
+
+export type CustomerCallRecordHistoryEntry = {
+  id: string;
+  callTime: Date;
+  resultLabel: string;
+  remark: string | null;
+};
+
+export type CustomerCallRecordsPage = {
+  records: CustomerCallRecordHistoryEntry[];
+  nextCursor: string | null;
+};
+
+export async function getCustomerCallRecordsPage(
+  viewer: CustomerViewer,
+  customerId: string,
+  cursor: string | null,
+): Promise<CustomerCallRecordsPage | null> {
+  // 复用客户详情可见性守卫: 承接/团队/公海范围校验都落服务端.
+  const detail = await getVisibleCustomerDetailBase(viewer, customerId);
+
+  if (!detail) {
+    return null;
+  }
+
+  const rows = await prisma.callRecord.findMany({
+    where: { customerId: detail.customer.id },
+    orderBy: [{ callTime: "desc" }, { id: "desc" }],
+    // 多取 1 条判定是否还有下一页.
+    take: CUSTOMER_CALL_RECORDS_PAGE_SIZE + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    select: {
+      id: true,
+      callTime: true,
+      result: true,
+      resultCode: true,
+      remark: true,
+    },
+  });
+
+  const hasMore = rows.length > CUSTOMER_CALL_RECORDS_PAGE_SIZE;
+  const pageRows = hasMore
+    ? rows.slice(0, CUSTOMER_CALL_RECORDS_PAGE_SIZE)
+    : rows;
+  const labeled = await hydrateCallResultLabels(pageRows);
+
+  return {
+    records: labeled.map((row) => ({
+      id: row.id,
+      callTime: row.callTime,
+      resultLabel: row.resultLabel,
+      remark: row.remark,
+    })),
+    nextCursor: hasMore ? pageRows[pageRows.length - 1]!.id : null,
+  };
+}
+
 export async function getCustomerDetailWechatData(
   viewer: CustomerViewer,
   customerId: string,

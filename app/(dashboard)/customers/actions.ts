@@ -37,9 +37,11 @@ import {
   type CustomerRecycleBlockedReasonSummary,
 } from "@/lib/customers/recycle-blocker-explanation";
 import {
+  getCustomerCallRecordsPage,
   listFilteredCustomerCenterCustomerIds,
   listVisibleCustomerCenterCustomerIds,
 } from "@/lib/customers/queries";
+import type { CustomerCallRecordHistoryEntry } from "@/lib/customers/queries";
 import {
   createOwnedCustomer,
   transferCustomerOwner,
@@ -768,6 +770,63 @@ export async function createOwnedCustomerAction(
       message: error instanceof Error ? error.message : "新增客户失败，请稍后重试。",
       customerId: null,
       fieldErrors: {},
+    };
+  }
+}
+
+export type LoadCustomerCallRecordsResult =
+  | {
+      status: "success";
+      records: CustomerCallRecordHistoryEntry[];
+      nextCursor: string | null;
+    }
+  | { status: "error"; message: string };
+
+// 跟进弹窗"查看全部 N 条"按需翻页. 只读, 不写审计; 可见范围由
+// getCustomerCallRecordsPage -> getVisibleCustomerDetailBase 在服务端逐次校验.
+export async function loadCustomerCallRecordsAction(
+  customerId: string,
+  cursor: string | null,
+): Promise<LoadCustomerCallRecordsResult> {
+  try {
+    const session = await auth();
+
+    if (!session?.user) {
+      return { status: "error", message: "登录已失效，请重新登录后再试。" };
+    }
+
+    const trimmedId = customerId.trim();
+
+    if (!trimmedId) {
+      return { status: "error", message: "客户参数缺失。" };
+    }
+
+    const normalizedCursor = cursor?.trim() ? cursor.trim() : null;
+
+    const page = await getCustomerCallRecordsPage(
+      {
+        id: session.user.id,
+        role: session.user.role,
+        teamId: session.user.teamId,
+      },
+      trimmedId,
+      normalizedCursor,
+    );
+
+    if (!page) {
+      return { status: "error", message: "无法查看该客户的通话记录。" };
+    }
+
+    return {
+      status: "success",
+      records: page.records,
+      nextCursor: page.nextCursor,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message:
+        error instanceof Error ? error.message : "加载通话记录失败，请稍后重试。",
     };
   }
 }

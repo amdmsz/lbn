@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { ChevronRight, PhoneOutgoing, X } from "lucide-react";
@@ -13,8 +14,12 @@ import {
   getCustomerExecutionDisplayVariant,
   formatDateTime,
 } from "@/lib/customers/metadata";
-import type { CustomerListItem } from "@/lib/customers/queries";
+import type {
+  CustomerCallRecordHistoryEntry,
+  CustomerListItem,
+} from "@/lib/customers/queries";
 import { CustomerCallRecordForm } from "@/components/customers/customer-call-record-form";
+import { loadCustomerCallRecordsAction } from "@/app/(dashboard)/customers/actions";
 import type { CallResultOption } from "@/lib/calls/metadata";
 import { cn } from "@/lib/utils";
 
@@ -234,45 +239,12 @@ function CustomerFollowUpDialogBody({
             )}
           </div>
 
-          {/* 右列: 最近记录 (只显 结果 + 备注 + 时间) */}
-          <div
-            className={cn(
-              dialogSurfaceClassName,
-              "flex min-h-[14rem] min-w-0 flex-col px-4 py-3.5 lg:h-full lg:min-h-0",
-            )}
-          >
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                最近记录
-              </p>
-              <span className="text-[12px] tabular-nums text-muted-foreground">
-                {item._count.callRecords} 条
-              </span>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {recentRecords.length > 0 ? (
-                <ul className="space-y-0">
-                  {recentRecords.map((record) => (
-                    <FollowUpRecentRecordRow
-                      key={record.id}
-                      resultLabel={record.resultLabel}
-                      remark={record.remark}
-                      callTime={record.callTime}
-                    />
-                  ))}
-                </ul>
-              ) : (
-                <div className="flex h-full min-h-[10rem] items-center justify-center rounded-md border border-dashed border-border/60 px-4 text-center text-[13px] text-muted-foreground">
-                  当前客户还没有通话记录
-                </div>
-              )}
-            </div>
-
-            <p className="mt-2.5 border-t border-border/40 pt-2.5 text-[11px] leading-4 text-muted-foreground/70">
-              外呼通话会自动附带录音与时长。
-            </p>
-          </div>
+          {/* 右列: 通话记录 (预览 + "查看全部 N 条" 懒加载分页) */}
+          <FollowUpCallHistoryPanel
+            customerId={item.id}
+            totalCount={item._count.callRecords}
+            previewRecords={recentRecords}
+          />
         </div>
       </div>
     </div>
@@ -323,6 +295,176 @@ function OutboundCallSlot({
           外呼
         </button>
       )}
+    </div>
+  );
+}
+
+function FollowUpCallHistoryPanel({
+  customerId,
+  totalCount,
+  previewRecords,
+}: Readonly<{
+  customerId: string;
+  totalCount: number;
+  previewRecords: CustomerListItem["callRecords"];
+}>) {
+  const [expanded, setExpanded] = useState(false);
+  const [records, setRecords] = useState<CustomerCallRecordHistoryEntry[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // totalCount 是真实总数 (item._count.callRecords); 预览只画前若干条,
+  // 所以总数比预览多时才给"查看全部"入口.
+  const hasMoreThanPreview = totalCount > previewRecords.length;
+
+  async function loadPage(nextCursor: string | null, append: boolean) {
+    setLoading(true);
+    setError(null);
+
+    const result = await loadCustomerCallRecordsAction(customerId, nextCursor);
+
+    setLoading(false);
+
+    if (result.status === "error") {
+      setError(result.message);
+      return;
+    }
+
+    setRecords((prev) => (append ? [...prev, ...result.records] : result.records));
+    setCursor(result.nextCursor);
+  }
+
+  function handleExpand() {
+    setExpanded(true);
+    void loadPage(null, false);
+  }
+
+  function handleCollapse() {
+    setExpanded(false);
+    setRecords([]);
+    setCursor(null);
+    setError(null);
+  }
+
+  const showInitialLoading = expanded && loading && records.length === 0;
+
+  return (
+    <div
+      className={cn(
+        dialogSurfaceClassName,
+        "flex min-h-[14rem] min-w-0 flex-col px-4 py-3.5 lg:h-full lg:min-h-0",
+      )}
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+          {expanded ? "全部记录" : "最近记录"}
+        </p>
+        <span className="text-[12px] tabular-nums text-muted-foreground">
+          {totalCount} 条
+        </span>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {showInitialLoading ? (
+          <div className="flex h-full min-h-[10rem] items-center justify-center text-[13px] text-muted-foreground">
+            加载中...
+          </div>
+        ) : expanded ? (
+          <>
+            {records.length > 0 ? (
+              <ul className="space-y-0">
+                {records.map((record) => (
+                  <FollowUpRecentRecordRow
+                    key={record.id}
+                    resultLabel={record.resultLabel}
+                    remark={record.remark}
+                    callTime={record.callTime}
+                  />
+                ))}
+              </ul>
+            ) : null}
+
+            {error ? (
+              <div className="py-3 text-center text-[12px] leading-5 text-destructive">
+                <p>{error}</p>
+                <button
+                  type="button"
+                  onClick={() => void loadPage(cursor, records.length > 0)}
+                  className="mt-1 font-medium underline underline-offset-2 hover:opacity-80"
+                >
+                  重试
+                </button>
+              </div>
+            ) : null}
+
+            {!error && records.length === 0 && !loading ? (
+              <div className="flex h-full min-h-[10rem] items-center justify-center rounded-md border border-dashed border-border/60 px-4 text-center text-[13px] text-muted-foreground">
+                当前客户还没有通话记录
+              </div>
+            ) : null}
+
+            {cursor && !error ? (
+              <div className="pt-2.5 text-center">
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => void loadPage(cursor, true)}
+                  className="inline-flex items-center justify-center rounded-md border border-border bg-card px-3 py-1.5 text-[12px] font-medium text-muted-foreground transition-colors duration-150 hover:border-primary/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loading ? "加载中..." : "加载更多"}
+                </button>
+              </div>
+            ) : null}
+
+            {!cursor && !error && records.length > 0 ? (
+              <p className="pt-2.5 text-center text-[11px] leading-4 text-muted-foreground/60">
+                没有更多了
+              </p>
+            ) : null}
+          </>
+        ) : previewRecords.length > 0 ? (
+          <ul className="space-y-0">
+            {previewRecords.map((record) => (
+              <FollowUpRecentRecordRow
+                key={record.id}
+                resultLabel={record.resultLabel}
+                remark={record.remark}
+                callTime={record.callTime}
+              />
+            ))}
+          </ul>
+        ) : (
+          <div className="flex h-full min-h-[10rem] items-center justify-center rounded-md border border-dashed border-border/60 px-4 text-center text-[13px] text-muted-foreground">
+            当前客户还没有通话记录
+          </div>
+        )}
+      </div>
+
+      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border/40 pt-2.5">
+        {expanded ? (
+          <button
+            type="button"
+            onClick={handleCollapse}
+            className="inline-flex items-center gap-1 text-[12px] font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground"
+          >
+            收起
+          </button>
+        ) : hasMoreThanPreview ? (
+          <button
+            type="button"
+            onClick={handleExpand}
+            className="inline-flex items-center gap-1 text-[12px] font-medium text-primary transition-colors duration-150 hover:text-primary/80"
+          >
+            查看全部 {totalCount} 条
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <p className="text-[11px] leading-4 text-muted-foreground/70">
+            外呼通话会自动附带录音与时长。
+          </p>
+        )}
+      </div>
     </div>
   );
 }
