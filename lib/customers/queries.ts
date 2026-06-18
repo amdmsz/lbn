@@ -1409,7 +1409,10 @@ async function getPhoneSearchOwnershipDisclosures(input: {
   visibleCustomerIds: string[];
   recycledCustomerIds: string[];
 }): Promise<CustomerPhoneSearchDisclosure[]> {
-  if (input.actor.role !== "SALES") {
+  // 号码归属提示对所有客户域角色开放 (ADMIN/SUPERVISOR/SALES). ADMIN 看不到
+  // 公海客户、SUPERVISOR 看不到跨团队客户, 搜手机号时给"号码已存在"提示, 避免
+  // "查不到却又导不进"的困惑 (导入查重是全库的, 列表可见是按权限的).
+  if (!canAccessCustomerModule(input.actor.role)) {
     return [];
   }
 
@@ -1419,31 +1422,22 @@ async function getPhoneSearchOwnershipDisclosures(input: {
     return [];
   }
 
-  const excludedIds = [
-    ...new Set([...input.visibleCustomerIds, ...input.recycledCustomerIds]),
-  ];
-  const notInExcludedWhere =
-    excludedIds.length > 0
-      ? ({
-          id: {
-            notIn: excludedIds,
-          },
-        } satisfies Prisma.CustomerWhereInput)
-      : {};
+  // 排除"已在我可见范围内"和"已回收"的客户, 改在 JS 里过滤: ADMIN 可见集是全部
+  // 有主客户, 体量可达上万, 直接塞进 SQL notIn 会拖慢手机号查询. Customer.phone
+  // 唯一, 整号搜索至多命中 1 条; take 放宽到 25 兜底部分号 / 历史脏数据的情形.
+  const excludedIds = new Set([
+    ...input.visibleCustomerIds,
+    ...input.recycledCustomerIds,
+  ]);
 
   const rows = await prisma.customer.findMany({
     where: {
-      AND: [
-        notInExcludedWhere,
-        {
-          phone: {
-            contains: phoneDigits,
-          },
-        },
-      ],
+      phone: {
+        contains: phoneDigits,
+      },
     },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-    take: 5,
+    take: 25,
     select: {
       id: true,
       name: true,
@@ -1488,16 +1482,19 @@ async function getPhoneSearchOwnershipDisclosures(input: {
     },
   });
 
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    phoneMasked: maskPhoneForOwnershipDisclosure(row.phone),
-    ownershipMode: row.ownershipMode,
-    owner: row.owner,
-    lastOwner: row.lastOwner,
-    publicPoolTeam: row.publicPoolTeam,
-    updatedAt: row.updatedAt,
-  }));
+  return rows
+    .filter((row) => !excludedIds.has(row.id))
+    .slice(0, 5)
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      phoneMasked: maskPhoneForOwnershipDisclosure(row.phone),
+      ownershipMode: row.ownershipMode,
+      owner: row.owner,
+      lastOwner: row.lastOwner,
+      publicPoolTeam: row.publicPoolTeam,
+      updatedAt: row.updatedAt,
+    }));
 }
 
 async function getCustomerOwnershipHistoryArchives(

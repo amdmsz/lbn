@@ -27,25 +27,89 @@ import { primaryCustomerQueueOptions } from "@/lib/customers/metadata";
 import type {
   CustomerCenterListData,
   CustomerCenterStatsData,
+  CustomerPhoneSearchDisclosure,
 } from "@/lib/customers/queries";
 
 const workspaceShellClassName = "mx-auto w-full max-w-7xl min-w-0";
 
+// 把"号码已存在但不在你可见范围"的客户归属说清楚, 方便判断该认领还是该移交.
+function describePhoneDisclosureLocation(
+  disclosure: CustomerPhoneSearchDisclosure,
+): string {
+  if (disclosure.owner) {
+    const team = disclosure.owner.team?.name ? `·${disclosure.owner.team.name}` : "";
+    return `归属 ${disclosure.owner.name}（@${disclosure.owner.username}${team}）`;
+  }
+
+  if (disclosure.publicPoolTeam) {
+    return `${disclosure.publicPoolTeam.name} 团队公海`;
+  }
+
+  if (disclosure.ownershipMode === "PUBLIC") {
+    return "公海（未分配团队）";
+  }
+
+  if (disclosure.lastOwner) {
+    const team = disclosure.lastOwner.team?.name
+      ? `·${disclosure.lastOwner.team.name}`
+      : "";
+    return `原归属 ${disclosure.lastOwner.name}（@${disclosure.lastOwner.username}${team}，已释放）`;
+  }
+
+  return "未分配";
+}
+
 function PhoneSearchAlert({
-  count,
+  disclosures,
   search,
-}: Readonly<{ count: number; search: string }>) {
-  if (count === 0) return null;
+  role,
+}: Readonly<{
+  disclosures: CustomerPhoneSearchDisclosure[];
+  search: string;
+  role: RoleCode;
+}>) {
+  if (disclosures.length === 0) return null;
+
+  // 仅 ADMIN / SUPERVISOR 展示归属明细 (谁的/哪个公海); SALES 只提示"已存在",
+  // 不暴露具体归属人, 避免撞单/跨抢.
+  const showOwnership = role === "ADMIN" || role === "SUPERVISOR";
 
   return (
     <div
       role="status"
-      className="mb-3 flex items-center gap-2 rounded-lg border border-amber-300/60 bg-amber-50/60 px-3 py-2 text-[12px] text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+      className="mb-3 rounded-lg border border-amber-300/60 bg-amber-50/60 px-3 py-2.5 text-[12px] text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
     >
-      <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-      <span className="min-w-0 truncate">
-        搜索 “{search}” 命中范围外 {count} 条客户,仅展示归属(只读)。
-      </span>
+      <div className="flex items-start gap-2">
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+        <div className="min-w-0">
+          <p>
+            号码 “{search}” 已存在于系统，但不在你当前的可见范围
+            {showOwnership
+              ? "（只读，归属如下）："
+              : `（只读，共 ${disclosures.length} 条）。`}
+          </p>
+          {showOwnership ? (
+            <ul className="mt-1.5 space-y-1">
+              {disclosures.map((disclosure) => (
+                <li
+                  key={disclosure.id}
+                  className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5"
+                >
+                  <span className="font-medium">
+                    {disclosure.name || "未命名客户"}
+                  </span>
+                  <span className="tabular-nums opacity-80">
+                    {disclosure.phoneMasked}
+                  </span>
+                  <span className="opacity-90">
+                    · {describePhoneDisclosureLocation(disclosure)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }
@@ -184,8 +248,9 @@ export function CustomerCenterListSection({
   return (
     <>
       <PhoneSearchAlert
-        count={list.phoneSearchDisclosures.length}
+        disclosures={list.phoneSearchDisclosures}
         search={list.filters.search}
+        role={role}
       />
       <CustomersTable
         viewerRole={role}
