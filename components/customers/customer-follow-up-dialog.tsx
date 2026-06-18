@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import { ChevronRight, PhoneOutgoing, X } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, PhoneOutgoing, X } from "lucide-react";
 import { CustomerCallProgress } from "@/components/customers/customer-call-progress";
 import { CustomerMobileDialButton } from "@/components/customers/mobile-call-followup-sheet";
 import { CustomerOutboundCallButton } from "@/components/customers/customer-outbound-call-button";
@@ -119,7 +119,8 @@ function CustomerFollowUpDialogBody({
     Boolean(item.phone?.trim()) && item.phone.trim() !== "暂无电话";
   const phoneText = hasPhone ? item.phone.trim() : "暂无电话";
 
-  const recentRecords = item.callRecords.slice(0, 4);
+  // 列表查询已加载最多 8 条; 直接全展示填满右栏, "查看全部"只在总数更多时出现.
+  const recentRecords = item.callRecords;
 
   const detailHref = `/customers/${item.id}`;
   const liveHref = `${detailHref}?tab=live`;
@@ -356,13 +357,25 @@ function FollowUpCallHistoryPanel({
         "flex min-h-[14rem] min-w-0 flex-col px-4 py-3.5 lg:h-full lg:min-h-0",
       )}
     >
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2.5 flex items-center justify-between gap-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           {expanded ? "全部记录" : "最近记录"}
         </p>
-        <span className="text-[12px] tabular-nums text-muted-foreground">
-          {totalCount} 条
-        </span>
+        <div className="flex items-center gap-2.5">
+          <span className="text-[12px] tabular-nums text-muted-foreground">
+            {totalCount} 条
+          </span>
+          {expanded ? (
+            <button
+              type="button"
+              onClick={handleCollapse}
+              className="inline-flex items-center gap-0.5 text-[12px] font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground"
+            >
+              <ChevronUp className="h-3.5 w-3.5" />
+              收起
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -386,7 +399,7 @@ function FollowUpCallHistoryPanel({
             ) : null}
 
             {error ? (
-              <div className="py-3 text-center text-[12px] leading-5 text-destructive">
+              <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-center text-[12px] leading-5 text-destructive">
                 <p>{error}</p>
                 <button
                   type="button"
@@ -405,64 +418,49 @@ function FollowUpCallHistoryPanel({
             ) : null}
 
             {cursor && !error ? (
-              <div className="pt-2.5 text-center">
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={() => void loadPage(cursor, true)}
-                  className="inline-flex items-center justify-center rounded-md border border-border bg-card px-3 py-1.5 text-[12px] font-medium text-muted-foreground transition-colors duration-150 hover:border-primary/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {loading ? "加载中..." : "加载更多"}
-                </button>
-              </div>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => void loadPage(cursor, true)}
+                className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-border/70 bg-card py-2 text-[12px] font-medium text-muted-foreground transition-colors duration-150 hover:border-primary/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? "加载中..." : "加载更多"}
+              </button>
             ) : null}
 
             {!cursor && !error && records.length > 0 ? (
-              <p className="pt-2.5 text-center text-[11px] leading-4 text-muted-foreground/60">
+              <p className="mt-3 text-center text-[11px] leading-4 text-muted-foreground/50">
                 没有更多了
               </p>
             ) : null}
           </>
         ) : previewRecords.length > 0 ? (
-          <ul className="space-y-0">
-            {previewRecords.map((record) => (
-              <FollowUpRecentRecordRow
-                key={record.id}
-                resultLabel={record.resultLabel}
-                remark={record.remark}
-                callTime={record.callTime}
-              />
-            ))}
-          </ul>
+          <>
+            <ul className="space-y-0">
+              {previewRecords.map((record) => (
+                <FollowUpRecentRecordRow
+                  key={record.id}
+                  resultLabel={record.resultLabel}
+                  remark={record.remark}
+                  callTime={record.callTime}
+                />
+              ))}
+            </ul>
+            {hasMoreThanPreview ? (
+              <button
+                type="button"
+                onClick={handleExpand}
+                className="mt-3 inline-flex w-full items-center justify-center gap-1 rounded-md border border-border/70 bg-card py-2 text-[12px] font-medium text-primary transition-colors duration-150 hover:border-primary/40 hover:bg-primary/5"
+              >
+                查看全部 {totalCount} 条
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+          </>
         ) : (
           <div className="flex h-full min-h-[10rem] items-center justify-center rounded-md border border-dashed border-border/60 px-4 text-center text-[13px] text-muted-foreground">
             当前客户还没有通话记录
           </div>
-        )}
-      </div>
-
-      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border/40 pt-2.5">
-        {expanded ? (
-          <button
-            type="button"
-            onClick={handleCollapse}
-            className="inline-flex items-center gap-1 text-[12px] font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground"
-          >
-            收起
-          </button>
-        ) : hasMoreThanPreview ? (
-          <button
-            type="button"
-            onClick={handleExpand}
-            className="inline-flex items-center gap-1 text-[12px] font-medium text-primary transition-colors duration-150 hover:text-primary/80"
-          >
-            查看全部 {totalCount} 条
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-        ) : (
-          <p className="text-[11px] leading-4 text-muted-foreground/70">
-            外呼通话会自动附带录音与时长。
-          </p>
         )}
       </div>
     </div>
