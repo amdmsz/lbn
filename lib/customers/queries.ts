@@ -386,6 +386,9 @@ export type CustomerPhoneSearchDisclosure = {
     name: string;
     code: string;
   } | null;
+  // 非空 = 这条命中是"当前视角能去认领的公海客户"(ADMIN=任意公海; SUPERVISOR/SALES=
+  // 本团队公海), 值为公海团队名. 前端据此把文案从"不在你可见范围"换成"可前往认领".
+  claimablePoolTeamName: string | null;
   updatedAt: Date;
 };
 
@@ -1493,6 +1496,15 @@ async function getPhoneSearchOwnershipDisclosures(input: {
       owner: row.owner,
       lastOwner: row.lastOwner,
       publicPoolTeam: row.publicPoolTeam,
+      // 无主 + PUBLIC + 有公海团队, 且当前视角够得着该公海 (ADMIN 任意 / 否则本团队).
+      claimablePoolTeamName:
+        row.owner === null &&
+        row.ownershipMode === CustomerOwnershipMode.PUBLIC &&
+        row.publicPoolTeam !== null &&
+        (input.actor.role === "ADMIN" ||
+          row.publicPoolTeam.id === input.actor.teamId)
+          ? row.publicPoolTeam.name
+          : null,
       updatedAt: row.updatedAt,
     }));
 }

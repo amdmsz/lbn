@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import Link from "next/link";
 import { Info } from "lucide-react";
 import type { RoleCode } from "@prisma/client";
 import {
@@ -70,9 +71,19 @@ function PhoneSearchAlert({
 }>) {
   if (disclosures.length === 0) return null;
 
-  // 仅 ADMIN / SUPERVISOR 展示归属明细 (谁的/哪个公海); SALES 只提示"已存在",
-  // 不暴露具体归属人, 避免撞单/跨抢.
-  const showOwnership = role === "ADMIN" || role === "SUPERVISOR";
+  const canSeeOwnership = role === "ADMIN" || role === "SUPERVISOR";
+  // "可认领的公海"命中对所有角色展示并给认领入口 (本团队公海 / ADMIN 任意公海,
+  // 非敏感); 其余 (他人私域 / 别团队公海) 只对 ADMIN/主管展示归属明细, SALES
+  // 只报条数防撞单.
+  const claimable = disclosures.filter(
+    (disclosure) => disclosure.claimablePoolTeamName,
+  );
+  const others = disclosures.filter(
+    (disclosure) => !disclosure.claimablePoolTeamName,
+  );
+  const visibleOthers = canSeeOwnership ? others : [];
+  const hiddenOtherCount = canSeeOwnership ? 0 : others.length;
+  const poolHref = `/customers/public-pool?search=${encodeURIComponent(search)}`;
 
   return (
     <div
@@ -81,32 +92,67 @@ function PhoneSearchAlert({
     >
       <div className="flex items-start gap-2">
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-        <div className="min-w-0">
-          <p>
-            号码 “{search}” 已存在于系统，但不在你当前的可见范围
-            {showOwnership
-              ? "（只读，归属如下）："
-              : `（只读，共 ${disclosures.length} 条）。`}
-          </p>
-          {showOwnership ? (
-            <ul className="mt-1.5 space-y-1">
-              {disclosures.map((disclosure) => (
-                <li
-                  key={disclosure.id}
-                  className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5"
-                >
-                  <span className="font-medium">
-                    {disclosure.name || "未命名客户"}
-                  </span>
-                  <span className="tabular-nums opacity-80">
-                    {disclosure.phoneMasked}
-                  </span>
-                  <span className="opacity-90">
-                    · {describePhoneDisclosureLocation(disclosure)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+        <div className="min-w-0 space-y-1.5">
+          {claimable.length > 0 ? (
+            <div>
+              <p>号码 “{search}” 已在公海，可前往认领：</p>
+              <ul className="mt-1 space-y-1">
+                {claimable.map((disclosure) => (
+                  <li
+                    key={disclosure.id}
+                    className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5"
+                  >
+                    <span className="font-medium">
+                      {disclosure.name || "未命名客户"}
+                    </span>
+                    <span className="tabular-nums opacity-80">
+                      {disclosure.phoneMasked}
+                    </span>
+                    <span className="opacity-90">
+                      · {disclosure.claimablePoolTeamName} 团队公海
+                    </span>
+                    <Link
+                      href={poolHref}
+                      prefetch={false}
+                      className="font-medium underline underline-offset-2 hover:opacity-80"
+                    >
+                      前往公海 →
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {visibleOthers.length > 0 ? (
+            <div>
+              <p>号码 “{search}” 已存在于系统，但不在你的可见范围（只读）：</p>
+              <ul className="mt-1 space-y-1">
+                {visibleOthers.map((disclosure) => (
+                  <li
+                    key={disclosure.id}
+                    className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5"
+                  >
+                    <span className="font-medium">
+                      {disclosure.name || "未命名客户"}
+                    </span>
+                    <span className="tabular-nums opacity-80">
+                      {disclosure.phoneMasked}
+                    </span>
+                    <span className="opacity-90">
+                      · {describePhoneDisclosureLocation(disclosure)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {hiddenOtherCount > 0 ? (
+            <p>
+              号码 “{search}” 已存在于系统，但不在你的可见范围（只读，共{" "}
+              {hiddenOtherCount} 条）。
+            </p>
           ) : null}
         </div>
       </div>
