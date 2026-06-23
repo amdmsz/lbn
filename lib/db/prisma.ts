@@ -36,6 +36,11 @@ const adapter = new PrismaMariaDb({
   password: decodeURIComponent(parsedDbUrl.password),
   database: parsedDbUrl.pathname.replace(/^\//, "") || undefined,
   connectionLimit,
+  // 2026-06-23 生产事故复盘: MySQL 用 caching_sha2_password, 重启后认证缓存清空,
+  // 此时驱动在普通连接上要做 RSA 公钥握手; 不开此项 → 全部新连接认证失败 →
+  // 连接池填不满 → 每个请求等 10s 拿不到连接 → DriverAdapterError: pool timeout
+  // → 站点"打不开". DB 在 127.0.0.1 本机, 无中间人风险, 直接允许公钥获取兜底.
+  allowPublicKeyRetrieval: true,
 });
 
 export const prisma =
