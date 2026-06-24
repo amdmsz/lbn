@@ -365,6 +365,7 @@ function ThemedDatePicker({
         ? createPortal(
             <div
               ref={popupRef}
+              data-customer-filter-portal=""
               style={{ position: "fixed", top: coords.top, left: coords.left }}
               className="crm-animate-pop z-[60] w-72 rounded-lg border border-border bg-card p-3 text-foreground shadow-md"
             >
@@ -577,9 +578,15 @@ export function CustomerFilterToolbar({
     if (!open) return undefined;
 
     function handlePointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
+      const target = event.target as HTMLElement | null;
+      if (rootRef.current?.contains(target)) {
+        return;
       }
+      // 日期日历用 portal 渲染到 body (在 rootRef 之外), 点它不应连带关闭整个面板.
+      if (target?.closest?.("[data-customer-filter-portal]")) {
+        return;
+      }
+      setOpen(false);
     }
 
     function handleKeyDown(event: KeyboardEvent) {
