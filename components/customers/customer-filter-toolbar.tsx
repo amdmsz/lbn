@@ -21,6 +21,7 @@ import {
   useTransition,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import {
   advancedCustomerQueueOptions,
@@ -262,9 +263,15 @@ function ThemedDatePicker({
   value: string;
   onChange: (nextValue: string) => void;
 }>) {
-  const pickerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
   const selectedDate = useMemo(() => parseDateInputValue(value), [value]);
   const [open, setOpen] = useState(false);
+  // 弹层用 portal 渲染到 body, 脱离高级筛选面板的 overflow 裁剪 — 否则日历会被
+  // overflow-y-auto 容器裁切, 并把面板撑出一条横向滚动条.
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(
+    null,
+  );
   const [viewMonth, setViewMonth] = useState(() =>
     getMonthStart(selectedDate ?? new Date()),
   );
@@ -275,27 +282,64 @@ function ThemedDatePicker({
     [viewMonth],
   );
 
+  const updatePosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) {
+      return;
+    }
+    const rect = trigger.getBoundingClientRect();
+    const popupWidth = 288; // w-72
+    const popupHeight = 360;
+    const margin = 8;
+    const left = Math.min(
+      Math.max(margin, rect.left),
+      Math.max(margin, window.innerWidth - popupWidth - margin),
+    );
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top =
+      spaceBelow < popupHeight + margin && rect.top > popupHeight + margin
+        ? rect.top - margin - popupHeight
+        : rect.bottom + margin;
+    setCoords({ top, left });
+  }, []);
+
   useEffect(() => {
     if (!open) {
       return undefined;
     }
 
+    updatePosition();
+
     function handlePointerDown(event: MouseEvent) {
-      if (!pickerRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        !triggerRef.current?.contains(target) &&
+        !popupRef.current?.contains(target)
+      ) {
         setOpen(false);
       }
     }
 
+    function handleReflow() {
+      updatePosition();
+    }
+
     document.addEventListener("mousedown", handlePointerDown);
+    // capture: true — 面板内部滚动容器的滚动也能捕获到, 让弹层跟随触发器.
+    window.addEventListener("scroll", handleReflow, true);
+    window.addEventListener("resize", handleReflow);
 
     return () => {
       document.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("scroll", handleReflow, true);
+      window.removeEventListener("resize", handleReflow);
     };
-  }, [open]);
+  }, [open, updatePosition]);
 
   return (
-    <div ref={pickerRef} className="relative">
+    <div className="relative">
       <button
+        ref={triggerRef}
         type="button"
         aria-expanded={open}
         onClick={() => {
@@ -317,8 +361,13 @@ function ThemedDatePicker({
         <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       </button>
 
-      {open ? (
-        <div className="crm-animate-pop absolute left-0 top-full z-50 mt-2 w-72 rounded-lg border border-border bg-card p-3 text-foreground shadow-md">
+      {open && coords && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={popupRef}
+              style={{ position: "fixed", top: coords.top, left: coords.left }}
+              className="crm-animate-pop z-[60] w-72 rounded-lg border border-border bg-card p-3 text-foreground shadow-md"
+            >
           <div className="flex items-center justify-between">
             <button
               type="button"
@@ -403,8 +452,10 @@ function ThemedDatePicker({
               今天
             </button>
           </div>
-        </div>
-      ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
