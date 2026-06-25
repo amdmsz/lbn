@@ -28,6 +28,7 @@ import {
   LeadSource,
   LeadStatus,
   LiveSessionStatus,
+  PublicPoolReason,
   SalesOrderReviewStatus,
   TradeOrderStatus,
   UserStatus,
@@ -389,6 +390,8 @@ export type CustomerPhoneSearchDisclosure = {
   // 非空 = 这条命中是"当前视角能去认领的公海客户"(ADMIN=任意公海; SUPERVISOR/SALES=
   // 本团队公海), 值为公海团队名. 前端据此把文案从"不在你可见范围"换成"可前往认领".
   claimablePoolTeamName: string | null;
+  // true = 导入未分配客户(不在公海, 待主管在线索分配中心指派).
+  isUnassignedImport: boolean;
   updatedAt: Date;
 };
 
@@ -1446,6 +1449,7 @@ async function getPhoneSearchOwnershipDisclosures(input: {
       name: true,
       phone: true,
       ownershipMode: true,
+      publicPoolReason: true,
       updatedAt: true,
       owner: {
         select: {
@@ -1496,10 +1500,16 @@ async function getPhoneSearchOwnershipDisclosures(input: {
       owner: row.owner,
       lastOwner: row.lastOwner,
       publicPoolTeam: row.publicPoolTeam,
-      // 无主 + PUBLIC + 有公海团队, 且当前视角够得着该公海 (ADMIN 任意 / 否则本团队).
+      // 导入未分配客户不进公海, 改由线索分配中心指派; 前端据此提示"导入待分配"
+      // 而非"在公海·可认领".
+      isUnassignedImport:
+        row.publicPoolReason === PublicPoolReason.UNASSIGNED_IMPORT,
+      // 无主 + PUBLIC + 有公海团队 + 非导入未分配, 且当前视角够得着该公海
+      // (ADMIN 任意 / 否则本团队).
       claimablePoolTeamName:
         row.owner === null &&
         row.ownershipMode === CustomerOwnershipMode.PUBLIC &&
+        row.publicPoolReason !== PublicPoolReason.UNASSIGNED_IMPORT &&
         row.publicPoolTeam !== null &&
         (input.actor.role === "ADMIN" ||
           row.publicPoolTeam.id === input.actor.teamId)

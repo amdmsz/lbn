@@ -1,6 +1,7 @@
 import {
   CustomerOwnershipEventReason,
   CustomerOwnershipMode,
+  PublicPoolReason,
   UserStatus,
   type Prisma,
 } from "@prisma/client";
@@ -449,6 +450,10 @@ async function getScopedPublicCustomers(scope: AutoAssignScopeSummary) {
       ownerId: null,
       ownershipMode: CustomerOwnershipMode.PUBLIC,
       publicPoolTeamId: scope.teamId,
+      // 导入未分配客户不参与公海自动分配 — 它们走线索分配中心由主管指派.
+      publicPoolReason: {
+        not: PublicPoolReason.UNASSIGNED_IMPORT,
+      },
       status: {
         notIn: [...customerPublicPoolRecycleConfig.excludedCustomerStatuses],
       },

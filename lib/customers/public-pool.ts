@@ -553,6 +553,15 @@ function buildVisiblePublicCustomerWhere(
         },
       },
     },
+    // 导入未分配 (UNASSIGNED_IMPORT) 的客户不进"公海": 它们只经线索分配中心由
+    // 主管指派 (分配线索会联动把客户承接给业务员)。公海只放主管手动降级/回流的
+    // 客户。Prisma 的 NOT 对可空字段是 null-aware, publicPoolReason 为 null 的
+    // 历史客户仍保留在公海。
+    {
+      NOT: {
+        publicPoolReason: PublicPoolReason.UNASSIGNED_IMPORT,
+      },
+    },
     ...buildSearchClause(filters.search),
     ...buildOrderFilter(filters.hasOrders),
   ];

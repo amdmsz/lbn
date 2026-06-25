@@ -1,6 +1,7 @@
 import {
   CustomerOwnershipEventReason,
   CustomerOwnershipMode,
+  PublicPoolReason,
   type Prisma,
   type RoleCode,
 } from "@prisma/client";
@@ -284,6 +285,12 @@ function buildCurrentPublicWhere(teamId: string | null): Prisma.CustomerWhereInp
       {
         ownershipMode: {
           in: [CustomerOwnershipMode.PUBLIC, CustomerOwnershipMode.LOCKED],
+        },
+      },
+      // 导入未分配不计入"公海"报表 — 与公海列表口径一致(只走线索分配中心).
+      {
+        NOT: {
+          publicPoolReason: PublicPoolReason.UNASSIGNED_IMPORT,
         },
       },
       teamId

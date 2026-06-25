@@ -37,6 +37,10 @@ const workspaceShellClassName = "mx-auto w-full max-w-7xl min-w-0";
 function describePhoneDisclosureLocation(
   disclosure: CustomerPhoneSearchDisclosure,
 ): string {
+  if (disclosure.isUnassignedImport) {
+    return "导入待分配（线索分配中心指派）";
+  }
+
   if (disclosure.owner) {
     const team = disclosure.owner.team?.name ? `·${disclosure.owner.team.name}` : "";
     return `归属 ${disclosure.owner.name}（@${disclosure.owner.username}${team}）`;
@@ -72,18 +76,28 @@ function PhoneSearchAlert({
   if (disclosures.length === 0) return null;
 
   const canSeeOwnership = role === "ADMIN" || role === "SUPERVISOR";
-  // "可认领的公海"命中对所有角色展示并给认领入口 (本团队公海 / ADMIN 任意公海,
-  // 非敏感); 其余 (他人私域 / 别团队公海) 只对 ADMIN/主管展示归属明细, SALES
-  // 只报条数防撞单.
+  // 三类分开:
+  // - claimable: 可认领的公海(本团队/ADMIN 任意), 对所有角色给认领入口;
+  // - pendingImport: 导入未分配(不在公海), 主管去线索分配中心指派;
+  // - others: 他人私域 / 别团队公海, 只对 ADMIN/主管展示归属, SALES 只报条数.
   const claimable = disclosures.filter(
-    (disclosure) => disclosure.claimablePoolTeamName,
+    (disclosure) =>
+      disclosure.claimablePoolTeamName && !disclosure.isUnassignedImport,
+  );
+  const pendingImport = disclosures.filter(
+    (disclosure) => disclosure.isUnassignedImport,
   );
   const others = disclosures.filter(
-    (disclosure) => !disclosure.claimablePoolTeamName,
+    (disclosure) =>
+      !disclosure.claimablePoolTeamName && !disclosure.isUnassignedImport,
   );
+  const visiblePendingImport = canSeeOwnership ? pendingImport : [];
   const visibleOthers = canSeeOwnership ? others : [];
-  const hiddenOtherCount = canSeeOwnership ? 0 : others.length;
+  const hiddenOtherCount = canSeeOwnership
+    ? 0
+    : pendingImport.length + others.length;
   const poolHref = `/customers/public-pool?search=${encodeURIComponent(search)}`;
+  const assignHref = `/leads?search=${encodeURIComponent(search)}`;
 
   return (
     <div
@@ -117,6 +131,41 @@ function PhoneSearchAlert({
                       className="font-medium underline underline-offset-2 hover:opacity-80"
                     >
                       前往公海 →
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {visiblePendingImport.length > 0 ? (
+            <div>
+              <p>号码 “{search}” 已导入，待在线索分配中心指派：</p>
+              <ul className="mt-1 space-y-1">
+                {visiblePendingImport.map((disclosure) => (
+                  <li
+                    key={disclosure.id}
+                    className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5"
+                  >
+                    <span className="font-medium">
+                      {disclosure.name || "未命名客户"}
+                    </span>
+                    <span className="tabular-nums opacity-80">
+                      {disclosure.phoneMasked}
+                    </span>
+                    <span className="opacity-90">
+                      ·{" "}
+                      {disclosure.publicPoolTeam
+                        ? `${disclosure.publicPoolTeam.name} · `
+                        : ""}
+                      导入待分配
+                    </span>
+                    <Link
+                      href={assignHref}
+                      prefetch={false}
+                      className="font-medium underline underline-offset-2 hover:opacity-80"
+                    >
+                      前往分配中心 →
                     </Link>
                   </li>
                 ))}
