@@ -8,6 +8,7 @@ import type { CallResultOption } from "@/lib/calls/metadata";
  *
  * 映射依据 (effectLevel / wechatSyncAction 在 metadata.ts 已自动驱动分类):
  * - 未接通      -> NOT_CONNECTED   (WEAK,     wechat NONE)
+ * - 待通过      -> WECHAT_PENDING  (STRONG,   wechat PENDING)
  * - 已加微信    -> WECHAT_ADDED    (STRONG,   wechat ADDED)
  * - 拒加        -> REFUSED_WECHAT  (NEGATIVE, wechat REFUSED)
  * - 接通·再跟   -> NEED_CALLBACK   (MEDIUM,   接通后继续跟, 保留 claim 保护)
@@ -28,6 +29,7 @@ export type FollowUpQuickResultDefinition = {
 
 export const FOLLOW_UP_QUICK_RESULTS: readonly FollowUpQuickResultDefinition[] = [
   { code: "NOT_CONNECTED", label: "未接通", tone: "neutral" },
+  { code: "WECHAT_PENDING", label: "待通过", tone: "neutral" },
   { code: "WECHAT_ADDED", label: "已加微信", tone: "success" },
   { code: "REFUSED_WECHAT", label: "拒加", tone: "danger" },
   { code: "NEED_CALLBACK", label: "接通·再跟", tone: "neutral" },
@@ -36,8 +38,8 @@ export const FOLLOW_UP_QUICK_RESULTS: readonly FollowUpQuickResultDefinition[] =
 
 /**
  * 只保留服务端真实启用 (resultOptions 含该 code) 的快捷结果, 防止某个 system
- * result 被禁用时按钮点了提交报错. 按钮文案沿用上面的定稿短标签 (未接通 / 已加微信 /
- * 拒加 / 接通·再跟 / 空号), code 不变.
+ * result 被禁用时按钮点了提交报错. 按钮文案沿用上面的定稿短标签 (未接通 / 待通过 /
+ * 已加微信 / 拒加 / 接通·再跟 / 空号), code 不变.
  */
 export function buildFollowUpQuickResults(
   resultOptions: CallResultOption[],
@@ -47,7 +49,7 @@ export function buildFollowUpQuickResults(
   return FOLLOW_UP_QUICK_RESULTS.filter((item) => enabledCodes.has(item.code));
 }
 
-/** 提交的 result code 是否是 5 个快捷结果之一 (历史/分类展示可复用). */
+/** 提交的 result code 是否是 6 个快捷结果之一 (历史/分类展示可复用). */
 export function isFollowUpQuickResultCode(code: string) {
   return FOLLOW_UP_QUICK_RESULTS.some((item) => item.code === code);
 }
