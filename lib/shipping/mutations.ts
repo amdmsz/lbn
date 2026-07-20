@@ -22,7 +22,7 @@ import {
   normalizeShippingPackageSnapshots,
   type ShippingPackageSnapshot,
 } from "@/lib/shipping/package-snapshots";
-import { buildShippingProductSummary } from "@/lib/shipping/product-summary";
+import { buildShippingTaskProductExportSnapshots } from "@/lib/shipping/export-snapshots";
 
 export type ShippingActor = {
   id: string;
@@ -80,6 +80,7 @@ type ShippingExportSourceStage = "PENDING_REPORT" | "PENDING_TRACKING";
 
 type ShippingExportLineDraft = {
   rowNo: number;
+  itemSequence: number;
   tradeOrderId: string;
   salesOrderId: string;
   shippingTaskId: string;
@@ -218,7 +219,8 @@ function compareShippingExportLineDraft(a: ShippingExportLineDraft, b: ShippingE
   return (
     a.tradeNoSnapshot.localeCompare(b.tradeNoSnapshot) ||
     a.subOrderNoSnapshot.localeCompare(b.subOrderNoSnapshot) ||
-    a.shippingTaskId.localeCompare(b.shippingTaskId)
+    a.shippingTaskId.localeCompare(b.shippingTaskId) ||
+    a.itemSequence - b.itemSequence
   );
 }
 
@@ -305,6 +307,7 @@ async function buildShippingExportLineDrafts(
         select: {
           id: true,
           tradeNo: true,
+          remark: true,
         },
       },
       salesOrder: {
@@ -312,10 +315,12 @@ async function buildShippingExportLineDrafts(
           id: true,
           orderNo: true,
           subOrderNo: true,
+          remark: true,
           tradeOrder: {
             select: {
               id: true,
               tradeNo: true,
+              remark: true,
             },
           },
           receiverNameSnapshot: true,
@@ -325,9 +330,16 @@ async function buildShippingExportLineDrafts(
             orderBy: [{ createdAt: "asc" }, { id: "asc" }],
             select: {
               id: true,
+              exportDisplayNameSnapshot: true,
+              productNameSnapshot: true,
               skuNameSnapshot: true,
               specSnapshot: true,
               qty: true,
+              tradeOrderItem: {
+                select: {
+                  remark: true,
+                },
+              },
             },
           },
         },
@@ -563,6 +575,7 @@ async function buildShippingExportLineDrafts(
         select: {
           id: true,
           tradeNo: true,
+          remark: true,
         },
       },
       salesOrder: {
@@ -570,10 +583,12 @@ async function buildShippingExportLineDrafts(
           id: true,
           orderNo: true,
           subOrderNo: true,
+          remark: true,
           tradeOrder: {
             select: {
               id: true,
               tradeNo: true,
+              remark: true,
             },
           },
           receiverNameSnapshot: true,
@@ -583,9 +598,16 @@ async function buildShippingExportLineDrafts(
             orderBy: [{ createdAt: "asc" }, { id: "asc" }],
             select: {
               id: true,
+              exportDisplayNameSnapshot: true,
+              productNameSnapshot: true,
               skuNameSnapshot: true,
               specSnapshot: true,
               qty: true,
+              tradeOrderItem: {
+                select: {
+                  remark: true,
+                },
+              },
             },
           },
         },
@@ -613,54 +635,75 @@ async function buildShippingExportLineDrafts(
     );
   }
 
-  const drafts = tasks.map((task) => {
-    if (!task.salesOrder) {
+  const drafts = tasks.flatMap((task) => {
+    const salesOrder = task.salesOrder;
+    if (!salesOrder) {
       throw new Error("A shipping task is missing its sales order and cannot be frozen.");
     }
 
-    const tradeOrderSnapshot = task.tradeOrder ?? task.salesOrder.tradeOrder;
+    const tradeOrderSnapshot = task.tradeOrder ?? salesOrder.tradeOrder;
 
     if (!tradeOrderSnapshot) {
       throw new Error(`Shipping task ${task.id} is missing its trade order snapshot anchor.`);
     }
 
-    if (!task.supplierId) {
+    const supplierId = task.supplierId;
+    if (!supplierId) {
       throw new Error(`Shipping task ${task.id} is missing its supplier id.`);
     }
 
-    if (task.salesOrder.items.length === 0) {
-      throw new Error(`Sales order ${task.salesOrder.orderNo} has no execution items to export.`);
+    if (salesOrder.items.length === 0) {
+      throw new Error(`Sales order ${salesOrder.orderNo} has no execution items to export.`);
     }
 
     const receiverNameSnapshot =
-      task.salesOrder.receiverNameSnapshot || task.receiverNameSnapshot || "";
+      salesOrder.receiverNameSnapshot || task.receiverNameSnapshot || "";
     const receiverPhoneSnapshot =
-      task.salesOrder.receiverPhoneSnapshot || task.receiverPhoneSnapshot || "";
+      salesOrder.receiverPhoneSnapshot || task.receiverPhoneSnapshot || "";
     const receiverAddressSnapshot =
-      task.salesOrder.receiverAddressSnapshot || task.receiverAddressSnapshot || "";
+      salesOrder.receiverAddressSnapshot || task.receiverAddressSnapshot || "";
 
     if (!receiverNameSnapshot || !receiverPhoneSnapshot || !receiverAddressSnapshot) {
-      throw new Error(`Sales order ${task.salesOrder.orderNo} is missing receiver snapshots.`);
+      throw new Error(`Sales order ${salesOrder.orderNo} is missing receiver snapshots.`);
     }
 
-    return {
+    const productSnapshots = buildShippingTaskProductExportSnapshots({
+      codAmount: task.codAmount.toString(),
+      insuranceRequired: task.insuranceRequired,
+      insuranceAmount: task.insuranceAmount.toString(),
+      salesOrderRemark: salesOrder.remark,
+      tradeOrderRemark: tradeOrderSnapshot.remark,
+      shippingTaskRemark: task.remark,
+      items: salesOrder.items.map((item) => ({
+        id: item.id,
+        exportDisplayNameSnapshot: item.exportDisplayNameSnapshot,
+        productNameSnapshot: item.productNameSnapshot,
+        skuNameSnapshot: item.skuNameSnapshot,
+        specSnapshot: item.specSnapshot,
+        qty: item.qty,
+        remark: item.tradeOrderItem?.remark ?? null,
+      })),
+    });
+
+    return productSnapshots.map((productSnapshot) => ({
       rowNo: 0,
+      itemSequence: productSnapshot.itemSequence,
       tradeOrderId: tradeOrderSnapshot.id,
-      salesOrderId: task.salesOrder.id,
+      salesOrderId: salesOrder.id,
       shippingTaskId: task.id,
-      supplierId: task.supplierId,
+      supplierId,
       tradeNoSnapshot: tradeOrderSnapshot.tradeNo,
-      subOrderNoSnapshot: task.salesOrder.subOrderNo || task.salesOrder.orderNo,
+      subOrderNoSnapshot: salesOrder.subOrderNo || salesOrder.orderNo,
       receiverNameSnapshot,
       receiverPhoneSnapshot,
       receiverAddressSnapshot,
-      productSummarySnapshot: buildShippingProductSummary(task.salesOrder.items),
-      pieceCountSnapshot: task.salesOrder.items.reduce((total, item) => total + item.qty, 0),
-      codAmountSnapshot: task.codAmount.toString(),
-      insuranceRequiredSnapshot: task.insuranceRequired,
-      insuranceAmountSnapshot: task.insuranceAmount.toString(),
-      remarkSnapshot: task.remark || null,
-    };
+      productSummarySnapshot: productSnapshot.productSummarySnapshot,
+      pieceCountSnapshot: productSnapshot.pieceCountSnapshot,
+      codAmountSnapshot: productSnapshot.codAmountSnapshot,
+      insuranceRequiredSnapshot: productSnapshot.insuranceRequiredSnapshot,
+      insuranceAmountSnapshot: productSnapshot.insuranceAmountSnapshot,
+      remarkSnapshot: productSnapshot.remarkSnapshot,
+    }));
   });
 
   return drafts
@@ -896,7 +939,7 @@ export async function createShippingExportBatch(
     sourceStage: input.sourceStage,
     shippingTaskIds: input.shippingTaskIds,
   });
-  const orderCount = drafts.length;
+  const orderCount = getDistinctCount(drafts.map((draft) => draft.shippingTaskId));
   const subOrderCount = getDistinctCount(drafts.map((draft) => draft.salesOrderId));
   const tradeOrderCount = getDistinctCount(drafts.map((draft) => draft.tradeOrderId));
 
@@ -973,7 +1016,11 @@ export async function createShippingExportBatch(
       })),
     });
 
-    for (const draft of drafts) {
+    const taskDrafts = Array.from(
+      new Map(drafts.map((draft) => [draft.shippingTaskId, draft])).values(),
+    );
+
+    for (const draft of taskDrafts) {
       await tx.shippingTask.update({
         where: { id: draft.shippingTaskId },
         data: {
@@ -999,6 +1046,9 @@ export async function createShippingExportBatch(
             reportStatus: ShippingReportStatus.REPORTED,
             reportedAt: exportedAt,
             sourceStage: input.sourceStage,
+            productLineCount: drafts.filter(
+              (candidate) => candidate.shippingTaskId === draft.shippingTaskId,
+            ).length,
           },
         },
       });

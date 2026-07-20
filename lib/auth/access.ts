@@ -146,7 +146,9 @@ export function canAccessPath(
   }
 
   if (pathname === "/orders" || pathname.startsWith("/orders/")) {
-    return canAccessOrderModule(role);
+    return pathname.startsWith("/orders/")
+      ? canAccessOrderDetail(role)
+      : canAccessOrderModule(role);
   }
 
   if (pathname === "/shipping" || pathname.startsWith("/shipping/")) {
@@ -274,6 +276,10 @@ export function canAccessReportModule(role: RoleCode) {
 
 export function canAccessOrderModule(role: RoleCode) {
   return canAccessSalesOrderModule(role);
+}
+
+export function canAccessOrderDetail(role: RoleCode) {
+  return canAccessOrderModule(role) || role === "SHIPPER";
 }
 
 export function canAccessOrderFulfillmentCenter(role: RoleCode) {

@@ -287,9 +287,18 @@ function CurrentReportWorkspace({
                           />
                         </td>
                         <td className={tableCellClass}>
-                          <div className="font-medium text-foreground">
-                            {identity.subOrderNo}
-                          </div>
+                          {item.salesOrder?.id ? (
+                            <Link
+                              href={`/orders/${item.salesOrder.id}`}
+                              className="font-medium text-[var(--color-info)] hover:underline"
+                            >
+                              {identity.subOrderNo}
+                            </Link>
+                          ) : (
+                            <div className="font-medium text-foreground">
+                              {identity.subOrderNo}
+                            </div>
+                          )}
                           <div className="mt-0.5 text-[11px] text-muted-foreground">
                             {identity.tradeNo
                               ? `父单 ${identity.tradeNo}`

@@ -547,6 +547,7 @@ const shippingExportBatchListSelect = {
     select: {
       tradeOrderId: true,
       tradeNoSnapshot: true,
+      shippingTaskId: true,
       shippingTask: {
         select: {
           reportStatus: true,
@@ -1046,9 +1047,18 @@ async function serializeShippingExportBatchItems(
         fileUrl: item.fileUrl,
         lineCount: item._count.lines,
       });
+      const taskLines = Array.from(
+        new Map(
+          item.lines
+            .filter(
+              (line) => Boolean(line.shippingTaskId) && Boolean(line.shippingTask),
+            )
+            .map((line) => [line.shippingTaskId, line]),
+        ).values(),
+      );
       const pendingTrackingCount =
         fileStatus.state === "READY"
-          ? item.lines.filter(
+          ? taskLines.filter(
               (line) =>
                 line.shippingTask &&
                 line.shippingTask.reportStatus === "REPORTED" &&
@@ -1058,7 +1068,7 @@ async function serializeShippingExportBatchItems(
                 !line.shippingTask.trackingNumber?.trim(),
             ).length
           : 0;
-      const shippedCount = item.lines.filter(
+      const shippedCount = taskLines.filter(
         (line) =>
           line.shippingTask &&
           (isShippedFulfillmentStatus(line.shippingTask.shippingStatus) ||

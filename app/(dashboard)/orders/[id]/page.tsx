@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { SalesOrderDetailSection } from "@/components/sales-orders/sales-order-detail-section";
+import { ShipperOrderDetailSection } from "@/components/shipping/shipper-order-detail-section";
 import { TradeOrderDetailSection } from "@/components/trade-orders/trade-order-detail-section";
 import TradeOrderRevisionPanel from "@/components/trade-orders/trade-order-revision-panel";
 import { ActionBanner } from "@/components/shared/action-banner";
@@ -10,6 +11,7 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { parseActionNotice } from "@/lib/action-notice";
 import {
   canAccessPaymentRecordModule,
+  canAccessOrderDetail,
   canAccessSalesOrderModule,
   canAccessShippingModule,
   canConfirmPaymentRecord,
@@ -23,9 +25,13 @@ import {
   getDefaultRouteForRole,
 } from "@/lib/auth/access";
 import { auth } from "@/lib/auth/session";
-import { buildFulfillmentTradeOrdersHref } from "@/lib/fulfillment/navigation";
+import {
+  buildFulfillmentShippingHref,
+  buildFulfillmentTradeOrdersHref,
+} from "@/lib/fulfillment/navigation";
 import { getSalesOrderDetail } from "@/lib/sales-orders/queries";
 import { getActiveShippingReturnForTradeOrder } from "@/lib/shipping/returns";
+import { getShipperOrderDetail } from "@/lib/shipping/order-detail";
 import { getTradeOrderDetail } from "@/lib/trade-orders/queries";
 import {
   checkRevisionBlockers,
@@ -73,13 +79,59 @@ export default async function SalesOrderDetailPage({
     redirect("/login");
   }
 
-  if (!canAccessSalesOrderModule(session.user.role)) {
+  if (!canAccessOrderDetail(session.user.role)) {
     redirect(getDefaultRouteForRole(session.user.role));
   }
 
   const { id } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const notice = parseActionNotice(resolvedSearchParams);
+
+  if (session.user.role === "SHIPPER") {
+    const shipperOrder = await getShipperOrderDetail(
+      {
+        id: session.user.id,
+        role: session.user.role,
+      },
+      id,
+    );
+
+    if (!shipperOrder) {
+      notFound();
+    }
+
+    return (
+      <div className="crm-page">
+        <PageHeader
+          context={
+            <PageContextLink
+              href={buildFulfillmentShippingHref()}
+              label="返回发货执行"
+              trail={[
+                "履约中心",
+                "发货执行",
+                shipperOrder.subOrderNo || shipperOrder.orderNo,
+              ]}
+            />
+          }
+          eyebrow="履约中心"
+          title={`发货订单详情 · ${shipperOrder.subOrderNo || shipperOrder.orderNo}`}
+          description="查看商品、业务员、订单备注、收件与物流信息。"
+          actions={<StatusBadge label="发货只读" variant="info" />}
+        />
+
+        {notice ? (
+          <ActionBanner tone={notice.tone}>{notice.message}</ActionBanner>
+        ) : null}
+
+        <ShipperOrderDetailSection order={shipperOrder} />
+      </div>
+    );
+  }
+
+  if (!canAccessSalesOrderModule(session.user.role)) {
+    redirect(getDefaultRouteForRole(session.user.role));
+  }
 
   const tradeOrderData = await getTradeOrderDetail(
     {

@@ -41,6 +41,8 @@
     "test:payments-decimal": "node --test --import tsx tests/payments/decimal.test.mts",
     "test:trade-orders-revisions": "node --test --import tsx tests/trade-orders/revisions-blockers.test.mts",
     "test:shipping-returns": "node --test --import tsx tests/shipping/returns-workflow.test.mts",
+    "test:shipping-exports": "node --test --import tsx tests/shipping/export-snapshots.test.mts",
+    "test:shipper-order-detail": "node --test --import tsx tests/auth/shipper-order-detail-access.test.mts",
     "test:refund-payout-uniqueness": "node --test --import tsx tests/payments/refund-payout-uniqueness.test.mts",
     "test:customer-force-delete-scope": "node --test --import tsx tests/customers/force-delete-scope.test.mts",
     "test:customers-public-pool-lock": "node --test --import tsx tests/customers/public-pool-claim-lock.test.mts",

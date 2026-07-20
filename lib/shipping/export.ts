@@ -1,26 +1,10 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "@/lib/db/prisma";
-
-type ShippingExportRow = {
-  receiverName: string;
-  receiverPhone: string;
-  receiverAddress: string;
-  productName: string;
-  qty: number;
-  codAmount: string;
-  insuranceRequired: boolean;
-  insuranceAmount: string;
-};
-
-function escapeCsvCell(value: string | number | boolean) {
-  const stringValue = String(value ?? "");
-  if (/[",\r\n]/.test(stringValue)) {
-    return `"${stringValue.replace(/"/g, "\"\"")}"`;
-  }
-
-  return stringValue;
-}
+import {
+  buildShippingExportCsvContent,
+  type ShippingExportCsvRow,
+} from "@/lib/shipping/export-csv";
 
 function normalizeFileName(fileName: string, exportNo: string) {
   const prefixPattern = new RegExp(`^${exportNo}-`, "i");
@@ -38,42 +22,13 @@ function normalizeFileName(fileName: string, exportNo: string) {
 async function writeShippingExportCsvFile(input: {
   exportNo: string;
   fileName: string;
-  rows: ShippingExportRow[];
+  rows: ShippingExportCsvRow[];
 }) {
   const safeFileName = normalizeFileName(input.fileName, input.exportNo);
   const outputDirectory = path.join(process.cwd(), "public", "exports", "shipping");
   const outputPath = path.join(outputDirectory, safeFileName);
-  const headers = [
-    "姓名",
-    "号码",
-    "地址",
-    "品名",
-    "件数",
-    "代收金额",
-    "是否保价",
-    "保价金额",
-  ];
-
-  const lines = [
-    headers.map((header) => escapeCsvCell(header)).join(","),
-    ...input.rows.map((row) =>
-      [
-        row.receiverName,
-        row.receiverPhone,
-        row.receiverAddress,
-        row.productName,
-        row.qty,
-        row.codAmount,
-        row.insuranceRequired ? "是" : "否",
-        row.insuranceAmount,
-      ]
-        .map((value) => escapeCsvCell(value))
-        .join(","),
-    ),
-  ];
-
   await mkdir(outputDirectory, { recursive: true });
-  await writeFile(outputPath, `\uFEFF${lines.join("\n")}`, "utf8");
+  await writeFile(outputPath, buildShippingExportCsvContent(input.rows), "utf8");
 
   return {
     fileName: safeFileName,
@@ -99,6 +54,7 @@ export async function generateShippingExportCsvForBatch(exportBatchId: string) {
           codAmountSnapshot: true,
           insuranceRequiredSnapshot: true,
           insuranceAmountSnapshot: true,
+          remarkSnapshot: true,
         },
       },
     },
@@ -124,6 +80,7 @@ export async function generateShippingExportCsvForBatch(exportBatchId: string) {
       codAmount: line.codAmountSnapshot.toString(),
       insuranceRequired: line.insuranceRequiredSnapshot,
       insuranceAmount: line.insuranceAmountSnapshot.toString(),
+      remark: line.remarkSnapshot ?? "",
     })),
   });
 
