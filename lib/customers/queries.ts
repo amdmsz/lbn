@@ -57,6 +57,7 @@ import {
   type CustomerQueueKey,
   type CustomerWorkStatusKey,
 } from "@/lib/customers/metadata";
+import { CUSTOMER_GRADE_VALUES } from "@/lib/customers/grade";
 import {
   findActiveCustomerRecycleEntry,
   listActiveCustomerIds,
@@ -619,11 +620,13 @@ const legacyQueueAliasMap: Partial<Record<string, CustomerQueueKey>> = {
 const customerCenterFiltersSchema = z.object({
   queue: z.enum(customerQueueValues).default("all"),
   executionClasses: z.array(z.enum(customerExecutionClassValues)).default([]),
-  // Wave 7-B: 客户分级 A/B/C/D/F 多选过滤. 与执行档独立 — 执行档是行为画像
+  // 客户分级 A/B/C/D/E/F 多选过滤. 直接复用 grade 领域唯一值集合，避免
+  // schema / UI 已新增档位而 URL 校验白名单遗漏，导致合法筛选在服务端抛错。
+  // 与执行档独立 — 执行档是行为画像
   // (CALLED_TODAY / WECHAT_PENDING 之类), grade 是销售里程碑 (A 成交 / B 加微
   // / ...). 两个可以叠加, 也可以单独筛.
   grades: z
-    .array(z.enum([CustomerGrade.A, CustomerGrade.B, CustomerGrade.C, CustomerGrade.D, CustomerGrade.F]))
+    .array(z.enum(CUSTOMER_GRADE_VALUES))
     .default([]),
   teamId: z.string().trim().default(""),
   salesId: z.string().trim().default(""),
@@ -1321,7 +1324,7 @@ async function getCustomerCenterActor(userId: string): Promise<CustomerCenterAct
   };
 }
 
-function parseCustomerCenterFilters(
+export function parseCustomerCenterFilters(
   rawSearchParams: Record<string, SearchParamsValue> | undefined,
 ) {
   const rawQueue =
