@@ -233,6 +233,7 @@ export function CustomersTable({
   outboundCallEnabled = false,
   moveToRecycleBinAction,
   canBatchAddTags = false,
+  canBatchExport = false,
   canBatchTransferOwner = false,
   canBatchReleaseToPublicPool = false,
   canBatchMoveToRecycleBin = false,
@@ -257,6 +258,7 @@ export function CustomersTable({
   outboundCallEnabled?: boolean;
   moveToRecycleBinAction?: MoveCustomerToRecycleBinAction;
   canBatchAddTags?: boolean;
+  canBatchExport?: boolean;
   canBatchTransferOwner?: boolean;
   // 批量"移交公海" (释放回公海池, 替代移交给中转假账号) — ADMIN/SUPERVISOR.
   canBatchReleaseToPublicPool?: boolean;
@@ -316,6 +318,7 @@ export function CustomersTable({
   const [batchRecyclePending, startBatchRecycleTransition] = useTransition();
   const [batchForceDeletePending, startBatchForceDeleteTransition] = useTransition();
   const [batchReleasePending, startBatchReleaseTransition] = useTransition();
+  const [batchExportPending, setBatchExportPending] = useState(false);
   const router = useRouter();
   const pathname = usePathname() || "/customers";
   const searchParams = useSearchParams();
@@ -397,6 +400,7 @@ export function CustomersTable({
     items.length > 0 &&
     (selectionMode === "filtered" || manualSelectedIds.length === items.length);
   const canBatchSelect =
+    canBatchExport ||
     canBatchAddTags ||
     canBatchTransferOwner ||
     canBatchReleaseToPublicPool ||
@@ -433,7 +437,7 @@ export function CustomersTable({
       ? "动作将应用到整个筛选结果"
       : allCurrentPageSelected && canSelectFiltered
         ? `可扩展到 ${pagination.totalCount} 位`
-        : "标签 / 移交 / 回收";
+        : "导出 / 标签 / 移交 / 回收";
 
   useEffect(() => {
     const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
@@ -555,6 +559,74 @@ export function CustomersTable({
     if (!canSelectFiltered) return;
     setSelectionMode("filtered");
     setPageSelection({ pageKey: currentPageSelectionKey, ids: [] });
+  }
+
+  async function exportSelectedCustomers() {
+    if (!canBatchExport || selectedCount === 0 || batchExecutionBlockedByLimit) {
+      return;
+    }
+
+    setBatchExportPending(true);
+
+    try {
+      const response = await fetch("/customers/export/selected", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          selectionMode,
+          customerIds: selectionMode === "manual" ? manualSelectedIds : [],
+          filters: {
+            queue: filters.queue,
+            executionClasses: filters.executionClasses,
+            grades: filters.grades,
+            teamId: filters.teamId,
+            salesId: filters.salesId,
+            search: filters.search,
+            productKeys: filters.productKeys,
+            productKeyword: filters.productKeyword,
+            tagIds: filters.tagIds,
+            assignedFrom: filters.assignedFrom,
+            assignedTo: filters.assignedTo,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { message?: string }
+          | null;
+        throw new Error(payload?.message || "导出失败，请稍后重试。");
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") ?? "";
+      const fileNameMatch = disposition.match(/filename="?([^";]+)"?/i);
+      const fileName = fileNameMatch?.[1] || "customers-selected.xlsx";
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = downloadUrl;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+
+      notifyToast({
+        title: "客户 XLSX 已导出",
+        description: `已导出 ${selectedCount} 位客户，手机号中间四位已隐藏。`,
+        tone: "success",
+      });
+    } catch (error) {
+      notifyToast({
+        title: "客户导出失败",
+        description: error instanceof Error ? error.message : "请稍后重试。",
+        tone: "danger",
+      });
+    } finally {
+      setBatchExportPending(false);
+    }
   }
 
   function resetNotices() {
@@ -1236,6 +1308,8 @@ export function CustomersTable({
                   neutralHint={batchBarNeutralHint}
                   batchExecutionBlockedByLimit={batchExecutionBlockedByLimit}
                   manualRecycleUnavailable={manualRecycleUnavailable}
+                  canBatchExport={canBatchExport}
+                  exportPending={batchExportPending}
                   canBatchAddTags={canBatchAddTags}
                   canBatchTransferOwner={canBatchTransferOwner}
                   canBatchReleaseToPublicPool={canBatchReleaseToPublicPool}
@@ -1247,6 +1321,7 @@ export function CustomersTable({
                   onSelectFilteredResults={selectFilteredResults}
                   onToggleSelectAllCurrentPage={toggleSelectAllCurrentPage}
                   onResetSelection={resetSelection}
+                  onExportSelected={exportSelectedCustomers}
                   onOpenBatchTag={openBatchTagDialog}
                   onOpenBatchOwnerTransfer={openBatchOwnerTransferDialog}
                   onOpenBatchRelease={openBatchReleaseDialog}
@@ -1452,5 +1527,3 @@ export function CustomersTable({
     </>
   );
 }
-
-

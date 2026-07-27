@@ -9,11 +9,17 @@ import {
 } from "@prisma/client";
 import ExcelJS from "exceljs";
 import { canExportCustomers } from "@/lib/auth/access";
+import { CUSTOMER_GRADE_LABEL } from "@/lib/customers/grade";
 import {
+  customerStatusMeta,
   customerManualCreateOperationAction,
   formatDateTime,
+  MAX_BATCH_CUSTOMER_ACTION_SIZE,
 } from "@/lib/customers/metadata";
-import { listFilteredCustomerCenterCustomerIds } from "@/lib/customers/queries";
+import {
+  listFilteredCustomerCenterCustomerIds,
+  listVisibleCustomerCenterCustomerIds,
+} from "@/lib/customers/queries";
 import { prisma } from "@/lib/db/prisma";
 import {
   getSalesOrderPaymentSchemeLabel,
@@ -25,6 +31,7 @@ import {
   formatTradeOrderLineSummary,
 } from "@/lib/trade-orders/display";
 import { buildCustomersExportHref } from "@/lib/customers/export-url";
+import { maskMobilePhone } from "@/lib/mobile/api-contract";
 
 export { buildCustomersExportHref };
 
@@ -68,7 +75,40 @@ const customerExportColumns = [
     header: "电话",
     width: 16,
     text: true,
-    description: "客户手机号，按文本保存，避免 Excel 自动转科学计数。",
+    description: "手机号已隐藏中间四位；完整号码仅可在 CRM 内按权限查看。",
+  },
+  {
+    key: "grade",
+    header: "客户分类",
+    width: 16,
+    description: "当前客户分类及业务含义。",
+  },
+  {
+    key: "customerStatus",
+    header: "客户状态",
+    width: 12,
+    description: "当前客户状态。",
+  },
+  {
+    key: "wechatId",
+    header: "微信号",
+    width: 20,
+    text: true,
+    description: "客户微信号。",
+  },
+  {
+    key: "callCount",
+    header: "累计拨打",
+    width: 12,
+    center: true,
+    description: "客户累计拨打次数。",
+  },
+  {
+    key: "customerRemark",
+    header: "客户备注",
+    width: 40,
+    wrap: true,
+    description: "客户主档备注。",
   },
   {
     key: "province",
@@ -216,6 +256,11 @@ const customerExportSelect = {
   id: true,
   name: true,
   phone: true,
+  wechatId: true,
+  remark: true,
+  status: true,
+  grade: true,
+  callCount: true,
   province: true,
   city: true,
   district: true,
@@ -670,7 +715,12 @@ function buildCustomersExportRows(items: CustomerExportItem[]): CustomerExportRo
   return items.map((item) => ({
     customerId: item.id,
     customerName: item.name,
-    phone: item.phone,
+    phone: maskMobilePhone(item.phone),
+    grade: item.grade ? CUSTOMER_GRADE_LABEL[item.grade] : "",
+    customerStatus: customerStatusMeta[item.status].label,
+    wechatId: item.wechatId ?? "",
+    callCount: item.callCount,
+    customerRemark: item.remark ?? "",
     province: item.province ?? "",
     city: item.city ?? "",
     district: item.district ?? "",
@@ -701,7 +751,11 @@ const thinBorder: Partial<ExcelJS.Borders> = {
   right: { style: "thin", color: { argb: "FFE5E7EB" } },
 };
 
-function applyDetailWorksheetStyle(worksheet: ExcelJS.Worksheet, rowCount: number) {
+function applyDetailWorksheetStyle(
+  worksheet: ExcelJS.Worksheet,
+  rowCount: number,
+  title: string,
+) {
   worksheet.views = [{ state: "frozen", ySplit: 4 }];
   worksheet.properties.defaultRowHeight = 22;
   worksheet.pageSetup = {
@@ -742,7 +796,7 @@ function applyDetailWorksheetStyle(worksheet: ExcelJS.Worksheet, rowCount: numbe
   worksheet.mergeCells(2, 1, 2, lastColumnIndex);
 
   const titleCell = worksheet.getCell(1, 1);
-  titleCell.value = "客户对账导出";
+  titleCell.value = title;
   titleCell.font = { bold: true, size: 16, color: { argb: "FFFFFFFF" } };
   titleCell.fill = {
     type: "pattern",
@@ -806,7 +860,11 @@ function applyDetailWorksheetStyle(worksheet: ExcelJS.Worksheet, rowCount: numbe
   }
 }
 
-function addDetailWorksheet(workbook: ExcelJS.Workbook, rows: CustomerExportRow[]) {
+function addDetailWorksheet(
+  workbook: ExcelJS.Workbook,
+  rows: CustomerExportRow[],
+  title: string,
+) {
   const worksheet = workbook.addWorksheet("客户对账明细");
   const tableRows = rows.map((row) =>
     customerExportColumns.map((column) => row[column.key] ?? ""),
@@ -828,7 +886,7 @@ function addDetailWorksheet(workbook: ExcelJS.Workbook, rows: CustomerExportRow[
     rows: tableRows,
   });
 
-  applyDetailWorksheetStyle(worksheet, rows.length);
+  applyDetailWorksheetStyle(worksheet, rows.length, title);
 
   return worksheet;
 }
@@ -908,23 +966,24 @@ export function buildCustomersExportFileName() {
   return `customers-${datePart}.xlsx`;
 }
 
-export async function getCustomersExportData(
-  viewer: CustomerExportViewer,
-  rawSearchParams?: Record<string, SearchParamsValue>,
-) {
-  if (!canExportCustomers(viewer.role)) {
-    throw new Error("You do not have access to customer export.");
-  }
+export function buildSelectedCustomersExportFileName() {
+  const datePart = new Date().toISOString().slice(0, 10);
+  return `customers-selected-${datePart}.xlsx`;
+}
 
-  const filters = parseCustomerExportFilters(rawSearchParams);
-  const customerIds = await listFilteredCustomerCenterCustomerIds(
-    {
-      id: viewer.id,
-      role: viewer.role,
-      teamId: viewer.teamId,
-    },
-    rawSearchParams,
-  );
+export type CustomerExportSelectionMode = "manual" | "filtered";
+
+export class CustomerExportSelectionError extends Error {
+  constructor(
+    public readonly code: "empty_selection" | "limit_exceeded" | "stale_selection",
+    message: string,
+  ) {
+    super(message);
+    this.name = "CustomerExportSelectionError";
+  }
+}
+
+async function getCustomerExportItems(customerIds: string[]) {
   const items = await prisma.customer.findMany({
     where: {
       id: {
@@ -969,24 +1028,127 @@ export async function getCustomersExportData(
   );
   const itemMap = new Map(items.map((item) => [item.id, item]));
 
+  return customerIds
+    .map((customerId) => itemMap.get(customerId))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .map((item) => ({
+      ...item,
+      assignedAt: assignedAtMap.get(item.id) ?? item.ownershipEvents[0]?.createdAt ?? null,
+      orderTotals: orderTotalsByCustomerId.get(item.id) ?? {
+        finalAmount: 0,
+        paidAmount: 0,
+        remainingAmount: 0,
+      },
+    }));
+}
+
+export async function getCustomersExportData(
+  viewer: CustomerExportViewer,
+  rawSearchParams?: Record<string, SearchParamsValue>,
+) {
+  if (!canExportCustomers(viewer.role)) {
+    throw new Error("You do not have access to customer export.");
+  }
+
+  const filters = parseCustomerExportFilters(rawSearchParams);
+  const customerIds = await listFilteredCustomerCenterCustomerIds(
+    {
+      id: viewer.id,
+      role: viewer.role,
+      teamId: viewer.teamId,
+    },
+    rawSearchParams,
+  );
+
   return {
     filters,
-    items: customerIds
-      .map((customerId) => itemMap.get(customerId))
-      .filter((item): item is NonNullable<typeof item> => Boolean(item))
-      .map((item) => ({
-        ...item,
-        assignedAt: assignedAtMap.get(item.id) ?? item.ownershipEvents[0]?.createdAt ?? null,
-        orderTotals: orderTotalsByCustomerId.get(item.id) ?? {
-          finalAmount: 0,
-          paidAmount: 0,
-          remainingAmount: 0,
-        },
-      })),
+    items: await getCustomerExportItems(customerIds),
   };
 }
 
-export async function buildCustomersExportXlsx(items: CustomerExportItem[]) {
+export async function getSelectedCustomersExportData(
+  viewer: CustomerExportViewer,
+  input: {
+    selectionMode: CustomerExportSelectionMode;
+    customerIds?: string[];
+    rawSearchParams?: Record<string, SearchParamsValue>;
+  },
+) {
+  if (!canExportCustomers(viewer.role)) {
+    throw new Error("You do not have access to customer export.");
+  }
+
+  let customerIds: string[];
+
+  if (input.selectionMode === "filtered") {
+    customerIds = await listFilteredCustomerCenterCustomerIds(
+      {
+        id: viewer.id,
+        role: viewer.role,
+        teamId: viewer.teamId,
+      },
+      input.rawSearchParams,
+    );
+  } else {
+    customerIds = [
+      ...new Set((input.customerIds ?? []).map((customerId) => customerId.trim()).filter(Boolean)),
+    ];
+
+    if (customerIds.length > MAX_BATCH_CUSTOMER_ACTION_SIZE) {
+      throw new CustomerExportSelectionError(
+        "limit_exceeded",
+        `单次最多导出 ${MAX_BATCH_CUSTOMER_ACTION_SIZE} 位客户。`,
+      );
+    }
+
+    const visibleCustomerIds = await listVisibleCustomerCenterCustomerIds(
+      {
+        id: viewer.id,
+        role: viewer.role,
+        teamId: viewer.teamId,
+      },
+      customerIds,
+    );
+
+    if (visibleCustomerIds.length !== customerIds.length) {
+      throw new CustomerExportSelectionError(
+        "stale_selection",
+        "部分已选客户已不可见，请刷新列表后重新选择。",
+      );
+    }
+  }
+
+  if (customerIds.length === 0) {
+    throw new CustomerExportSelectionError("empty_selection", "请至少选择一位客户。");
+  }
+
+  if (customerIds.length > MAX_BATCH_CUSTOMER_ACTION_SIZE) {
+    throw new CustomerExportSelectionError(
+      "limit_exceeded",
+      `单次最多导出 ${MAX_BATCH_CUSTOMER_ACTION_SIZE} 位客户。`,
+    );
+  }
+
+  const items = await getCustomerExportItems(customerIds);
+
+  if (items.length !== customerIds.length) {
+    throw new CustomerExportSelectionError(
+      "stale_selection",
+      "部分已选客户已发生变化，请刷新列表后重新选择。",
+    );
+  }
+
+  return {
+    selectionMode: input.selectionMode,
+    customerIds,
+    items,
+  };
+}
+
+export async function buildCustomersExportXlsx(
+  items: CustomerExportItem[],
+  options: { title?: string } = {},
+) {
   const workbook = new ExcelJS.Workbook();
   const rows = buildCustomersExportRows(items);
 
@@ -996,7 +1158,7 @@ export async function buildCustomersExportXlsx(items: CustomerExportItem[]) {
   workbook.modified = new Date();
   workbook.calcProperties.fullCalcOnLoad = true;
 
-  addDetailWorksheet(workbook, rows);
+  addDetailWorksheet(workbook, rows, options.title ?? "客户对账导出");
   addGuideWorksheet(workbook);
 
   const buffer = await workbook.xlsx.writeBuffer();

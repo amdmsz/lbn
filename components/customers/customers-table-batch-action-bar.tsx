@@ -3,6 +3,8 @@
 import {
   ArrowRightLeft,
   CheckSquare2,
+  Download,
+  Loader2,
   Tags,
   Trash2,
   Waves,
@@ -25,6 +27,8 @@ export type BatchActionBarProps = Readonly<{
   neutralHint: string;
   batchExecutionBlockedByLimit: boolean;
   manualRecycleUnavailable: boolean;
+  canBatchExport: boolean;
+  exportPending: boolean;
   canBatchAddTags: boolean;
   canBatchTransferOwner: boolean;
   canBatchReleaseToPublicPool: boolean;
@@ -36,6 +40,7 @@ export type BatchActionBarProps = Readonly<{
   onSelectFilteredResults: () => void;
   onToggleSelectAllCurrentPage: () => void;
   onResetSelection: () => void;
+  onExportSelected: () => void;
   onOpenBatchTag: () => void;
   onOpenBatchOwnerTransfer: () => void;
   onOpenBatchRelease: () => void;
@@ -58,6 +63,8 @@ export function CustomersTableBatchActionBar(props: BatchActionBarProps) {
     neutralHint,
     batchExecutionBlockedByLimit,
     manualRecycleUnavailable,
+    canBatchExport,
+    exportPending,
     canBatchAddTags,
     canBatchTransferOwner,
     canBatchReleaseToPublicPool,
@@ -69,6 +76,7 @@ export function CustomersTableBatchActionBar(props: BatchActionBarProps) {
     onSelectFilteredResults,
     onToggleSelectAllCurrentPage,
     onResetSelection,
+    onExportSelected,
     onOpenBatchTag,
     onOpenBatchOwnerTransfer,
     onOpenBatchRelease,
@@ -149,6 +157,23 @@ export function CustomersTableBatchActionBar(props: BatchActionBarProps) {
             className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-card text-muted-foreground transition-colors hover:border-border hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+
+        {canBatchExport ? (
+          <button
+            type="button"
+            onClick={onExportSelected}
+            disabled={exportPending || batchExecutionBlockedByLimit}
+            title="导出已选客户为 XLSX；手机号中间四位将隐藏"
+            className="inline-flex h-8 items-center gap-1.5 rounded-full border border-primary/20 bg-card px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/10 disabled:cursor-not-allowed disabled:border-border disabled:text-muted-foreground"
+          >
+            {exportPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+            {exportPending ? "导出中" : "导出"}
           </button>
         ) : null}
 

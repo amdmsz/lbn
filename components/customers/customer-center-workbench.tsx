@@ -357,6 +357,7 @@ export function CustomerCenterListSection({
         outboundCallEnabled={outboundCallEnabled}
         moveToRecycleBinAction={moveCustomerToRecycleBinAction}
         canBatchAddTags={canBatchManageCustomerTags(role)}
+        canBatchExport={canExportCustomers(role)}
         canBatchTransferOwner={canTransferCustomerOwner(role)}
         canBatchReleaseToPublicPool={canManageCustomerPublicPool(role)}
         canBatchMoveToRecycleBin={canBatchMoveCustomersToRecycleBin(role)}

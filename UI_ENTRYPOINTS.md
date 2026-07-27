@@ -560,31 +560,37 @@ Decommissioned entrypoints:
 
 ---
 
-### 8A. Export Customer Reconciliation Data
+### 8A. Export Customer Data
 
 **唯一主链（当前真实主入口）**
 
-- Finance reconciliation page export control at `/finance/reconciliation`
+- Finance reconciliation filtered export at `/finance/reconciliation`
+- Customer center filtered and selected export at `/customers`
 
 **主入口列表**
 
 - `app/(dashboard)/finance/reconciliation/page.tsx`
 - `components/finance/finance-reconciliation-section.tsx`
+- `components/customers/customers-table.tsx`
+- `components/customers/customers-table-batch-action-bar.tsx`
 
 **兼容入口列表**
 
-- `/finance/reconciliation/export` is the finance-facing CSV download endpoint
-- `/customers/export` remains a compatibility CSV endpoint for direct access
+- `/finance/reconciliation/export` is the finance-facing XLSX download endpoint
+- `/customers/export` exports the current customer-center filter as XLSX
+- `POST /customers/export/selected` exports manually selected IDs or up to 1000 customers
+  from the current filtered selection
 
 **已废弃 / 应废弃入口**
 
-- `/customers` no longer surfaces this export button in the customer workbench
+- CSV customer export is no longer the current contract
 
 **涉及的关键文件**
 
 - `app/(dashboard)/finance/reconciliation/page.tsx`
 - `app/(dashboard)/finance/reconciliation/export/route.ts`
 - `app/(dashboard)/customers/export/route.ts`
+- `app/(dashboard)/customers/export/selected/route.ts`
 - `lib/customers/export.ts`
 - `lib/customers/queries.ts`
 
@@ -592,13 +598,15 @@ Decommissioned entrypoints:
 
 - Finance reconciliation page export controls
 - Finance reconciliation export route permission guard
-- Customer export route permission guard
-- CSV column shape and future XLSX migration path
+- Customer filtered/selected export route permission guards and visibility re-checks
+- XLSX field shape, phone masking and `OperationLog` audit payloads
 
 **当前风险说明**
 
-- Export is still CSV for now and uses customer assignment date as the date filter
-- The next refinement should split the reconciliation fields more clearly or move to XLSX, but that is a separate step
+- Customer XLSX exports always hide the middle four phone digits; full phone stays in CRM and
+  remains subject to in-system visibility permissions
+- Customer export is available only to `ADMIN` and `SUPERVISOR`; selected export re-resolves
+  server-side visibility and rejects stale or over-limit selections
 
 ---
 

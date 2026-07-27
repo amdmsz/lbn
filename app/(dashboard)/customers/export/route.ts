@@ -69,6 +69,7 @@ export async function GET(request: Request) {
       afterData: {
         count: data.items.length,
         filters: data.filters,
+        phoneMasking: "middle_four",
       },
     },
   });
