@@ -40,13 +40,11 @@ export const executionBadgeClassNames = {
 } as const;
 
 export function ListTopBar({
-  headerAction,
   viewMode,
   onChangeView,
   totalCount,
   quickSelectButton,
 }: Readonly<{
-  headerAction?: ReactNode;
   viewMode: CustomerViewMode;
   onChangeView: (next: CustomerViewMode) => void;
   totalCount: number;
@@ -55,7 +53,6 @@ export function ListTopBar({
   return (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
       <div className="flex flex-wrap items-center gap-2">
-        {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
         {quickSelectButton}
         <div className="md:hidden">
           <CustomerViewToggle value={viewMode} onChange={onChangeView} />
@@ -113,7 +110,7 @@ export function CustomerGradeBadge({
     <span
       title={CUSTOMER_GRADE_LABEL[grade]}
       className={cn(
-        "inline-flex select-none items-center rounded-full font-semibold tracking-tight",
+        "inline-flex select-none items-center rounded-full font-semibold tracking-normal",
         sizeClass,
         customerGradeToneClassMap[tone],
         className,
@@ -135,8 +132,25 @@ export function ExecutionBadge({
   compact?: boolean;
   variantClass?: string;
 }>) {
+  if (row.grade) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title={`${CUSTOMER_GRADE_LABEL[row.grade]} · 记录跟进`}
+        className="rounded-full outline-none transition-[filter,box-shadow] hover:brightness-[0.96] focus-visible:ring-2 focus-visible:ring-primary/40"
+      >
+        <CustomerGradeBadge
+          grade={row.grade}
+          size={compact ? "sm" : "md"}
+          variant="long"
+        />
+      </button>
+    );
+  }
+
   const className = cn(
-    "inline-flex items-center rounded-full border font-medium tracking-tight outline-none transition-[background-color,color,filter,box-shadow] duration-200 ease-out hover:brightness-[0.95] focus-visible:ring-2 focus-visible:ring-primary/40",
+    "inline-flex items-center rounded-full border font-medium tracking-normal outline-none transition-[background-color,color,filter,box-shadow] duration-200 ease-out hover:brightness-[0.95] focus-visible:ring-2 focus-visible:ring-primary/40",
     compact ? "h-5 px-2 text-[11px]" : "h-6 px-2.5 text-[11px]",
     variantClass ??
       executionBadgeClassNames[

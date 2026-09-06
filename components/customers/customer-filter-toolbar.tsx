@@ -26,11 +26,9 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   advancedCustomerQueueOptions,
   customerExecutionClassOptions,
-  customerPageSizeOptions,
   getCustomerQueueLabel,
   isPrimaryCustomerQueue,
   OPEN_CUSTOMER_ADVANCED_FILTER_EVENT,
-  type CustomerPageSize,
   type CustomerQueueKey,
 } from "@/lib/customers/metadata";
 import { buildCustomersHref } from "@/lib/customers/filter-url";
@@ -1116,26 +1114,7 @@ export function CustomerFilterToolbar({
           </div>
           </div>
 
-          <div className="flex items-center justify-between border-t border-border bg-muted/40 px-4 py-2.5">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>每页</span>
-              <InlineNativeSelect
-                ariaLabel="选择每页客户数量"
-                value={String(filters.pageSize)}
-                placeholder="20"
-                options={customerPageSizeOptions.map((size) => ({
-                  value: String(size),
-                  label: String(size),
-                }))}
-                onChange={(nextValue) => {
-                  if (!nextValue) return;
-                  applyFilters({ pageSize: Number(nextValue) as CustomerPageSize });
-                }}
-                pending={pending}
-                className="h-8 w-[5rem] text-xs"
-              />
-              <span>条</span>
-            </div>
+          <div className="flex items-center justify-end border-t border-border bg-muted/40 px-4 py-2.5">
             <div className="flex items-center gap-2">
               <button
                 type="button"

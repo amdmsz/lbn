@@ -7,7 +7,6 @@ import type {
   FormEvent,
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
-  ReactNode,
 } from "react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { CheckSquare2, ChevronRight } from "lucide-react";
@@ -23,7 +22,6 @@ import {
   BatchForceDeleteDialog,
   BatchOwnerTransferDialog,
   BatchRecycleDialog,
-  BatchRecycleRequestDialog,
   BatchReleaseToPoolDialog,
   BatchTagDialog,
   type BatchReleaseToPoolMode,
@@ -32,11 +30,7 @@ import {
 } from "@/components/customers/customer-batch-dialogs";
 import {
   type CustomerViewMode,
-  getCustomerAddress,
-  getCustomerInitial,
-  getLatestCallRecord,
-  getOwnerLabel,
-  getProgressSummary,
+  getCustomerListViewModel,
   getSuggestedFollowUpResult,
   isRecentIsoDate,
   notifyCustomerBatchActionResult,
@@ -161,45 +155,8 @@ function getCallsSummaryText(latestFollowUpAt: Date | null, totalCallCount: numb
   return `${diffDays === 0 ? "今日" : `近 ${diffDays} 天`} · ${totalCallCount} 次`;
 }
 
-function getRecentProductText(row: CustomerListItem) {
-  return row.latestInterestedProduct ?? row.latestPurchasedProduct ?? "暂无意向商品";
-}
-
 // 意向标注 "¥298 · 06-09 15:16": 金额 / 时间来自导入名单的"金额""日期"列,
 // 只在展示的是意向商品 (非已购兜底) 时显示, 缺哪个就不显哪个.
-function getInterestMetaText(row: CustomerListItem) {
-  if (!row.latestInterestedProduct) {
-    return null;
-  }
-
-  const parts: string[] = [];
-  if (row.latestInterestedAmount) {
-    const amount = Number(row.latestInterestedAmount);
-    if (Number.isFinite(amount)) {
-      parts.push(`¥${amount.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`);
-    }
-  }
-  if (row.latestInterestedAt) {
-    const at =
-      row.latestInterestedAt instanceof Date
-        ? row.latestInterestedAt
-        : new Date(row.latestInterestedAt);
-    if (!Number.isNaN(at.getTime())) {
-      parts.push(
-        new Intl.DateTimeFormat("zh-CN", {
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        }).format(at),
-      );
-    }
-  }
-
-  return parts.length > 0 ? parts.join(" · ") : null;
-}
-
 // 栏4 "最近通话" 时间短格式: 今天 11:28 / 昨天 18:05 / 06-08 09:12.
 function formatCallTimeShort(value: Date) {
   const timeText = new Intl.DateTimeFormat("zh-CN", {
@@ -243,7 +200,6 @@ export function CustomersTable({
   emptyTitle,
   emptyDescription,
   filters,
-  headerAction,
   scrollTargetId,
 }: Readonly<{
   // 可选, 默认按 ADMIN (展示负责人). `/customers` workbench 传真实 role —
@@ -269,7 +225,6 @@ export function CustomersTable({
   emptyTitle: string;
   emptyDescription: string;
   filters: CustomerCenterFilters;
-  headerAction?: ReactNode;
   scrollTargetId?: string;
 }>) {
   const [viewMode, setViewMode] = useState<CustomerViewMode>("table");
@@ -285,8 +240,6 @@ export function CustomersTable({
   const [batchTagDialogOpen, setBatchTagDialogOpen] = useState(false);
   const [batchOwnerTransferDialogOpen, setBatchOwnerTransferDialogOpen] = useState(false);
   const [batchRecycleDialogOpen, setBatchRecycleDialogOpen] = useState(false);
-  // 销售自助"申请回收" — 本波只 UI, 无服务端动作.
-  const [batchRecycleRequestDialogOpen, setBatchRecycleRequestDialogOpen] = useState(false);
   const [batchForceDeleteDialogOpen, setBatchForceDeleteDialogOpen] = useState(false);
   const [batchReleaseDialogOpen, setBatchReleaseDialogOpen] = useState(false);
   const [batchReleaseMode, setBatchReleaseMode] =
@@ -667,27 +620,6 @@ export function CustomersTable({
     setBatchRecycleDialogOpen(false);
   }
 
-  function openBatchRecycleRequestDialog() {
-    setBatchRecycleDialogOpen(false);
-    setBatchRecycleRequestDialogOpen(true);
-  }
-
-  function closeBatchRecycleRequestDialog() {
-    setBatchRecycleRequestDialogOpen(false);
-  }
-
-  function confirmBatchRecycleRequest() {
-    setBatchRecycleRequestDialogOpen(false);
-    // TODO (下一 PR): 接入 requestRecycleApproval server action + OperationLog.
-    notifyToast({
-      title: "已发送回收申请到主管",
-      description:
-        "审批通过后由主管走硬删流程；申请已记录在客户中心，请等待审批结果。",
-      tone: "info",
-    });
-    resetSelection();
-  }
-
   function openBatchForceDeleteDialog() {
     resetNotices();
     setBatchForceDeleteConfirmation("");
@@ -735,7 +667,7 @@ export function CustomersTable({
     setSheetCustomer(null);
   }
 
-  // 整行可点 = 打开跟进弹窗 (弹窗内已有 客户详情 / 直播邀约 / 订单 入口).
+  // 整行可点 = 打开快速详情 Sheet；明确的“记录跟进”入口打开跟进弹窗。
   // 行内交互元素 (checkbox label / tel: / 徽章按钮) 自带 stopPropagation,
   // closest 守卫再兜底一层, 双保险不触发行点击.
   function handleSpaciousRowClick(
@@ -750,7 +682,7 @@ export function CustomersTable({
     ) {
       return;
     }
-    openFollowUpDialog(item);
+    openCustomerSheet(item);
   }
 
   // 键盘可达: 行本体聚焦后 Enter / Space 等价于点击行.
@@ -765,7 +697,7 @@ export function CustomersTable({
       return;
     }
     event.preventDefault();
-    openFollowUpDialog(item);
+    openCustomerSheet(item);
   }
 
   function handleBatchTagSubmit(event: FormEvent<HTMLFormElement>) {
@@ -909,12 +841,14 @@ export function CustomersTable({
       title: "负责人 / 进展",
       headerClassName: "w-[18%]",
       render: (row: CustomerListItem) => {
-        const progress = getProgressSummary(row);
+        const viewModel = getCustomerListViewModel(row);
         return (
           <div className="space-y-0.5">
-            <div className="text-[13px] font-medium text-foreground">{getOwnerLabel(row)}</div>
+            <div className="text-[13px] font-medium text-foreground">
+              {viewModel.ownerLabel}
+            </div>
             <p className="text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
-              {progress.primary}
+              {viewModel.progress.primary}
             </p>
           </div>
         );
@@ -925,17 +859,14 @@ export function CustomersTable({
       title: "最近意向",
       headerClassName: "w-[18%]",
       render: (row: CustomerListItem) => {
-        const metaText = getInterestMetaText(row);
-        const fullText = metaText
-          ? `${getRecentProductText(row)} · ${metaText}`
-          : getRecentProductText(row);
+        const viewModel = getCustomerListViewModel(row);
 
         return (
           <p
             className="max-w-[16rem] truncate text-[13px] text-[var(--color-sidebar-muted)]"
-            title={fullText}
+            title={viewModel.signalSummary}
           >
-            {fullText}
+            {viewModel.signalSummary}
           </p>
         );
       },
@@ -1014,29 +945,25 @@ export function CustomersTable({
   //   栏2 电话 + 省市 (~170px, font-mono 手机号)
   //   栏3 意向 + 备注 (flex-1)
   //   栏4 最近通话 (~130px 右对齐); hover 原位淡入 "记录跟进 ›" (零位移)
-  //   整行可点 = 跟进弹窗 (内含 客户详情 / 直播邀约 / 订单 入口); lg 以下四栏堆叠.
+  //   整行可点 = 快速详情 Sheet；明确的按钮进入跟进弹窗；lg 以下四栏堆叠.
   const spaciousRows = (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div className="divide-y divide-border">
         {items.map((row) => {
-          const latestCallRecord = getLatestCallRecord(row);
-          const remarkText = row.remark?.trim() ?? "";
+          const viewModel = getCustomerListViewModel(row);
+          const latestCallRecord = viewModel.latestCallRecord;
+          const remarkText = viewModel.remark;
           const executionVariant = getCustomerExecutionDisplayVariant({
             executionClass: row.executionClass,
             newImported: row.newImported,
             pendingFirstCall: row.pendingFirstCall,
           });
-          const phoneText = row.phone?.trim() ?? "";
+          const phoneText = viewModel.phone;
           const hasPhone = phoneText.length > 0;
-          // 栏2 地址: 优先显完整地址 (省市区 / 详细地址), 销售很多客户只填了
-          // 详细地址没填结构化省市, 之前只取 [province, city] 会误显"地区未填".
-          const fullAddressText = getCustomerAddress(row);
-          const regionText =
-            fullAddressText === "未填写" ? "地址未填" : fullAddressText;
-          const productText =
-            row.latestInterestedProduct ?? row.latestPurchasedProduct;
-          const interestMetaText = getInterestMetaText(row);
-          const ownerLabel = getOwnerLabel(row);
+          const regionText = viewModel.addressLabel;
+          const productText = viewModel.primarySignal;
+          const interestMetaText = viewModel.signalDetail;
+          const ownerLabel = viewModel.ownerLabel;
 
           return (
             <article
@@ -1044,7 +971,7 @@ export function CustomersTable({
               id={`customer-row-${row.id}`}
               role="button"
               tabIndex={0}
-              aria-label={`记录跟进 ${row.name}`}
+              aria-label={`查看 ${row.name} 快速详情`}
               onClick={(event) => handleSpaciousRowClick(event, row)}
               onKeyDown={(event) => handleSpaciousRowKeyDown(event, row)}
               className={cn(
@@ -1078,7 +1005,7 @@ export function CustomersTable({
                 {/* 栏1 客户: 头像 + 姓名 + 执行徽章 + 已拨进度 */}
                 <div className="flex min-w-0 items-center gap-2.5 lg:w-40 lg:shrink-0">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/15 bg-primary/10 text-sm font-bold text-primary">
-                    {getCustomerInitial(row)}
+                    {viewModel.initial}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
@@ -1135,7 +1062,7 @@ export function CustomersTable({
                   )}
                   <p
                     className="mt-0.5 truncate text-xs leading-4 text-muted-foreground"
-                    title={getCustomerAddress(row)}
+                    title={viewModel.address}
                   >
                     {regionText}
                   </p>
@@ -1146,15 +1073,14 @@ export function CustomersTable({
                   <p
                     className="truncate text-[13px] leading-5 text-foreground/85"
                     title={
-                      productText
+                      productText !== "暂无商品信号"
                         ? interestMetaText
                           ? `${productText} · ${interestMetaText}`
                           : productText
                         : undefined
                     }
                   >
-                    <span className="text-muted-foreground">意向 </span>
-                    {productText ?? "—"}
+                    {productText}
                     {interestMetaText ? (
                       <span className="text-muted-foreground"> · {interestMetaText}</span>
                     ) : null}
@@ -1163,13 +1089,13 @@ export function CustomersTable({
                     className="truncate text-xs leading-5 text-muted-foreground"
                     title={remarkText || undefined}
                   >
-                    备注 {remarkText || "—"}
+                    {remarkText || "暂无备注"}
                   </p>
                 </div>
 
                 {/* 栏4 最近通话; hover 原位淡入 "记录跟进 ›" (绝对定位零位移) */}
                 <div className="relative min-w-0 lg:w-[130px] lg:shrink-0 lg:text-right">
-                  <div className="transition-opacity duration-150 lg:group-hover/customer-row:opacity-0 lg:group-focus-visible/customer-row:opacity-0">
+                  <div className="transition-opacity duration-150 lg:group-hover/customer-row:opacity-0 lg:group-focus-visible/customer-row:opacity-0 lg:group-focus-within/customer-row:opacity-0">
                     {latestCallRecord ? (
                       <>
                         <p className="truncate text-[13px] font-medium leading-5 text-foreground/85">
@@ -1189,13 +1115,17 @@ export function CustomersTable({
                       </p>
                     )}
                   </div>
-                  <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-y-0 right-0 hidden items-center justify-end gap-0.5 text-[13px] font-medium text-primary opacity-0 transition-opacity duration-150 lg:flex lg:group-hover/customer-row:opacity-100 lg:group-focus-visible/customer-row:opacity-100"
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openFollowUpDialog(row);
+                    }}
+                    className="absolute inset-y-0 right-0 hidden items-center justify-end gap-0.5 text-[13px] font-medium text-primary outline-none transition-opacity duration-150 hover:text-primary/80 focus-visible:opacity-100 focus-visible:underline lg:flex lg:opacity-0 lg:group-hover/customer-row:opacity-100 lg:group-focus-visible/customer-row:opacity-100 lg:group-focus-within/customer-row:opacity-100"
                   >
                     记录跟进
                     <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-                  </span>
+                  </button>
                 </div>
               </div>
             </article>
@@ -1219,13 +1149,12 @@ export function CustomersTable({
         <DataTableWrapper
           title="客户列表"
           headerMode="hidden"
-          className="rounded-xl border-border bg-card shadow-sm"
+          className="rounded-lg border-border/70 bg-card shadow-sm"
           contentClassName="p-3 md:p-4"
         >
           {items.length === 0 ? (
             <div className="space-y-4">
               <ListTopBar
-                headerAction={headerAction}
                 viewMode={viewMode}
                 onChangeView={handleChangeView}
                 totalCount={pagination.totalCount}
@@ -1237,6 +1166,7 @@ export function CustomersTable({
                 action={
                   <Link
                     href={buildCustomersHref(filters, { page: 1 })}
+                    prefetch={false}
                     scroll={false}
                     className="crm-button crm-button-secondary"
                   >
@@ -1248,7 +1178,6 @@ export function CustomersTable({
           ) : (
             <div className="space-y-3">
               <ListTopBar
-                headerAction={headerAction}
                 viewMode={viewMode}
                 onChangeView={handleChangeView}
                 totalCount={pagination.totalCount}
@@ -1360,6 +1289,9 @@ export function CustomersTable({
                     rows={items}
                     getRowKey={(row) => row.id}
                     getRowId={(row) => `customer-row-${row.id}`}
+                    getRowAriaLabel={(row) => `查看 ${row.name} 快速详情`}
+                    onRowClick={(event, row) => handleSpaciousRowClick(event, row)}
+                    onRowKeyDown={(event, row) => handleSpaciousRowKeyDown(event, row)}
                     getRowClassName={(row) =>
                       cn(
                         "group/customer-row cursor-pointer",
@@ -1496,16 +1428,7 @@ export function CustomersTable({
         pending={batchRecyclePending}
         onClose={closeBatchRecycleDialog}
         onSubmit={handleBatchRecycleSubmit}
-        onRequestRecycle={openBatchRecycleRequestDialog}
         selectedCustomerIds={manualSelectedIds}
-      />
-
-      <BatchRecycleRequestDialog
-        open={batchRecycleRequestDialogOpen}
-        selectedCount={selectedCount}
-        selectionMode={selectionMode}
-        onClose={closeBatchRecycleRequestDialog}
-        onConfirm={confirmBatchRecycleRequest}
       />
 
       <BatchForceDeleteDialog

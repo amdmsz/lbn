@@ -25,12 +25,9 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import type { CallResultOption } from "@/lib/calls/metadata";
 import { startMobileCallFollowUpDial } from "@/lib/calls/mobile-call-followup";
 import {
-  getCustomerExecutionDisplayLongLabel,
-  getCustomerExecutionDisplayVariant,
   getCustomerExecutionClassQuickResult,
   formatDateTime,
   formatRelativeDateTime,
-  formatRegion,
   getCustomerStatusLabel,
   getCustomerWorkStatusLabel,
   getCustomerWorkStatusVariant,
@@ -38,6 +35,10 @@ import {
 import { getCustomerOwnershipModeLabel } from "@/lib/customers/public-pool-metadata";
 import type { CustomerListItem } from "@/lib/customers/queries";
 import { formatCurrency } from "@/lib/fulfillment/metadata";
+import {
+  getCustomerListViewModel,
+} from "@/components/customers/customer-list-helpers";
+import { ExecutionBadge } from "@/components/customers/customers-table-bits";
 import { cn } from "@/lib/utils";
 
 const CustomerFollowUpDialog = dynamic(
@@ -50,31 +51,6 @@ const CustomerFollowUpDialog = dynamic(
     loading: () => null,
   },
 );
-
-function normalizeDate(value: Date | string | null | undefined) {
-  if (!value) {
-    return null;
-  }
-
-  return value instanceof Date ? value : new Date(value);
-}
-
-function getRecentInterest(item: CustomerListItem) {
-  const interestedProduct = item.latestInterestedProduct?.trim();
-  return interestedProduct || "暂无最近意向";
-}
-
-function getCardAddress(item: CustomerListItem) {
-  const region = formatRegion(item.province, item.city, item.district);
-  const detail = item.address?.trim();
-  const parts = [region !== "未填写" ? region : null, detail].filter(Boolean);
-
-  return parts.length > 0 ? parts.join(" / ") : "未填写地址";
-}
-
-function getOwnerLabel(item: CustomerListItem) {
-  return item.owner ? `${item.owner.name} (@${item.owner.username})` : "未分配负责人";
-}
 
 function buildCustomerTradeOrderHref(customerId: string) {
   return `/customers/${customerId}?tab=orders&createTradeOrder=1`;
@@ -226,20 +202,21 @@ export function CustomerListCard({
 
   const detailHref = `/customers/${item.id}`;
   const popupDetailHref = `${detailHref}?mode=popup`;
-  const latestFollowUpAt = normalizeDate(item.latestFollowUpAt);
-  const latestTradeAt = normalizeDate(item.latestTradeAt);
-  const address = getCardAddress(item);
+  const viewModel = getCustomerListViewModel(item);
+  const latestFollowUpAt = viewModel.latestFollowUpAt;
+  const latestTradeAt = viewModel.latestTradeAt;
+  const address = viewModel.addressLabel;
   const hasLifetimeTrade = Number(item.lifetimeTradeAmount) > 0.009;
-  const recentInterest = getRecentInterest(item);
-  const phoneText = item.phone?.trim() || "暂无电话";
-  const canDialFromCard = canCreateCallRecord && phoneText !== "暂无电话";
+  const recentInterest = viewModel.primarySignal;
+  const phoneText = viewModel.phoneLabel;
+  const canDialFromCard = canCreateCallRecord && Boolean(viewModel.phone);
   const recycleEntryProps = {
     customerId: item.id,
     customerName: item.name,
     phone: phoneText,
     statusLabel: getCustomerStatusLabel(item.status),
     ownershipLabel: getCustomerOwnershipModeLabel(item.ownershipMode),
-    ownerLabel: getOwnerLabel(item),
+    ownerLabel: viewModel.ownerLabel,
     lastEffectiveFollowUpAt: item.lastEffectiveFollowUpAt,
     approvedTradeOrderCount: item.approvedTradeOrderCount,
     linkedLeadCount: item._count.leads,
@@ -361,9 +338,9 @@ export function CustomerListCard({
         onClick={() => navigateTo(detailHref)}
         onKeyDown={handleCardKeyDown}
         className={cn(
-          "group relative flex cursor-pointer flex-col overflow-hidden rounded-[18px] border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)] outline-none transition-[border-color,background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
+          "group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border border-[var(--color-border-soft)] bg-[var(--color-panel-soft)] px-4 py-3.5 shadow-[var(--color-shell-shadow-sm)] outline-none transition-[border-color,background-color,box-shadow] duration-200",
           "focus-visible:ring-2 focus-visible:ring-[rgba(122,154,255,0.16)] focus-visible:ring-offset-0",
-          "min-[960px]:hover:-translate-y-px min-[960px]:hover:border-[rgba(122,154,255,0.16)] min-[960px]:hover:bg-[var(--color-shell-hover)] min-[960px]:hover:shadow-[var(--color-shell-shadow-md)]",
+          "min-[960px]:hover:border-[rgba(122,154,255,0.16)] min-[960px]:hover:bg-[var(--color-shell-hover)]",
           focused &&
             "scroll-mt-28 border-[rgba(79,125,247,0.32)] bg-[linear-gradient(180deg,rgba(248,250,255,0.98),rgba(255,255,255,0.96))] shadow-[inset_3px_0_0_var(--color-accent),var(--color-shell-shadow-md)]",
         )}
@@ -384,37 +361,25 @@ export function CustomerListCard({
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="truncate text-[18px] font-semibold leading-5 tracking-[-0.03em] text-[var(--foreground)]">
+                <h3 className="truncate text-base font-semibold leading-5 tracking-normal text-[var(--foreground)]">
                   {item.name}
                 </h3>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    openFollowUpDialog({
-                      initialResult:
-                        (item.newImported && item.pendingFirstCall
-                          ? ""
-                          : getCustomerExecutionClassQuickResult(item.executionClass)) ||
-                        item.callRecords[0]?.resultCode ||
-                        "",
-                    });
-                  }}
-                  className="rounded-full outline-none transition-transform duration-150 hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-[rgba(122,154,255,0.16)]"
-                >
-                  <StatusBadge
-                    label={getCustomerExecutionDisplayLongLabel({
-                      executionClass: item.executionClass,
-                      newImported: item.newImported,
-                      pendingFirstCall: item.pendingFirstCall,
-                    })}
-                    variant={getCustomerExecutionDisplayVariant({
-                      executionClass: item.executionClass,
-                      newImported: item.newImported,
-                      pendingFirstCall: item.pendingFirstCall,
-                    })}
+                <div onClick={stopCardNavigation}>
+                  <ExecutionBadge
+                    row={item}
+                    compact
+                    onClick={() =>
+                      openFollowUpDialog({
+                        initialResult:
+                          (item.newImported && item.pendingFirstCall
+                            ? ""
+                            : getCustomerExecutionClassQuickResult(item.executionClass)) ||
+                          item.callRecords[0]?.resultCode ||
+                          "",
+                      })
+                    }
                   />
-                </button>
+                </div>
               </div>
 
               <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -424,12 +389,12 @@ export function CustomerListCard({
                   <a
                     href={`tel:${item.phone.trim()}`}
                     onClick={stopCardNavigation}
-                    className="w-fit font-mono text-xl font-bold leading-none tracking-tight text-[var(--foreground)] tabular-nums underline-offset-4 transition-colors hover:text-[var(--color-accent-strong)] hover:underline"
+                    className="w-fit font-mono text-lg font-semibold leading-none tracking-normal text-[var(--foreground)] tabular-nums underline-offset-4 transition-colors hover:text-[var(--color-accent-strong)] hover:underline"
                   >
                     {phoneText}
                   </a>
                 ) : (
-                  <p className="font-mono text-xl font-bold leading-none tracking-tight text-[var(--color-sidebar-muted)] tabular-nums">
+                  <p className="font-mono text-lg font-semibold leading-none tracking-normal text-[var(--color-sidebar-muted)] tabular-nums">
                     {phoneText}
                   </p>
                 )}
@@ -454,7 +419,7 @@ export function CustomerListCard({
 
               <div className="mt-2.5 flex items-start gap-2 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">
                 <span className="shrink-0 font-medium text-[var(--color-sidebar-muted)]">
-                  最近意向
+                  {viewModel.signalMeta}
                 </span>
                 <p
                   title={recentInterest}
@@ -570,7 +535,7 @@ export function CustomerListCard({
           {item.workingStatuses.length === 0 ? (
             <StatusBadge label={getCustomerStatusLabel(item.status)} variant="neutral" />
           ) : null}
-          <StatusBadge label={getOwnerLabel(item)} variant="neutral" />
+          <StatusBadge label={viewModel.ownerLabel} variant="neutral" />
         </div>
 
         <div className="mt-2.5 space-y-1.5 text-[12px] leading-5 text-[var(--color-sidebar-muted)]">

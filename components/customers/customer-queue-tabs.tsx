@@ -66,6 +66,9 @@ export function CustomerQueueTabs({
           <Link
             key={item.key}
             href={href}
+            // 队列 tab 只在用户点击时加载. 默认 prefetch 会把每个 tab 的 RSC
+            // payload 都提前请求一遍, 在客户工作台上形成不必要的并发 SSR.
+            prefetch={false}
             aria-current={isActive ? "page" : undefined}
             className={cn(
               "inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full px-3.5 py-1.5",

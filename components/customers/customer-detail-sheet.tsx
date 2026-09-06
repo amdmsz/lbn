@@ -23,13 +23,13 @@ import {
 import { Sheet } from "@/components/shared/sheet";
 import {
   formatDateTime,
-  formatRegion,
   formatRelativeDateTime,
   getCustomerStatusLabel,
   getCustomerWorkStatusLabel,
 } from "@/lib/customers/metadata";
 import type { CustomerListItem } from "@/lib/customers/queries";
 import { formatCurrency } from "@/lib/fulfillment/metadata";
+import { getCustomerListViewModel } from "@/components/customers/customer-list-helpers";
 import { cn } from "@/lib/utils";
 
 type CustomerSheetOrder = {
@@ -52,49 +52,6 @@ type OrderLoadState =
   | { status: "loading"; orders: CustomerSheetOrder[] }
   | { status: "ready"; orders: CustomerSheetOrder[] }
   | { status: "error"; orders: CustomerSheetOrder[]; message: string };
-
-function getCustomerInitial(item: CustomerListItem) {
-  const name = item.name.trim();
-  if (!name) return "?";
-  return Array.from(name)[0]?.toUpperCase() ?? "?";
-}
-
-function getCustomerAddress(item: CustomerListItem) {
-  const region = formatRegion(item.province, item.city, item.district);
-  const detail = item.address?.trim();
-
-  if (detail) {
-    return region !== "未填写" ? `${region} / ${detail}` : detail;
-  }
-
-  return region;
-}
-
-function getOwnerLabel(item: CustomerListItem) {
-  return item.owner
-    ? `${item.owner.name} (@${item.owner.username})`
-    : "未分配负责人";
-}
-
-function getPrimarySignal(item: CustomerListItem) {
-  return (
-    item.latestPurchasedProduct ??
-    item.latestInterestedProduct ??
-    "暂无商品信号"
-  );
-}
-
-function getSignalMeta(item: CustomerListItem) {
-  if (item.latestPurchasedProduct) {
-    return "最近购买";
-  }
-
-  if (item.latestInterestedProduct) {
-    return "导入意向";
-  }
-
-  return "未记录商品字段";
-}
 
 function getProgressLabel(item: CustomerListItem) {
   if (item.workingStatuses.length === 0) {
@@ -507,6 +464,8 @@ export function CustomerDetailSheet({
     return null;
   }
 
+  const viewModel = getCustomerListViewModel(customer);
+
   return (
     <Sheet
       open={open}
@@ -520,7 +479,7 @@ export function CustomerDetailSheet({
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-primary/15 bg-primary/10 text-sm font-bold text-primary">
-                {getCustomerInitial(customer)}
+                {viewModel.initial}
               </div>
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -541,7 +500,7 @@ export function CustomerDetailSheet({
                   <span className="inline-flex min-w-0 items-center gap-1.5">
                     <MapPin className="h-3.5 w-3.5" />
                     <span className="truncate">
-                      {getCustomerAddress(customer)}
+                      {viewModel.address}
                     </span>
                   </span>
                 </div>
@@ -588,7 +547,7 @@ export function CustomerDetailSheet({
               />
               <MetricTile
                 label="负责人"
-                value={getOwnerLabel(customer)}
+                value={viewModel.ownerLabel}
                 icon={<UserRound className="h-3.5 w-3.5" />}
               />
             </div>
@@ -617,10 +576,10 @@ export function CustomerDetailSheet({
               <div className="mt-3 space-y-2.5">
                 <div>
                   <p className="text-xs text-muted-foreground">
-                    {getSignalMeta(customer)}
+                    {viewModel.signalMeta}
                   </p>
                   <p className="mt-1 truncate text-sm font-semibold text-foreground">
-                    {getPrimarySignal(customer)}
+                    {viewModel.primarySignal}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">

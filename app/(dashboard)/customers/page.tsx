@@ -101,6 +101,7 @@ export default async function CustomersPage({
   // slicing 拆成两份, 让 UI 形态保持一致 (cursor 模式列表偏少时阻塞不明显).
   return (
     <CustomerCenterWorkbench
+      role={viewer.role}
       toolbarSlot={
         <Suspense fallback={<ToolbarSkeleton />}>
           <StreamingToolbar

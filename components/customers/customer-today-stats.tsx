@@ -11,8 +11,6 @@ type CustomerTodayStatsProps = {
   scopeDialedToday: number;
   /** 可见范围内今日新加微数. */
   wechatAddedToday: number;
-  /** 待拨打队列剩余人数. */
-  pendingDialCount: number;
   /**
    * SALES 视角 "今日已拨" 只显示一个数; SUPERVISOR/ADMIN 显示范围总数 +
    * 括注个人数 "(我 M)".
@@ -31,15 +29,15 @@ function formatCount(value: number) {
  * 今日战绩条 — 纯展示 server 组件. 一行 (移动端自然换行),
  * 无进度条 / 无目标值, 只读 count. 不碰 table / workbench / dialog.
  *
- * - SALES: "今日已拨 N · 加微 N · 待拨打还剩 N 人".
- * - SUPERVISOR/ADMIN: "今日已拨 N (我 M) · 加微 N · 待拨打还剩 N 人" —
+ * - SALES: "今日已拨 N · 加微 N".
+ * - SUPERVISOR/ADMIN: "今日已拨 N (我 M) · 加微 N" —
  *   范围总数与个人数并列.
+ * 待拨打总数由同层级的队列 tab 承载，避免重复指标。
  */
 export function CustomerTodayStats({
   myDialedToday,
   scopeDialedToday,
   wechatAddedToday,
-  pendingDialCount,
   isSalesViewer,
   className,
 }: CustomerTodayStatsProps) {
@@ -71,16 +69,6 @@ export function CustomerTodayStats({
         <strong className="font-semibold tabular-nums">
           {formatCount(wechatAddedToday)}
         </strong>
-      </span>
-      <span aria-hidden className="text-muted-foreground/50">
-        ·
-      </span>
-      <span className="inline-flex items-baseline gap-1 text-muted-foreground">
-        待拨打还剩
-        <strong className="font-semibold tabular-nums text-foreground">
-          {formatCount(pendingDialCount)}
-        </strong>
-        人
       </span>
     </div>
   );

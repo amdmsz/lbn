@@ -78,6 +78,74 @@ export function getSuggestedFollowUpResult(item: CustomerListItem) {
   return item.callRecords[0]?.resultCode ?? getCustomerExecutionClassQuickResult(item.executionClass);
 }
 
+function normalizeListDate(value: Date | string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getInterestMeta(item: CustomerListItem) {
+  if (item.latestPurchasedProduct || !item.latestInterestedProduct) {
+    return null;
+  }
+
+  const parts: string[] = [];
+  if (item.latestInterestedAmount) {
+    const amount = Number(item.latestInterestedAmount);
+    if (Number.isFinite(amount)) {
+      parts.push(`¥${amount.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`);
+    }
+  }
+
+  const interestedAt = normalizeListDate(item.latestInterestedAt);
+  if (interestedAt) {
+    parts.push(
+      new Intl.DateTimeFormat("zh-CN", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).format(interestedAt),
+    );
+  }
+
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/**
+ * The canonical presentation model for customer list surfaces.
+ * Keep derived display values in one place so table, cards, and quick details
+ * do not slowly diverge while the underlying query contract stays unchanged.
+ */
+export function getCustomerListViewModel(item: CustomerListItem) {
+  const phone = item.phone?.trim() ?? "";
+  const address = getCustomerAddress(item);
+  const primarySignal = getPrimarySignal(item);
+  const signalDetail = getInterestMeta(item);
+
+  return {
+    address,
+    addressLabel: address === "未填写" ? "地址未填" : address,
+    ownerLabel: getOwnerLabel(item),
+    initial: getCustomerInitial(item),
+    primarySignal,
+    signalMeta: getSignalMeta(item),
+    signalDetail,
+    signalSummary: signalDetail ? `${primarySignal} · ${signalDetail}` : primarySignal,
+    latestCallRecord: getLatestCallRecord(item),
+    progress: getProgressSummary(item),
+    phone,
+    phoneLabel: phone || "暂无电话",
+    remark: item.remark?.trim() ?? "",
+    latestFollowUpAt: normalizeListDate(item.latestFollowUpAt),
+    latestTradeAt: normalizeListDate(item.latestTradeAt),
+  };
+}
+
 export function buildCustomerPopupHref(customerId: string) {
   return `/customers/${customerId}?mode=popup`;
 }

@@ -16,6 +16,7 @@ import {
 import { CustomerCreateEntry } from "@/components/customers/customer-create-entry";
 import type { MoveCustomerToRecycleBinAction } from "@/components/customers/customer-recycle-entry";
 import { WorkbenchLayout } from "@/components/layout-patterns/workbench-layout";
+import { PageHeader } from "@/components/shared/page-header";
 import { CustomerFilterToolbar } from "@/components/customers/customer-filter-toolbar";
 import {
   CustomerQueueTabs,
@@ -24,7 +25,10 @@ import {
 import { CustomerTodayStats } from "@/components/customers/customer-today-stats";
 import { CustomersTable } from "@/components/customers/customers-table";
 import { buildCustomersExportHref } from "@/lib/customers/export-url";
-import { primaryCustomerQueueOptions } from "@/lib/customers/metadata";
+import {
+  customerRoleHeaderMeta,
+  primaryCustomerQueueOptions,
+} from "@/lib/customers/metadata";
 import type {
   CustomerCenterListData,
   CustomerCenterStatsData,
@@ -218,17 +222,32 @@ function PhoneSearchAlert({
  * 后渲染. 这样列表渲染不被 stats aggregate 阻塞.
  */
 export function CustomerCenterWorkbench({
+  role,
   toolbarSlot,
   listSlot,
 }: Readonly<{
+  role: RoleCode;
   toolbarSlot: ReactNode;
   listSlot: ReactNode;
 }>) {
+  const headerMeta = customerRoleHeaderMeta[role];
+
   return (
     <WorkbenchLayout
       className="!gap-0"
+      header={
+        <div className={workspaceShellClassName}>
+          <PageHeader
+            eyebrow={headerMeta.eyebrow}
+            title={headerMeta.title}
+            description={headerMeta.description}
+            actions={canCreateCustomer(role) ? <CustomerCreateEntry /> : undefined}
+            className="border-border/60 bg-card shadow-sm"
+          />
+        </div>
+      }
       toolbar={
-        <div className={`${workspaceShellClassName} relative z-20 mb-3`}>
+        <div className={`${workspaceShellClassName} relative z-20`}>
           {toolbarSlot}
         </div>
       }
@@ -288,7 +307,7 @@ export function CustomerCenterToolbarSection({
   wechatAddedToday: CustomerCenterStatsData["wechatAddedToday"];
 }>) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       <CustomerFilterToolbar
         filters={filters}
         exportHref={
@@ -300,18 +319,21 @@ export function CustomerCenterToolbarSection({
         salesOptions={role === "ADMIN" || role === "SUPERVISOR" ? salesBoard : []}
         queueCounts={queueCounts}
       />
-      <CustomerQueueTabs
-        items={buildQueueTabItems(queueCounts)}
-        activeKey={filters.queue}
-        filters={filters}
-      />
-      <CustomerTodayStats
-        myDialedToday={myDialedToday}
-        scopeDialedToday={scopeDialedToday}
-        wechatAddedToday={wechatAddedToday}
-        pendingDialCount={queueCounts.pending_dial ?? 0}
-        isSalesViewer={role === "SALES"}
-      />
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <CustomerQueueTabs
+          items={buildQueueTabItems(queueCounts)}
+          activeKey={filters.queue}
+          filters={filters}
+          className="min-w-0 flex-1"
+        />
+        <CustomerTodayStats
+          myDialedToday={myDialedToday}
+          scopeDialedToday={scopeDialedToday}
+          wechatAddedToday={wechatAddedToday}
+          isSalesViewer={role === "SALES"}
+          className="shrink-0 px-3 py-2 lg:rounded-md"
+        />
+      </div>
     </div>
   );
 }
@@ -338,8 +360,6 @@ export function CustomerCenterListSection({
   outboundCallEnabled: boolean;
   moveCustomerToRecycleBinAction?: MoveCustomerToRecycleBinAction;
 }>) {
-  const headerAction = canCreateCustomer(role) ? <CustomerCreateEntry /> : null;
-
   return (
     <>
       <PhoneSearchAlert
@@ -367,7 +387,6 @@ export function CustomerCenterListSection({
         emptyTitle="当前筛选条件下没有客户"
         emptyDescription="试试调整筛选条件或重置当前工作台范围。"
         filters={list.filters}
-        headerAction={headerAction}
         scrollTargetId="customer-list"
       />
     </>

@@ -1,4 +1,9 @@
-import type { CSSProperties, ReactNode } from "react";
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  ReactNode,
+} from "react";
 import { EmptyState } from "@/components/shared/empty-state";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +22,9 @@ export function EntityTable<T>({
   getRowKey,
   getRowId,
   getRowClassName,
+  getRowAriaLabel,
+  onRowClick,
+  onRowKeyDown,
   emptyTitle = "暂无数据",
   emptyDescription = "当前筛选条件下没有匹配的数据。",
   className,
@@ -29,6 +37,13 @@ export function EntityTable<T>({
   getRowKey: (row: T, index: number) => string;
   getRowId?: (row: T, index: number) => string | undefined;
   getRowClassName?: (row: T, index: number) => string | undefined;
+  getRowAriaLabel?: (row: T, index: number) => string | undefined;
+  onRowClick?: (event: ReactMouseEvent<HTMLTableRowElement>, row: T, index: number) => void;
+  onRowKeyDown?: (
+    event: ReactKeyboardEvent<HTMLTableRowElement>,
+    row: T,
+    index: number,
+  ) => void;
   emptyTitle?: string;
   emptyDescription?: string;
   className?: string;
@@ -87,6 +102,12 @@ export function EntityTable<T>({
               key={getRowKey(row, index)}
               id={getRowId?.(row, index)}
               className={getRowClassName?.(row, index)}
+              tabIndex={onRowClick ? 0 : undefined}
+              aria-label={getRowAriaLabel?.(row, index)}
+              onClick={onRowClick ? (event) => onRowClick(event, row, index) : undefined}
+              onKeyDown={
+                onRowKeyDown ? (event) => onRowKeyDown(event, row, index) : undefined
+              }
             >
               {columns.map((column) => (
                 <td
