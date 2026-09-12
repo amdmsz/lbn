@@ -18,8 +18,13 @@ import test from "node:test";
 process.env.DATABASE_URL =
   process.env.DATABASE_URL ?? "mariadb://test:test@127.0.0.1:3306/test";
 
-const { buildCustomersHref } = await import("../../lib/customers/filter-url.ts");
+const { buildCustomersHref, buildCustomersPageHref } = await import(
+  "../../lib/customers/filter-url.ts",
+);
 const { CUSTOMERS_PAGE_SIZE } = await import("../../lib/customers/metadata.ts");
+const { getCustomerFilterParamsFromFormData } = await import(
+  "../../lib/customers/batch-filter-params.ts",
+);
 
 type Filters = Parameters<typeof buildCustomersHref>[0];
 
@@ -81,4 +86,34 @@ test("queue + 其他过滤同时存在时, 全部保留", () => {
   assert.equal(url.searchParams.get("search"), "张三");
   assert.equal(url.searchParams.get("teamId"), "team_a");
   assert.equal(url.searchParams.get("pageSize"), "50");
+});
+
+test("D 类筛选翻页与批量表单透传时必须保留 grades", () => {
+  const href = buildCustomersHref(
+    makeFilters({ grades: ["D" as Filters["grades"][number]] }),
+    { page: 2 },
+  );
+  const url = new URL(href, "http://localhost");
+  assert.deepEqual(url.searchParams.getAll("grades"), ["D"]);
+  assert.equal(url.searchParams.get("page"), "2");
+
+  const formData = new FormData();
+  formData.append("selectionMode", "filtered");
+  formData.append("grades", "D");
+  formData.append("page", "2");
+  const parsed = getCustomerFilterParamsFromFormData(formData);
+  assert.deepEqual(parsed.grades, ["D"]);
+  assert.equal(parsed.page, "2");
+});
+
+test("分页链接从当前 URL 保留 grades，不受旧 Suspense filters 影响", () => {
+  const href = buildCustomersPageHref(
+    "/customers",
+    new URLSearchParams("grades=D&grades=E&teamId=team_a&page=1"),
+    2,
+  );
+  const url = new URL(href, "http://localhost");
+  assert.deepEqual(url.searchParams.getAll("grades"), ["D", "E"]);
+  assert.equal(url.searchParams.get("teamId"), "team_a");
+  assert.equal(url.searchParams.get("page"), "2");
 });

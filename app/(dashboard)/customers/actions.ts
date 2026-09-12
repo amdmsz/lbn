@@ -41,6 +41,7 @@ import {
   listFilteredCustomerCenterCustomerIds,
   listVisibleCustomerCenterCustomerIds,
 } from "@/lib/customers/queries";
+import { getCustomerFilterParamsFromFormData } from "@/lib/customers/batch-filter-params";
 import type { CustomerCallRecordHistoryEntry } from "@/lib/customers/queries";
 import {
   createOwnedCustomer,
@@ -601,25 +602,6 @@ function buildBatchForceHardDeleteMessage(summary: {
 
 function isAlreadyAssignedToTargetOwnerError(error: unknown) {
   return error instanceof Error && error.message.includes("已由该负责人承接");
-}
-
-function getCustomerFilterParamsFromFormData(formData: FormData) {
-  return {
-    queue: String(formData.get("queue") ?? ""),
-    executionClasses: formData
-      .getAll("executionClasses")
-      .map((value) => String(value).trim()),
-    teamId: String(formData.get("teamId") ?? "").trim(),
-    salesId: String(formData.get("salesId") ?? "").trim(),
-    search: String(formData.get("search") ?? "").trim(),
-    productKeys: formData.getAll("productKeys").map((value) => String(value).trim()),
-    productKeyword: String(formData.get("productKeyword") ?? "").trim(),
-    tagIds: formData.getAll("tagIds").map((value) => String(value).trim()),
-    assignedFrom: String(formData.get("assignedFrom") ?? "").trim(),
-    assignedTo: String(formData.get("assignedTo") ?? "").trim(),
-    page: String(formData.get("page") ?? "1").trim(),
-    pageSize: String(formData.get("pageSize") ?? "").trim(),
-  };
 }
 
 async function resolveBatchCustomerSelection(input: {

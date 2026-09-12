@@ -111,6 +111,22 @@ type PaginationData = {
 
 type PageSelectionState = { pageKey: string; ids: string[] };
 
+function buildCustomerSelectionScopeKey(filters: CustomerCenterFilters) {
+  return JSON.stringify({
+    queue: filters.queue,
+    executionClasses: filters.executionClasses,
+    grades: filters.grades,
+    teamId: filters.teamId,
+    salesId: filters.salesId,
+    search: filters.search,
+    productKeys: filters.productKeys,
+    productKeyword: filters.productKeyword,
+    tagIds: filters.tagIds,
+    assignedFrom: filters.assignedFrom,
+    assignedTo: filters.assignedTo,
+  });
+}
+
 type FollowUpDialogState = {
   item: CustomerListItem | null;
   initialResult: string;
@@ -237,6 +253,8 @@ export function CustomersTable({
     pageKey: currentPageSelectionKey,
     ids: [],
   });
+  const customerSelectionScopeKey = buildCustomerSelectionScopeKey(filters);
+  const [selectionScopeKey, setSelectionScopeKey] = useState(customerSelectionScopeKey);
   const [batchTagDialogOpen, setBatchTagDialogOpen] = useState(false);
   const [batchOwnerTransferDialogOpen, setBatchOwnerTransferDialogOpen] = useState(false);
   const [batchRecycleDialogOpen, setBatchRecycleDialogOpen] = useState(false);
@@ -292,6 +310,22 @@ export function CustomersTable({
   if (navPending && navPendingKey !== null && navPendingKey !== currentNavKey) {
     setNavPending(false);
     setNavPendingKey(null);
+  }
+
+  // A batch selection belongs to one immutable filter scope. If a filter
+  // changes while a route transition is resolving, discard the old selection
+  // and any open batch dialog before the new result can be submitted.
+  if (selectionScopeKey !== customerSelectionScopeKey) {
+    setSelectionScopeKey(customerSelectionScopeKey);
+    setSelectionMode("manual");
+    setPageSelection({ pageKey: currentPageSelectionKey, ids: [] });
+    setBatchTagDialogOpen(false);
+    setBatchOwnerTransferDialogOpen(false);
+    setBatchRecycleDialogOpen(false);
+    setBatchForceDeleteDialogOpen(false);
+    setBatchReleaseDialogOpen(false);
+    setSelectedTagId("");
+    setSelectedTargetOwnerId("");
   }
 
   useEffect(() => {

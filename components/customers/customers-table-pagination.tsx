@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Loader2 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { SmartLink } from "@/components/shared/smart-link";
-import { buildCustomersHref } from "@/lib/customers/filter-url";
+import { buildCustomersHref, buildCustomersPageHref } from "@/lib/customers/filter-url";
 import {
   customerPageSizeOptions,
   type CustomerPageSize,
@@ -117,7 +117,7 @@ function PagePagination({
   }
 
   const buildHref = (nextPage: number) =>
-    buildCustomersHref(filters, { page: nextPage }, pathname);
+    buildCustomersPageHref(pathname, searchParams, nextPage);
 
   const onNavStart = () => setPending(true);
 
@@ -474,4 +474,3 @@ function useNavPending(navKey: string) {
 
   return { pending, setPending: setPendingWithFallback };
 }
-

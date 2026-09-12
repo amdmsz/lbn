@@ -64,3 +64,27 @@ export function buildCustomersHref(
   const query = params.toString();
   return query ? `${pathname}?${query}` : pathname;
 }
+
+/**
+ * Build a page-mode pagination URL from the URL currently in the browser.
+ *
+ * Pagination can render from a stale Suspense prop while a filter transition is
+ * still resolving. Preserving the live query string prevents a page click from
+ * dropping multi-value filters such as `grades=D` during that window.
+ */
+export function buildCustomersPageHref(
+  pathname: string,
+  currentSearchParams: { toString(): string },
+  page: number,
+) {
+  const params = new URLSearchParams(currentSearchParams.toString());
+
+  if (page > 1) {
+    params.set("page", String(page));
+  } else {
+    params.delete("page");
+  }
+
+  const query = params.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
